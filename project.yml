@@ -4,6 +4,10 @@ options:
   deploymentTarget:
     iOS: "26.0"
 
+configFiles:
+  Debug: Config/Local.xcconfig
+  Release: Config/Local.xcconfig
+
 packages:
   TrainingAppKit:
     path: TrainingAppKit

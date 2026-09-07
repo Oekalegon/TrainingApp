@@ -31,3 +31,13 @@ the `TrainingApp` app target for the iOS Simulator, on every push/PR to `main` a
 project with a sibling reference to `../TrainingKit`, so `TrainingKit` must be checked out next to
 this repo. Open the workspace, not the bare `.xcodeproj`, for local edits to `TrainingKit` to be
 picked up automatically instead of Xcode fetching the remote dependency.
+
+## Signing
+
+Never commit an Apple Developer Team ID — `project.yml` deliberately has no `DEVELOPMENT_TEAM`
+setting. Instead, `project.yml`'s `configFiles` point every configuration at the committed
+`Config/Local.xcconfig`, which optionally includes `Config/Local.Secrets.xcconfig` (gitignored;
+copy it from `Local.Secrets.xcconfig.example` and fill in your own Team ID). Because signing comes
+from that xcconfig rather than being baked into the generated project, it survives every
+`xcodegen generate` instead of a manually-set Xcode Team getting silently wiped out on the next
+regeneration.
