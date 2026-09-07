@@ -1,0 +1,10 @@
+// Committed, shared base for local/device builds. Referenced by project.yml's `configFiles`, so
+// xcodegen bakes this in on every `xcodegen generate` instead of the Xcode-set Team getting wiped
+// out each time the project is regenerated.
+//
+// Team-specific values go in Local.Secrets.xcconfig (gitignored — see
+// Local.Secrets.xcconfig.example) which this optionally includes. `#include?` (note the `?`) is a
+// no-op if that file doesn't exist, so this stays safe for CI and a fresh clone with no team
+// configured yet — simulator builds work fine without one.
+CODE_SIGN_STYLE = Automatic
+#include? "Local.Secrets.xcconfig"
