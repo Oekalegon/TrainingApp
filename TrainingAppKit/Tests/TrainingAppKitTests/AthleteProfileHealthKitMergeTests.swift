@@ -89,6 +89,21 @@ struct AthleteProfileHealthKitMergeTests {
         #expect(merged.currentHeartRateZoneSettings?.zoneMethod == .lactateThreshold)
     }
 
+    @Test("a small, sub-tolerance fluctuation in resting HR doesn't append a new entry")
+    func smallRestingHeartRateFluctuationDoesNotAppend() {
+        // HealthKit's resting HR is recomputed daily and routinely moves by a beat or two even
+        // when the athlete's actual resting rate hasn't changed — this shouldn't read as a change.
+        let existing = HeartRateZoneSettings(effectiveDate: day(0), restingHeartRateBPM: 48, maxHeartRateBPM: 190)
+        var athlete = AthleteProfile.fixture()
+        athlete.heartRateZoneHistory = [existing]
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 47, biologicalSex: nil, estimatedMaxHeartRateBPM: 190)
+
+        let merged = athlete.merging(snapshot, asOf: day(5))
+
+        #expect(merged.heartRateZoneHistory.count == 1)
+        #expect(merged == athlete)
+    }
+
     @Test("only a partial HR reading (resting without max) doesn't append an entry")
     func partialHeartRateDataDoesNotAppend() {
         let athlete = AthleteProfile.fixture()
