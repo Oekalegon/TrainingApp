@@ -25,7 +25,6 @@ public struct WeekView: View {
                     weekContent
                 }
             }
-            .navigationTitle(weekTitle)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Today", systemImage: "calendar") {
@@ -91,12 +90,5 @@ public struct WeekView: View {
         } else if value.translation.width > Self.swipeThreshold {
             viewModel.goToPreviousWeek()
         }
-    }
-
-    private var weekTitle: String {
-        let end = viewModel.weekDates.last ?? viewModel.displayedWeekStart
-        var format = Date.FormatStyle.dateTime.day().month(.abbreviated)
-        format.timeZone = viewModel.athleteTimeZone
-        return "\(viewModel.displayedWeekStart.formatted(format)) – \(end.formatted(format))"
     }
 }
