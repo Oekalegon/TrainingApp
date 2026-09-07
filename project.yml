@@ -1,0 +1,40 @@
+name: TrainingApp
+options:
+  bundleIdPrefix: org.oekalegon
+  deploymentTarget:
+    iOS: "26.0"
+
+packages:
+  TrainingAppKit:
+    path: TrainingAppKit
+  TrainingKit:
+    url: https://github.com/Oekalegon/TrainingKit.git
+    branch: develop
+
+targets:
+  TrainingApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: TrainingApp/Sources
+    resources:
+      - path: TrainingApp/Resources/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.oekalegon.trainingapp
+        CODE_SIGN_ENTITLEMENTS: TrainingApp/Resources/TrainingApp.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSHealthShareUsageDescription: "TrainingApp reads your workouts and heart-rate data to compute your training load and fitness trend."
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        SWIFT_VERSION: "6.2"
+        TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - package: TrainingAppKit
+      - package: TrainingKit
+        product: TrainingCore
+    scheme:
+      testTargets: []
+      gatherCoverageData: false

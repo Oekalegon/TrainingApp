@@ -1,0 +1,43 @@
+name: Swift
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    name: Build and Test TrainingAppKit
+    runs-on: macos-26
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build
+      run: swift build
+      working-directory: TrainingAppKit
+
+    - name: Run tests
+      run: swift test
+      working-directory: TrainingAppKit
+
+  build-app:
+    name: Build TrainingApp (iOS Simulator)
+    runs-on: macos-26
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install xcodegen
+      run: brew install xcodegen
+
+    - name: Generate Xcode project
+      run: xcodegen generate
+
+    - name: Build
+      run: >
+        xcodebuild -project TrainingApp.xcodeproj -scheme TrainingApp
+        -destination "generic/platform=iOS Simulator" build

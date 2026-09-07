@@ -1,0 +1,15 @@
+{
+  "originHash" : "2bc1263717861eb39f9ccec28f2227b3cb240ac3c7e4fb2290cfdebbc5d7ebdf",
+  "pins" : [
+    {
+      "identity" : "trainingkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Oekalegon/TrainingKit.git",
+      "state" : {
+        "branch" : "develop",
+        "revision" : "7a83108aa4639f797e2d2a012870ae698c27cae9"
+      }
+    }
+  ],
+  "version" : 3
+}
