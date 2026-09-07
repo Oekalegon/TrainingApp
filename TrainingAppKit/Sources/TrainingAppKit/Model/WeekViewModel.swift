@@ -81,6 +81,11 @@ public final class WeekViewModel {
         model.workouts.first { $0.id == plan.workoutID }
     }
 
+    /// The detail view model for `activity`, pushed when it's tapped in the day list.
+    public func activityDetailViewModel(for activity: Activity) -> ActivityDetailViewModel {
+        ActivityDetailViewModel(activity: activity, athlete: model.athlete)
+    }
+
     /// Moves the displayed week forward by one week.
     public func goToNextWeek() {
         displayedWeekStart = calendar.date(byAdding: .day, value: 7, to: displayedWeekStart) ?? displayedWeekStart

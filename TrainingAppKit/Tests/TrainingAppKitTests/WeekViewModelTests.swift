@@ -114,6 +114,20 @@ struct WeekViewModelTests {
         #expect(viewModel.workout(for: plan)?.id == workout.id)
     }
 
+    @Test("activityDetailViewModel(for:) wires the model's athlete through")
+    func activityDetailViewModelUsesModelAthlete() {
+        let (_, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "Europe/Amsterdam")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let activity = Activity(source: .manual, sport: .running, start: day(0), duration: 1800)
+
+        let detail = viewModel.activityDetailViewModel(for: activity)
+
+        #expect(detail.activity.id == activity.id)
+        #expect(detail.timeZone.identifier == "Europe/Amsterdam")
+    }
+
     @Test("load(asOf:) loads chartRange (3 weeks), not just the displayed week")
     func loadFetchesChartRangeIntoModel() async throws {
         let (store, stores) = makeStores()
