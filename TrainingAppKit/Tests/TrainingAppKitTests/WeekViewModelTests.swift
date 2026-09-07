@@ -128,6 +128,16 @@ struct WeekViewModelTests {
         #expect(detail.timeZone.identifier == "Europe/Amsterdam")
     }
 
+    @Test("athleteViewModel wires the model's athlete through")
+    func athleteViewModelUsesModelAthlete() {
+        let (_, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "Europe/Amsterdam")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.athleteViewModel.athlete.timeZone.identifier == "Europe/Amsterdam")
+    }
+
     @Test("load(asOf:) loads chartRange (3 weeks), not just the displayed week")
     func loadFetchesChartRangeIntoModel() async throws {
         let (store, stores) = makeStores()

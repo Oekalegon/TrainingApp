@@ -86,6 +86,11 @@ public final class WeekViewModel {
         ActivityDetailViewModel(activity: activity, athlete: model.athlete)
     }
 
+    /// The view model for the athlete account screen, presented from the week view's toolbar.
+    public var athleteViewModel: AthleteViewModel {
+        AthleteViewModel(athlete: model.athlete)
+    }
+
     /// Moves the displayed week forward by one week.
     public func goToNextWeek() {
         displayedWeekStart = calendar.date(byAdding: .day, value: 7, to: displayedWeekStart) ?? displayedWeekStart

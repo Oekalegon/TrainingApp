@@ -6,6 +6,7 @@ import TrainingCore
 /// a "Today" toolbar button, and pull-to-refresh import.
 public struct WeekView: View {
     @State private var viewModel: WeekViewModel
+    @State private var isShowingAthlete = false
 
     private static let swipeThreshold: CGFloat = 60
 
@@ -31,12 +32,20 @@ public struct WeekView: View {
                         viewModel.goToToday()
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Athlete", systemImage: "person.circle") {
+                        isShowingAthlete = true
+                    }
+                }
             }
             .task(id: viewModel.displayedWeekStart) {
                 await viewModel.load()
             }
             .navigationDestination(for: Activity.self) { activity in
                 ActivityDetailView(viewModel: viewModel.activityDetailViewModel(for: activity))
+            }
+            .sheet(isPresented: $isShowingAthlete) {
+                AthleteView(viewModel: viewModel.athleteViewModel)
             }
         }
     }
