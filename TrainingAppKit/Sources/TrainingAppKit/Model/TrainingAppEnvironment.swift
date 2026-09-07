@@ -15,12 +15,21 @@ import HealthKit
 public final class TrainingAppEnvironment: ActivityRefreshing {
     public let model: TrainingModel
     private let importer: any ActivityImporting
+    private let athleteStore: any AthleteStore
     private let healthStore: HKHealthStore
+    private let athleteReader: HealthKitAthleteReader
 
-    private init(model: TrainingModel, importer: any ActivityImporting, healthStore: HKHealthStore) {
+    private init(
+        model: TrainingModel,
+        importer: any ActivityImporting,
+        athleteStore: any AthleteStore,
+        healthStore: HKHealthStore
+    ) {
         self.model = model
         self.importer = importer
+        self.athleteStore = athleteStore
         self.healthStore = healthStore
+        self.athleteReader = HealthKitAthleteReader(healthStore: healthStore)
     }
 
     /// Creates the environment this app instance runs on.
@@ -44,12 +53,32 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         // up and reused rather than duplicated — see `HealthKitActivityImporter`'s own doc comment
         // for the bug this avoids.
         let importer = HealthKitActivityImporter(healthStore: healthStore, activityStore: store)
-        return TrainingAppEnvironment(model: model, importer: importer, healthStore: healthStore)
+        return TrainingAppEnvironment(
+            model: model, importer: importer, athleteStore: store, healthStore: healthStore
+        )
     }
 
     /// See ``ActivityRefreshing/refreshActivities(asOf:)``.
+    ///
+    /// Also refreshes the athlete's biometrics from HealthKit (design doc §2.3's expectation that
+    /// this screen shows real imported data) — see ``refreshAthleteProfile(asOf:)``.
     public func refreshActivities(asOf today: Date) async throws {
         try await model.importActivities(from: importer, asOf: today)
+        await refreshAthleteProfile(asOf: today)
+    }
+
+    /// Reads a `HealthKitAthleteSnapshot` and merges it into `model.athlete`, persisting the
+    /// result if anything actually changed. Errors are swallowed — `HealthKitAthleteReader`
+    /// itself already treats a denied/missing data type as `nil` per field rather than throwing,
+    /// so a save failure here shouldn't take down `refreshActivities(asOf:)`, which just
+    /// successfully imported real activity data.
+    private func refreshAthleteProfile(asOf today: Date) async {
+        let snapshot = await athleteReader.snapshot(asOf: today)
+        let merged = model.athlete.merging(snapshot, asOf: today)
+        guard merged != model.athlete else { return }
+        model.athlete = merged
+        try? await athleteStore.save(merged)
+        await model.recompute(asOf: today)
     }
 
     /// See ``ActivityRefreshing/requestAuthorization()``.
