@@ -29,7 +29,7 @@ public final class WeekViewModel {
         self.displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
     }
 
-    /// `true` until a HealthKit import has ever completed for this athlete — the empty-state
+    /// `true` while no HealthKit import has yet completed for this athlete — the empty-state
     /// trigger (design doc §2.1).
     ///
     /// Deliberately keyed on `model.hasEverImportedActivities`, not `model.activities.isEmpty`:

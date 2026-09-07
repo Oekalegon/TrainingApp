@@ -237,6 +237,18 @@ struct WeekViewModelTests {
         #expect(refresher.callCount == 0)
         #expect(!viewModel.isRefreshing)
     }
+
+    @Test("connectHealthData(asOf:) clears hasNoActivities once the import completes")
+    func connectHealthDataClearsEmptyState() async throws {
+        let model = makeModel()
+        let refresher = ModelBackedFakeRefresher(model: model)
+        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        #expect(viewModel.hasNoActivities)
+
+        await viewModel.connectHealthData(asOf: day(0))
+
+        #expect(!viewModel.hasNoActivities)
+    }
 }
 
 @MainActor
@@ -259,5 +271,30 @@ private final class FakeRefresher: ActivityRefreshing {
     func requestAuthorization() async throws {
         authorizationRequested = true
         if shouldThrow { throw Boom() }
+    }
+}
+
+/// Unlike `FakeRefresher`, which just counts calls, this actually drives `model.importActivities(from:)`
+/// with a stub `ActivityImporting` — so a test can assert the real end-to-end effect of a refresh/
+/// connect on `model` (and therefore on anything, like `WeekViewModel.hasNoActivities`, that's
+/// derived from it), the way the app's real `TrainingAppEnvironment` does.
+@MainActor
+private final class ModelBackedFakeRefresher: ActivityRefreshing {
+    private let model: TrainingModel
+
+    init(model: TrainingModel) {
+        self.model = model
+    }
+
+    func refreshActivities(asOf today: Date) async throws {
+        try await model.importActivities(from: StubImporter(), asOf: today)
+    }
+
+    func requestAuthorization() async throws {}
+}
+
+private struct StubImporter: ActivityImporting {
+    func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
+        ImportResult(upserted: [], deletedSources: [], anchor: ImportAnchor(data: Data([1])))
     }
 }
