@@ -32,13 +32,13 @@ public final class WeekViewModel {
     /// `true` until a HealthKit import has ever completed for this athlete — the empty-state
     /// trigger (design doc §2.1).
     ///
-    /// Deliberately keyed on `model.hasImportedActivities`, not `model.activities.isEmpty`: the
-    /// latter only reflects whatever range was last loaded (``chartRange``, the 3 weeks around
+    /// Deliberately keyed on `model.hasEverImportedActivities`, not `model.activities.isEmpty`:
+    /// the latter only reflects whatever range was last loaded (``chartRange``, the 3 weeks around
     /// ``displayedWeekStart``), so an athlete who connected and has real training history outside
     /// that window would otherwise see the "Connect Health Data" prompt again instead of their
     /// (empty-for-this-week) calendar.
     public var hasNoActivities: Bool {
-        !model.hasImportedActivities
+        !model.hasEverImportedActivities
     }
 
     /// The athlete's timezone — views should format every date they show with this, not the
