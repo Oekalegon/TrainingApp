@@ -158,7 +158,7 @@ struct WeekViewModelTests {
         #expect(model.activities.map(\.id) == [activity.id])
     }
 
-    @Test("hasNoActivities reflects an empty model, for the empty-state prompt")
+    @Test("hasNoActivities reflects whether an import has ever happened, for the empty-state prompt")
     func hasNoActivitiesReflectsModelState() async throws {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
@@ -166,10 +166,27 @@ struct WeekViewModelTests {
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         #expect(viewModel.hasNoActivities)
 
-        let activity = Activity(source: .manual, sport: .running, start: day(0), duration: 1800)
-        try await store.upsert([activity])
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
         try await model.load(in: day(0)...day(6), asOf: day(0))
 
+        #expect(!viewModel.hasNoActivities)
+    }
+
+    @Test("hasNoActivities stays false once imported, even if the current chart range has no activities")
+    func hasNoActivitiesIgnoresCurrentlyLoadedRange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        // An activity months outside the loaded chart range -- proves hasNoActivities doesn't
+        // flip back on just because the displayed week's window happens to be empty.
+        let outOfRange = Activity(source: .healthKit(UUID()), sport: .running, start: day(200), duration: 1800)
+        try await store.upsert([outOfRange])
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+
+        #expect(model.activities.isEmpty)
         #expect(!viewModel.hasNoActivities)
     }
 
