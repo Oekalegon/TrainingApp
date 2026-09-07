@@ -114,6 +114,26 @@ struct WeekViewModelTests {
         #expect(viewModel.workout(for: plan)?.id == workout.id)
     }
 
+    @Test("load(asOf:) loads chartRange (3 weeks), not just the displayed week")
+    func loadFetchesChartRangeIntoModel() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        // Inside chartRange (the week after the displayed one) but outside weekDates — proves
+        // `load` fetches the wider 3-week window, not just the 7 displayed days.
+        let calendar = WeekViewModel.calendar(for: athlete)
+        let nextWeekDay = calendar.date(byAdding: .day, value: 10, to: viewModel.displayedWeekStart)!
+        let activity = Activity(source: .manual, sport: .running, start: nextWeekDay, duration: 1800)
+        try await store.upsert([activity])
+        #expect(model.activities.isEmpty)
+
+        await viewModel.load(asOf: day(0))
+
+        #expect(model.activities.map(\.id) == [activity.id])
+    }
+
     @Test("hasNoActivities reflects an empty model, for the empty-state prompt")
     func hasNoActivitiesReflectsModelState() async throws {
         let (store, stores) = makeStores()

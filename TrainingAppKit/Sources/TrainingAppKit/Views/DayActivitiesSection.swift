@@ -8,20 +8,33 @@ struct DayActivitiesSection: View {
     let activities: [Activity]
     let plans: [PlannedActivity]
     let workoutName: (PlannedActivity) -> String?
+    /// The athlete's timezone — every date here is formatted with this, not the device's default,
+    /// so headers/times agree with how `WeekViewModel` grouped them into this day in the first
+    /// place.
+    let timeZone: TimeZone
 
-    fileprivate static let headerFormat = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated)
-    fileprivate static let timeFormat = Date.FormatStyle.dateTime.hour().minute()
+    fileprivate static func headerFormat(timeZone: TimeZone) -> Date.FormatStyle {
+        var format = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated)
+        format.timeZone = timeZone
+        return format
+    }
+
+    fileprivate static func timeFormat(timeZone: TimeZone) -> Date.FormatStyle {
+        var format = Date.FormatStyle.dateTime.hour().minute()
+        format.timeZone = timeZone
+        return format
+    }
 
     var body: some View {
-        Section(day.formatted(Self.headerFormat)) {
+        Section(day.formatted(Self.headerFormat(timeZone: timeZone))) {
             if activities.isEmpty && plans.isEmpty {
                 Text("Rest day")
                     .foregroundStyle(.secondary)
             }
             ForEach(activities) { activity in
-                ActivityRow(activity: activity)
+                ActivityRow(activity: activity, timeZone: timeZone)
             }
-            ForEach(plans, id: \.id) { plan in
+            ForEach(plans) { plan in
                 PlannedActivityRow(plan: plan, workoutName: workoutName(plan))
             }
         }
@@ -30,6 +43,7 @@ struct DayActivitiesSection: View {
 
 private struct ActivityRow: View {
     let activity: Activity
+    let timeZone: TimeZone
 
     var body: some View {
         HStack {
@@ -37,7 +51,7 @@ private struct ActivityRow: View {
                 .foregroundStyle(.blue)
             VStack(alignment: .leading) {
                 Text(activity.sport.displayName)
-                Text(activity.start, format: DayActivitiesSection.timeFormat)
+                Text(activity.start, format: DayActivitiesSection.timeFormat(timeZone: timeZone))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

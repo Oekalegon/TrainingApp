@@ -35,6 +35,13 @@ public final class WeekViewModel {
         model.activities.isEmpty
     }
 
+    /// The athlete's timezone — views should format every date they show with this, not the
+    /// device's default, so displayed dates agree with how `displayedWeekStart`/`weekDates` were
+    /// actually computed.
+    public var athleteTimeZone: TimeZone {
+        model.athlete.timeZone
+    }
+
     /// The 7 days of the displayed week, starting `displayedWeekStart`.
     public var weekDates: [Date] {
         (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: displayedWeekStart) }

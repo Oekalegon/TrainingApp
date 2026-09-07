@@ -50,7 +50,8 @@ public struct WeekView: View {
                     day: day,
                     activities: viewModel.activities(on: day),
                     plans: viewModel.plans(on: day),
-                    workoutName: { viewModel.workout(for: $0)?.name }
+                    workoutName: { viewModel.workout(for: $0)?.name },
+                    timeZone: viewModel.athleteTimeZone
                 )
             }
         }
@@ -81,9 +82,9 @@ public struct WeekView: View {
     }
 
     private var weekTitle: String {
-        let end = Calendar.current.date(byAdding: .day, value: 6, to: viewModel.displayedWeekStart)
-            ?? viewModel.displayedWeekStart
-        let format = Date.FormatStyle.dateTime.day().month(.abbreviated)
+        let end = viewModel.weekDates.last ?? viewModel.displayedWeekStart
+        var format = Date.FormatStyle.dateTime.day().month(.abbreviated)
+        format.timeZone = viewModel.athleteTimeZone
         return "\(viewModel.displayedWeekStart.formatted(format)) – \(end.formatted(format))"
     }
 }
