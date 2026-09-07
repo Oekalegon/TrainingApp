@@ -7,9 +7,6 @@ options:
 packages:
   TrainingAppKit:
     path: TrainingAppKit
-  TrainingKit:
-    url: https://github.com/Oekalegon/TrainingKit.git
-    branch: develop
 
 targets:
   TrainingApp:
@@ -33,8 +30,6 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
     dependencies:
       - package: TrainingAppKit
-      - package: TrainingKit
-        product: TrainingCore
     scheme:
       testTargets: []
       gatherCoverageData: false
