@@ -41,23 +41,27 @@ struct DayActivitiesSection: View {
     }
 }
 
+/// A completed activity — a `NavigationLink(value:)` so `WeekView`'s `navigationDestination(for:)`
+/// can push `ActivityDetailView` without this row needing to know how to build one itself.
 private struct ActivityRow: View {
     let activity: Activity
     let timeZone: TimeZone
 
     var body: some View {
-        HStack {
-            Image(systemName: activity.sport.symbolName)
-                .foregroundStyle(.blue)
-            VStack(alignment: .leading) {
-                Text(activity.sport.displayName)
-                Text(activity.start, format: DayActivitiesSection.timeFormat(timeZone: timeZone))
-                    .font(.caption)
+        NavigationLink(value: activity) {
+            HStack {
+                Image(systemName: activity.sport.symbolName)
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading) {
+                    Text(activity.sport.displayName)
+                    Text(activity.start, format: DayActivitiesSection.timeFormat(timeZone: timeZone))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(Duration.seconds(activity.duration).formatted(.units(allowed: [.hours, .minutes])))
                     .foregroundStyle(.secondary)
             }
-            Spacer()
-            Text(Duration.seconds(activity.duration).formatted(.units(allowed: [.hours, .minutes])))
-                .foregroundStyle(.secondary)
         }
     }
 }

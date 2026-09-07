@@ -6,14 +6,28 @@ extension AthleteProfile {
     /// defaults — mirrors TrainingKit's own `AthleteProfile.fixture()` test helper.
     static func fixture(
         weekStartsOn: Weekday = .monday,
-        timeZoneIdentifier: String = "UTC"
+        timeZoneIdentifier: String = "UTC",
+        restingHeartRateBPM: Double? = nil,
+        maxHeartRateBPM: Double? = nil
     ) -> AthleteProfile {
-        AthleteProfile(
+        let heartRateZoneHistory: [HeartRateZoneSettings]
+        if let restingHeartRateBPM, let maxHeartRateBPM {
+            heartRateZoneHistory = [
+                HeartRateZoneSettings(
+                    effectiveDate: .distantPast,
+                    restingHeartRateBPM: restingHeartRateBPM,
+                    maxHeartRateBPM: maxHeartRateBPM
+                )
+            ]
+        } else {
+            heartRateZoneHistory = []
+        }
+        return AthleteProfile(
             sex: .unspecified,
             paceModel: PaceModel(thresholdPaceSecondsPerKilometer: 300),
             timeZone: TimeZone(identifier: timeZoneIdentifier)!,
             weekStartsOn: weekStartsOn,
-            heartRateZoneHistory: []
+            heartRateZoneHistory: heartRateZoneHistory
         )
     }
 }

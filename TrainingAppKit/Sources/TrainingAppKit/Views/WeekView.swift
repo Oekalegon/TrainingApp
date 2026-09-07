@@ -35,6 +35,9 @@ public struct WeekView: View {
             .task(id: viewModel.displayedWeekStart) {
                 await viewModel.load()
             }
+            .navigationDestination(for: Activity.self) { activity in
+                ActivityDetailView(viewModel: viewModel.activityDetailViewModel(for: activity))
+            }
         }
     }
 
