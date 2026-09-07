@@ -14,13 +14,13 @@ targets:
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: TrainingApp/Sources
+      - path: iOS/Sources
     resources:
-      - path: TrainingApp/Resources/Assets.xcassets
+      - path: iOS/Resources/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.oekalegon.trainingapp
-        CODE_SIGN_ENTITLEMENTS: TrainingApp/Resources/TrainingApp.entitlements
+        CODE_SIGN_ENTITLEMENTS: iOS/Resources/TrainingApp.entitlements
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSHealthShareUsageDescription: "TrainingApp reads your workouts and heart-rate data to compute your training load and fitness trend."
