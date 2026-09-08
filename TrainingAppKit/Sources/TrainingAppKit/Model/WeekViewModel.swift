@@ -24,6 +24,10 @@ public final class WeekViewModel {
     /// athlete screen's own button state shouldn't flip just because a pull-to-refresh happens to
     /// be running underneath it, or vice versa.
     public private(set) var isResyncing = false
+    /// `true` while the athlete screen's "Deduplicate Activities" action is in flight. Kept
+    /// separate from ``isRefreshing``/``isResyncing`` for the same reason those two are kept
+    /// separate from each other.
+    public private(set) var isDeduplicating = false
 
     /// Creates a week view model showing the week containing `today`.
     public init(model: TrainingModel, refresher: any ActivityRefreshing, today: Date = .now) {
@@ -189,6 +193,19 @@ public final class WeekViewModel {
         isResyncing = true
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
+    }
+
+    /// The athlete screen's "Deduplicate Activities" action (MVP1-44): removes duplicate
+    /// `Activity` records left over from before the concurrent-import race that produced them was
+    /// fixed (MVP1-26) — including duplicates already synced to CloudKit before that fix, which
+    /// deleting and reinstalling the app doesn't clear on its own. Goes straight through `model`
+    /// rather than `refresher`, since this is a plain store cleanup with no `ActivityImporting`
+    /// dependency. Failures fail silently, same as ``resyncActivities(asOf:)`` — MVP 1 has no
+    /// error UI.
+    public func deduplicateActivities(asOf today: Date = .now) async {
+        isDeduplicating = true
+        defer { isDeduplicating = false }
+        try? await model.deduplicateActivities(asOf: today)
     }
 
     static func calendar(for athlete: AthleteProfile) -> Calendar {

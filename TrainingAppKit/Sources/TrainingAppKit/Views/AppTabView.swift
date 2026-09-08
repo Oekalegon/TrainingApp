@@ -22,9 +22,13 @@ public struct AppTabView: View {
                     Label("Week", systemImage: "calendar")
                 }
 
-            AthleteView(viewModel: viewModel.athleteViewModel, isResyncing: viewModel.isResyncing) {
-                Task { await viewModel.resyncActivities() }
-            }
+            AthleteView(
+                viewModel: viewModel.athleteViewModel,
+                isResyncing: viewModel.isResyncing,
+                onResync: { Task { await viewModel.resyncActivities() } },
+                isDeduplicating: viewModel.isDeduplicating,
+                onDeduplicate: { Task { await viewModel.deduplicateActivities() } }
+            )
             .tabItem {
                 Label("Athlete", systemImage: "person.circle")
             }

@@ -299,6 +299,19 @@ struct WeekViewModelTests {
         #expect(!viewModel.isResyncing)
     }
 
+    @Test("deduplicateActivities(asOf:) toggles isDeduplicating, independent of isRefreshing/isResyncing")
+    func deduplicateTogglesFlagIndependently() async {
+        let model = makeModel()
+        let refresher = FakeRefresher()
+        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+
+        #expect(!viewModel.isDeduplicating)
+        await viewModel.deduplicateActivities(asOf: day(0))
+        #expect(!viewModel.isDeduplicating)
+        #expect(!viewModel.isRefreshing)
+        #expect(!viewModel.isResyncing)
+    }
+
     @Test("resyncActivities(asOf:) reaches TrainingModel end-to-end, same as refresh(asOf:) does")
     func resyncActivitiesUpdatesModelEndToEnd() async throws {
         let model = makeModel()
