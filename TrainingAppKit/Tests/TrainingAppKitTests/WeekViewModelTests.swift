@@ -106,6 +106,21 @@ struct WeekViewModelTests {
         #expect(viewModel.displayedWeekStart == start)
     }
 
+    @Test("goToWeek(containing:) jumps to an arbitrary date's week, not just today's")
+    func goToWeekJumpsToArbitraryDate() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: model.athlete)
+        // Several weeks away from `today`, so this can't be confused with `goToToday`'s target.
+        let target = day(40)
+        let expectedStart = calendar.dateInterval(of: .weekOfYear, for: target)!.start
+
+        viewModel.goToWeek(containing: target)
+
+        #expect(viewModel.displayedWeekStart == expectedStart)
+        #expect(viewModel.displayedWeekStart != calendar.dateInterval(of: .weekOfYear, for: day(0))!.start)
+    }
+
     @Test("activities(on:) and plans(on:) filter to exactly that calendar day")
     func activitiesAndPlansFilterByDay() async throws {
         let (store, stores) = makeStores()

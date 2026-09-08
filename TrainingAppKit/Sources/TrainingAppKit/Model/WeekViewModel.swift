@@ -53,6 +53,13 @@ public final class WeekViewModel {
         model.athlete.timeZone
     }
 
+    /// The athlete's calendar (timezone + `weekStartsOn` applied) — used to keep the "Select Date"
+    /// picker's own week-row layout consistent with how `displayedWeekStart`/`weekDates` are
+    /// actually computed, not the device's locale default.
+    public var athleteCalendar: Calendar {
+        calendar
+    }
+
     /// The 7 days of the displayed week, starting `displayedWeekStart`.
     public var weekDates: [Date] {
         weekDates(offsetWeeks: 0)
@@ -124,7 +131,13 @@ public final class WeekViewModel {
 
     /// Jumps back to the week containing `today`.
     public func goToToday(asOf today: Date = .now) {
-        displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
+        goToWeek(containing: today)
+    }
+
+    /// Jumps to the week containing `date` — the "Select Date" toolbar action's destination,
+    /// for an arbitrary date rather than today's.
+    public func goToWeek(containing date: Date) {
+        displayedWeekStart = Self.weekStart(containing: date, calendar: calendar)
     }
 
     /// Loads ``chartRange`` from the stores into `model`. Errors are swallowed — a failed load

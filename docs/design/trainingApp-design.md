@@ -44,7 +44,7 @@ TrainingApp/                      # sibling to TrainingKit/ on disk
     Package.swift
     Sources/TrainingAppKit/
       Model/                    # TrainingAppEnvironment, WeekViewModel, ActivityDetailViewModel
-      Views/                    # WeekView, ActivityDetailView, AthleteView, EmptyStateView
+      Views/                    # AppTabView, WeekView, ActivityDetailView, AthleteView, EmptyStateView
     Tests/TrainingAppKitTests/
   docs/design/trainingApp-design.md   # this document
 ```
@@ -72,9 +72,15 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 
 ## 2. Screens
 
-### 2.1 Week view (top-level, only tab)
+### 2.0 Top-level navigation
 
-One screen, no tab bar — there's nothing else to switch to in MVP 1.
+`AppTabView` is the app's root: a bottom tab bar with two tabs, "Week" (§2.1) and "Athlete"
+(§2.3) — both built from the same `WeekViewModel` instance (`AthleteView` reads it via
+`WeekViewModel.athleteViewModel`), owned by `AppTabView` and constructed once for the app's
+lifetime. There's no tab-selection state beyond `TabView`'s own default — MVP 1 doesn't need to
+remember or restore which tab was last active.
+
+### 2.1 Week view
 
 - **Top**: a chart (Swift Charts) of CTL / ATL / TSB over a 3-week window centered on the
   displayed week (i.e. the week before, the displayed week, the week after), fed from
@@ -85,7 +91,8 @@ One screen, no tab bar — there's nothing else to switch to in MVP 1.
 - **Gestures**: horizontal swipe moves the displayed week by ±1 week (re-centers the chart,
   reloads the day list). Both the chart and the day list scroll together — the displayed week is
   one piece of state, not two.
-- **Toolbar**: "Today" button resets the displayed week to the current calendar week.
+- **Toolbar**: "Today" button resets the displayed week to the current calendar week; "Select
+  Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date.
 - **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
@@ -109,7 +116,7 @@ render workout structure detail, only the plan's date/expected load inline in th
 
 ### 2.3 Athlete account
 
-Reachable from a toolbar button on the week view (e.g. a person icon, alongside "Today").
+Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0).
 Read-only display of `TrainingModel.athlete: AthleteProfile` — **not editable in MVP 1**, since
 there's no save/write path back through `TrainingModel` yet and this is meant to confirm the
 imported biometric data looks right, not to be a settings screen:
@@ -150,14 +157,13 @@ No athlete switching, so exactly one `TrainingModel` for the app's lifetime:
 
 ```swift
 @main
-struct TrainingApp: App {
-    @State private var model: TrainingModel?
+struct TrainingAppApp: App {
+    @State private var environment: TrainingAppEnvironment?
 
     var body: some Scene {
         WindowGroup {
-            if let model {
-                WeekView()
-                    .environment(model)
+            if let environment {
+                AppTabView(model: environment.model, refresher: environment)
             } else {
                 LaunchingView()   // builds the StoreSet + TrainingModel asynchronously
             }
@@ -166,9 +172,11 @@ struct TrainingApp: App {
 }
 ```
 
-`TrainingModel` is `@Observable @MainActor`, so it's injected via `.environment(_:)` (Observation
-framework, not an `ObservableObject`/`@EnvironmentObject`) and read with `@Environment(TrainingModel.self)`
-in views/view models.
+`TrainingModel` is `@Observable @MainActor`. In practice it's threaded through explicit
+constructor parameters (`AppTabView(model:refresher:)` → `WeekViewModel(model:refresher:)`) rather
+than `.environment(_:)`/`@Environment(TrainingModel.self)` — there's only ever one `TrainingModel`
+for the app's lifetime, so there's no need for the environment-injection machinery that pattern
+exists to support.
 
 ### 3.2 CloudKit container
 
