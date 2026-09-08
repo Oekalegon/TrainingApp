@@ -9,6 +9,40 @@ struct FitnessChartView: View {
     /// shaded behind the trend lines so the 3-week chart stays visually anchored to whichever week
     /// the athlete has scrolled to.
     let displayedWeekRange: ClosedRange<Date>
+    /// Days after this are projected/estimated rather than actual history (see
+    /// `FitnessMetrics.isProjected`), so the CTL/ATL/TSB lines render dashed past this point.
+    /// Defaults to `.now`, but is a stored property (not a default parameter) so a preview or a
+    /// future test can pin it.
+    let today: Date
+
+    init(metrics: [FitnessMetrics], displayedWeekRange: ClosedRange<Date>, today: Date = .now) {
+        self.metrics = metrics
+        self.displayedWeekRange = displayedWeekRange
+        self.today = today
+    }
+
+    /// `metrics`, sorted by day — the split into ``pastPoints`` / ``futurePoints`` below assumes
+    /// ascending order.
+    private var sortedMetrics: [FitnessMetrics] {
+        metrics.sorted { $0.day < $1.day }
+    }
+
+    /// Days up to and including `today` — drawn as solid lines. Includes the first future day too
+    /// (see ``futurePoints``) so the solid and dashed segments connect with no visual gap.
+    private var pastPoints: [FitnessMetrics] {
+        let sorted = sortedMetrics
+        guard let splitIndex = sorted.lastIndex(where: { $0.day <= today }) else { return [] }
+        return Array(sorted[0...splitIndex])
+    }
+
+    /// Days from `today` onward — drawn as dashed lines, since a projected/estimated value hasn't
+    /// actually happened yet. Starts at the same index as ``pastPoints`` ends, not one past it, so
+    /// the dashed segment continues from exactly where the solid one stops.
+    private var futurePoints: [FitnessMetrics] {
+        let sorted = sortedMetrics
+        guard let splitIndex = sorted.lastIndex(where: { $0.day <= today }) else { return sorted }
+        return Array(sorted[splitIndex...])
+    }
 
     /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
     /// so a single heavy training day can be several times larger than the smoothed lines. It's
@@ -42,13 +76,25 @@ struct FitnessChartView: View {
                 )
                 .foregroundStyle(Color.primary.opacity(0.1))
 
-                ForEach(metrics, id: \.day) { point in
+                ForEach(pastPoints, id: \.day) { point in
                     LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
                         .foregroundStyle(by: .value("Series", "Fitness (CTL)"))
                     LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
                         .foregroundStyle(by: .value("Series", "Fatigue (ATL)"))
                     LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
                         .foregroundStyle(by: .value("Series", "Form (TSB)"))
+                }
+
+                ForEach(futurePoints, id: \.day) { point in
+                    LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
+                        .foregroundStyle(by: .value("Series", "Fitness (CTL)"))
+                        .lineStyle(StrokeStyle(dash: [5, 4]))
+                    LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
+                        .foregroundStyle(by: .value("Series", "Fatigue (ATL)"))
+                        .lineStyle(StrokeStyle(dash: [5, 4]))
+                    LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                        .foregroundStyle(by: .value("Series", "Form (TSB)"))
+                        .lineStyle(StrokeStyle(dash: [5, 4]))
                 }
             }
             .chartForegroundStyleScale([
