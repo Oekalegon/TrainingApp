@@ -145,7 +145,7 @@ public struct WeekView: View {
     /// direct-manipulation paging control.
     private var weekContent: some View {
         VStack(spacing: 0) {
-            FitnessChartView(metrics: viewModel.chartMetrics)
+            FitnessChartView(metrics: viewModel.chartMetrics, currentWeekRange: viewModel.currentWeekRange())
                 .padding(.vertical, 8)
 
             GeometryReader { geometry in

@@ -5,6 +5,10 @@ import TrainingCore
 /// The 3-week CTL/ATL/TSB trend chart at the top of the week view (design doc §2.1).
 struct FitnessChartView: View {
     let metrics: [FitnessMetrics]
+    /// Date range of the calendar week containing "now" (`WeekViewModel.currentWeekRange(asOf:)`),
+    /// shaded behind the trend lines so "now" stays visible even when the displayed week (and so
+    /// the chart's 3-week window) has been navigated away from it.
+    let currentWeekRange: ClosedRange<Date>
 
     /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
     /// so a single heavy training day can be several times larger than the smoothed lines. It's
@@ -17,13 +21,21 @@ struct FitnessChartView: View {
 
     var body: some View {
         ZStack {
-            Chart(metrics, id: \.day) { point in
-                LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
-                    .foregroundStyle(by: .value("Series", "Fitness (CTL)"))
-                LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
-                    .foregroundStyle(by: .value("Series", "Fatigue (ATL)"))
-                LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
-                    .foregroundStyle(by: .value("Series", "Form (TSB)"))
+            Chart {
+                RectangleMark(
+                    xStart: .value("Week start", currentWeekRange.lowerBound),
+                    xEnd: .value("Week end", currentWeekRange.upperBound)
+                )
+                .foregroundStyle(Color.primary.opacity(0.06))
+
+                ForEach(metrics, id: \.day) { point in
+                    LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
+                        .foregroundStyle(by: .value("Series", "Fitness (CTL)"))
+                    LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
+                        .foregroundStyle(by: .value("Series", "Fatigue (ATL)"))
+                    LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                        .foregroundStyle(by: .value("Series", "Form (TSB)"))
+                }
             }
             .chartForegroundStyleScale([
                 "Fitness (CTL)": Color.blue,

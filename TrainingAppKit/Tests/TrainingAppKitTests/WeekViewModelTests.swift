@@ -77,6 +77,28 @@ struct WeekViewModelTests {
         #expect(dayCount == 20)
     }
 
+    @Test("currentWeekRange(asOf:) tracks today's week, independent of navigating displayedWeekStart away from it")
+    func currentWeekRangeStaysOnTodayAfterNavigating() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let today = day(0)
+
+        let expectedStart = WeekViewModel.weekStart(containing: today, calendar: calendar)
+        let expectedEnd = calendar.date(byAdding: .day, value: 7, to: expectedStart)!
+
+        // Before navigating, today's week and the displayed week coincide.
+        #expect(viewModel.currentWeekRange(asOf: today).lowerBound == expectedStart)
+        #expect(viewModel.currentWeekRange(asOf: today).upperBound == expectedEnd)
+
+        // After navigating away, currentWeekRange(asOf:) should still report today's week, not
+        // wherever displayedWeekStart has moved to.
+        viewModel.goToNextWeek()
+        viewModel.goToNextWeek()
+        #expect(viewModel.currentWeekRange(asOf: today).lowerBound == expectedStart)
+        #expect(viewModel.currentWeekRange(asOf: today).upperBound == expectedEnd)
+    }
+
     @Test("goToNextWeek/goToPreviousWeek move by exactly 7 days")
     func weekNavigationMovesBySevenDays() {
         let model = makeModel()
