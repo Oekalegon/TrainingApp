@@ -50,7 +50,17 @@ public final class WeekViewModel {
 
     /// The 7 days of the displayed week, starting `displayedWeekStart`.
     public var weekDates: [Date] {
-        (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: displayedWeekStart) }
+        weekDates(offsetWeeks: 0)
+    }
+
+    /// The 7 days of the week `weeks` weeks away from ``displayedWeekStart`` (negative for
+    /// earlier, positive for later), without changing ``displayedWeekStart`` itself.
+    ///
+    /// Lets a view render the neighboring weeks (e.g. to peek during a swipe) purely from data
+    /// already covered by ``chartRange`` — no navigation state changes, no separate load.
+    public func weekDates(offsetWeeks weeks: Int) -> [Date] {
+        let start = calendar.date(byAdding: .day, value: weeks * 7, to: displayedWeekStart) ?? displayedWeekStart
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
 
     /// The 3-week range (the week before, the displayed week, the week after) the chart covers
