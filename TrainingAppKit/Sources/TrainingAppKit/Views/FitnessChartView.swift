@@ -24,27 +24,8 @@ struct FitnessChartView: View {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).future
     }
 
-    /// One point per calendar day with an actual training load, loads summed if `metrics` has
-    /// more than one entry for the same day — `FitnessMetrics.day` is meant to be unique per day
-    /// (`FitnessMetricsCalculator` produces exactly one row per input day), but a duplicate-row
-    /// bug upstream (the same class of concurrent-upsert race `MVP1-26` fixed for activities) can
-    /// still surface as several separate dots on one day, each carrying a single activity's load
-    /// instead of the day's total. Summing here shows the correct daily TRIMP regardless, though
-    /// the root cause still belongs in TrainingKit's `FitnessMetricsCacheStore.upsert`.
-    private struct DailyLoad: Hashable {
-        let day: Date
-        let load: Double
-    }
-
     private var dailyLoads: [DailyLoad] {
-        var totals: [Date: Double] = [:]
-        for point in metrics {
-            totals[point.day, default: 0] += point.load
-        }
-        return totals
-            .filter { $0.value > 0 }
-            .map { DailyLoad(day: $0.key, load: $0.value) }
-            .sorted { $0.day < $1.day }
+        DailyLoad.aggregating(metrics)
     }
 
     /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
@@ -121,6 +102,11 @@ struct FitnessChartView: View {
                     AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                 }
             }
+            // The load chart below is the only one with a labeled y-axis. Left unhidden, Charts'
+            // own default leading axis for this chart would sit at the same position as the load
+            // axis (both charts share this frame) — invisible right now only because CTL/ATL/TSB
+            // are all reading 0 (MVP1-21), coincidentally matching the load axis's own domain.
+            .chartYAxis(.hidden)
             .chartLegend(.hidden)
 
             Chart(dailyLoads, id: \.day) { point in
