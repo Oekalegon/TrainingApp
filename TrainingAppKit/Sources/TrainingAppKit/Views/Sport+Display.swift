@@ -10,6 +10,7 @@ extension Sport {
         case .strength: "Strength"
         case .walking: "Walking"
         case .rowing: "Rowing"
+        case .hiking: "Hiking"
         case .other(let name): name
         }
     }
@@ -23,6 +24,7 @@ extension Sport {
         case .strength: "figure.strengthtraining.traditional"
         case .walking: "figure.walk"
         case .rowing: "figure.rower"
+        case .hiking: "figure.hiking"
         case .other: "figure.mixed.cardio"
         }
     }
