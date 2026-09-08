@@ -19,6 +19,11 @@ public final class WeekViewModel {
     public private(set) var displayedWeekStart: Date
     /// `true` while a pull-to-refresh import is in flight.
     public private(set) var isRefreshing = false
+    /// `true` while a full resync (the athlete screen's "Force Full Resync" action) is in flight.
+    /// Kept separate from ``isRefreshing`` so the two actions' spinners never conflate — the
+    /// athlete screen's own button state shouldn't flip just because a pull-to-refresh happens to
+    /// be running underneath it, or vice versa.
+    public private(set) var isResyncing = false
 
     /// Creates a week view model showing the week containing `today`.
     public init(model: TrainingModel, refresher: any ActivityRefreshing, today: Date = .now) {
@@ -151,6 +156,18 @@ public final class WeekViewModel {
         } catch {
             return
         }
+    }
+
+    /// The athlete screen's "Force Full Resync" action (design doc §2.3): re-imports every
+    /// matching activity from scratch via `refresher.resyncActivities(asOf:)`, so a mapping fix
+    /// (e.g. a `Sport` case that used to fall back to `.other`) reaches activities that were
+    /// already imported before the fix — `Sport` is resolved once at import time and persisted,
+    /// not recomputed on read. Failures fail silently, same as ``refresh(asOf:)`` — MVP 1 has no
+    /// error UI.
+    public func resyncActivities(asOf today: Date = .now) async {
+        isResyncing = true
+        defer { isResyncing = false }
+        try? await refresher.resyncActivities(asOf: today)
     }
 
     static func calendar(for athlete: AthleteProfile) -> Calendar {

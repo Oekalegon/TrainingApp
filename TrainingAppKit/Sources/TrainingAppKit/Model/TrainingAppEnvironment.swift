@@ -67,6 +67,12 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         await refreshAthleteProfile(asOf: today)
     }
 
+    /// See ``ActivityRefreshing/resyncActivities(asOf:)``.
+    public func resyncActivities(asOf today: Date) async throws {
+        try await model.resyncActivities(from: importer, asOf: today)
+        await refreshAthleteProfile(asOf: today)
+    }
+
     /// Reads a `HealthKitAthleteSnapshot` and merges it into `model.athlete`, persisting the
     /// result if anything actually changed. Errors are swallowed — `HealthKitAthleteReader`
     /// itself already treats a denied/missing data type as `nil` per field rather than throwing,

@@ -131,6 +131,15 @@ imported biometric data looks right, not to be a settings screen:
 just "what's in effect now"). No editing, no HealthKit-write-back; this screen only reads what
 `TrainingHealthKit`/`TrainingPersistence` have already populated.
 
+**Force Full Resync**: a single action at the bottom of the screen that re-imports every activity
+from HealthKit from scratch, via `TrainingModel.resyncActivities(from:asOf:)` — a full import
+(cleared `ImportAnchor`) rather than the incremental one pull-to-refresh runs. This doesn't edit
+the athlete profile; it exists because `Sport` (and other per-activity fields) is resolved once at
+import time and persisted, not recomputed on read, so an app update that fixes a mapping (e.g. a
+`HKWorkoutActivityType` that used to fall back to `Sport.other`) doesn't retroactively fix
+activities imported before the fix. This is a recovery action, not a settings toggle — the screen
+otherwise stays read-only as described above.
+
 ---
 
 ## 3. Data & state architecture
