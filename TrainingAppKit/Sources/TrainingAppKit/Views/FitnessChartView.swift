@@ -24,6 +24,12 @@ struct FitnessChartView: View {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).future
     }
 
+    /// Days with an actual training load — rest days (`load == 0`) don't get a dot, since a dot
+    /// at zero on every rest day would clutter the chart with a mark that carries no information.
+    private var daysWithActivity: [FitnessMetrics] {
+        metrics.filter { $0.load > 0 }
+    }
+
     /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
     /// so a single heavy training day can be several times larger than the smoothed lines. It's
     /// drawn on its own trailing y-axis (rather than sharing the CTL/ATL/TSB domain) so a load
@@ -100,15 +106,19 @@ struct FitnessChartView: View {
             }
             .chartLegend(.hidden)
 
-            Chart(metrics, id: \.day) { point in
+            Chart(daysWithActivity, id: \.day) { point in
                 PointMark(x: .value("Day", point.day), y: .value("TRIMP", point.load))
                     .foregroundStyle(by: .value("Series", "Daily load (TRIMP)"))
+                    .symbolSize(20)
             }
             .chartForegroundStyleScale(["Daily load (TRIMP)": Color.red])
             .chartXScale(domain: dayDomain)
             .chartYScale(domain: loadDomain)
             .chartYAxis {
-                AxisMarks(position: .trailing)
+                // Leading (not trailing/right), since the CTL/ATL/TSB lines' rightmost points sit
+                // right at the plot's trailing edge — a trailing axis collided with them there,
+                // most visibly with the TSB line.
+                AxisMarks(position: .leading)
             }
             .chartXAxis(.hidden)
             .chartLegend(.hidden)
