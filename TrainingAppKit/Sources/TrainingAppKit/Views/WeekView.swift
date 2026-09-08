@@ -7,6 +7,9 @@ import TrainingCore
 public struct WeekView: View {
     @State private var viewModel: WeekViewModel
     @State private var isShowingAthlete = false
+    /// The activity currently shown in the detail sheet, or `nil` when none is presented.
+    /// `Activity` is `Identifiable`, so `.sheet(item:)` handles show/dismiss from this alone.
+    @State private var selectedActivity: Activity?
     /// Horizontal offset applied to the previous/current/next page `HStack`, on top of its base
     /// "current page centered" position — 0 while idle, tracking the finger during a drag, then
     /// animated to a full page width (commit) or back to 0 (cancel) once the drag ends. Nothing
@@ -69,8 +72,21 @@ public struct WeekView: View {
             .task(id: viewModel.displayedWeekStart) {
                 await viewModel.load()
             }
-            .navigationDestination(for: Activity.self) { activity in
-                ActivityDetailView(viewModel: viewModel.activityDetailViewModel(for: activity))
+            .sheet(item: $selectedActivity) { activity in
+                // Its own NavigationStack: a sheet doesn't inherit the presenting view's
+                // navigation bar, and ActivityDetailView's .navigationTitle needs one to render
+                // into. The "Close" button is the sheet's dismiss control -- there's no back
+                // button to fall back on the way there was when this pushed onto WeekView's stack.
+                NavigationStack {
+                    ActivityDetailView(viewModel: viewModel.activityDetailViewModel(for: activity))
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Close") {
+                                    selectedActivity = nil
+                                }
+                            }
+                        }
+                }
             }
             .sheet(isPresented: $isShowingAthlete) {
                 AthleteView(viewModel: viewModel.athleteViewModel)
@@ -129,7 +145,8 @@ public struct WeekView: View {
                         activities: viewModel.activities(on: day),
                         plans: viewModel.plans(on: day),
                         workoutName: { viewModel.workout(for: $0)?.name },
-                        timeZone: viewModel.athleteTimeZone
+                        timeZone: viewModel.athleteTimeZone,
+                        onSelectActivity: { selectedActivity = $0 }
                     )
                 }
             }

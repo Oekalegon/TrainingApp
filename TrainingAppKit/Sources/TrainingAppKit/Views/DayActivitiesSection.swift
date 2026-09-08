@@ -22,6 +22,10 @@ struct DayActivitiesSection: View {
     /// so the dates/times shown agree with how `WeekViewModel` grouped them into this day in the
     /// first place.
     let timeZone: TimeZone
+    /// Called when a completed activity's row is tapped — `WeekView` presents it in a detail
+    /// sheet, not a navigation push, so this hands back the tapped `Activity` rather than this
+    /// view building a `NavigationLink` itself.
+    let onSelectActivity: (Activity) -> Void
 
     /// Weekday + day + month, no time — used for planned activities, which only carry a calendar
     /// day (`PlannedActivity.date`), not a time of day.
@@ -41,7 +45,7 @@ struct DayActivitiesSection: View {
 
     var body: some View {
         ForEach(activities) { activity in
-            ActivityRow(activity: activity, timeZone: timeZone)
+            ActivityRow(activity: activity, timeZone: timeZone, onSelect: { onSelectActivity(activity) })
         }
         ForEach(plans) { plan in
             PlannedActivityRow(plan: plan, workoutName: workoutName(plan), timeZone: timeZone)
@@ -49,14 +53,16 @@ struct DayActivitiesSection: View {
     }
 }
 
-/// A completed activity — a `NavigationLink(value:)` so `WeekView`'s `navigationDestination(for:)`
-/// can push `ActivityDetailView` without this row needing to know how to build one itself.
+/// A completed activity — tapping it presents `ActivityDetailView` in a sheet (see `WeekView`'s
+/// `.sheet(item: $selectedActivity)`), so this is a plain `Button` rather than a
+/// `NavigationLink(value:)`/`navigationDestination` push.
 private struct ActivityRow: View {
     let activity: Activity
     let timeZone: TimeZone
+    let onSelect: () -> Void
 
     var body: some View {
-        NavigationLink(value: activity) {
+        Button(action: onSelect) {
             HStack {
                 Image(systemName: activity.sport.symbolName)
                     .foregroundStyle(.blue)
@@ -72,7 +78,9 @@ private struct ActivityRow: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
 
