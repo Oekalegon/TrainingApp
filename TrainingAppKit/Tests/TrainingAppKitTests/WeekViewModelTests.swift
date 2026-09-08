@@ -265,6 +265,18 @@ struct WeekViewModelTests {
         #expect(!viewModel.isResyncing)
     }
 
+    @Test("resyncActivities(asOf:) reaches TrainingModel end-to-end, same as refresh(asOf:) does")
+    func resyncActivitiesUpdatesModelEndToEnd() async throws {
+        let model = makeModel()
+        let refresher = ModelBackedFakeRefresher(model: model)
+        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        #expect(viewModel.hasNoActivities)
+
+        await viewModel.resyncActivities(asOf: day(0))
+
+        #expect(!viewModel.hasNoActivities)
+    }
+
     @Test("connectHealthData(asOf:) requests authorization before refreshing")
     func connectHealthDataRequestsAuthorizationThenRefreshes() async {
         let model = makeModel()

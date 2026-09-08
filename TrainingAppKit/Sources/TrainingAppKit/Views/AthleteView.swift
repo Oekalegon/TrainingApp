@@ -11,6 +11,7 @@ struct AthleteView: View {
     let isResyncing: Bool
     let onResync: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var isConfirmingResync = false
 
     var body: some View {
         NavigationStack {
@@ -55,7 +56,9 @@ struct AthleteView: View {
                 }
 
                 Section {
-                    Button(action: onResync) {
+                    Button {
+                        isConfirmingResync = true
+                    } label: {
                         HStack {
                             Text("Force Full Resync")
                             if isResyncing {
@@ -77,6 +80,16 @@ struct AthleteView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .confirmationDialog(
+                "Re-import your entire activity history from HealthKit?",
+                isPresented: $isConfirmingResync,
+                titleVisibility: .visible
+            ) {
+                Button("Force Full Resync", role: .destructive, action: onResync)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This can take a while for a long training history.")
             }
         }
     }
