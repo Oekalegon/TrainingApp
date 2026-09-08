@@ -230,6 +230,41 @@ struct WeekViewModelTests {
         #expect(!viewModel.isRefreshing)
     }
 
+    @Test("resyncActivities(asOf:) toggles isResyncing and delegates to the refresher")
+    func resyncDelegatesAndTogglesFlag() async {
+        let model = makeModel()
+        let refresher = FakeRefresher()
+        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+
+        #expect(!viewModel.isResyncing)
+        await viewModel.resyncActivities(asOf: day(0))
+        #expect(!viewModel.isResyncing)
+        #expect(refresher.resyncCallCount == 1)
+    }
+
+    @Test("resyncActivities(asOf:) clears isResyncing even when the refresher throws")
+    func resyncClearsFlagOnFailure() async {
+        let model = makeModel()
+        let refresher = FakeRefresher(shouldThrow: true)
+        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+
+        await viewModel.resyncActivities(asOf: day(0))
+        #expect(!viewModel.isResyncing)
+    }
+
+    @Test("resyncActivities(asOf:) doesn't affect isRefreshing, and vice versa")
+    func resyncAndRefreshFlagsAreIndependent() async {
+        let model = makeModel()
+        let refresher = FakeRefresher()
+        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+
+        await viewModel.resyncActivities(asOf: day(0))
+        #expect(!viewModel.isRefreshing)
+
+        await viewModel.refresh(asOf: day(0))
+        #expect(!viewModel.isResyncing)
+    }
+
     @Test("connectHealthData(asOf:) requests authorization before refreshing")
     func connectHealthDataRequestsAuthorizationThenRefreshes() async {
         let model = makeModel()
@@ -281,8 +316,15 @@ private final class FakeRefresher: ActivityRefreshing {
 
     struct Boom: Error {}
 
+    private(set) var resyncCallCount = 0
+
     func refreshActivities(asOf today: Date) async throws {
         callCount += 1
+        if shouldThrow { throw Boom() }
+    }
+
+    func resyncActivities(asOf today: Date) async throws {
+        resyncCallCount += 1
         if shouldThrow { throw Boom() }
     }
 
@@ -306,6 +348,10 @@ private final class ModelBackedFakeRefresher: ActivityRefreshing {
 
     func refreshActivities(asOf today: Date) async throws {
         try await model.importActivities(from: StubImporter(), asOf: today)
+    }
+
+    func resyncActivities(asOf today: Date) async throws {
+        try await model.resyncActivities(from: StubImporter(), asOf: today)
     }
 
     func requestAuthorization() async throws {}

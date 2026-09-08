@@ -2,9 +2,14 @@ import SwiftUI
 import TrainingCore
 
 /// The read-only athlete account screen (design doc §2.3): everything here is display-only — no
-/// editing, no save button, no `heartRateZoneHistory` timeline, just what's currently in effect.
+/// editing of the profile itself, no `heartRateZoneHistory` timeline, just what's currently in
+/// effect. The one action this screen offers, "Force Full Resync", doesn't edit the profile — it
+/// re-imports activities from scratch, for recovering from a mapping fix that already-imported
+/// activities wouldn't otherwise pick up (design doc §2.3).
 struct AthleteView: View {
     let viewModel: AthleteViewModel
+    let isResyncing: Bool
+    let onResync: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -47,6 +52,21 @@ struct AthleteView: View {
                 Section("Calendar") {
                     LabeledContent("Week Starts On", value: viewModel.athlete.weekStartsOn.displayName)
                     LabeledContent("Time Zone", value: viewModel.athlete.timeZone.identifier)
+                }
+
+                Section {
+                    Button(action: onResync) {
+                        HStack {
+                            Text("Force Full Resync")
+                            if isResyncing {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isResyncing)
+                } footer: {
+                    Text("Re-imports every activity from HealthKit from scratch. Use this if an activity's sport or name looks wrong after an app update.")
                 }
             }
             .navigationTitle("Athlete")

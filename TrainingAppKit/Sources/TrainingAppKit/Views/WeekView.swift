@@ -82,7 +82,9 @@ public struct WeekView: View {
                 }
             }
             .sheet(isPresented: $isShowingAthlete) {
-                AthleteView(viewModel: viewModel.athleteViewModel)
+                AthleteView(viewModel: viewModel.athleteViewModel, isResyncing: viewModel.isResyncing) {
+                    Task { await viewModel.resyncActivities() }
+                }
             }
         }
     }
