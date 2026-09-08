@@ -24,10 +24,27 @@ struct FitnessChartView: View {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).future
     }
 
-    /// Days with an actual training load — rest days (`load == 0`) don't get a dot, since a dot
-    /// at zero on every rest day would clutter the chart with a mark that carries no information.
-    private var daysWithActivity: [FitnessMetrics] {
-        metrics.filter { $0.load > 0 }
+    /// One point per calendar day with an actual training load, loads summed if `metrics` has
+    /// more than one entry for the same day — `FitnessMetrics.day` is meant to be unique per day
+    /// (`FitnessMetricsCalculator` produces exactly one row per input day), but a duplicate-row
+    /// bug upstream (the same class of concurrent-upsert race `MVP1-26` fixed for activities) can
+    /// still surface as several separate dots on one day, each carrying a single activity's load
+    /// instead of the day's total. Summing here shows the correct daily TRIMP regardless, though
+    /// the root cause still belongs in TrainingKit's `FitnessMetricsCacheStore.upsert`.
+    private struct DailyLoad: Hashable {
+        let day: Date
+        let load: Double
+    }
+
+    private var dailyLoads: [DailyLoad] {
+        var totals: [Date: Double] = [:]
+        for point in metrics {
+            totals[point.day, default: 0] += point.load
+        }
+        return totals
+            .filter { $0.value > 0 }
+            .map { DailyLoad(day: $0.key, load: $0.value) }
+            .sorted { $0.day < $1.day }
     }
 
     /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
@@ -35,7 +52,7 @@ struct FitnessChartView: View {
     /// drawn on its own trailing y-axis (rather than sharing the CTL/ATL/TSB domain) so a load
     /// spike doesn't visually flatten the trend lines.
     private var loadDomain: ClosedRange<Double> {
-        let maxLoad = metrics.map(\.load).max() ?? 0
+        let maxLoad = dailyLoads.map(\.load).max() ?? 0
         return 0...max(maxLoad * 1.1, 1)
     }
 
@@ -106,7 +123,7 @@ struct FitnessChartView: View {
             }
             .chartLegend(.hidden)
 
-            Chart(daysWithActivity, id: \.day) { point in
+            Chart(dailyLoads, id: \.day) { point in
                 PointMark(x: .value("Day", point.day), y: .value("TRIMP", point.load))
                     .foregroundStyle(by: .value("Series", "Daily load (TRIMP)"))
                     .symbolSize(20)
