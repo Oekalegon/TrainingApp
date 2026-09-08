@@ -10,7 +10,6 @@ struct AthleteView: View {
     let viewModel: AthleteViewModel
     let isResyncing: Bool
     let onResync: () -> Void
-    @Environment(\.dismiss) private var dismiss
     @State private var isConfirmingResync = false
 
     var body: some View {
@@ -76,11 +75,6 @@ struct AthleteView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
             .confirmationDialog(
                 "Re-import your entire activity history from HealthKit?",
                 isPresented: $isConfirmingResync,

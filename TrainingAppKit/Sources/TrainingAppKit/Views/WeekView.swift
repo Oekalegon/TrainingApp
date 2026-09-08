@@ -1,12 +1,16 @@
 import SwiftUI
 import TrainingCore
 
-/// The app's single top-level screen (design doc §2.1): a 3-week CTL/ATL/TSB chart centered on
-/// the displayed week, that week's activities/plans below it, swipe-to-navigate between weeks,
-/// a "Today" toolbar button, and pull-to-refresh import.
+/// The week tab's screen (design doc §2.1): a 3-week CTL/ATL/TSB chart centered on the displayed
+/// week, that week's activities/plans below it, swipe-to-navigate between weeks, "Today" and
+/// "Select Date" toolbar buttons, and pull-to-refresh import.
 public struct WeekView: View {
-    @State private var viewModel: WeekViewModel
-    @State private var isShowingAthlete = false
+    let viewModel: WeekViewModel
+    /// Whether the "Select Date" sheet is presented.
+    @State private var isShowingDatePicker = false
+    /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
+    /// the sheet opens, so the picker starts near whatever week is currently on screen.
+    @State private var pickedDate = Date()
     /// The activity currently shown in the detail sheet, or `nil` when none is presented.
     /// `Activity` is `Identifiable`, so `.sheet(item:)` handles show/dismiss from this alone.
     @State private var selectedActivity: Activity?
@@ -36,8 +40,8 @@ public struct WeekView: View {
     /// previous week rather than springing back.
     private static let commitThreshold: CGFloat = 0.3
 
-    public init(model: TrainingModel, refresher: any ActivityRefreshing) {
-        _viewModel = State(initialValue: WeekViewModel(model: model, refresher: refresher))
+    public init(viewModel: WeekViewModel) {
+        self.viewModel = viewModel
     }
 
     public var body: some View {
@@ -64,8 +68,9 @@ public struct WeekView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Athlete", systemImage: "person.circle") {
-                        isShowingAthlete = true
+                    Button("Select Date", systemImage: "calendar.badge.clock") {
+                        pickedDate = viewModel.displayedWeekStart
+                        isShowingDatePicker = true
                     }
                 }
             }
@@ -81,12 +86,44 @@ public struct WeekView: View {
                     ActivityDetailView(viewModel: viewModel.activityDetailViewModel(for: activity))
                 }
             }
-            .sheet(isPresented: $isShowingAthlete) {
-                AthleteView(viewModel: viewModel.athleteViewModel, isResyncing: viewModel.isResyncing) {
-                    Task { await viewModel.resyncActivities() }
-                }
+            .sheet(isPresented: $isShowingDatePicker) {
+                datePickerSheet
             }
         }
+    }
+
+    private var datePickerSheet: some View {
+        NavigationStack {
+            DatePicker("Date", selection: $pickedDate, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .padding()
+                // Without this, the picker resolves "the selected day" using the device's
+                // calendar/time zone, which `goToWeek(containing:)` then reinterprets in the
+                // athlete's — a mismatch (e.g. traveling) could silently land on the wrong week
+                // for a date near midnight.
+                .environment(\.timeZone, viewModel.athleteTimeZone)
+                .navigationTitle("Select Date")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            withAnimation(Self.weekChangeAnimation) {
+                                viewModel.goToWeek(containing: pickedDate)
+                            }
+                            isShowingDatePicker = false
+                        }
+                    }
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            isShowingDatePicker = false
+                        }
+                    }
+                }
+        }
+        .presentationDetents([.medium])
     }
 
     /// The chart sits outside the swipeable area — it's a rolling 3-week trend, not "this week's"

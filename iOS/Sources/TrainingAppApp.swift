@@ -8,7 +8,7 @@ struct TrainingAppApp: App {
     var body: some Scene {
         WindowGroup {
             if let environment {
-                WeekView(model: environment.model, refresher: environment)
+                AppTabView(model: environment.model, refresher: environment)
             } else {
                 LaunchingView(onReady: { environment = $0 })
             }

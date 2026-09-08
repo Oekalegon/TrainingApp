@@ -124,7 +124,13 @@ public final class WeekViewModel {
 
     /// Jumps back to the week containing `today`.
     public func goToToday(asOf today: Date = .now) {
-        displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
+        goToWeek(containing: today)
+    }
+
+    /// Jumps to the week containing `date` — the "Select Date" toolbar action's destination,
+    /// for an arbitrary date rather than today's.
+    public func goToWeek(containing date: Date) {
+        displayedWeekStart = Self.weekStart(containing: date, calendar: calendar)
     }
 
     /// Loads ``chartRange`` from the stores into `model`. Errors are swallowed — a failed load
