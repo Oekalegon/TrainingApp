@@ -118,31 +118,35 @@ public struct WeekView: View {
         }
     }
 
+    /// A plain `ScrollView`/`LazyVStack`, not `List`: once MVP1-20 dropped the per-day section
+    /// headers, `List` wasn't buying anything here beyond default row styling — and both
+    /// `.refreshable` and `.scrollDisabled` (used below) work identically on a `ScrollView`.
     private func dayList(for dates: [Date]) -> some View {
-        List {
-            ForEach(dates, id: \.self) { day in
-                DayActivitiesSection(
-                    activities: viewModel.activities(on: day),
-                    plans: viewModel.plans(on: day),
-                    workoutName: { viewModel.workout(for: $0)?.name },
-                    timeZone: viewModel.athleteTimeZone
-                )
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(dates, id: \.self) { day in
+                    DayActivitiesSection(
+                        activities: viewModel.activities(on: day),
+                        plans: viewModel.plans(on: day),
+                        workoutName: { viewModel.workout(for: $0)?.name },
+                        timeZone: viewModel.athleteTimeZone
+                    )
+                }
             }
+            .padding(.horizontal)
         }
-        // Without this, each of the three carousel slots keeps the same underlying List identity
-        // (and thus scroll position) across weeks, since only its row data changes -- scrolling
-        // down in one week would leave the next week's list scrolled to the same offset instead of
-        // starting at the top. Keying on the week's first date forces a fresh List (and so a reset
-        // scroll position) exactly when the week actually changes, not on every unrelated re-render.
+        // Without this, each of the three carousel slots keeps the same underlying scroll view
+        // identity (and thus scroll position) across weeks, since only its row data changes --
+        // scrolling down in one week would leave the next week's content scrolled to the same
+        // offset instead of starting at the top. Keying on the week's first date forces a fresh
+        // view (and so a reset scroll position) exactly when the week actually changes, not on
+        // every unrelated re-render.
         .id(dates.first)
-        #if os(iOS)
-        .listStyle(.insetGrouped)
-        #endif
         .refreshable {
             await viewModel.refresh()
         }
         // Locked for the duration of a horizontal swipe (see `isDraggingHorizontally`), so a
-        // committed horizontal drag can't also scroll whichever list it's currently over.
+        // committed horizontal drag can't also scroll whichever page it's currently over.
         .scrollDisabled(isDraggingHorizontally)
     }
 
@@ -198,7 +202,7 @@ public struct WeekView: View {
 
     /// Jumps to the week containing today. No drag and no natural left/right direction (today
     /// could be either side of the displayed week) to page toward, so this just updates
-    /// `displayedWeekStart` directly — each page's `List` picks up the new dates and animates its
+    /// `displayedWeekStart` directly — each page's content picks up the new dates and animates its
     /// own row-level changes, without paging anywhere.
     private func goToToday() {
         withAnimation(Self.weekChangeAnimation) {

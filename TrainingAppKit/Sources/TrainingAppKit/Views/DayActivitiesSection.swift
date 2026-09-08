@@ -9,11 +9,11 @@ import TrainingCore
 /// scaffolding for the other five days. Each surviving row shows its own date/time, since there's
 /// no per-day header left to carry that context.
 ///
-/// Deliberately holds no local `@State`: `WeekView` recreates the `List` a given week's rows live
-/// in (via `.id(...)` on that week's first date) whenever the displayed week changes, so a swipe
-/// resets scroll position instead of leaking it into the next week — any local state added here
-/// (an expand/collapse toggle, say) would be silently reset by the same mechanism. If this type
-/// ever needs its own state, that interaction needs accounting for first.
+/// Deliberately holds no local `@State`: `WeekView` recreates the scroll view a given week's rows
+/// live in (via `.id(...)` on that week's first date) whenever the displayed week changes, so a
+/// swipe resets scroll position instead of leaking it into the next week — any local state added
+/// here (an expand/collapse toggle, say) would be silently reset by the same mechanism. If this
+/// type ever needs its own state, that interaction needs accounting for first.
 struct DayActivitiesSection: View {
     let activities: [Activity]
     let plans: [PlannedActivity]
@@ -70,6 +70,7 @@ private struct ActivityRow: View {
                 Text(Duration.seconds(activity.duration).formatted(.units(allowed: [.hours, .minutes])))
                     .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 8)
         }
     }
 }
@@ -94,6 +95,7 @@ private struct PlannedActivityRow: View {
                 }
                 Spacer()
             }
+            .padding(.vertical, 8)
             .foregroundStyle(.secondary)
         }
     }
