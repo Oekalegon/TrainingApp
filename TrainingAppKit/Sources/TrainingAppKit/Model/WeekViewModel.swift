@@ -53,6 +53,13 @@ public final class WeekViewModel {
         model.athlete.timeZone
     }
 
+    /// The athlete's calendar (timezone + `weekStartsOn` applied) — used to keep the "Select Date"
+    /// picker's own week-row layout consistent with how `displayedWeekStart`/`weekDates` are
+    /// actually computed, not the device's locale default.
+    public var athleteCalendar: Calendar {
+        calendar
+    }
+
     /// The 7 days of the displayed week, starting `displayedWeekStart`.
     public var weekDates: [Date] {
         weekDates(offsetWeeks: 0)

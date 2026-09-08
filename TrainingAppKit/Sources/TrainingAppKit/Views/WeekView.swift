@@ -98,11 +98,15 @@ public struct WeekView: View {
                 .datePickerStyle(.graphical)
                 .labelsHidden()
                 .padding()
-                // Without this, the picker resolves "the selected day" using the device's
-                // calendar/time zone, which `goToWeek(containing:)` then reinterprets in the
-                // athlete's — a mismatch (e.g. traveling) could silently land on the wrong week
-                // for a date near midnight.
+                // Without `.timeZone`, the picker resolves "the selected day" using the device's
+                // time zone, which `goToWeek(containing:)` then reinterprets in the athlete's — a
+                // mismatch (e.g. traveling) could silently land on the wrong week for a date near
+                // midnight. Without `.calendar`, the graphical grid's rows would start on the
+                // device locale's first weekday rather than `AthleteProfile.weekStartsOn`, which
+                // `goToWeek(containing:)` still resolves correctly but would visually disagree
+                // with -- e.g. rows starting Sunday while the app's own weeks start Monday.
                 .environment(\.timeZone, viewModel.athleteTimeZone)
+                .environment(\.calendar, viewModel.athleteCalendar)
                 .navigationTitle("Select Date")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)

@@ -157,14 +157,13 @@ No athlete switching, so exactly one `TrainingModel` for the app's lifetime:
 
 ```swift
 @main
-struct TrainingApp: App {
-    @State private var model: TrainingModel?
+struct TrainingAppApp: App {
+    @State private var environment: TrainingAppEnvironment?
 
     var body: some Scene {
         WindowGroup {
-            if let model {
-                WeekView()
-                    .environment(model)
+            if let environment {
+                AppTabView(model: environment.model, refresher: environment)
             } else {
                 LaunchingView()   // builds the StoreSet + TrainingModel asynchronously
             }
@@ -173,9 +172,11 @@ struct TrainingApp: App {
 }
 ```
 
-`TrainingModel` is `@Observable @MainActor`, so it's injected via `.environment(_:)` (Observation
-framework, not an `ObservableObject`/`@EnvironmentObject`) and read with `@Environment(TrainingModel.self)`
-in views/view models.
+`TrainingModel` is `@Observable @MainActor`. In practice it's threaded through explicit
+constructor parameters (`AppTabView(model:refresher:)` → `WeekViewModel(model:refresher:)`) rather
+than `.environment(_:)`/`@Environment(TrainingModel.self)` — there's only ever one `TrainingModel`
+for the app's lifetime, so there's no need for the environment-injection machinery that pattern
+exists to support.
 
 ### 3.2 CloudKit container
 
