@@ -75,17 +75,10 @@ public struct WeekView: View {
             .sheet(item: $selectedActivity) { activity in
                 // Its own NavigationStack: a sheet doesn't inherit the presenting view's
                 // navigation bar, and ActivityDetailView's .navigationTitle needs one to render
-                // into. The "Close" button is the sheet's dismiss control -- there's no back
-                // button to fall back on the way there was when this pushed onto WeekView's stack.
+                // into. Dismissal is the standard swipe-down gesture every sheet gets for free --
+                // no explicit close button.
                 NavigationStack {
                     ActivityDetailView(viewModel: viewModel.activityDetailViewModel(for: activity))
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("Close") {
-                                    selectedActivity = nil
-                                }
-                            }
-                        }
                 }
             }
             .sheet(isPresented: $isShowingAthlete) {
