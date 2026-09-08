@@ -9,6 +9,20 @@ struct FitnessChartView: View {
     /// shaded behind the trend lines so the 3-week chart stays visually anchored to whichever week
     /// the athlete has scrolled to.
     let displayedWeekRange: ClosedRange<Date>
+    /// Days after this are projected/estimated rather than actual history (see
+    /// `FitnessMetrics.isProjected`), so the CTL/ATL/TSB lines render dashed past this point.
+    let today: Date = .now
+
+    /// Dash pattern for the projected/future portion of each CTL/ATL/TSB line.
+    private static let futureLineStyle = StrokeStyle(dash: [5, 4])
+
+    private var pastPoints: [FitnessMetrics] {
+        FitnessMetricsSplit.pastAndFuture(metrics, today: today).past
+    }
+
+    private var futurePoints: [FitnessMetrics] {
+        FitnessMetricsSplit.pastAndFuture(metrics, today: today).future
+    }
 
     /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
     /// so a single heavy training day can be several times larger than the smoothed lines. It's
@@ -42,7 +56,7 @@ struct FitnessChartView: View {
                 )
                 .foregroundStyle(Color.primary.opacity(0.1))
 
-                ForEach(metrics, id: \.day) { point in
+                ForEach(pastPoints, id: \.day) { point in
                     LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
                         .foregroundStyle(by: .value("Series", "Fitness (CTL)"))
                     LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
@@ -50,11 +64,31 @@ struct FitnessChartView: View {
                     LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
                         .foregroundStyle(by: .value("Series", "Form (TSB)"))
                 }
+
+                ForEach(futurePoints, id: \.day) { point in
+                    LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
+                        .foregroundStyle(by: .value("Series", "Fitness (CTL) (projected)"))
+                        .lineStyle(Self.futureLineStyle)
+                    LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
+                        .foregroundStyle(by: .value("Series", "Fatigue (ATL) (projected)"))
+                        .lineStyle(Self.futureLineStyle)
+                    LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                        .foregroundStyle(by: .value("Series", "Form (TSB) (projected)"))
+                        .lineStyle(Self.futureLineStyle)
+                }
             }
             .chartForegroundStyleScale([
                 "Fitness (CTL)": Color.blue,
                 "Fatigue (ATL)": Color.orange,
                 "Form (TSB)": Color.green,
+                // Distinct series keys from the solid segments above — Swift Charts merges
+                // LineMarks sharing the same foregroundStyle(by:) value into one continuous
+                // stroked path, so the dashed future segment needs its own key (mapped to the
+                // same color here) or its .lineStyle() gets silently discarded in favor of the
+                // solid segment's style.
+                "Fitness (CTL) (projected)": Color.blue,
+                "Fatigue (ATL) (projected)": Color.orange,
+                "Form (TSB) (projected)": Color.green,
             ])
             .chartXScale(domain: dayDomain)
             .chartXAxis {
