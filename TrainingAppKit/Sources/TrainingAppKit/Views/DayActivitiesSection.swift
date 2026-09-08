@@ -62,6 +62,7 @@ private struct ActivityRow: View {
                     .foregroundStyle(.blue)
                 VStack(alignment: .leading) {
                     Text(activity.sport.displayName)
+                        .foregroundStyle(.primary)
                     Text(activity.start, format: DayActivitiesSection.dateTimeFormat(timeZone: timeZone))
                         .font(.caption)
                         .foregroundStyle(.secondary)
