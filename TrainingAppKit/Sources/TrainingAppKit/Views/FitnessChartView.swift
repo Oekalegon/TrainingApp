@@ -24,12 +24,16 @@ struct FitnessChartView: View {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).future
     }
 
+    private var dailyLoads: [DailyLoad] {
+        DailyLoad.aggregating(metrics)
+    }
+
     /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
     /// so a single heavy training day can be several times larger than the smoothed lines. It's
     /// drawn on its own trailing y-axis (rather than sharing the CTL/ATL/TSB domain) so a load
     /// spike doesn't visually flatten the trend lines.
     private var loadDomain: ClosedRange<Double> {
-        let maxLoad = metrics.map(\.load).max() ?? 0
+        let maxLoad = dailyLoads.map(\.load).max() ?? 0
         return 0...max(maxLoad * 1.1, 1)
     }
 
@@ -98,17 +102,26 @@ struct FitnessChartView: View {
                     AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                 }
             }
+            // The load chart below is the only one with a labeled y-axis. Left unhidden, Charts'
+            // own default leading axis for this chart would sit at the same position as the load
+            // axis (both charts share this frame) — invisible right now only because CTL/ATL/TSB
+            // are all reading 0 (MVP1-21), coincidentally matching the load axis's own domain.
+            .chartYAxis(.hidden)
             .chartLegend(.hidden)
 
-            Chart(metrics, id: \.day) { point in
+            Chart(dailyLoads, id: \.day) { point in
                 PointMark(x: .value("Day", point.day), y: .value("TRIMP", point.load))
                     .foregroundStyle(by: .value("Series", "Daily load (TRIMP)"))
+                    .symbolSize(20)
             }
             .chartForegroundStyleScale(["Daily load (TRIMP)": Color.red])
             .chartXScale(domain: dayDomain)
             .chartYScale(domain: loadDomain)
             .chartYAxis {
-                AxisMarks(position: .trailing)
+                // Leading (not trailing/right), since the CTL/ATL/TSB lines' rightmost points sit
+                // right at the plot's trailing edge — a trailing axis collided with them there,
+                // most visibly with the TSB line.
+                AxisMarks(position: .leading)
             }
             .chartXAxis(.hidden)
             .chartLegend(.hidden)
