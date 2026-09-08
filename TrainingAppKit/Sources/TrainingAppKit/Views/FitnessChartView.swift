@@ -19,6 +19,19 @@ struct FitnessChartView: View {
         return 0...max(maxLoad * 1.1, 1)
     }
 
+    /// Explicit x-domain shared by both overlaid charts, derived only from `metrics` — never from
+    /// `currentWeekRange`. Without this, the line chart's auto-inferred domain would stretch to
+    /// include `currentWeekRange`'s dates whenever "today" falls outside the displayed 3-week
+    /// window, while the point chart's domain (which has no RectangleMark) would not, misaligning
+    /// the TRIMP dots against the CTL/ATL/TSB lines they're meant to sit on.
+    private var dayDomain: ClosedRange<Date> {
+        guard let first = metrics.first?.day, let last = metrics.last?.day else {
+            let now = Date()
+            return now...now
+        }
+        return first...last
+    }
+
     var body: some View {
         ZStack {
             Chart {
@@ -26,7 +39,7 @@ struct FitnessChartView: View {
                     xStart: .value("Week start", currentWeekRange.lowerBound),
                     xEnd: .value("Week end", currentWeekRange.upperBound)
                 )
-                .foregroundStyle(Color.primary.opacity(0.06))
+                .foregroundStyle(Color.primary.opacity(0.1))
 
                 ForEach(metrics, id: \.day) { point in
                     LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
@@ -42,6 +55,7 @@ struct FitnessChartView: View {
                 "Fatigue (ATL)": Color.orange,
                 "Form (TSB)": Color.green,
             ])
+            .chartXScale(domain: dayDomain)
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day, count: 7)) { _ in
                     AxisGridLine()
@@ -56,6 +70,7 @@ struct FitnessChartView: View {
                     .foregroundStyle(by: .value("Series", "Daily load (TRIMP)"))
             }
             .chartForegroundStyleScale(["Daily load (TRIMP)": Color.red])
+            .chartXScale(domain: dayDomain)
             .chartYScale(domain: loadDomain)
             .chartYAxis {
                 AxisMarks(position: .trailing)
