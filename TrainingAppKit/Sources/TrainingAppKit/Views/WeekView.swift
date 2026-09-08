@@ -7,17 +7,24 @@ import TrainingCore
 public struct WeekView: View {
     @State private var viewModel: WeekViewModel
     @State private var isShowingAthlete = false
-    /// Which of the three day-list pages `dayListPages` is currently selected — always recentered
-    /// to `.current` immediately after a swipe commits (see the `onChange` below), so there's
-    /// always a "previous"/"next" page on either side to swipe to again. This is the standard
-    /// finite-window trick for an apparently-infinite `TabView(.page)` carousel.
-    @State private var selectedPage: WeekPage = .current
+    /// Horizontal offset applied to the previous/current/next page `HStack`, on top of its base
+    /// "current page centered" position — 0 while idle, tracking the finger during a drag, then
+    /// animated to a full page width (commit) or back to 0 (cancel) once the drag ends. Nothing
+    /// about `displayedWeekStart` changes until then: the model only ever advances in
+    /// `completeSwipe(goingForward:)`, once the user has actually lifted their finger.
+    @State private var dragOffset: CGFloat = 0
+    /// Whether the drag in progress has been determined to be a horizontal swipe — decided once,
+    /// from the first `onChanged` sample, and used both to gate `dragOffset` updates and to
+    /// disable the day lists' own vertical scrolling for the rest of that gesture (see
+    /// `dayList(for:isDraggingHorizontally:)`), so a horizontal swipe can't also scroll the list
+    /// underneath it.
+    @State private var isDraggingHorizontally = false
+    @State private var hasDeterminedDragDirection = false
 
     private static let weekChangeAnimation: Animation = .easeInOut(duration: 0.25)
-
-    private enum WeekPage: Int, Hashable {
-        case previous, current, next
-    }
+    /// Fraction of the page width a drag needs to clear, at release, to commit to the next/
+    /// previous week rather than springing back.
+    private static let commitThreshold: CGFloat = 0.3
 
     public init(model: TrainingModel, refresher: any ActivityRefreshing) {
         _viewModel = State(initialValue: WeekViewModel(model: model, refresher: refresher))
@@ -66,30 +73,40 @@ public struct WeekView: View {
 
     /// The chart sits outside the swipeable area — it's a rolling 3-week trend, not "this week's"
     /// content, so it shouldn't visibly drag along with the day list — with only the day-by-day
-    /// list underneath living in the paging `TabView`.
+    /// list underneath following the gesture.
+    ///
+    /// The day list itself is a manual three-page carousel (previous/current/next week, each a
+    /// real `dayList`, not a placeholder) rather than `TabView(.page)`: `TabView`'s selection
+    /// binding updates — and so, if reacted to directly, `viewModel.displayedWeekStart` would
+    /// have updated — as soon as the drag crosses the halfway point, well before the finger lifts.
+    /// That let the model (and the chart above) change mid-gesture, which is exactly the
+    /// unnatural, too-early flip this was built to avoid. Driving the pages from `dragOffset`
+    /// directly keeps the model change (`completeSwipe(goingForward:)`) tied to gesture *end*,
+    /// with the remaining distance animating to completion afterward, same as any standard
+    /// direct-manipulation paging control.
     private var weekContent: some View {
         VStack(spacing: 0) {
             FitnessChartView(metrics: viewModel.chartMetrics)
                 .padding(.vertical, 8)
 
-            // `TabView(.page)` gives us finger-tracking, edge-peeking of the neighboring weeks,
-            // and horizontal-only paging (it doesn't fight the day list's own vertical scrolling)
-            // for free — all things a hand-rolled DragGesture had to approximate and got wrong.
-            // The three pages are `viewModel.weekDates(offsetWeeks:)` for -1/0/+1: real data, not
-            // placeholders, since `chartRange` already keeps the adjacent weeks loaded.
-            TabView(selection: $selectedPage) {
-                dayList(for: viewModel.weekDates(offsetWeeks: -1))
-                    .tag(WeekPage.previous)
-                dayList(for: viewModel.weekDates(offsetWeeks: 0))
-                    .tag(WeekPage.current)
-                dayList(for: viewModel.weekDates(offsetWeeks: 1))
-                    .tag(WeekPage.next)
-            }
-            #if os(iOS)
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            #endif
-            .onChange(of: selectedPage) { _, newPage in
-                handlePageChange(to: newPage)
+            GeometryReader { geometry in
+                let pageWidth = geometry.size.width
+                HStack(spacing: 0) {
+                    dayList(for: viewModel.weekDates(offsetWeeks: -1))
+                        .frame(width: pageWidth)
+                    dayList(for: viewModel.weekDates(offsetWeeks: 0))
+                        .frame(width: pageWidth)
+                    dayList(for: viewModel.weekDates(offsetWeeks: 1))
+                        .frame(width: pageWidth)
+                }
+                // Base position centers the "current" (middle) page; dragOffset then tracks the
+                // finger on top of that.
+                .offset(x: -pageWidth + dragOffset)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 10)
+                        .onChanged { value in handleDragChanged(value) }
+                        .onEnded { value in handleDragEnded(value, pageWidth: pageWidth) }
+                )
             }
         }
     }
@@ -112,28 +129,62 @@ public struct WeekView: View {
         .refreshable {
             await viewModel.refresh()
         }
+        // Locked for the duration of a horizontal swipe (see `isDraggingHorizontally`), so a
+        // committed horizontal drag can't also scroll whichever list it's currently over.
+        .scrollDisabled(isDraggingHorizontally)
     }
 
-    /// Reacts once the page carousel settles on `newPage` (i.e. the swipe already visually
-    /// completed) by advancing `viewModel`, then immediately snapping `selectedPage` back to
-    /// `.current` — invisibly, since `.current`'s content (recomputed from the now-updated
-    /// `displayedWeekStart`) is identical to what `newPage` was already showing.
-    private func handlePageChange(to newPage: WeekPage) {
-        guard newPage != .current else { return }
+    private func handleDragChanged(_ value: DragGesture.Value) {
+        if !hasDeterminedDragDirection {
+            hasDeterminedDragDirection = true
+            isDraggingHorizontally = abs(value.translation.width) > abs(value.translation.height)
+        }
+        guard isDraggingHorizontally else { return }
+        dragOffset = value.translation.width
+    }
+
+    private func handleDragEnded(_ value: DragGesture.Value, pageWidth: CGFloat) {
+        defer {
+            hasDeterminedDragDirection = false
+            isDraggingHorizontally = false
+        }
+        guard isDraggingHorizontally else { return }
+
+        if value.translation.width < -pageWidth * Self.commitThreshold {
+            completeSwipe(goingForward: true, pageWidth: pageWidth)
+        } else if value.translation.width > pageWidth * Self.commitThreshold {
+            completeSwipe(goingForward: false, pageWidth: pageWidth)
+        } else {
+            // Didn't clear the threshold -- spring back to the current week rather than committing.
+            withAnimation(Self.weekChangeAnimation) {
+                dragOffset = 0
+            }
+        }
+    }
+
+    /// Finishes a swipe that cleared `commitThreshold`: animates `dragOffset` the rest of the way
+    /// to fully reveal the next/previous page, then — once that's done — advances `viewModel` and
+    /// resets `dragOffset` to 0 in the same (non-animated) beat. That reset is invisible: the
+    /// three pages immediately recompute from the new `displayedWeekStart`, and the page that was
+    /// just fully shown (e.g. "next") is now, by definition, the same content the "current" slot
+    /// recomputes to — so nothing visibly moves a second time.
+    private func completeSwipe(goingForward: Bool, pageWidth: CGFloat) {
         withAnimation(Self.weekChangeAnimation) {
-            if newPage == .next {
+            dragOffset = goingForward ? -pageWidth : pageWidth
+        } completion: {
+            dragOffset = 0
+            if goingForward {
                 viewModel.goToNextWeek()
             } else {
                 viewModel.goToPreviousWeek()
             }
         }
-        selectedPage = .current
     }
 
     /// Jumps to the week containing today. No drag and no natural left/right direction (today
     /// could be either side of the displayed week) to page toward, so this just updates
-    /// `displayedWeekStart` directly — the currently selected `TabView` page's `List` picks up
-    /// the new dates and animates its own row-level changes, without paging anywhere.
+    /// `displayedWeekStart` directly — each page's `List` picks up the new dates and animates its
+    /// own row-level changes, without paging anywhere.
     private func goToToday() {
         withAnimation(Self.weekChangeAnimation) {
             viewModel.goToToday()
