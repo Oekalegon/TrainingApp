@@ -27,6 +27,7 @@ public struct WeekView: View {
                     EmptyStateView(isConnecting: viewModel.isRefreshing) {
                         Task { await viewModel.connectHealthData() }
                     }
+                    .transition(.opacity)
                 } else {
                     // `.id` keyed on the displayed week forces SwiftUI to treat each week as a
                     // distinct view rather than diffing the List in place — without it, `.transition`
@@ -36,6 +37,14 @@ public struct WeekView: View {
                         .transition(weekTransition)
                 }
             }
+            // Covers the empty-state -> week-content swap once `hasNoActivities` flips (e.g. after
+            // "Connect Health Data" completes): that happens asynchronously, well after the button's
+            // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` the
+            // way the week-navigation methods below do it -- animating on the value change itself is
+            // the only way to catch it. Scoped to just this value so it can't interfere with the
+            // explicit `withAnimation` calls `goToNextWeek()`/`goToPreviousWeek()`/`goToToday()` make
+            // for `displayedWeekStart` changes.
+            .animation(Self.weekChangeAnimation, value: viewModel.hasNoActivities)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Today", systemImage: "calendar") {
