@@ -43,6 +43,24 @@ struct WeekViewModelTests {
         #expect(viewModel.weekDates.first == viewModel.displayedWeekStart)
     }
 
+    @Test("weekDates(offsetWeeks:) returns the neighboring weeks without moving displayedWeekStart")
+    func weekDatesWithOffsetReflectsNeighboringWeeksOnly() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let originalStart = viewModel.displayedWeekStart
+
+        let previous = viewModel.weekDates(offsetWeeks: -1)
+        let next = viewModel.weekDates(offsetWeeks: 1)
+
+        #expect(previous.count == 7)
+        #expect(next.count == 7)
+        #expect(previous.first == calendar.date(byAdding: .day, value: -7, to: originalStart))
+        #expect(next.first == calendar.date(byAdding: .day, value: 7, to: originalStart))
+        // Neither call should have moved the actual navigation state.
+        #expect(viewModel.displayedWeekStart == originalStart)
+    }
+
     @Test("chartRange spans the week before, the displayed week, and the week after")
     func chartRangeIsThreeWeeksCenteredOnDisplayedWeek() {
         let model = makeModel()
