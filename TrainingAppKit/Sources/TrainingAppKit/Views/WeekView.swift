@@ -201,6 +201,15 @@ public struct WeekView: View {
         // Locked for the duration of a horizontal swipe (see `isDraggingHorizontally`), so a
         // committed horizontal drag can't also scroll whichever page it's currently over.
         .scrollDisabled(isDraggingHorizontally)
+        // Same reasoning, for taps: without this, a horizontal swipe that starts on an
+        // `ActivityRow`/`PlannedActivityRow` button still recognizes as a tap on release and opens
+        // the activity detail sheet in addition to paging the week. `.allowsHitTesting(false)`
+        // doesn't help here -- the button's tap gesture already started tracking the touch at
+        // touch-down, before `isDraggingHorizontally` flips, so blocking new hit-tests mid-drag
+        // doesn't cancel it. `.disabled` does: SwiftUI re-checks `isEnabled` at the moment the tap
+        // actually fires (touch-up), not at touch-down, so flipping it during the drag suppresses
+        // the action.
+        .disabled(isDraggingHorizontally)
     }
 
     private func handleDragChanged(_ value: DragGesture.Value) {
