@@ -16,10 +16,17 @@ public struct WeekView: View {
     /// Whether the drag in progress has been determined to be a horizontal swipe — decided once,
     /// from the first `onChanged` sample, and used both to gate `dragOffset` updates and to
     /// disable the day lists' own vertical scrolling for the rest of that gesture (see
-    /// `dayList(for:isDraggingHorizontally:)`), so a horizontal swipe can't also scroll the list
-    /// underneath it.
+    /// `.scrollDisabled(isDraggingHorizontally)` in `dayList(for:)` below), so a horizontal swipe
+    /// can't also scroll the list underneath it.
     @State private var isDraggingHorizontally = false
     @State private var hasDeterminedDragDirection = false
+    /// `true` from the moment a swipe clears `commitThreshold` until `completeSwipe(goingForward:)`'s
+    /// animation and model update both finish. `handleDragChanged`/`handleDragEnded` ignore touches
+    /// while this is `true`, so a fast re-swipe can't land mid-animation: overwriting `dragOffset`
+    /// directly (as a new drag would) while the previous swipe's `withAnimation` is still running
+    /// would visibly stomp it, and the previous swipe's `completion` closure would still fire later
+    /// and advance `viewModel` a second, unintended time.
+    @State private var isCompletingSwipe = false
 
     private static let weekChangeAnimation: Animation = .easeInOut(duration: 0.25)
     /// Fraction of the page width a drag needs to clear, at release, to commit to the next/
@@ -123,6 +130,12 @@ public struct WeekView: View {
                 )
             }
         }
+        // Without this, each of the three carousel slots keeps the same underlying List identity
+        // (and thus scroll position) across weeks, since only its row data changes -- scrolling
+        // down in one week would leave the next week's list scrolled to the same offset instead of
+        // starting at the top. Keying on the week's first date forces a fresh List (and so a reset
+        // scroll position) exactly when the week actually changes, not on every unrelated re-render.
+        .id(dates.first)
         #if os(iOS)
         .listStyle(.insetGrouped)
         #endif
@@ -135,6 +148,7 @@ public struct WeekView: View {
     }
 
     private func handleDragChanged(_ value: DragGesture.Value) {
+        guard !isCompletingSwipe else { return }
         if !hasDeterminedDragDirection {
             hasDeterminedDragDirection = true
             isDraggingHorizontally = abs(value.translation.width) > abs(value.translation.height)
@@ -148,7 +162,7 @@ public struct WeekView: View {
             hasDeterminedDragDirection = false
             isDraggingHorizontally = false
         }
-        guard isDraggingHorizontally else { return }
+        guard !isCompletingSwipe, isDraggingHorizontally else { return }
 
         if value.translation.width < -pageWidth * Self.commitThreshold {
             completeSwipe(goingForward: true, pageWidth: pageWidth)
@@ -169,6 +183,7 @@ public struct WeekView: View {
     /// just fully shown (e.g. "next") is now, by definition, the same content the "current" slot
     /// recomputes to — so nothing visibly moves a second time.
     private func completeSwipe(goingForward: Bool, pageWidth: CGFloat) {
+        isCompletingSwipe = true
         withAnimation(Self.weekChangeAnimation) {
             dragOffset = goingForward ? -pageWidth : pageWidth
         } completion: {
@@ -178,6 +193,7 @@ public struct WeekView: View {
             } else {
                 viewModel.goToPreviousWeek()
             }
+            isCompletingSwipe = false
         }
     }
 

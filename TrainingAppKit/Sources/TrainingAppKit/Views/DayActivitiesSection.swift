@@ -4,11 +4,11 @@ import TrainingCore
 /// One day's row group in the week view's day list: a date header, its completed activities, and
 /// its planned activities — planned ones rendered visibly distinct (design doc §2.1).
 ///
-/// Deliberately holds no local `@State`: `WeekView` recreates its whole `List` (via `.id(...)` on
-/// the displayed week) on every week navigation, to give the week-change transition something to
-/// animate — any local state added here (an expand/collapse toggle, say) would be silently reset
-/// on every swipe/"Today" tap as a result. If this type ever needs its own state, that interaction
-/// needs accounting for first.
+/// Deliberately holds no local `@State`: `WeekView` recreates the `List` a given week's rows live
+/// in (via `.id(...)` on that week's first date) whenever the displayed week changes, so a swipe
+/// resets scroll position instead of leaking it into the next week — any local state added here
+/// (an expand/collapse toggle, say) would be silently reset by the same mechanism. If this type
+/// ever needs its own state, that interaction needs accounting for first.
 struct DayActivitiesSection: View {
     let day: Date
     let activities: [Activity]
