@@ -96,8 +96,8 @@ One screen, no tab bar — there's nothing else to switch to in MVP 1.
 
 ### 2.2 Activity detail
 
-Pushed via `NavigationStack` when an activity in the week view is tapped. Shows, from the
-`Activity` and its computed `TrainingLoad`:
+Presented as a sheet when an activity in the week view is tapped (dismissed via the standard
+swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 
 - Sport, start time, duration, distance (if present).
 - Load/TRIMP for the activity, and time-in-zone breakdown if heart-rate samples are present
