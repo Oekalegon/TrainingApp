@@ -90,14 +90,12 @@ public final class WeekViewModel {
             .sorted { $0.day < $1.day }
     }
 
-    /// The date range of the calendar week containing `today` — independent of
-    /// ``displayedWeekStart``, since the chart's 3-week window can be scrolled away from "now"
-    /// while still needing to show where "now" falls. Used to highlight the current week's
-    /// background on the fitness chart.
-    public func currentWeekRange(asOf today: Date = .now) -> ClosedRange<Date> {
-        let start = Self.weekStart(containing: today, calendar: calendar)
-        let end = calendar.date(byAdding: .day, value: 7, to: start) ?? start
-        return start...end
+    /// The date range of ``displayedWeekStart`` — the week currently visible in the day list, not
+    /// necessarily today's. Used to highlight that week's background on the fitness chart, so the
+    /// 3-week trend stays visually anchored to whichever week the athlete has scrolled to.
+    public var displayedWeekRange: ClosedRange<Date> {
+        let end = calendar.date(byAdding: .day, value: 7, to: displayedWeekStart) ?? displayedWeekStart
+        return displayedWeekStart...end
     }
 
     /// Completed activities on `day`, in start-time order.

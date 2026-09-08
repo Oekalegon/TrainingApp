@@ -77,26 +77,23 @@ struct WeekViewModelTests {
         #expect(dayCount == 20)
     }
 
-    @Test("currentWeekRange(asOf:) tracks today's week, independent of navigating displayedWeekStart away from it")
-    func currentWeekRangeStaysOnTodayAfterNavigating() {
+    @Test("displayedWeekRange tracks displayedWeekStart, following navigation rather than staying on today")
+    func displayedWeekRangeFollowsNavigation() {
         let model = makeModel()
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         let calendar = WeekViewModel.calendar(for: model.athlete)
-        let today = day(0)
 
-        let expectedStart = WeekViewModel.weekStart(containing: today, calendar: calendar)
-        let expectedEnd = calendar.date(byAdding: .day, value: 7, to: expectedStart)!
+        func expectedRange(for weekStart: Date) -> ClosedRange<Date> {
+            weekStart...calendar.date(byAdding: .day, value: 7, to: weekStart)!
+        }
 
-        // Before navigating, today's week and the displayed week coincide.
-        #expect(viewModel.currentWeekRange(asOf: today).lowerBound == expectedStart)
-        #expect(viewModel.currentWeekRange(asOf: today).upperBound == expectedEnd)
+        // Before navigating, displayedWeekRange matches the initial displayed week.
+        #expect(viewModel.displayedWeekRange == expectedRange(for: viewModel.displayedWeekStart))
 
-        // After navigating away, currentWeekRange(asOf:) should still report today's week, not
-        // wherever displayedWeekStart has moved to.
+        // After navigating, displayedWeekRange should follow displayedWeekStart, not stay behind.
         viewModel.goToNextWeek()
         viewModel.goToNextWeek()
-        #expect(viewModel.currentWeekRange(asOf: today).lowerBound == expectedStart)
-        #expect(viewModel.currentWeekRange(asOf: today).upperBound == expectedEnd)
+        #expect(viewModel.displayedWeekRange == expectedRange(for: viewModel.displayedWeekStart))
     }
 
     @Test("goToNextWeek/goToPreviousWeek move by exactly 7 days")

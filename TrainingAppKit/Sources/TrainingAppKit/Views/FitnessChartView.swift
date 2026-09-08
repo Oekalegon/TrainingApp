@@ -5,10 +5,10 @@ import TrainingCore
 /// The 3-week CTL/ATL/TSB trend chart at the top of the week view (design doc §2.1).
 struct FitnessChartView: View {
     let metrics: [FitnessMetrics]
-    /// Date range of the calendar week containing "now" (`WeekViewModel.currentWeekRange(asOf:)`),
-    /// shaded behind the trend lines so "now" stays visible even when the displayed week (and so
-    /// the chart's 3-week window) has been navigated away from it.
-    let currentWeekRange: ClosedRange<Date>
+    /// Date range of the week currently visible in the day list (`WeekViewModel.displayedWeekRange`),
+    /// shaded behind the trend lines so the 3-week chart stays visually anchored to whichever week
+    /// the athlete has scrolled to.
+    let displayedWeekRange: ClosedRange<Date>
 
     /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
     /// so a single heavy training day can be several times larger than the smoothed lines. It's
@@ -20,10 +20,11 @@ struct FitnessChartView: View {
     }
 
     /// Explicit x-domain shared by both overlaid charts, derived only from `metrics` — never from
-    /// `currentWeekRange`. Without this, the line chart's auto-inferred domain would stretch to
-    /// include `currentWeekRange`'s dates whenever "today" falls outside the displayed 3-week
-    /// window, while the point chart's domain (which has no RectangleMark) would not, misaligning
-    /// the TRIMP dots against the CTL/ATL/TSB lines they're meant to sit on.
+    /// `displayedWeekRange`. Without this, the line chart's auto-inferred domain could stretch to
+    /// include the RectangleMark's dates while the point chart's domain (which has no
+    /// RectangleMark) would not, misaligning the TRIMP dots against the CTL/ATL/TSB lines they're
+    /// meant to sit on. In practice `displayedWeekRange` is always the middle third of `metrics`'
+    /// own range, so this is a safety net rather than something normally exercised.
     private var dayDomain: ClosedRange<Date> {
         guard let first = metrics.first?.day, let last = metrics.last?.day else {
             let now = Date()
@@ -36,8 +37,8 @@ struct FitnessChartView: View {
         ZStack {
             Chart {
                 RectangleMark(
-                    xStart: .value("Week start", currentWeekRange.lowerBound),
-                    xEnd: .value("Week end", currentWeekRange.upperBound)
+                    xStart: .value("Week start", displayedWeekRange.lowerBound),
+                    xEnd: .value("Week end", displayedWeekRange.upperBound)
                 )
                 .foregroundStyle(Color.primary.opacity(0.1))
 
