@@ -122,7 +122,6 @@ public struct WeekView: View {
         List {
             ForEach(dates, id: \.self) { day in
                 DayActivitiesSection(
-                    day: day,
                     activities: viewModel.activities(on: day),
                     plans: viewModel.plans(on: day),
                     workoutName: { viewModel.workout(for: $0)?.name },
