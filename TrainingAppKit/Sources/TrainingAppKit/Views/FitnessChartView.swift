@@ -67,13 +67,13 @@ struct FitnessChartView: View {
 
                 ForEach(futurePoints, id: \.day) { point in
                     LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
-                        .foregroundStyle(by: .value("Series", "Fitness (CTL)"))
+                        .foregroundStyle(by: .value("Series", "Fitness (CTL) (projected)"))
                         .lineStyle(Self.futureLineStyle)
                     LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
-                        .foregroundStyle(by: .value("Series", "Fatigue (ATL)"))
+                        .foregroundStyle(by: .value("Series", "Fatigue (ATL) (projected)"))
                         .lineStyle(Self.futureLineStyle)
                     LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
-                        .foregroundStyle(by: .value("Series", "Form (TSB)"))
+                        .foregroundStyle(by: .value("Series", "Form (TSB) (projected)"))
                         .lineStyle(Self.futureLineStyle)
                 }
             }
@@ -81,6 +81,14 @@ struct FitnessChartView: View {
                 "Fitness (CTL)": Color.blue,
                 "Fatigue (ATL)": Color.orange,
                 "Form (TSB)": Color.green,
+                // Distinct series keys from the solid segments above — Swift Charts merges
+                // LineMarks sharing the same foregroundStyle(by:) value into one continuous
+                // stroked path, so the dashed future segment needs its own key (mapped to the
+                // same color here) or its .lineStyle() gets silently discarded in favor of the
+                // solid segment's style.
+                "Fitness (CTL) (projected)": Color.blue,
+                "Fatigue (ATL) (projected)": Color.orange,
+                "Form (TSB) (projected)": Color.green,
             ])
             .chartXScale(domain: dayDomain)
             .chartXAxis {
