@@ -7,8 +7,14 @@ import TrainingCore
 public struct WeekView: View {
     @State private var viewModel: WeekViewModel
     @State private var isShowingAthlete = false
+    /// The transition the *next* week change should use — set just before mutating
+    /// `viewModel.displayedWeekStart` so it's in place before SwiftUI removes/inserts the
+    /// `.id`-keyed `weekContent` below. Slides in the swipe direction for next/previous week;
+    /// "Today" (which has no natural left/right direction) just cross-fades.
+    @State private var weekTransition: AnyTransition = .opacity
 
     private static let swipeThreshold: CGFloat = 60
+    private static let weekChangeAnimation: Animation = .easeInOut(duration: 0.25)
 
     public init(model: TrainingModel, refresher: any ActivityRefreshing) {
         _viewModel = State(initialValue: WeekViewModel(model: model, refresher: refresher))
@@ -22,13 +28,18 @@ public struct WeekView: View {
                         Task { await viewModel.connectHealthData() }
                     }
                 } else {
+                    // `.id` keyed on the displayed week forces SwiftUI to treat each week as a
+                    // distinct view rather than diffing the List in place — without it, `.transition`
+                    // never animates anything, since there'd be no insert/remove for it to apply to.
                     weekContent
+                        .id(viewModel.displayedWeekStart)
+                        .transition(weekTransition)
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Today", systemImage: "calendar") {
-                        viewModel.goToToday()
+                        goToToday()
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -86,9 +97,41 @@ public struct WeekView: View {
     private func handleSwipeEnd(_ value: DragGesture.Value) {
         guard abs(value.translation.width) > abs(value.translation.height) else { return }
         if value.translation.width < -Self.swipeThreshold {
-            viewModel.goToNextWeek()
+            goToNextWeek()
         } else if value.translation.width > Self.swipeThreshold {
+            goToPreviousWeek()
+        }
+    }
+
+    /// Advances to next week, sliding the new week in from the trailing edge (the natural
+    /// direction for a leftward/"forward in time" swipe).
+    private func goToNextWeek() {
+        weekTransition = .asymmetric(
+            insertion: .move(edge: .trailing).combined(with: .opacity),
+            removal: .move(edge: .leading).combined(with: .opacity)
+        )
+        withAnimation(Self.weekChangeAnimation) {
+            viewModel.goToNextWeek()
+        }
+    }
+
+    /// Moves back to the previous week, sliding the new week in from the leading edge.
+    private func goToPreviousWeek() {
+        weekTransition = .asymmetric(
+            insertion: .move(edge: .leading).combined(with: .opacity),
+            removal: .move(edge: .trailing).combined(with: .opacity)
+        )
+        withAnimation(Self.weekChangeAnimation) {
             viewModel.goToPreviousWeek()
+        }
+    }
+
+    /// Jumps to the week containing today. No natural left/right direction (today could be
+    /// either side of the displayed week), so this just cross-fades.
+    private func goToToday() {
+        weekTransition = .opacity
+        withAnimation(Self.weekChangeAnimation) {
+            viewModel.goToToday()
         }
     }
 }
