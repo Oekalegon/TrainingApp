@@ -35,6 +35,10 @@ struct DayActivitiesSection: View {
     let activities: [Activity]
     let plans: [PlannedActivity]
     let workoutName: (PlannedActivity) -> String?
+    /// An activity's training load (TRIMP) — the card's headline number (MVP1-41). `nil` when
+    /// `WeekViewModel.trainingLoad(for:)` couldn't score it, in which case the card omits the
+    /// number rather than showing a misleading "0".
+    let trainingLoad: (Activity) -> Double?
     /// The athlete's timezone — every date here is formatted with this, not the device's default,
     /// so the dates/times shown agree with how `WeekViewModel` grouped them into this day in the
     /// first place.
@@ -44,48 +48,67 @@ struct DayActivitiesSection: View {
     /// view building a `NavigationLink` itself.
     let onSelectActivity: (Activity) -> Void
 
-    /// Hour + minute only — the weekday pill already carries the day, so completed activities'
-    /// rows only need their time of day.
-    fileprivate static func timeFormat(timeZone: TimeZone) -> Date.FormatStyle {
+    /// Hour + minute only — shown beside each activity card on the timeline, in the same column
+    /// the weekday pill sits in above it (MVP1-41; the pill itself already carries the day).
+    private static func timeFormat(timeZone: TimeZone) -> Date.FormatStyle {
         var format = Date.FormatStyle.dateTime.hour().minute()
         format.timeZone = timeZone
         return format
     }
 
     var body: some View {
-        // `.top`, not `.firstTextBaseline`: the weekday pill and each metric pill's label are the
-        // same font size and the same vertical padding (see `WeekdayPillView`/`MetricPillView`),
-        // so their pill boxes are exactly the same height — top-aligning the two columns lines up
-        // those boxes exactly, which in turn lines up their text. `.firstTextBaseline` relies on
-        // SwiftUI's own baseline-guide propagation through the nested stacks/frames in the content
-        // column, which doesn't reliably resolve to the same value as this simpler, guaranteed
-        // approach.
-        HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
                 WeekdayPillView(date: date, isToday: isToday, timeZone: timeZone)
-                if showsConnector {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .frame(width: 2)
-                        .frame(maxHeight: .infinity)
-                }
-            }
-            .frame(width: WeekdayPillView.columnWidth)
-
-            VStack(alignment: .leading, spacing: 8) {
+                    .frame(width: WeekdayPillView.columnWidth)
                 if let metrics {
                     DayMetricsPillRow(metrics: metrics, showsOnlyForm: activities.isEmpty)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                ForEach(activities) { activity in
-                    ActivityCard(activity: activity, timeZone: timeZone, onSelect: { onSelectActivity(activity) })
+            }
+
+            ForEach(activities) { activity in
+                HStack(alignment: .top, spacing: 12) {
+                    // `.top` plus this label's own top padding matching the card's — deterministic,
+                    // not reliant on SwiftUI's baseline-guide propagation through the card's own
+                    // padding/background/Button wrapping (same reasoning as the weekday-pill/
+                    // metrics-row alignment above).
+                    Text(activity.start, format: Self.timeFormat(timeZone: timeZone))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: WeekdayPillView.columnWidth)
+                        .padding(.top, ActivityCard.contentPadding)
+                    ActivityCard(
+                        activity: activity,
+                        trainingLoad: trainingLoad(activity),
+                        onSelect: { onSelectActivity(activity) }
+                    )
                 }
-                ForEach(plans) { plan in
+            }
+            ForEach(plans) { plan in
+                HStack(alignment: .top, spacing: 12) {
+                    // No time shown here — a `PlannedActivity` only carries a calendar day, not a
+                    // time of day — but the column still needs to hold its width so the card below
+                    // starts at the same x as the activity cards above it.
+                    Color.clear.frame(width: WeekdayPillView.columnWidth)
                     PlannedActivityCard(plan: plan, workoutName: workoutName(plan))
                 }
             }
-            .padding(.bottom, 20)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.bottom, 20)
+        // The continuous timeline line, drawn once behind the whole day rather than per row: a
+        // per-row line (as MVP1-39 used, back when this view had only one row) can't span multiple
+        // sibling `HStack`s the way a single background can. It's drawn behind the weekday pill
+        // too, but the pill's own opaque fill covers that portion, so the visible effect — the
+        // line starting right where the pill ends — is unchanged.
+        .background(alignment: .topLeading) {
+            if showsConnector {
+                Rectangle()
+                    .fill(.quaternary)
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+                    .padding(.leading, WeekdayPillView.columnWidth / 2 - 1)
+            }
         }
     }
 }
@@ -217,28 +240,55 @@ private let timelineCardCornerRadius: CGFloat = 12
 /// doc §2.1, MVP1-41) rather than a plain list row — tapping it presents `ActivityDetailView` in a
 /// sheet (see `WeekView`'s `.sheet(item: $selectedActivity)`), so this is a plain `Button` rather
 /// than a `NavigationLink(value:)`/`navigationDestination` push.
+///
+/// Headline line: icon, sport name, and — trailing-aligned, same font as the name but secondary —
+/// the activity's Load (TRIMP), the single most important number here. Second line (endurance
+/// sports only): duration, distance, and climb (if over 50m), smaller and secondary, indented to
+/// align with the name above it rather than the icon. The time of day isn't shown in the card at
+/// all — `DayActivitiesSection` shows it on the timeline instead, aligned with this headline line.
 private struct ActivityCard: View {
     let activity: Activity
-    let timeZone: TimeZone
+    /// This activity's TRIMP, from `WeekViewModel.trainingLoad(for:)` — `nil` when it couldn't be
+    /// computed, in which case the headline line just omits the number.
+    let trainingLoad: Double?
     let onSelect: () -> Void
+
+    /// Matches `DayActivitiesSection`'s time label's top padding, so the label and this card's
+    /// headline line land at the same y (see that view's own note on why — deterministic matched
+    /// offsets, not `.firstTextBaseline`, given this card's own padding/background/Button nesting).
+    static let contentPadding: CGFloat = 12
+    /// Fixed so the icon's actual glyph width (which varies per sport) doesn't change where the
+    /// second line's indent lands — the second line aligns to this width plus `iconSpacing`, not
+    /// to the icon's own measured size.
+    private static let iconWidth: CGFloat = 22
+    private static let iconSpacing: CGFloat = 8
+
+    private static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
+    private static let measurementFormat = Measurement<UnitLength>.FormatStyle.measurement(width: .abbreviated)
 
     var body: some View {
         Button(action: onSelect) {
-            HStack {
-                Image(systemName: activity.sport.symbolName)
-                    .foregroundStyle(.blue)
-                VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Self.iconSpacing) {
+                    Image(systemName: activity.sport.symbolName)
+                        .foregroundStyle(.primary)
+                        .frame(width: Self.iconWidth)
                     Text(activity.sport.displayName)
                         .foregroundStyle(.primary)
-                    Text(activity.start, format: DayActivitiesSection.timeFormat(timeZone: timeZone))
+                    Spacer()
+                    if let trainingLoad {
+                        Text(trainingLoad.formatted(Self.loadFormat))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if activity.sport.isEndurance {
+                    Text(secondLineText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .padding(.leading, Self.iconWidth + Self.iconSpacing)
                 }
-                Spacer()
-                Text(Duration.seconds(activity.duration).formatted(.units(allowed: [.hours, .minutes])))
-                    .foregroundStyle(.secondary)
             }
-            .padding(12)
+            .padding(Self.contentPadding)
             .background {
                 RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous)
                     .fill(Color.secondary.opacity(0.08))
@@ -246,6 +296,20 @@ private struct ActivityCard: View {
             .contentShape(RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    /// "1:30:00 · 8 km" (plus "· 120 m" when the climb exceeds 50m) — duration always shown as
+    /// H:MM:SS, distance/climb omitted entirely (not shown as "0 km"/"0 m") when the source
+    /// doesn't report one.
+    private var secondLineText: String {
+        var parts = [Duration.seconds(activity.duration).formatted(.time(pattern: .hourMinuteSecond))]
+        if let distanceMeters = activity.distanceMeters {
+            parts.append(Measurement(value: distanceMeters, unit: UnitLength.meters).formatted(Self.measurementFormat))
+        }
+        if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
+            parts.append(Measurement(value: gainMeters, unit: UnitLength.meters).formatted(Self.measurementFormat))
+        }
+        return parts.joined(separator: " · ")
     }
 }
 

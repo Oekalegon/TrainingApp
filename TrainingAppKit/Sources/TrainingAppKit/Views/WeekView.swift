@@ -185,6 +185,7 @@ public struct WeekView: View {
                         activities: viewModel.activities(on: day),
                         plans: viewModel.plans(on: day),
                         workoutName: { viewModel.workout(for: $0)?.name },
+                        trainingLoad: { viewModel.trainingLoad(for: $0) },
                         timeZone: viewModel.athleteTimeZone,
                         onSelectActivity: { selectedActivity = $0 }
                     )

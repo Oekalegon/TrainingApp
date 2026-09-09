@@ -28,4 +28,14 @@ extension Sport {
         case .other: "figure.mixed.cardio"
         }
     }
+
+    /// Whether duration/distance/elevation are meaningful stats for this sport — used by the day
+    /// list's activity cards (MVP1-41) to decide whether to show a second stats line at all.
+    /// `.strength`/`.other` have no reliable distance, so they show just the headline line.
+    var isEndurance: Bool {
+        switch self {
+        case .running, .cycling, .swimming, .walking, .rowing, .hiking: true
+        case .strength, .other: false
+        }
+    }
 }

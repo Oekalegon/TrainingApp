@@ -13,6 +13,9 @@ public final class WeekViewModel {
     private let model: TrainingModel
     private let refresher: any ActivityRefreshing
     private let calendar: Calendar
+    /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
+    /// uses, so a card's headline Load number always agrees with the detail sheet's own figure.
+    private let statisticsCalculator = StatisticsCalculator()
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
@@ -125,6 +128,15 @@ public final class WeekViewModel {
     /// the first frame, before `.task` runs). Used by the day list's CTL/ATL/TSB pills (MVP1-40).
     public func metrics(on day: Date) -> FitnessMetrics? {
         model.metrics.first { calendar.isDate($0.day, inSameDayAs: day) }
+    }
+
+    /// `activity`'s training load (TRIMP), computed the same way ``activityDetailViewModel(for:)``
+    /// does — the day list's activity cards show this as their headline number (MVP1-41). `nil`
+    /// when no calculator could score the activity (`confidence == 0`), so the card shows nothing
+    /// rather than a misleading "0".
+    public func trainingLoad(for activity: Activity) -> Double? {
+        let summary = statisticsCalculator.summary(for: activity, athlete: model.athlete)
+        return summary.load.confidence > 0 ? summary.load.value : nil
     }
 
     /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day
