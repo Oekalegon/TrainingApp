@@ -21,6 +21,9 @@ public final class WeekViewModel {
     /// writing to it shouldn't itself trigger a view update.
     @ObservationIgnored
     private var sportStatsPagesCache: (weekStart: Date, activityCount: Int, today: Date, pages: [SportStatsPage])?
+    /// Memoizes ``timeInZoneByDay()`` — see that method's own doc comment for why this exists.
+    @ObservationIgnored
+    private var timeInZoneByDayCache: (weekStart: Date, activityCount: Int, days: [DayTimeInZone])?
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
@@ -250,6 +253,34 @@ public final class WeekViewModel {
     public func trainingLoad(for activity: Activity) -> Double? {
         let summary = statisticsCalculator.summary(for: activity, athlete: model.athlete)
         return summary.load.confidence > 0 ? summary.load.value : nil
+    }
+
+    /// Heart-rate time-in-zone for each day of the displayed week, for the graph panel's "Time in
+    /// zone" page (MVP1-55) — every completed activity's own `TimeInZone` (from
+    /// `StatisticsCalculator.summary(for:athlete:)`, the same calculator ``trainingLoad(for:)``
+    /// uses) summed per day via `TimeInZone.+`. A day with no activities, or none with heart-rate
+    /// samples, reports an empty `TimeInZone` (all zeros) rather than being omitted — the chart
+    /// still needs exactly 7 entries, one per day of the week.
+    ///
+    /// Memoized on `(displayedWeekStart, model.activities.count)`, the same pattern
+    /// ``sportStatsPages(asOf:)`` uses and for the same reason: `WeekView` re-evaluates this from a
+    /// `@State` change on every touch-move frame of the day list's own swipe gesture, and each call
+    /// would otherwise re-run a `StatisticsCalculator.summary` per activity in the displayed week
+    /// on every one of those frames.
+    public func timeInZoneByDay() -> [DayTimeInZone] {
+        if let cache = timeInZoneByDayCache,
+            cache.weekStart == displayedWeekStart,
+            cache.activityCount == model.activities.count {
+            return cache.days
+        }
+        let days = weekDates.map { day -> DayTimeInZone in
+            let combined = activities(on: day).reduce(TimeInZone()) { partial, activity in
+                partial + statisticsCalculator.summary(for: activity, athlete: model.athlete).timeInZone
+            }
+            return DayTimeInZone(day: day, timeInZone: combined)
+        }
+        timeInZoneByDayCache = (displayedWeekStart, model.activities.count, days)
+        return days
     }
 
     /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day

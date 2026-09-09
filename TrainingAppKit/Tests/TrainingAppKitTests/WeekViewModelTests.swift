@@ -430,6 +430,80 @@ struct WeekViewModelTests {
         #expect(nextWeekPages[0].distanceMeters == 0)
     }
 
+    @Test("timeInZoneByDay() has exactly 7 entries matching weekDates, empty when there's no activity")
+    func timeInZoneByDayHasSevenEmptyEntriesWithNoActivities() async throws {
+        let (_, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let days = viewModel.timeInZoneByDay()
+
+        #expect(days.map(\.day) == viewModel.weekDates)
+        #expect(days.allSatisfy { $0.timeInZone.total == 0 })
+    }
+
+    @Test("timeInZoneByDay() sums an activity's heart-rate time in zone onto its own day, not others")
+    func timeInZoneByDaySumsOntoOwnDay() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activityDay = viewModel.displayedWeekStart
+        // 30s apart (well under the 60s gap threshold), so the whole 10 minutes forms one
+        // continuous segment instead of being excluded as a pause -- same fixture pattern
+        // `ActivityDetailViewModelTests` uses for a heart-rate-scored activity.
+        let samples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let activity = Activity(
+            source: .manual, sport: .running, start: activityDay, duration: 600, heartRate: samples
+        )
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let days = viewModel.timeInZoneByDay()
+
+        let activityDayEntry = try #require(days.first { $0.day == activityDay })
+        #expect(activityDayEntry.timeInZone.total > 0)
+        // Every other day of the week has no activity, so its time in zone stays empty.
+        #expect(days.filter { $0.day != activityDay }.allSatisfy { $0.timeInZone.total == 0 })
+    }
+
+    @Test("timeInZoneByDay() invalidates its cache when the displayed week changes")
+    func timeInZoneByDayRecomputesAfterWeekNavigation() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activityDay = viewModel.displayedWeekStart
+        let samples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let activity = Activity(
+            source: .manual, sport: .running, start: activityDay, duration: 600, heartRate: samples
+        )
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let firstWeekTotal = viewModel.timeInZoneByDay().reduce(0) { $0 + $1.timeInZone.total }
+        #expect(firstWeekTotal > 0)
+
+        // Same view model instance -- only `displayedWeekStart` changes. A cache keyed on the
+        // wrong thing (or nothing at all) would incorrectly keep returning the first week's data
+        // for the next (activity-free) week.
+        viewModel.goToNextWeek()
+        let nextWeekTotal = viewModel.timeInZoneByDay().reduce(0) { $0 + $1.timeInZone.total }
+
+        #expect(nextWeekTotal == 0)
+    }
+
     @Test("activityDetailViewModel(for:) wires the model's athlete through")
     func activityDetailViewModelUsesModelAthlete() {
         let (_, stores) = makeStores()

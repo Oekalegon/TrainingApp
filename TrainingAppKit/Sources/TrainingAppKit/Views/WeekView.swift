@@ -50,16 +50,20 @@ public struct WeekView: View {
     @State private var isDraggingHorizontally = false
     @State private var hasDeterminedDragDirection = false
     /// Decided once per gesture, alongside `isDraggingHorizontally` — `true` when the drag started
-    /// inside `statsBarFrame`, so this gesture is left entirely to `SportStatsPagerView`'s own
-    /// horizontal paging instead of also being read as a week-swipe. Before the stats bar moved
-    /// inside `weekContent`'s own swipeable area (MVP1-56), the two never overlapped, so this
-    /// wasn't needed — now that they do, without this, a swipe across the stats bar changes the
-    /// displayed week instead of (or as well as) paging its sport pager.
+    /// inside `statsBarFrame` or `graphPanelFrame`, so this gesture is left entirely to
+    /// `SportStatsPagerView`'s/`GraphPanelPagerView`'s own horizontal paging instead of also being
+    /// read as a week-swipe. Before those pagers moved inside `weekContent`'s own swipeable area
+    /// (MVP1-56, MVP1-55), neither overlapped it, so this wasn't needed — now that they do, without
+    /// this, a swipe across either one changes the displayed week instead of (or as well as) paging
+    /// it.
     @State private var isSwipeExemptFromWeekChange = false
     /// The pinned stats bar's own on-screen frame, in `weekSwipeCoordinateSpace` — measured only
     /// from the current page's header (see `weekPageHeader`'s own `.onGeometryChange`), so it always
     /// reflects the interactive page rather than being clobbered by an offscreen neighbor's.
     @State private var statsBarFrame: CGRect = .zero
+    /// The graph panel's own on-screen frame, in `weekSwipeCoordinateSpace` — same role as
+    /// `statsBarFrame`, for `GraphPanelPagerView` (MVP1-55).
+    @State private var graphPanelFrame: CGRect = .zero
     /// `true` from the moment a swipe clears `commitThreshold` until `completeSwipe(goingForward:)`'s
     /// animation and model update both finish. `handleDragChanged`/`handleDragEnded` ignore touches
     /// while this is `true`, so a fast re-swipe can't land mid-animation: overwriting `dragOffset`
@@ -331,15 +335,25 @@ public struct WeekView: View {
 
     /// The shared content for one week's page — see `weekPage`'s own doc comment for why only the
     /// current page wraps this in a real `ScrollView`. `isCurrentPage` is threaded down to
-    /// `weekPageHeader` purely so it knows whether to report its frame for gesture disambiguation
-    /// (see `statsBarFrame`'s own doc comment) — a non-current page's header frame is meaningless
-    /// for that since the page isn't the one on screen being swiped.
+    /// `weekPageHeader` and the graph panel purely so they know whether to report their frames for
+    /// gesture disambiguation (see `statsBarFrame`'s own doc comment) — a non-current page's frames
+    /// are meaningless for that since the page isn't the one on screen being swiped.
     private func weekPageContent(for dates: [Date], pageHeight: CGFloat, isCurrentPage: Bool) -> some View {
         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-            FitnessChartView(metrics: viewModel.chartMetrics, displayedWeekRange: viewModel.displayedWeekRange)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(chartSectionBackground)
+            GraphPanelPagerView(
+                metrics: viewModel.chartMetrics,
+                displayedWeekRange: viewModel.displayedWeekRange,
+                timeInZoneByDay: viewModel.timeInZoneByDay()
+            )
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(chartSectionBackground)
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .named(weekSwipeCoordinateSpace))
+            } action: { _, newFrame in
+                guard isCurrentPage else { return }
+                graphPanelFrame = newFrame
+            }
             Section {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(dates.enumerated()), id: \.element) { index, day in
@@ -417,6 +431,7 @@ public struct WeekView: View {
             hasDeterminedDragDirection = true
             isDraggingHorizontally = abs(value.translation.width) > abs(value.translation.height)
             isSwipeExemptFromWeekChange = statsBarFrame.contains(value.startLocation)
+                || graphPanelFrame.contains(value.startLocation)
         }
         guard isDraggingHorizontally, !isSwipeExemptFromWeekChange else { return }
         dragOffset = value.translation.width
