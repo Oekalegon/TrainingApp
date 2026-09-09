@@ -4,21 +4,37 @@ import TrainingCore
 /// Background for every un-highlighted pill/badge on the day list's timeline — `WeekdayPillView`'s
 /// own pill and each `MetricPillView`'s label, so they read as one consistent pill style rather
 /// than two independently-tuned ones. Also the timeline connector's own line color, so the line
-/// reads as the same visual element as the pills sitting on it rather than an unrelated grey. Not
-/// `private`: `WeekView` reuses it for the trailing filler segment that extends the timeline past
-/// the last day down to the bottom of the week view.
-let unhighlightedPillBackground = Color.secondary.opacity(0.12)
+/// reads as the same visual element as the pills sitting on it rather than an unrelated grey.
+///
+/// `Color.primary.opacity(_:)`, not a fixed grey: `.primary` is already black in light mode and
+/// white in dark mode, so this overlay is "slightly darker than whatever's behind it" in light
+/// mode and "slightly lighter" in dark mode for free, without a separate dark-mode-reversed value
+/// to keep in sync. Not `private`: `WeekView` reuses it for the trailing filler segment that
+/// extends the timeline past the last day down to the bottom of the week view.
+let unhighlightedPillBackground = Color.primary.opacity(0.06)
 
-/// The week view's own background — opaque, unlike `unhighlightedPillBackground` above. Used as a
-/// backing layer behind the weekday pill and each activity's time label, so the timeline's line
-/// (drawn behind everything as one continuous background) is fully hidden where a pill or time
-/// label sits on it, rather than showing through a translucent pill fill.
+/// The week view's own background — a light (dark in dark mode) grey, distinct from the plain
+/// system background so `unhighlightedPillBackground` above reads as "recessed" relative to it and
+/// `ActivityCard`'s own background reads as "elevated". Also used as an opaque backing layer behind
+/// the weekday pill and each activity's time label, so the timeline's line (drawn behind everything
+/// as one continuous background) is fully hidden where a pill or time label sits on it, rather than
+/// showing through. Not `private`: `WeekView` sets it as the day list's actual background too.
 #if os(iOS)
-private let viewBackground = Color(.systemBackground)
+let weekViewBackground = Color(.systemGroupedBackground)
 #else
 // This view only ever ships on iOS; the fallback exists purely so TrainingAppKit (built for both
 // iOS and macOS, per Package.swift) still compiles on macOS, e.g. for host-side tooling/tests.
-private let viewBackground = Color.white
+let weekViewBackground = Color(white: 0.93)
+#endif
+
+/// `ActivityCard`'s own background — "elevated" relative to `weekViewBackground` (white in light
+/// mode, a dark elevated grey in dark mode), the opposite direction from
+/// `unhighlightedPillBackground`'s "recessed" pills/timeline, so a completed activity's card reads
+/// as the most prominent surface in the day list.
+#if os(iOS)
+private let activityCardBackground = Color(.secondarySystemGroupedBackground)
+#else
+private let activityCardBackground = Color.white
 #endif
 
 /// Renders one day's row in the week view's day list (design doc §2.1, MVP1-39/MVP1-40/MVP1-41): a
@@ -86,7 +102,10 @@ struct DayActivitiesSection: View {
             }
 
             ForEach(activities) { activity in
-                HStack(alignment: .top, spacing: 12) {
+                // Tighter spacing than the weekday-pill/metrics row above: the time label and its
+                // card are one paired unit on the timeline, not two independent elements, so they
+                // should read closer together than that row's pill-vs-metrics pairing does.
+                HStack(alignment: .top, spacing: 4) {
                     // `.top` plus this label's own top padding matching the card's — deterministic,
                     // not reliant on SwiftUI's baseline-guide propagation through the card's own
                     // padding/background/Button wrapping (same reasoning as the weekday-pill/
@@ -99,7 +118,7 @@ struct DayActivitiesSection: View {
                         // Opaque, so the timeline line behind it (see `showsConnector`'s
                         // `.background` below) is fully interrupted here rather than showing
                         // through the label — same reasoning as `WeekdayPillView`'s own backing.
-                        .background(viewBackground)
+                        .background(weekViewBackground)
                         .frame(width: WeekdayPillView.columnWidth)
                         .padding(.top, ActivityCard.contentPadding)
                     ActivityCard(
@@ -110,7 +129,7 @@ struct DayActivitiesSection: View {
                 }
             }
             ForEach(plans) { plan in
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: 4) {
                     // No time shown here — a `PlannedActivity` only carries a calendar day, not a
                     // time of day — but the column still needs to hold its width so the card below
                     // starts at the same x as the activity cards above it.
@@ -123,7 +142,7 @@ struct DayActivitiesSection: View {
         // The continuous timeline line, drawn once behind the whole day rather than per row: a
         // per-row line (as MVP1-39 used, back when this view had only one row) can't span multiple
         // sibling `HStack`s the way a single background can. It's drawn behind the weekday pill and
-        // every time label too, but each of those has its own opaque `viewBackground` backing layer
+        // every time label too, but each of those has its own opaque `weekViewBackground` backing layer
         // (see `WeekdayPillView` and the time label below) that fully covers the line where it
         // passes underneath, rather than letting the line's translucent color show through/blend
         // with theirs.
@@ -173,13 +192,13 @@ struct WeekdayPillView: View {
             .padding(.vertical, 3)
             .foregroundStyle(isToday ? Color.white : Color.primary)
             .background {
-                // Opaque `viewBackground` first, so the timeline line drawn behind this pill (see
+                // Opaque `weekViewBackground` first, so the timeline line drawn behind this pill (see
                 // `DayActivitiesSection`'s `showsConnector` background) is fully hidden rather than
                 // showing through — `unhighlightedPillBackground` alone is translucent (12%
                 // opacity) and wouldn't block it on its own. `isToday`'s solid `accentColor` would
                 // already fully cover the line without this, but it's applied unconditionally so
                 // this doesn't silently break if that color ever becomes translucent too.
-                Capsule().fill(viewBackground)
+                Capsule().fill(weekViewBackground)
                 Capsule().fill(isToday ? Color.accentColor : unhighlightedPillBackground)
             }
             // This pill is deliberately fixed-size (it's a small badge, not body text), so it
@@ -282,8 +301,8 @@ private let timelineCardCornerRadius: CGFloat = 12
 /// timeline instead, aligned with this headline line.
 private struct ActivityCard: View {
     let activity: Activity
-    /// This activity's TRIMP, from `WeekViewModel.trainingLoad(for:)` — `nil` when it couldn't be
-    /// computed, in which case the headline line just omits the number.
+    /// This activity's TRIMP, from `WeekViewModel.trainingLoad(for:)` — the headline line omits
+    /// the number entirely when this is `nil` (couldn't be computed) or `0` (nothing to show).
     let trainingLoad: Double?
     let onSelect: () -> Void
 
@@ -310,7 +329,7 @@ private struct ActivityCard: View {
                     Text(activity.sport.displayName)
                         .foregroundStyle(.primary)
                     Spacer()
-                    if let trainingLoad {
+                    if let trainingLoad, trainingLoad > 0 {
                         HStack(spacing: 2) {
                             Image(systemName: TrainingMetricKind.load.icon)
                             Text(trainingLoad.formatted(Self.loadFormat))
@@ -328,7 +347,7 @@ private struct ActivityCard: View {
             .padding(Self.contentPadding)
             .background {
                 RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous)
-                    .fill(Color.secondary.opacity(0.08))
+                    .fill(activityCardBackground)
             }
             .contentShape(RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous))
         }

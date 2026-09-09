@@ -56,6 +56,10 @@ public struct WeekView: View {
                     weekContent
                 }
             }
+            // A light (dark in dark mode) grey rather than the plain system background, so
+            // DayActivitiesSection's pills/timeline (recessed relative to this) and its activity
+            // cards (elevated relative to this) both have something to visually contrast against.
+            .background(weekViewBackground.ignoresSafeArea())
             // Covers the empty-state -> week-content swap once `hasNoActivities` flips (e.g. after
             // "Connect Health Data" completes): that happens asynchronously, well after the button's
             // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` —
