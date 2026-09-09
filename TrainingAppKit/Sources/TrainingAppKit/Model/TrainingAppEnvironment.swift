@@ -1,3 +1,4 @@
+import Foundation
 import TrainingCore
 import TrainingHealthKit
 import TrainingPersistence
@@ -42,6 +43,7 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     public static func make() async throws -> TrainingAppEnvironment {
         let container = try TrainingPersistenceContainer.make()
         let store = SwiftDataStore(modelContainer: container)
+        await wipeFitnessMetricsCacheIfNeeded(store: store)
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
             cycleStore: store, athleteStore: store, fitnessMetricsCacheStore: store
@@ -90,6 +92,23 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     /// See ``ActivityRefreshing/requestAuthorization()``.
     public func requestAuthorization() async throws {
         try await HealthKitAuthorization.requestAuthorization(for: healthStore)
+    }
+
+    /// One-time fix-up for MVP1-59/MVP1-43: `TrainingModel.buildMetricsWithCache` used to
+    /// silently cache a bogus all-zero-load recompute result whenever its underlying activity/
+    /// plan fetch failed (fixed in TrainingKit#35), which could permanently poison a historical
+    /// span of the persisted fitness-metrics cache with near-zero CTL/ATL. That's fixed going
+    /// forward, but doesn't repair rows already written under the old behavior — this wipes the
+    /// whole cache exactly once per device (mirroring the same `.distantPast` full-invalidate
+    /// `buildMetricsWithCache` already uses internally) so the next `recompute(asOf:)` rebuilds
+    /// it from scratch with the fix in place, then never runs again.
+    private static let fitnessMetricsCacheWipeDefaultsKey = "MVP1-59.fitnessMetricsCacheWiped.v1"
+
+    private static func wipeFitnessMetricsCacheIfNeeded(store: SwiftDataStore) async {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: fitnessMetricsCacheWipeDefaultsKey) else { return }
+        try? await store.deleteCachedMetrics(from: .distantPast)
+        defaults.set(true, forKey: fitnessMetricsCacheWipeDefaultsKey)
     }
 
     /// A blank athlete profile used until the first HealthKit import populates real biometrics.
