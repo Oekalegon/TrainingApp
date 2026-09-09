@@ -1,11 +1,26 @@
 import SwiftUI
 import TrainingCore
 
+/// Background behind the fitness chart (MVP1-56) — plain white (an elevated dark grey in dark
+/// mode), distinct from `weekViewBackground` behind the day rows, so title and chart read as one
+/// opaque surface while the pinned stats bar (translucent) is the only part of the screen that lets
+/// scrolled content show through.
+#if os(iOS)
+private let chartSectionBackground = Color(.systemBackground)
+#else
+// This view only ever ships on iOS; the fallback exists purely so TrainingAppKit (built for both
+// iOS and macOS, per Package.swift) still compiles on macOS, e.g. for host-side tooling/tests.
+private let chartSectionBackground = Color.white
+#endif
+
 /// The week tab's screen (design doc §2.1): a 3-week CTL/ATL/TSB chart centered on the displayed
 /// week, that week's activities/plans below it, swipe-to-navigate between weeks, "Today" and
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
 public struct WeekView: View {
     let viewModel: WeekViewModel
+    #if os(iOS)
+    @Environment(\.colorScheme) private var colorScheme
+    #endif
     /// Whether the "Select Date" sheet is presented.
     @State private var isShowingDatePicker = false
     /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
@@ -48,6 +63,15 @@ public struct WeekView: View {
         self.viewModel = viewModel
     }
 
+    #if os(iOS)
+    /// A concrete resolved color, not `chartSectionBackground` itself — see the `.toolbarBackground`
+    /// call site in `body` for why the toolbar needs a resolved (non-dynamic) color to render flat.
+    private var toolbarBackgroundColor: Color {
+        let style: UIUserInterfaceStyle = colorScheme == .dark ? .dark : .light
+        return Color(UIColor.systemBackground.resolvedColor(with: UITraitCollection(userInterfaceStyle: style)))
+    }
+    #endif
+
     /// `.topBarLeading` doesn't exist on macOS — this view only ever ships on iOS, but
     /// `TrainingAppKit` is built for both iOS and macOS (per `Package.swift`), so `.navigation`
     /// here is unused in practice, just kept for the package to compile on macOS.
@@ -89,6 +113,14 @@ public struct WeekView: View {
             .navigationTitle("Week \(viewModel.displayedWeekOfYear)")
             #if os(iOS)
             .navigationSubtitle(viewModel.displayedWeekDateRangeDescription)
+            // Opaque, matching chartSectionBackground, so the nav bar reads as the same surface as
+            // the chart scrolling underneath it — not the system's default translucent chrome. A
+            // concrete resolved color, not `chartSectionBackground` itself: passed a dynamic/system
+            // `Color` (e.g. `Color(.systemBackground)`), the toolbar still renders its own
+            // translucent "glass" chrome layered on top regardless of `.visible`, while a fixed,
+            // already-resolved color is drawn flat and opaque as given.
+            .toolbarBackground(toolbarBackgroundColor, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             #endif
             .toolbar {
                 ToolbarItem(placement: leadingToolbarPlacement) {
@@ -280,6 +312,8 @@ public struct WeekView: View {
         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
             FitnessChartView(metrics: viewModel.chartMetrics, displayedWeekRange: viewModel.displayedWeekRange)
                 .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(chartSectionBackground)
             Section {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(dates.enumerated()), id: \.element) { index, day in
@@ -321,8 +355,9 @@ public struct WeekView: View {
     }
 
     /// The pinned stats bar (MVP1-56) — see `weekPage`'s own doc comment for how it fits into the
-    /// scroll hierarchy. Translucent (`.background(.bar)`, the same material a toolbar uses) so the
-    /// day rows read as scrolling underneath it once pinned, not behind an opaque panel.
+    /// scroll hierarchy. Lightly translucent (`.ultraThinMaterial`) so the day rows read as
+    /// scrolling underneath it once pinned, not behind an opaque panel — unlike `chartSectionBackground`
+    /// above it, which is deliberately opaque.
     private var weekPageHeader: some View {
         VStack(spacing: 0) {
             Divider()
@@ -330,7 +365,7 @@ public struct WeekView: View {
                 .padding(.vertical, 12)
             Divider()
         }
-        .background(.bar)
+        .background(.ultraThinMaterial)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.height
         } action: { _, newHeight in

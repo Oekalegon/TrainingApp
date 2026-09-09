@@ -76,6 +76,12 @@ struct SportStatsPagerView: View {
                             .accessibilityHidden(index != selectedIndex)
                     }
                 }
+                // Without this, the `HStack`'s own natural (content-hugging) height leaves
+                // `GeometryReader` positioning it at the top of this row's full 44pt height rather
+                // than centering it — `GeometryReader` doesn't center its content by default, unlike
+                // the icon+dots `HStack` alongside it, which does get that from this view's outer
+                // `HStack`'s own default `.center` alignment.
+                .frame(maxHeight: .infinity, alignment: .center)
                 .offset(x: -CGFloat(selectedIndex) * pageWidth + dragOffset)
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 10)
