@@ -99,17 +99,37 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     /// plan fetch failed (fixed in TrainingKit#35), which could permanently poison a historical
     /// span of the persisted fitness-metrics cache with near-zero CTL/ATL. That's fixed going
     /// forward, but doesn't repair rows already written under the old behavior — this wipes the
-    /// whole cache exactly once per device (mirroring the same `.distantPast` full-invalidate
-    /// `buildMetricsWithCache` already uses internally) so the next `recompute(asOf:)` rebuilds
-    /// it from scratch with the fix in place, then never runs again.
-    private static let fitnessMetricsCacheWipeDefaultsKey = "MVP1-59.fitnessMetricsCacheWiped.v1"
-
-    private static func wipeFitnessMetricsCacheIfNeeded(store: SwiftDataStore) async {
-        let defaults = UserDefaults.standard
+    /// whole cache once (mirroring the same `.distantPast` full-invalidate `buildMetricsWithCache`
+    /// already uses internally) so the next `recompute(asOf:)` rebuilds it from scratch with the
+    /// fix in place.
+    ///
+    /// Only marks itself done (via `defaults`) after a *successful* delete — a failure (e.g. a
+    /// transient store error right at launch) leaves the flag unset so this retries on the next
+    /// launch instead of silently leaving the poisoned cache unrepaired forever, which would just
+    /// reintroduce the same "failure treated as success" defect TrainingKit#35 fixed.
+    ///
+    /// This is one-off data-migration code, not a permanent feature: once it's confirmed to have
+    /// run successfully, it and its call site should be deleted (tracked as a follow-up, not kept
+    /// indefinitely on the off chance some device hasn't launched yet — this is a single-athlete
+    /// app under direct control, not a wide release with unknown update timing).
+    ///
+    /// - Parameters:
+    ///   - store: `any FitnessMetricsCacheStore` rather than the concrete `SwiftDataStore`, so
+    ///     this is testable against TrainingKit's `InMemoryStore`.
+    ///   - defaults: Injectable for the same reason; defaults to `.standard` for real use.
+    nonisolated static func wipeFitnessMetricsCacheIfNeeded(
+        store: any FitnessMetricsCacheStore, defaults: UserDefaults = .standard
+    ) async {
         guard !defaults.bool(forKey: fitnessMetricsCacheWipeDefaultsKey) else { return }
-        try? await store.deleteCachedMetrics(from: .distantPast)
-        defaults.set(true, forKey: fitnessMetricsCacheWipeDefaultsKey)
+        do {
+            try await store.deleteCachedMetrics(from: .distantPast)
+            defaults.set(true, forKey: fitnessMetricsCacheWipeDefaultsKey)
+        } catch {
+            // Left unset deliberately — see the doc comment above.
+        }
     }
+
+    nonisolated static let fitnessMetricsCacheWipeDefaultsKey = "MVP1-59.fitnessMetricsCacheWiped.v1"
 
     /// A blank athlete profile used until the first HealthKit import populates real biometrics.
     nonisolated static func placeholderAthlete() -> AthleteProfile {
