@@ -310,7 +310,8 @@ private let timelineCardCornerRadius: CGFloat = 12
 private struct ActivityCard: View {
     let activity: Activity
     /// This activity's TRIMP, from `WeekViewModel.trainingLoad(for:)` — the headline line omits
-    /// the number entirely when this is `nil` (couldn't be computed) or `0` (nothing to show).
+    /// the number entirely when this is `nil` (couldn't be computed) or rounds to `0` (nothing
+    /// worth showing).
     let trainingLoad: Double?
     let onSelect: () -> Void
 
@@ -337,7 +338,10 @@ private struct ActivityCard: View {
                     Text(activity.sport.displayName)
                         .foregroundStyle(.primary)
                     Spacer()
-                    if let trainingLoad, trainingLoad > 0 {
+                    // Rounds first, then checks that against zero — `loadFormat` itself rounds to
+                    // the nearest whole number, so a raw value like 0.3 is `> 0` but would still
+                    // display as "0" if the raw (unrounded) value were what got checked here.
+                    if let trainingLoad, trainingLoad.rounded() > 0 {
                         HStack(spacing: 2) {
                             Image(systemName: TrainingMetricKind.load.icon)
                             Text(trainingLoad.formatted(Self.loadFormat))
