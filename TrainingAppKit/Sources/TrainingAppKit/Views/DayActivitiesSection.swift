@@ -23,6 +23,9 @@ struct DayActivitiesSection: View {
     /// Whether to draw the timeline connector below this row's pill — `false` for the last day in
     /// the list, so the vertical line doesn't dangle past the final pill.
     let showsConnector: Bool
+    /// This day's CTL/ATL/TSB, shown as pills beside the weekday pill (MVP1-40) — `nil` before
+    /// the first load, in which case no pill row renders (rather than a row of placeholder zeros).
+    let metrics: FitnessMetrics?
     let activities: [Activity]
     let plans: [PlannedActivity]
     let workoutName: (PlannedActivity) -> String?
@@ -56,7 +59,10 @@ struct DayActivitiesSection: View {
             }
             .frame(width: WeekdayPillView.columnWidth)
 
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                if let metrics {
+                    DayMetricsPillRow(metrics: metrics)
+                }
                 ForEach(activities) { activity in
                     ActivityRow(activity: activity, timeZone: timeZone, onSelect: { onSelectActivity(activity) })
                 }
@@ -115,6 +121,54 @@ struct WeekdayPillView: View {
             // rather than left unbounded, so a maxed-out Dynamic Type setting can't blow the
             // pill's small footprint out to something that no longer reads as a compact badge.
             .dynamicTypeSize(.large)
+    }
+}
+
+/// CTL/ATL/TSB shown as compact value+label pills beside a weekday row (design doc §2.1,
+/// MVP1-40) — color-matched to `FitnessChartView`'s legend (blue/orange/green) so the day list
+/// reads as the same three series as the chart above it, just localized to one day.
+private struct DayMetricsPillRow: View {
+    let metrics: FitnessMetrics
+
+    /// CTL/ATL are unsigned moving averages of load — no sign shown. TSB is a balance that reads
+    /// meaningfully as positive ("fresh") or negative ("fatigued"), so it always shows its sign.
+    private static let unsignedFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
+    private static let signedFormat = FloatingPointFormatStyle<Double>.number
+        .sign(strategy: .always()).precision(.fractionLength(0))
+
+    var body: some View {
+        HStack(spacing: 4) {
+            MetricPillView(label: "CTL", value: metrics.ctl.formatted(Self.unsignedFormat), color: .blue)
+            MetricPillView(label: "ATL", value: metrics.atl.formatted(Self.unsignedFormat), color: .orange)
+            MetricPillView(label: "TSB", value: metrics.tsb.formatted(Self.signedFormat), color: .green)
+        }
+    }
+}
+
+/// One metric's value+label pill, e.g. "CTL 42" — the label tinted to match its series color, the
+/// value in the ordinary text color so three adjacent colored labels don't turn into a wall of
+/// color that's harder to read than plain text.
+private struct MetricPillView: View {
+    let label: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(label)
+                .foregroundStyle(color)
+            Text(value)
+                .foregroundStyle(.primary)
+        }
+        .font(.system(size: 9, weight: .regular, design: .default))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background {
+            Capsule().fill(color.opacity(0.12))
+        }
+        // Same reasoning as `WeekdayPillView`: a small fixed-size badge, capped rather than
+        // unbounded, so it stays a compact pill even at large accessibility text sizes.
+        .dynamicTypeSize(.large)
     }
 }
 

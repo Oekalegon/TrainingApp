@@ -121,6 +121,12 @@ public final class WeekViewModel {
         model.workouts.first { $0.id == plan.workoutID }
     }
 
+    /// `day`'s fitness metrics, if computed — `nil` before ``load(asOf:)`` has covered it (e.g.
+    /// the first frame, before `.task` runs). Used by the day list's CTL/ATL/TSB pills (MVP1-40).
+    public func metrics(on day: Date) -> FitnessMetrics? {
+        model.metrics.first { calendar.isDate($0.day, inSameDayAs: day) }
+    }
+
     /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day
     /// list's weekday pills (MVP1-39) to highlight today's row.
     public func isToday(_ day: Date, asOf today: Date = .now) -> Bool {
