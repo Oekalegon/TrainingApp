@@ -121,6 +121,12 @@ public final class WeekViewModel {
         model.workouts.first { $0.id == plan.workoutID }
     }
 
+    /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day
+    /// list's weekday pills (MVP1-39) to highlight today's row.
+    public func isToday(_ day: Date, asOf today: Date = .now) -> Bool {
+        calendar.isDate(day, inSameDayAs: today)
+    }
+
     /// The detail view model for `activity`, pushed when it's tapped in the day list.
     public func activityDetailViewModel(for activity: Activity) -> ActivityDetailViewModel {
         ActivityDetailViewModel(activity: activity, athlete: model.athlete)

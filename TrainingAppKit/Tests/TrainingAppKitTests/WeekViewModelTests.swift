@@ -61,6 +61,18 @@ struct WeekViewModelTests {
         #expect(viewModel.displayedWeekStart == originalStart)
     }
 
+    @Test("isToday(_:) matches only the calendar day of the given reference date")
+    func isTodayMatchesOnlyTheReferenceDay() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let startOfDay2 = calendar.startOfDay(for: day(2))
+
+        #expect(viewModel.isToday(day(2), asOf: day(2)))
+        #expect(!viewModel.isToday(day(2), asOf: day(3)))
+        #expect(!viewModel.isToday(day(2), asOf: startOfDay2.addingTimeInterval(-1)))
+    }
+
     @Test("chartRange spans the week before, the displayed week, and the week after")
     func chartRangeIsThreeWeeksCenteredOnDisplayedWeek() {
         let model = makeModel()

@@ -175,9 +175,12 @@ public struct WeekView: View {
     /// `.refreshable` and `.scrollDisabled` (used below) work identically on a `ScrollView`.
     private func dayList(for dates: [Date]) -> some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(dates, id: \.self) { day in
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(dates.enumerated()), id: \.element) { index, day in
                     DayActivitiesSection(
+                        date: day,
+                        isToday: viewModel.isToday(day),
+                        showsConnector: index < dates.count - 1,
                         activities: viewModel.activities(on: day),
                         plans: viewModel.plans(on: day),
                         workoutName: { viewModel.workout(for: $0)?.name },
