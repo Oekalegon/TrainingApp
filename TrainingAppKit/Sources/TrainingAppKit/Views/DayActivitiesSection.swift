@@ -355,20 +355,24 @@ private struct ActivityCard: View {
         .buttonStyle(.plain)
     }
 
-    /// "1:30:00 8 km 🏔120 m" — duration always shown as H:MM:SS, distance/climb omitted entirely
-    /// (not shown as "0 km"/"0 m") when the source doesn't report one. No separator between parts
-    /// beyond a plain space; climb alone gets a leading mountain icon (via `Text(Image(...))`
-    /// concatenation) to set it apart from the plain duration/distance numbers next to it.
+    /// "1:30:00   8 km   🏔120 m" — duration always shown as H:MM:SS, distance/climb omitted
+    /// entirely (not shown as "0 km"/"0 m") when the source doesn't report one. No separator
+    /// character between parts, just extra spacing (rather than a single plain space) to visually
+    /// group each part's own text/icon without implying they're one continuous phrase; climb alone
+    /// also gets a leading mountain icon (via `Text(Image(...))` concatenation) to set it apart
+    /// from the plain duration/distance numbers next to it.
+    private static let partSpacing = "   "
+
     private var secondLineText: Text {
         let durationString = Duration.seconds(activity.duration).formatted(.time(pattern: .hourMinuteSecond))
         var text = Text(durationString)
         if let distanceMeters = activity.distanceMeters {
             let distanceString = Measurement(value: distanceMeters, unit: UnitLength.meters).formatted(Self.measurementFormat)
-            text = Text("\(text) \(distanceString)")
+            text = Text("\(text)\(Self.partSpacing)\(distanceString)")
         }
         if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
             let gainString = Measurement(value: gainMeters, unit: UnitLength.meters).formatted(Self.measurementFormat)
-            text = Text("\(text) \(Image(systemName: "mountain.2")) \(gainString)")
+            text = Text("\(text)\(Self.partSpacing)\(Image(systemName: "mountain.2")) \(gainString)")
         }
         return text
     }
