@@ -76,17 +76,25 @@ public struct WeekView: View {
             // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` —
             // animating on the value change itself is the only way to catch it.
             .animation(Self.weekChangeAnimation, value: viewModel.hasNoActivities)
-            // The system nav bar is hidden entirely in favor of `weekHeader` below (MVP1-56): a
-            // `.principal` toolbar item is always centered and sized to its own intrinsic width —
-            // `.frame(maxWidth: .infinity, alignment: .leading)` inside one has no effect — so it
-            // can't be made to left-align the title with the rest of the screen's content. Building
-            // the header ourselves also sidesteps the toolbar's own translucent "glass" chrome,
-            // which layers over any `.toolbarBackground` color rather than rendering it flat.
+            // The native title/subtitle (MVP1-56), not a custom header view: this gets the leading-
+            // aligned large-title layout and the toolbar buttons' Liquid Glass styling for free,
+            // rather than fighting the system nav bar's own rendering.
+            .navigationTitle("Week \(viewModel.displayedWeekOfYear)")
             #if os(iOS)
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationSubtitle(viewModel.displayedWeekDateRangeDescription)
             #endif
-            .safeAreaInset(edge: .top, spacing: 0) {
-                weekHeader
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Today", systemImage: "calendar") {
+                        goToToday()
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Select Date", systemImage: "calendar.badge.clock") {
+                        pickedDate = viewModel.displayedWeekStart
+                        isShowingDatePicker = true
+                    }
+                }
             }
             .task(id: viewModel.displayedWeekStart) {
                 await viewModel.load()
@@ -194,39 +202,6 @@ public struct WeekView: View {
                 )
             }
         }
-    }
-
-    /// Replaces the system nav bar (MVP1-56): a large "Week #" title with the week's date range/
-    /// year underneath, leading-aligned with the rest of the screen's content, and the "Today"/
-    /// "Select Date" actions at their same original trailing position — all on one row sharing
-    /// `chartSectionBackground` with the chart section directly below it.
-    private var weekHeader: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Week \(viewModel.displayedWeekOfYear)")
-                    .font(.title2.bold())
-                Text(viewModel.displayedWeekDateRangeDescription)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            HStack(spacing: 16) {
-                Button("Today", systemImage: "calendar") {
-                    goToToday()
-                }
-                Button("Select Date", systemImage: "calendar.badge.clock") {
-                    pickedDate = viewModel.displayedWeekStart
-                    isShowingDatePicker = true
-                }
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-        }
-        .padding(.horizontal)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-        .background(chartSectionBackground)
     }
 
     /// A plain `ScrollView`/`LazyVStack`, not `List`: once MVP1-20 dropped the per-day section
