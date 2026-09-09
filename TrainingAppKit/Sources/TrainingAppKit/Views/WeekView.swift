@@ -1,17 +1,6 @@
 import SwiftUI
 import TrainingCore
 
-/// Background behind the fitness chart and the main-sport stats row (MVP1-52) — plain white (an
-/// elevated dark grey in dark mode), distinct from `weekViewBackground` below it so the two
-/// sections read as separate surfaces, divided by a `Divider()` rather than a color change alone.
-#if os(iOS)
-private let chartSectionBackground = Color(.systemBackground)
-#else
-// This view only ever ships on iOS; the fallback exists purely so TrainingAppKit (built for both
-// iOS and macOS, per Package.swift) still compiles on macOS, e.g. for host-side tooling/tests.
-private let chartSectionBackground = Color.white
-#endif
-
 /// The week tab's screen (design doc §2.1): a 3-week CTL/ATL/TSB chart centered on the displayed
 /// week, that week's activities/plans below it, swipe-to-navigate between weeks, "Today" and
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
@@ -45,6 +34,10 @@ public struct WeekView: View {
     /// would visibly stomp it, and the previous swipe's `completion` closure would still fire later
     /// and advance `viewModel` a second, unintended time.
     @State private var isCompletingSwipe = false
+    /// The pinned stats-bar header's own measured height (MVP1-56) — used to size the day rows'
+    /// `minHeight` so the timeline connector still reaches the bottom of a short week. See
+    /// `weekPageHeader`'s `.onGeometryChange` for where this is measured.
+    @State private var statsBarHeight: CGFloat = 0
 
     private static let weekChangeAnimation: Animation = .easeInOut(duration: 0.25)
     /// Fraction of the page width a drag needs to clear, at release, to commit to the next/
@@ -55,8 +48,9 @@ public struct WeekView: View {
         self.viewModel = viewModel
     }
 
-    /// `.topBarLeading` doesn't exist on macOS, same as `chartSectionBackground`'s own #if —
-    /// `.navigation` there is unused in practice since this view only ever ships on iOS.
+    /// `.topBarLeading` doesn't exist on macOS — this view only ever ships on iOS, but
+    /// `TrainingAppKit` is built for both iOS and macOS (per `Package.swift`), so `.navigation`
+    /// here is unused in practice, just kept for the package to compile on macOS.
     private var leadingToolbarPlacement: ToolbarItemPlacement {
         #if os(iOS)
         .topBarLeading
@@ -87,9 +81,11 @@ public struct WeekView: View {
             // animating on the value change itself is the only way to catch it.
             .animation(Self.weekChangeAnimation, value: viewModel.hasNoActivities)
             // The native title/subtitle (MVP1-56), not a custom header view: this gets the toolbar
-            // buttons' Liquid Glass styling for free, rather than reimplementing it by hand, and —
-            // left as the default large-title style, not `.inline` — collapses into the compact
-            // toolbar title as the day list scrolls, the same as Mail's message list does.
+            // buttons' Liquid Glass styling for free, rather than reimplementing it by hand.
+            // Left at the default (large) display mode, not forced `.inline`: `weekContent`'s single
+            // `ScrollView` per page (MVP1-56) lets the system's own large-title collapse engage
+            // natively — title and chart scroll away together as the day list scrolls, exactly like
+            // Mail's message list, rather than an abrupt manual swap between two fixed styles.
             .navigationTitle("Week \(viewModel.displayedWeekOfYear)")
             #if os(iOS)
             .navigationSubtitle(viewModel.displayedWeekDateRangeDescription)
@@ -182,120 +178,164 @@ public struct WeekView: View {
     /// list underneath following the gesture.
     ///
     /// The day list itself is a manual three-page carousel (previous/current/next week, each a
-    /// real `dayList`, not a placeholder) rather than `TabView(.page)`: `TabView`'s selection
+    /// real `weekPage`, not a placeholder) rather than `TabView(.page)`: `TabView`'s selection
     /// binding updates — and so, if reacted to directly, `viewModel.displayedWeekStart` would
     /// have updated — as soon as the drag crosses the halfway point, well before the finger lifts.
-    /// That let the model (and the chart above) change mid-gesture, which is exactly the
-    /// unnatural, too-early flip this was built to avoid. Driving the pages from `dragOffset`
-    /// directly keeps the model change (`completeSwipe(goingForward:)`) tied to gesture *end*,
-    /// with the remaining distance animating to completion afterward, same as any standard
-    /// direct-manipulation paging control.
+    /// That let the model change mid-gesture, which is exactly the unnatural, too-early flip this
+    /// was built to avoid. Driving the pages from `dragOffset` directly keeps the model change
+    /// (`completeSwipe(goingForward:)`) tied to gesture *end*, with the remaining distance
+    /// animating to completion afterward, same as any standard direct-manipulation paging control.
+    ///
+    /// Only the middle (current) page is ever actually interactive — see `weekPage`'s own doc
+    /// comment for why the other two are permanently disabled rather than just during a drag.
     private var weekContent: some View {
-        VStack(spacing: 0) {
-            // Chart and main-sport stats row share one white section background, separated from
-            // each other and from the day list below by a `Divider()` (MVP1-52) — the day list
-            // itself keeps sitting on `weekViewBackground`, applied at the outer `Group` in `body`.
-            VStack(spacing: 0) {
-                FitnessChartView(metrics: viewModel.chartMetrics, displayedWeekRange: viewModel.displayedWeekRange)
-                    .padding(.vertical, 8)
-                Divider()
-                SportStatsPagerView(pages: viewModel.sportStatsPages())
-                    .padding(.vertical, 12)
+        GeometryReader { geometry in
+            let pageWidth = geometry.size.width
+            let pageHeight = geometry.size.height
+            HStack(spacing: 0) {
+                weekPage(for: viewModel.weekDates(offsetWeeks: -1), pageHeight: pageHeight, isCurrentPage: false)
+                    .frame(width: pageWidth)
+                weekPage(for: viewModel.weekDates(offsetWeeks: 0), pageHeight: pageHeight, isCurrentPage: true)
+                    .frame(width: pageWidth)
+                weekPage(for: viewModel.weekDates(offsetWeeks: 1), pageHeight: pageHeight, isCurrentPage: false)
+                    .frame(width: pageWidth)
             }
-            .background(chartSectionBackground)
+            // Base position centers the "current" (middle) page; dragOffset then tracks the
+            // finger on top of that.
+            .offset(x: -pageWidth + dragOffset)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { value in handleDragChanged(value) }
+                    .onEnded { value in handleDragEnded(value, pageWidth: pageWidth) }
+            )
+        }
+    }
 
-            Divider()
-
-            GeometryReader { geometry in
-                let pageWidth = geometry.size.width
-                let pageHeight = geometry.size.height
-                HStack(spacing: 0) {
-                    dayList(for: viewModel.weekDates(offsetWeeks: -1), pageHeight: pageHeight)
-                        .frame(width: pageWidth)
-                    dayList(for: viewModel.weekDates(offsetWeeks: 0), pageHeight: pageHeight)
-                        .frame(width: pageWidth)
-                    dayList(for: viewModel.weekDates(offsetWeeks: 1), pageHeight: pageHeight)
-                        .frame(width: pageWidth)
+    /// One week's full scrollable content (MVP1-56): the fitness chart scrolls away with the nav
+    /// bar's large title (both are content above the pinned section, so they collapse together as
+    /// the same `ScrollView` scrolls — exactly like Mail's message list), then the main-sport stats
+    /// bar pins to the top of the page, translucent (`.background(.bar)`) so the day rows are still
+    /// dimly visible scrolling underneath it, the same way a native pinned section header works.
+    ///
+    /// A plain `ScrollView`/`LazyVStack`, not `List`, for the day rows: once MVP1-20 dropped the
+    /// per-day section headers, `List` wasn't buying anything here beyond default row styling — and
+    /// both `.refreshable` and `.scrollDisabled` (used below) work identically on a `ScrollView`.
+    ///
+    /// - Parameters:
+    ///   - pageHeight: The week view's own visible height (from `weekContent`'s `GeometryReader`)
+    ///     — the day rows are given at least `pageHeight` minus the stats bar's own measured height
+    ///     as their `minHeight`, with a trailing filler segment absorbing whatever's left over, so
+    ///     the timeline extends all the way to the bottom of the week view even on a short week
+    ///     rather than stopping right after the last day's own content.
+    ///   - isCurrentPage: `true` only for the middle (currently displayed) carousel page. The other
+    ///     two exist purely so their content is ready to slide into view mid-drag — a real user
+    ///     never scrolls them directly, so they're rendered as plain, non-scrolling content rather
+    ///     than a second and third `ScrollView`. That's not just an optimization: the system binds
+    ///     its large-title collapse tracking to the first `ScrollView` it finds in the hierarchy,
+    ///     which — with three side-by-side candidates, only one of which the user can actually
+    ///     scroll — is never guaranteed to be the visible one. Keeping exactly one real `ScrollView`
+    ///     in the tree at a time is what makes the title reliably track *this* page's scrolling.
+    private func weekPage(for dates: [Date], pageHeight: CGFloat, isCurrentPage: Bool) -> some View {
+        Group {
+            if isCurrentPage {
+                ScrollView {
+                    weekPageContent(for: dates, pageHeight: pageHeight)
                 }
-                // Base position centers the "current" (middle) page; dragOffset then tracks the
-                // finger on top of that.
-                .offset(x: -pageWidth + dragOffset)
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 10)
-                        .onChanged { value in handleDragChanged(value) }
-                        .onEnded { value in handleDragEnded(value, pageWidth: pageWidth) }
-                )
+                .refreshable {
+                    await viewModel.refresh()
+                }
+                // Locked for the duration of a horizontal swipe (see `isDraggingHorizontally`), so
+                // a committed horizontal drag can't also scroll the page underneath it.
+                .scrollDisabled(isDraggingHorizontally)
+            } else {
+                // No ScrollView: this page is only ever glimpsed mid-drag, so it's pinned to its
+                // resting (scrolled-to-top) appearance and clipped to the visible page bounds.
+                weekPageContent(for: dates, pageHeight: pageHeight)
+                    .frame(height: pageHeight, alignment: .top)
+                    .clipped()
+            }
+        }
+        // Without this, each of the three carousel slots keeps the same underlying view identity
+        // (and thus scroll position, for the current page) across weeks, since only its row data
+        // changes -- scrolling down in one week would leave the next week's content scrolled to the
+        // same offset instead of starting at the top. Keying on the week's first date forces a
+        // fresh view (and so a reset scroll position) exactly when the week actually changes, not
+        // on every unrelated re-render.
+        .id(dates.first)
+        // Same reasoning as `.scrollDisabled` above, for taps: without this, a horizontal swipe
+        // that starts on an `ActivityRow`/`PlannedActivityRow` button still recognizes as a tap on
+        // release and opens the activity detail sheet in addition to paging the week.
+        // `.allowsHitTesting(false)` doesn't help here -- the button's tap gesture already started
+        // tracking the touch at touch-down, before `isDraggingHorizontally` flips, so blocking new
+        // hit-tests mid-drag doesn't cancel it. `.disabled` does: SwiftUI re-checks `isEnabled` at
+        // the moment the tap actually fires (touch-up), not at touch-down, so flipping it during
+        // the drag suppresses the action. The non-current pages are always disabled outright, since
+        // they're never meant to be tapped at all.
+        .disabled(!isCurrentPage || isDraggingHorizontally)
+    }
+
+    /// The shared content for one week's page — see `weekPage`'s own doc comment for why only the
+    /// current page wraps this in a real `ScrollView`.
+    private func weekPageContent(for dates: [Date], pageHeight: CGFloat) -> some View {
+        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+            FitnessChartView(metrics: viewModel.chartMetrics, displayedWeekRange: viewModel.displayedWeekRange)
+                .padding(.vertical, 8)
+            Section {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(dates.enumerated()), id: \.element) { index, day in
+                        DayActivitiesSection(
+                            date: day,
+                            isToday: viewModel.isToday(day),
+                            showsConnector: true,
+                            metrics: viewModel.metrics(on: day),
+                            activities: viewModel.activities(on: day),
+                            plans: viewModel.plans(on: day),
+                            workoutName: { viewModel.workout(for: $0)?.name },
+                            trainingLoad: { viewModel.trainingLoad(for: $0) },
+                            timeZone: viewModel.athleteTimeZone,
+                            onSelectActivity: { selectedActivity = $0 }
+                        )
+                    }
+                    // Continues the timeline past the last day's own connector (which stops at
+                    // that day's own bottom padding) down through whatever space `minHeight`
+                    // below adds — same line color/width/x-offset as `DayActivitiesSection`'s
+                    // own connector (shared via `WeekdayPillView`'s constants), so it reads as
+                    // one uninterrupted line rather than two segments that happen to line up.
+                    Rectangle()
+                        .fill(unhighlightedPillBackground)
+                        .frame(width: WeekdayPillView.connectorLineWidth)
+                        .padding(.leading, WeekdayPillView.connectorLineLeadingPadding)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+                .frame(minHeight: max(0, pageHeight - statsBarHeight), alignment: .top)
+                .padding(.horizontal)
+                // Without this, the first weekday pill sits flush against the divider at the
+                // bottom of the pinned stats bar (MVP1-52) — everything below the first row
+                // already has this same breathing room via each `DayActivitiesSection`'s own
+                // `.padding(.bottom, 20)`.
+                .padding(.top, 12)
+            } header: {
+                weekPageHeader
             }
         }
     }
 
-    /// A plain `ScrollView`/`LazyVStack`, not `List`: once MVP1-20 dropped the per-day section
-    /// headers, `List` wasn't buying anything here beyond default row styling — and both
-    /// `.refreshable` and `.scrollDisabled` (used below) work identically on a `ScrollView`.
-    ///
-    /// - Parameter pageHeight: The week view's own visible height (from `weekContent`'s
-    ///   `GeometryReader`) — the `LazyVStack` is given at least this as its `minHeight`, and a
-    ///   trailing filler segment after the last day absorbs whatever's left over, so the timeline
-    ///   extends all the way to the bottom of the week view even on a short week rather than
-    ///   stopping right after the last day's own content.
-    private func dayList(for dates: [Date], pageHeight: CGFloat) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(dates.enumerated()), id: \.element) { index, day in
-                    DayActivitiesSection(
-                        date: day,
-                        isToday: viewModel.isToday(day),
-                        showsConnector: true,
-                        metrics: viewModel.metrics(on: day),
-                        activities: viewModel.activities(on: day),
-                        plans: viewModel.plans(on: day),
-                        workoutName: { viewModel.workout(for: $0)?.name },
-                        trainingLoad: { viewModel.trainingLoad(for: $0) },
-                        timeZone: viewModel.athleteTimeZone,
-                        onSelectActivity: { selectedActivity = $0 }
-                    )
-                }
-                // Continues the timeline past the last day's own connector (which stops at that
-                // day's own bottom padding) down through whatever space `minHeight` below adds —
-                // same line color/width/x-offset as `DayActivitiesSection`'s own connector (shared
-                // via `WeekdayPillView`'s constants), so it reads as one uninterrupted line rather
-                // than two segments that happen to line up.
-                Rectangle()
-                    .fill(unhighlightedPillBackground)
-                    .frame(width: WeekdayPillView.connectorLineWidth)
-                    .padding(.leading, WeekdayPillView.connectorLineLeadingPadding)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
-            .frame(minHeight: pageHeight, alignment: .top)
-            .padding(.horizontal)
-            // Without this, the first weekday pill sits flush against the divider separating this
-            // list from the main-sport stats row above it (MVP1-52) — everything below the first
-            // row already has this same breathing room via each `DayActivitiesSection`'s own
-            // `.padding(.bottom, 20)`.
-            .padding(.top, 12)
+    /// The pinned stats bar (MVP1-56) — see `weekPage`'s own doc comment for how it fits into the
+    /// scroll hierarchy. Translucent (`.background(.bar)`, the same material a toolbar uses) so the
+    /// day rows read as scrolling underneath it once pinned, not behind an opaque panel.
+    private var weekPageHeader: some View {
+        VStack(spacing: 0) {
+            Divider()
+            SportStatsPagerView(pages: viewModel.sportStatsPages())
+                .padding(.vertical, 12)
+            Divider()
         }
-        // Without this, each of the three carousel slots keeps the same underlying scroll view
-        // identity (and thus scroll position) across weeks, since only its row data changes --
-        // scrolling down in one week would leave the next week's content scrolled to the same
-        // offset instead of starting at the top. Keying on the week's first date forces a fresh
-        // view (and so a reset scroll position) exactly when the week actually changes, not on
-        // every unrelated re-render.
-        .id(dates.first)
-        .refreshable {
-            await viewModel.refresh()
+        .background(.bar)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { _, newHeight in
+            statsBarHeight = newHeight
         }
-        // Locked for the duration of a horizontal swipe (see `isDraggingHorizontally`), so a
-        // committed horizontal drag can't also scroll whichever page it's currently over.
-        .scrollDisabled(isDraggingHorizontally)
-        // Same reasoning, for taps: without this, a horizontal swipe that starts on an
-        // `ActivityRow`/`PlannedActivityRow` button still recognizes as a tap on release and opens
-        // the activity detail sheet in addition to paging the week. `.allowsHitTesting(false)`
-        // doesn't help here -- the button's tap gesture already started tracking the touch at
-        // touch-down, before `isDraggingHorizontally` flips, so blocking new hit-tests mid-drag
-        // doesn't cancel it. `.disabled` does: SwiftUI re-checks `isEnabled` at the moment the tap
-        // actually fires (touch-up), not at touch-down, so flipping it during the drag suppresses
-        // the action.
-        .disabled(isDraggingHorizontally)
     }
 
     private func handleDragChanged(_ value: DragGesture.Value) {
