@@ -55,6 +55,16 @@ public struct WeekView: View {
         self.viewModel = viewModel
     }
 
+    /// `.topBarLeading` doesn't exist on macOS, same as `chartSectionBackground`'s own #if —
+    /// `.navigation` there is unused in practice since this view only ever ships on iOS.
+    private var leadingToolbarPlacement: ToolbarItemPlacement {
+        #if os(iOS)
+        .topBarLeading
+        #else
+        .navigation
+        #endif
+    }
+
     public var body: some View {
         NavigationStack {
             Group {
@@ -76,14 +86,29 @@ public struct WeekView: View {
             // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` —
             // animating on the value change itself is the only way to catch it.
             .animation(Self.weekChangeAnimation, value: viewModel.hasNoActivities)
-            // The native title/subtitle (MVP1-56), not a custom header view: this gets the leading-
-            // aligned large-title layout and the toolbar buttons' Liquid Glass styling for free,
-            // rather than fighting the system nav bar's own rendering.
+            // The native title/subtitle (MVP1-56), not a custom header view: this gets the toolbar
+            // buttons' Liquid Glass styling for free, rather than reimplementing it by hand, and —
+            // left as the default large-title style, not `.inline` — collapses into the compact
+            // toolbar title as the day list scrolls, the same as Mail's message list does.
             .navigationTitle("Week \(viewModel.displayedWeekOfYear)")
             #if os(iOS)
             .navigationSubtitle(viewModel.displayedWeekDateRangeDescription)
             #endif
             .toolbar {
+                ToolbarItem(placement: leadingToolbarPlacement) {
+                    Button("Previous Week", systemImage: "chevron.left") {
+                        withAnimation(Self.weekChangeAnimation) {
+                            viewModel.goToPreviousWeek()
+                        }
+                    }
+                }
+                ToolbarItem(placement: leadingToolbarPlacement) {
+                    Button("Next Week", systemImage: "chevron.right") {
+                        withAnimation(Self.weekChangeAnimation) {
+                            viewModel.goToNextWeek()
+                        }
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Today", systemImage: "calendar") {
                         goToToday()
