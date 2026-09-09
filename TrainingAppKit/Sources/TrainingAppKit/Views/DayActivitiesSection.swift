@@ -337,6 +337,7 @@ private struct ActivityCard: View {
                         .foregroundStyle(.secondary)
                     }
                 }
+                .font(.subheadline)
                 if activity.sport.isEndurance {
                     secondLineText
                         .font(.caption)
