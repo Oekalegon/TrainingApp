@@ -10,7 +10,10 @@ struct AthleteView: View {
     let viewModel: AthleteViewModel
     let isResyncing: Bool
     let onResync: () -> Void
+    let isDeduplicating: Bool
+    let onDeduplicate: () -> Void
     @State private var isConfirmingResync = false
+    @State private var isConfirmingDeduplicate = false
 
     var body: some View {
         NavigationStack {
@@ -66,9 +69,22 @@ struct AthleteView: View {
                             }
                         }
                     }
-                    .disabled(isResyncing)
+                    .disabled(isResyncing || isDeduplicating)
+
+                    Button {
+                        isConfirmingDeduplicate = true
+                    } label: {
+                        HStack {
+                            Text("Deduplicate Activities")
+                            if isDeduplicating {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isResyncing || isDeduplicating)
                 } footer: {
-                    Text("Re-imports every activity from HealthKit from scratch. Use this if an activity's sport or name looks wrong after an app update.")
+                    Text("Force Full Resync re-imports every activity from HealthKit from scratch. Use this if an activity's sport or name looks wrong after an app update. Deduplicate Activities removes any duplicate activities left over from an older version of the app.")
                 }
             }
             .navigationTitle("Athlete")
@@ -84,6 +100,16 @@ struct AthleteView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This can take a while for a long training history.")
+            }
+            .confirmationDialog(
+                "Remove duplicate activities?",
+                isPresented: $isConfirmingDeduplicate,
+                titleVisibility: .visible
+            ) {
+                Button("Deduplicate Activities", role: .destructive, action: onDeduplicate)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Permanently removes duplicate activities left over from an older version of the app. This can't be undone.")
             }
         }
     }

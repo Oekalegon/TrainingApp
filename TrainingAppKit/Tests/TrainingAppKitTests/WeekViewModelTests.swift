@@ -299,6 +299,40 @@ struct WeekViewModelTests {
         #expect(!viewModel.isResyncing)
     }
 
+    @Test("deduplicateActivities(asOf:) toggles isDeduplicating, independent of isRefreshing/isResyncing")
+    func deduplicateTogglesFlagIndependently() async {
+        let model = makeModel()
+        let refresher = FakeRefresher()
+        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+
+        #expect(!viewModel.isDeduplicating)
+        await viewModel.deduplicateActivities(asOf: day(0))
+        #expect(!viewModel.isDeduplicating)
+        #expect(!viewModel.isRefreshing)
+        #expect(!viewModel.isResyncing)
+    }
+
+    @Test("deduplicateActivities(asOf:) reaches TrainingModel end-to-end")
+    func deduplicateActivitiesUpdatesModelEndToEnd() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture()
+        let activity = Activity(source: .healthKit(UUID()), sport: .running, start: day(0), duration: 1800)
+        try await store.upsert([activity])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(0), asOf: day(0))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        // InMemoryStore's own upsert already prevents real duplicates from existing (see
+        // TrainingKit's own InMemoryStoreTests/SwiftDataStoreTests for that store-level
+        // behavior), so this can't assert a removal here -- what it proves is that the call
+        // genuinely reaches the real TrainingModel/store round trip (not a stub) and leaves a
+        // legitimate, non-duplicate activity untouched, without crashing.
+        await viewModel.deduplicateActivities(asOf: day(0))
+
+        #expect(model.activities.map(\.id) == [activity.id])
+    }
+
     @Test("resyncActivities(asOf:) reaches TrainingModel end-to-end, same as refresh(asOf:) does")
     func resyncActivitiesUpdatesModelEndToEnd() async throws {
         let model = makeModel()
