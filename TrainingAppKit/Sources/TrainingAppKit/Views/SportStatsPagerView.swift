@@ -66,16 +66,27 @@ struct SportStatsPagerView: View {
             GeometryReader { geometry in
                 let pageWidth = geometry.size.width
                 HStack(spacing: 0) {
-                    ForEach(pages) { page in
+                    ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                         StatsPageView(page: page)
                             .frame(width: pageWidth)
+                            // Every page's content actually exists in the layout simultaneously
+                            // (just offset out of the clipped, visible area) -- without this,
+                            // VoiceOver's element list would include every page's Distance/Time/
+                            // Load text, not just whichever one is actually on screen.
+                            .accessibilityHidden(index != selectedIndex)
                     }
                 }
                 .offset(x: -CGFloat(selectedIndex) * pageWidth + dragOffset)
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 10)
-                        .onChanged { value in dragOffset = value.translation.width }
+                        .onChanged { value in
+                            // No-op with a single page: nothing to page to, so the content
+                            // shouldn't visibly rubber-band on a stray horizontal touch.
+                            guard pages.count > 1 else { return }
+                            dragOffset = value.translation.width
+                        }
                         .onEnded { value in
+                            guard pages.count > 1 else { return }
                             let threshold = pageWidth * Self.commitThreshold
                             withAnimation(Self.pageChangeAnimation) {
                                 if value.translation.width < -threshold, selectedIndex < pages.count - 1 {
@@ -98,11 +109,27 @@ struct SportStatsPagerView: View {
         .onChange(of: pages.map(\.sport)) { _, _ in
             selectedIndex = 0
         }
+        // The drag gesture above has no VoiceOver/Switch Control equivalent on its own -- this
+        // lets an adjustable-control swipe (up/down) move between pages the same way the drag
+        // does, so paging isn't sighted-only.
+        .accessibilityElement(children: .combine)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                guard selectedIndex < pages.count - 1 else { return }
+                withAnimation(Self.pageChangeAnimation) { selectedIndex += 1 }
+            case .decrement:
+                guard selectedIndex > 0 else { return }
+                withAnimation(Self.pageChangeAnimation) { selectedIndex -= 1 }
+            @unknown default:
+                break
+            }
+        }
     }
 }
 
 /// One page's Distance/Time/Load figures, each followed by its percentage change — the swipeable
-/// content `SportStatsPagerView`'s `TabView` pages between.
+/// content `SportStatsPagerView`'s carousel pages between.
 private struct StatsPageView: View {
     let page: SportStatsPage
 

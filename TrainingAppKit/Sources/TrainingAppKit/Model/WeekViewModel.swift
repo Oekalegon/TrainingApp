@@ -1,32 +1,6 @@
 import Foundation
 import TrainingCore
 
-/// One sport's page in the week view's stats pager — see ``WeekViewModel/sportStatsPages(asOf:)``.
-///
-/// `distanceMeters`/`time` (and their change fractions) are this sport's own totals, but `load`/
-/// `loadChangeFraction` are always the *whole week's* total load across every sport, identical on
-/// every page: training load (TRIMP) isn't meaningfully attributable to one sport the way distance
-/// and time are — it's a systemic measure that feeds one CTL/ATL/TSB series regardless of which
-/// sport produced it — so slicing it per sport here would suggest a distinction the underlying
-/// model doesn't make.
-public struct SportStatsPage: Identifiable, Hashable {
-    public var id: Sport { sport }
-    public let sport: Sport
-    /// This sport's total distance for the displayed week.
-    public let distanceMeters: Double
-    /// This sport's total time for the displayed week.
-    public let time: TimeInterval
-    /// Relative change in this sport's distance vs. the previous week, e.g. `0.12` for +12%.
-    public let distanceChangeFraction: Double
-    /// Relative change in this sport's time vs. the previous week.
-    public let timeChangeFraction: Double
-    /// The whole week's total load across every sport — the same value on every page.
-    public let load: Double
-    /// Relative change in the whole week's total load vs. the previous week — the same value on
-    /// every page.
-    public let loadChangeFraction: Double
-}
-
 /// Drives the week view (design doc §2.1): which week is displayed, the 3-week window the
 /// CTL/ATL/TSB chart shows, and the day-by-day activities/plans below it.
 ///
@@ -42,6 +16,11 @@ public final class WeekViewModel {
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
     /// uses, so a card's headline Load number always agrees with the detail sheet's own figure.
     private let statisticsCalculator = StatisticsCalculator()
+    /// Memoizes ``sportStatsPages(asOf:)`` — see that method's own doc comment for why this exists.
+    /// `@ObservationIgnored` since it's a pure implementation-detail cache, not user-facing state;
+    /// writing to it shouldn't itself trigger a view update.
+    @ObservationIgnored
+    private var sportStatsPagesCache: (weekStart: Date, activityCount: Int, today: Date, pages: [SportStatsPage])?
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
@@ -162,7 +141,27 @@ public final class WeekViewModel {
     /// first (ties broken alphabetically) for a deterministic order. Always at least one page (the
     /// main sport's, zero-filled if it had no activity this week), so the pager never has nothing
     /// to show.
+    ///
+    /// Memoized on `(displayedWeekStart, model.activities.count, today's calendar day)`: `WeekView`
+    /// calls this from its `weekContent` computed property, which SwiftUI re-evaluates on every
+    /// `@State` change — including every touch-move frame of the *day list*'s own unrelated swipe
+    /// gesture. Without a cache, each of those frames would redundantly re-run two full
+    /// `periodStats` computations (one `LoadCalculator` invocation per activity, each) even though
+    /// neither the displayed week nor the underlying data changed — the same class of freeze this
+    /// codebase already fixed once for the day list itself (MVP1-19).
     public func sportStatsPages(asOf today: Date = .now) -> [SportStatsPage] {
+        if let cache = sportStatsPagesCache,
+            cache.weekStart == displayedWeekStart,
+            cache.activityCount == model.activities.count,
+            calendar.isDate(cache.today, inSameDayAs: today) {
+            return cache.pages
+        }
+        let pages = computeSportStatsPages(asOf: today)
+        sportStatsPagesCache = (displayedWeekStart, model.activities.count, today, pages)
+        return pages
+    }
+
+    private func computeSportStatsPages(asOf today: Date) -> [SportStatsPage] {
         let current = periodStats(weekStart: displayedWeekStart, asOf: today)
         let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: displayedWeekStart) ?? displayedWeekStart
         let previous = periodStats(weekStart: previousWeekStart, asOf: today)

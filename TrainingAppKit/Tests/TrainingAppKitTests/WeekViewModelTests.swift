@@ -342,6 +342,32 @@ struct WeekViewModelTests {
         #expect(pages.allSatisfy { $0.load == totalLoad })
     }
 
+    @Test("sportStatsPages(asOf:) invalidates its cache when the displayed week changes")
+    func sportStatsPagesRecomputesAfterWeekNavigation() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let thisWeekActivity = Activity(
+            source: .manual, sport: athlete.mainSport, start: viewModel.displayedWeekStart,
+            duration: 1800, distanceMeters: 5000
+        )
+        try await store.upsert([thisWeekActivity])
+        await viewModel.load(asOf: day(0))
+
+        let firstWeekPages = viewModel.sportStatsPages(asOf: day(0))
+        #expect(firstWeekPages[0].distanceMeters == 5000)
+
+        // Same view model instance, same `today` -- only `displayedWeekStart` changes. A cache
+        // keyed on the wrong thing (e.g. just `today`, or nothing at all) would incorrectly keep
+        // returning the first week's 5000m here instead of the next (empty) week's 0m.
+        viewModel.goToNextWeek()
+        let nextWeekPages = viewModel.sportStatsPages(asOf: day(0))
+
+        #expect(nextWeekPages[0].distanceMeters == 0)
+    }
+
     @Test("activityDetailViewModel(for:) wires the model's athlete through")
     func activityDetailViewModelUsesModelAthlete() {
         let (_, stores) = makeStores()
