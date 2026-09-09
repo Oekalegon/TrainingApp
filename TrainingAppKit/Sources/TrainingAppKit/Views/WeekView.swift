@@ -13,6 +13,13 @@ private let chartSectionBackground = Color(.systemBackground)
 private let chartSectionBackground = Color.white
 #endif
 
+/// The named coordinate space `weekContent`'s week-swipe `DragGesture` and `weekPageHeader`'s
+/// frame measurement (`statsBarFrame`) both use, so a swipe's start point can be compared against
+/// the stats bar's on-screen frame in the same terms. A file-scope constant, not a `WeekView`
+/// static member: `WeekView`'s own static members are inferred `@MainActor`-isolated (since `View`
+/// requires that for its instance side), which a plain `Sendable` `String` doesn't need to be.
+private let weekSwipeCoordinateSpace = "WeekView.weekSwipe"
+
 /// The week tab's screen (design doc §2.1): a 3-week CTL/ATL/TSB chart centered on the displayed
 /// week, that week's activities/plans below it, swipe-to-navigate between weeks, "Today" and
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
@@ -53,7 +60,6 @@ public struct WeekView: View {
     /// from the current page's header (see `weekPageHeader`'s own `.onGeometryChange`), so it always
     /// reflects the interactive page rather than being clobbered by an offscreen neighbor's.
     @State private var statsBarFrame: CGRect = .zero
-    private let weekSwipeCoordinateSpace = "WeekView.weekSwipe"
     /// `true` from the moment a swipe clears `commitThreshold` until `completeSwipe(goingForward:)`'s
     /// animation and model update both finish. `handleDragChanged`/`handleDragEnded` ignore touches
     /// while this is `true`, so a fast re-swipe can't land mid-animation: overwriting `dragOffset`
@@ -316,8 +322,11 @@ public struct WeekView: View {
         // hit-tests mid-drag doesn't cancel it. `.disabled` does: SwiftUI re-checks `isEnabled` at
         // the moment the tap actually fires (touch-up), not at touch-down, so flipping it during
         // the drag suppresses the action. The non-current pages are always disabled outright, since
-        // they're never meant to be tapped at all.
-        .disabled(!isCurrentPage || isDraggingHorizontally)
+        // they're never meant to be tapped at all. `isSwipeExemptFromWeekChange` carves out the one
+        // case that isn't a week-swipe at all (a drag starting on the pinned stats bar) — without
+        // it, this would also disable `SportStatsPagerView`'s own paging gesture for the whole drag,
+        // defeating the exemption `handleDragChanged` grants it.
+        .disabled(!isCurrentPage || (isDraggingHorizontally && !isSwipeExemptFromWeekChange))
     }
 
     /// The shared content for one week's page — see `weekPage`'s own doc comment for why only the

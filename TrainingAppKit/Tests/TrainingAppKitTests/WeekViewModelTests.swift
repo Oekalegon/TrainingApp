@@ -133,6 +133,43 @@ struct WeekViewModelTests {
         #expect(!description.isEmpty)
     }
 
+    /// Dec 26, 2022 (Mon) – Jan 1, 2023 (Sun): only 1 of its 7 days falls in 2023, so ISO-8601
+    /// calls this week 52 of 2022, not week 1 of 2023 — Foundation's own Gregorian default
+    /// (`minimumDaysInFirstWeek == 1`) would say week 1 of 2023, which is what an athlete's other
+    /// tools (and their own expectation) would disagree with.
+    private func dateOfDecember28th2022() -> Date {
+        var components = DateComponents()
+        components.year = 2022
+        components.month = 12
+        components.day = 28
+        components.timeZone = TimeZone(identifier: "UTC")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar.date(from: components)!
+    }
+
+    @Test("displayedWeekOfYear follows ISO-8601 week numbering across a year boundary, not Foundation's Gregorian default")
+    func displayedWeekOfYearFollowsISO8601NearYearBoundary() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: dateOfDecember28th2022())
+
+        // The literal expected ISO week number, not the same Calendar computation under test —
+        // this is the case that catches a wrong `minimumDaysInFirstWeek`, which a test that only
+        // re-derives the expectation from `WeekViewModel.calendar(for:)` itself cannot.
+        #expect(viewModel.displayedWeekOfYear == 52)
+    }
+
+    @Test("displayedWeekDateRangeDescription shows both years when the week crosses a year boundary")
+    func displayedWeekDateRangeDescriptionShowsBothYearsAcrossBoundary() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: dateOfDecember28th2022())
+
+        let description = viewModel.displayedWeekDateRangeDescription
+
+        #expect(description.contains("2022"))
+        #expect(description.contains("2023"))
+    }
+
     @Test("goToNextWeek/goToPreviousWeek move by exactly 7 days")
     func weekNavigationMovesBySevenDays() {
         let model = makeModel()
