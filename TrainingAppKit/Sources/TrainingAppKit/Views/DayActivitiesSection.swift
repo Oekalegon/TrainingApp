@@ -6,9 +6,10 @@ import TrainingCore
 /// than two independently-tuned ones.
 private let unhighlightedPillBackground = Color.secondary.opacity(0.12)
 
-/// Renders one day's row in the week view's day list (design doc §2.1, MVP1-39): a weekday pill
-/// marking its place on the list's vertical timeline, and — beside it — that day's completed and
-/// planned activities, planned ones rendered visibly distinct.
+/// Renders one day's row in the week view's day list (design doc §2.1, MVP1-39/MVP1-40/MVP1-41): a
+/// weekday pill marking its place on the list's vertical timeline, that day's Load/Fitness/
+/// Fatigue/Form pills, and — sitting in the timeline between this pill and the next day's — that
+/// day's completed and planned activities as cards, planned ones rendered visibly distinct.
 ///
 /// Unlike the flat row list MVP1-20 introduced, every day in the displayed week gets a row here,
 /// whether or not it has activities: the weekday pill is what makes the list read as a timeline of
@@ -71,16 +72,16 @@ struct DayActivitiesSection: View {
             }
             .frame(width: WeekdayPillView.columnWidth)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 if let metrics {
                     DayMetricsPillRow(metrics: metrics, showsOnlyForm: activities.isEmpty)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 ForEach(activities) { activity in
-                    ActivityRow(activity: activity, timeZone: timeZone, onSelect: { onSelectActivity(activity) })
+                    ActivityCard(activity: activity, timeZone: timeZone, onSelect: { onSelectActivity(activity) })
                 }
                 ForEach(plans) { plan in
-                    PlannedActivityRow(plan: plan, workoutName: workoutName(plan))
+                    PlannedActivityCard(plan: plan, workoutName: workoutName(plan))
                 }
             }
             .padding(.bottom, 20)
@@ -206,10 +207,17 @@ private struct MetricPillView: View {
     }
 }
 
-/// A completed activity — tapping it presents `ActivityDetailView` in a sheet (see `WeekView`'s
-/// `.sheet(item: $selectedActivity)`), so this is a plain `Button` rather than a
-/// `NavigationLink(value:)`/`navigationDestination` push.
-private struct ActivityRow: View {
+/// Corner radius shared by `ActivityCard` and `PlannedActivityCard` (design doc §2.1, MVP1-41),
+/// so a completed activity's filled card and a planned one's outlined card read as the same shape
+/// language sitting in the timeline between weekday rows, distinguished by fill/border rather than
+/// by silhouette.
+private let timelineCardCornerRadius: CGFloat = 12
+
+/// A completed activity, rendered as a filled card in the timeline between weekday rows (design
+/// doc §2.1, MVP1-41) rather than a plain list row — tapping it presents `ActivityDetailView` in a
+/// sheet (see `WeekView`'s `.sheet(item: $selectedActivity)`), so this is a plain `Button` rather
+/// than a `NavigationLink(value:)`/`navigationDestination` push.
+private struct ActivityCard: View {
     let activity: Activity
     let timeZone: TimeZone
     let onSelect: () -> Void
@@ -230,17 +238,23 @@ private struct ActivityRow: View {
                 Text(Duration.seconds(activity.duration).formatted(.units(allowed: [.hours, .minutes])))
                     .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous)
+                    .fill(Color.secondary.opacity(0.08))
+            }
+            .contentShape(RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
 }
 
-/// A planned activity that hasn't been reconciled to a completed one yet — shown muted/outlined
-/// to read clearly as "not done" at a glance. One already matched to a completed activity
-/// (`completedActivityID != nil`) is skipped: the completed activity above already represents it.
-private struct PlannedActivityRow: View {
+/// A planned activity that hasn't been reconciled to a completed one yet, rendered as a dashed,
+/// unfilled outline — same card shape as `ActivityCard`, but the absent fill and dashed border are
+/// what keep it reading as "not done yet" at a glance (design doc §2.1) rather than a second kind
+/// of completed activity. One already matched to a completed activity (`completedActivityID !=
+/// nil`) is skipped: the completed activity's own card above already represents it.
+private struct PlannedActivityCard: View {
     let plan: PlannedActivity
     let workoutName: String?
 
@@ -252,8 +266,12 @@ private struct PlannedActivityRow: View {
                 Text(workoutName ?? "Planned workout")
                 Spacer()
             }
-            .padding(.vertical, 8)
+            .padding(12)
             .foregroundStyle(.secondary)
+            .background {
+                RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.3), style: StrokeStyle(dash: [4, 3]))
+            }
         }
     }
 }
