@@ -242,10 +242,11 @@ private let timelineCardCornerRadius: CGFloat = 12
 /// than a `NavigationLink(value:)`/`navigationDestination` push.
 ///
 /// Headline line: icon, sport name, and — trailing-aligned, same font as the name but secondary —
-/// the activity's Load (TRIMP), the single most important number here. Second line (endurance
-/// sports only): duration, distance, and climb (if over 50m), smaller and secondary, indented to
-/// align with the name above it rather than the icon. The time of day isn't shown in the card at
-/// all — `DayActivitiesSection` shows it on the timeline instead, aligned with this headline line.
+/// a bolt icon plus the activity's Load (TRIMP), the single most important number here. Second
+/// line (endurance sports only): duration, distance, and climb (if over 50m, marked with a
+/// mountain icon), smaller and secondary, indented to align with the name above it rather than the
+/// icon. The time of day isn't shown in the card at all — `DayActivitiesSection` shows it on the
+/// timeline instead, aligned with this headline line.
 private struct ActivityCard: View {
     let activity: Activity
     /// This activity's TRIMP, from `WeekViewModel.trainingLoad(for:)` — `nil` when it couldn't be
@@ -277,12 +278,15 @@ private struct ActivityCard: View {
                         .foregroundStyle(.primary)
                     Spacer()
                     if let trainingLoad {
-                        Text(trainingLoad.formatted(Self.loadFormat))
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 2) {
+                            Image(systemName: TrainingMetricKind.load.icon)
+                            Text(trainingLoad.formatted(Self.loadFormat))
+                        }
+                        .foregroundStyle(.secondary)
                     }
                 }
                 if activity.sport.isEndurance {
-                    Text(secondLineText)
+                    secondLineText
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.leading, Self.iconWidth + Self.iconSpacing)
@@ -298,18 +302,22 @@ private struct ActivityCard: View {
         .buttonStyle(.plain)
     }
 
-    /// "1:30:00 · 8 km" (plus "· 120 m" when the climb exceeds 50m) — duration always shown as
-    /// H:MM:SS, distance/climb omitted entirely (not shown as "0 km"/"0 m") when the source
-    /// doesn't report one.
-    private var secondLineText: String {
-        var parts = [Duration.seconds(activity.duration).formatted(.time(pattern: .hourMinuteSecond))]
+    /// "1:30:00 8 km 🏔120 m" — duration always shown as H:MM:SS, distance/climb omitted entirely
+    /// (not shown as "0 km"/"0 m") when the source doesn't report one. No separator between parts
+    /// beyond a plain space; climb alone gets a leading mountain icon (via `Text(Image(...))`
+    /// concatenation) to set it apart from the plain duration/distance numbers next to it.
+    private var secondLineText: Text {
+        let durationString = Duration.seconds(activity.duration).formatted(.time(pattern: .hourMinuteSecond))
+        var text = Text(durationString)
         if let distanceMeters = activity.distanceMeters {
-            parts.append(Measurement(value: distanceMeters, unit: UnitLength.meters).formatted(Self.measurementFormat))
+            let distanceString = Measurement(value: distanceMeters, unit: UnitLength.meters).formatted(Self.measurementFormat)
+            text = Text("\(text) \(distanceString)")
         }
         if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
-            parts.append(Measurement(value: gainMeters, unit: UnitLength.meters).formatted(Self.measurementFormat))
+            let gainString = Measurement(value: gainMeters, unit: UnitLength.meters).formatted(Self.measurementFormat)
+            text = Text("\(text) \(Image(systemName: "mountain.2")) \(gainString)")
         }
-        return parts.joined(separator: " · ")
+        return text
     }
 }
 
