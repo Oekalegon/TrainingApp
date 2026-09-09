@@ -13,6 +13,7 @@ struct AthleteView: View {
     let isDeduplicating: Bool
     let onDeduplicate: () -> Void
     @State private var isConfirmingResync = false
+    @State private var isConfirmingDeduplicate = false
 
     var body: some View {
         NavigationStack {
@@ -71,7 +72,7 @@ struct AthleteView: View {
                     .disabled(isResyncing || isDeduplicating)
 
                     Button {
-                        onDeduplicate()
+                        isConfirmingDeduplicate = true
                     } label: {
                         HStack {
                             Text("Deduplicate Activities")
@@ -99,6 +100,16 @@ struct AthleteView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This can take a while for a long training history.")
+            }
+            .confirmationDialog(
+                "Remove duplicate activities?",
+                isPresented: $isConfirmingDeduplicate,
+                titleVisibility: .visible
+            ) {
+                Button("Deduplicate Activities", role: .destructive, action: onDeduplicate)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Permanently removes duplicate activities left over from an older version of the app. This can't be undone.")
             }
         }
     }
