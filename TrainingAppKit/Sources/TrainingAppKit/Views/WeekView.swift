@@ -160,6 +160,8 @@ public struct WeekView: View {
     /// direct-manipulation paging control.
     private var weekContent: some View {
         VStack(spacing: 0) {
+            weekTitle
+
             // Chart and main-sport stats row share one white section background, separated from
             // each other and from the day list below by a `Divider()` (MVP1-52) — the day list
             // itself keeps sitting on `weekViewBackground`, applied at the outer `Group` in `body`.
@@ -195,6 +197,23 @@ public struct WeekView: View {
                 )
             }
         }
+    }
+
+    /// The week view's own title (MVP1-56): a large "Week #" label with the week's date range/year
+    /// underneath, sitting above the chart so it stays put across a day-list swipe just like the
+    /// chart itself does.
+    private var weekTitle: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Week \(viewModel.displayedWeekOfYear)")
+                .font(.title.bold())
+            Text(viewModel.displayedWeekDateRangeDescription)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     /// A plain `ScrollView`/`LazyVStack`, not `List`: once MVP1-20 dropped the per-day section

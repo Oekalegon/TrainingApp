@@ -110,6 +110,22 @@ public final class WeekViewModel {
         return displayedWeekStart...end
     }
 
+    /// The calendar week number of ``displayedWeekStart``, for the week view's title (MVP1-56).
+    public var displayedWeekOfYear: Int {
+        calendar.component(.weekOfYear, from: displayedWeekStart)
+    }
+
+    /// A short "Sep 8 – Sep 14, 2026" description of the displayed week, for the subtitle under
+    /// ``displayedWeekOfYear`` (MVP1-56) — the year sits on the end date only, the usual convention
+    /// for a range that doesn't cross a year boundary.
+    public var displayedWeekDateRangeDescription: String {
+        let weekEnd = calendar.date(byAdding: .day, value: 6, to: displayedWeekStart) ?? displayedWeekStart
+        let startFormat = Date.FormatStyle(calendar: calendar, timeZone: athleteTimeZone)
+            .day().month(.abbreviated)
+        let endFormat = startFormat.year()
+        return "\(displayedWeekStart.formatted(startFormat)) – \(weekEnd.formatted(endFormat))"
+    }
+
     /// Completed activities on `day`, in start-time order.
     public func activities(on day: Date) -> [Activity] {
         model.activities

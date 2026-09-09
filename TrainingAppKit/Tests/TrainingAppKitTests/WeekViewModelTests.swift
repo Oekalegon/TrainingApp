@@ -108,6 +108,31 @@ struct WeekViewModelTests {
         #expect(viewModel.displayedWeekRange == expectedRange(for: viewModel.displayedWeekStart))
     }
 
+    @Test("displayedWeekOfYear matches the calendar's own weekOfYear component for displayedWeekStart")
+    func displayedWeekOfYearMatchesCalendarComponent() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: model.athlete)
+
+        #expect(viewModel.displayedWeekOfYear == calendar.component(.weekOfYear, from: viewModel.displayedWeekStart))
+
+        viewModel.goToNextWeek()
+        #expect(viewModel.displayedWeekOfYear == calendar.component(.weekOfYear, from: viewModel.displayedWeekStart))
+    }
+
+    @Test("displayedWeekDateRangeDescription spans displayedWeekStart through 6 days later, with the year on the end date")
+    func displayedWeekDateRangeDescriptionSpansTheWeek() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let weekEnd = calendar.date(byAdding: .day, value: 6, to: viewModel.displayedWeekStart)!
+
+        let description = viewModel.displayedWeekDateRangeDescription
+
+        #expect(description.contains(String(calendar.component(.year, from: weekEnd))))
+        #expect(!description.isEmpty)
+    }
+
     @Test("goToNextWeek/goToPreviousWeek move by exactly 7 days")
     func weekNavigationMovesBySevenDays() {
         let model = makeModel()
