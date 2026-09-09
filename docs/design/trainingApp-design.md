@@ -85,9 +85,13 @@ remember or restore which tab was last active.
 - **Top**: a chart (Swift Charts) of CTL / ATL / TSB over a 3-week window centered on the
   displayed week (i.e. the week before, the displayed week, the week after), fed from
   `TrainingModel.metrics: [FitnessMetrics]`.
-- **Below**: the displayed week's `Activity`s and `PlannedActivity`s, day by day. A planned
-  activity with no matching `completedActivityID` renders distinctly (e.g. outlined/muted) from
-  a completed one.
+- **Below**: a vertical timeline, one row per day of the displayed week (MVP1-39) — a weekday pill
+  ("Wed 9", highlighted for today) linked into the timeline by a connecting line, with that day's
+  `Activity`s and `PlannedActivity`s beside it. Every day gets a row, whether or not it has
+  activities — the pill is what makes the list read as a timeline of the week, not just a list of
+  things that happened; a day with neither renders its pill with an empty content column rather
+  than a "rest day" placeholder. A planned activity with no matching `completedActivityID` renders
+  distinctly (e.g. outlined/muted) from a completed one.
 - **Gestures**: horizontal swipe moves the displayed week by ±1 week (re-centers the chart,
   reloads the day list). Both the chart and the day list scroll together — the displayed week is
   one piece of state, not two.

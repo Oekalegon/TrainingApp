@@ -77,11 +77,17 @@ struct WeekdayPillView: View {
     let isToday: Bool
     let timeZone: TimeZone
 
-    /// Width of the timeline column this pill sits in — wide enough for the pill's longest
-    /// content ("Wed 9" etc.) plus breathing room, so the connector line below it (drawn by
+    /// Width of the timeline column this pill sits in — not measured from the pill's actual
+    /// rendered width (which hugs its text via padding), just a fixed value comfortably wider
+    /// than "Wed 9" at this font size, so the connector line below it (drawn by
     /// `DayActivitiesSection`, in a column of this same width) stays centered under it.
+    /// `minimumScaleFactor` on the pill's text is the real safety net if a locale's weekday
+    /// abbreviation or a two-digit day ever needs more room than this affords.
     static let columnWidth: CGFloat = 60
     private static let height: CGFloat = 24
+    /// Shared with the capsule fill below — pulled out so a future pill style (e.g. MVP1-40's
+    /// metric pills) can match this one instead of re-tuning its own opacity.
+    private static let unhighlightedBackground = Color.secondary.opacity(0.12)
 
     /// Weekday abbreviation + day-of-month, e.g. "Mon 9" — kept as one `Text` (rather than two
     /// stacked) so it fits on a single line at a small enough size to still read clearly inside
@@ -94,7 +100,7 @@ struct WeekdayPillView: View {
 
     var body: some View {
         Text(date, format: Self.format(timeZone: timeZone))
-            .font(.system(size: 9))
+            .font(.system(size: 9, weight: .regular, design: .default))
             .textCase(.uppercase)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -102,8 +108,13 @@ struct WeekdayPillView: View {
             .frame(height: Self.height)
             .foregroundStyle(isToday ? Color.white : Color.primary)
             .background {
-                Capsule().fill(isToday ? Color.accentColor : Color.secondary.opacity(0.12))
+                Capsule().fill(isToday ? Color.accentColor : Self.unhighlightedBackground)
             }
+            // This pill is deliberately fixed-size (it's a small badge, not body text), so it
+            // doesn't scale with the rest of the row at larger accessibility text sizes — capped
+            // rather than left unbounded, so a maxed-out Dynamic Type setting can't blow the
+            // pill's small footprint out to something that no longer reads as a compact badge.
+            .dynamicTypeSize(.large)
     }
 }
 
