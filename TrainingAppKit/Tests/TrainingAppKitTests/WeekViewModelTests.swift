@@ -195,6 +195,23 @@ struct WeekViewModelTests {
         #expect(viewModel.metrics(on: day(100)) == nil)
     }
 
+    @Test("trainingLoad(for:) computes a value when a calculator can score the activity, nil otherwise")
+    func trainingLoadReflectsWhetherACalculatorSucceeds() throws {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        // No heart-rate samples and no perceivedExertion: neither calculator can score it.
+        let unscored = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        #expect(viewModel.trainingLoad(for: unscored) == nil)
+
+        // perceivedExertion alone is enough for DurationRPECalculator to succeed.
+        let scored = Activity(
+            source: .manual, sport: .running, start: day(2), duration: 1800, perceivedExertion: 6
+        )
+        let loaded = try #require(viewModel.trainingLoad(for: scored))
+        #expect(loaded == 180.0)
+    }
+
     @Test("activityDetailViewModel(for:) wires the model's athlete through")
     func activityDetailViewModelUsesModelAthlete() {
         let (_, stores) = makeStores()

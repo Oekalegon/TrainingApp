@@ -86,17 +86,32 @@ remember or restore which tab was last active.
   displayed week (i.e. the week before, the displayed week, the week after), fed from
   `TrainingModel.metrics: [FitnessMetrics]`.
 - **Below**: a vertical timeline, one row per day of the displayed week (MVP1-39) — a weekday pill
-  ("Wed 9", highlighted for today) linked into the timeline by a connecting line, with that day's
+  ("Wed 9", highlighted for today) linked into the timeline by a connecting line (which continues
+  past the last day down to the bottom of the week view, not just the last pill), with that day's
   `Activity`s and `PlannedActivity`s beside it. Every day gets a row, whether or not it has
   activities — the pill is what makes the list read as a timeline of the week, not just a list of
   things that happened; a day with neither renders its pill with an empty content column rather
-  than a "rest day" placeholder. A planned activity with no matching `completedActivityID` renders
-  distinctly (e.g. outlined/muted) from a completed one.
+  than a "rest day" placeholder.
 - Each day's row also shows that day's Load / Fitness / Fatigue / Form (TRIMP / CTL / ATL / TSB) as
   compact icon+value pills, trailing-aligned, one icon per metric matching the chart legend above
   (MVP1-40). A day with no completed activities shows only the Form pill — Load/Fitness/Fatigue
   describe that day's training input, which has nothing to say on a day nothing happened, while
   Form is a trend that still moves whether or not the athlete trained that day.
+- Each completed `Activity` renders as a card on the timeline (MVP1-41), its start time shown
+  separately on the timeline itself rather than inside the card. A card's headline line has the
+  sport's icon, its name, and — trailing-aligned — its Load (TRIMP), omitted entirely when it's
+  zero or couldn't be computed. Endurance sports (running, cycling, swimming, walking, rowing,
+  hiking — not strength) get a second line: duration (H:MM:SS), distance, and climb (only over
+  50m, marked with a mountain icon). A `PlannedActivity` with no matching `completedActivityID`
+  renders as a same-shaped card with a dashed, unfilled outline instead of `ActivityCard`'s filled
+  background — that fill/border distinction is what reads as "not done yet" at a glance, not a
+  separate muted color scheme.
+- The week view sits on its own light (dark in dark mode) grey background, distinct from the plain
+  system background: the weekday pills, metric pills, and the timeline line itself are recessed
+  relative to it (a `Color.primary`-based translucent overlay, so "slightly darker in light mode,
+  slightly lighter in dark mode" falls out automatically rather than needing two authored values),
+  while `ActivityCard` is elevated relative to it (white in light mode, a dark elevated grey in
+  dark mode) — the most visually prominent surface in the list, per its "most important" content.
 - **Gestures**: horizontal swipe moves the displayed week by ±1 week (re-centers the chart,
   reloads the day list). Both the chart and the day list scroll together — the displayed week is
   one piece of state, not two.
