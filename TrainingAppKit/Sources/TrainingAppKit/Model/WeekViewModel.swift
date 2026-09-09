@@ -1,6 +1,32 @@
 import Foundation
 import TrainingCore
 
+/// One sport's page in the week view's stats pager — see ``WeekViewModel/sportStatsPages(asOf:)``.
+///
+/// `distanceMeters`/`time` (and their change fractions) are this sport's own totals, but `load`/
+/// `loadChangeFraction` are always the *whole week's* total load across every sport, identical on
+/// every page: training load (TRIMP) isn't meaningfully attributable to one sport the way distance
+/// and time are — it's a systemic measure that feeds one CTL/ATL/TSB series regardless of which
+/// sport produced it — so slicing it per sport here would suggest a distinction the underlying
+/// model doesn't make.
+public struct SportStatsPage: Identifiable, Hashable {
+    public var id: Sport { sport }
+    public let sport: Sport
+    /// This sport's total distance for the displayed week.
+    public let distanceMeters: Double
+    /// This sport's total time for the displayed week.
+    public let time: TimeInterval
+    /// Relative change in this sport's distance vs. the previous week, e.g. `0.12` for +12%.
+    public let distanceChangeFraction: Double
+    /// Relative change in this sport's time vs. the previous week.
+    public let timeChangeFraction: Double
+    /// The whole week's total load across every sport — the same value on every page.
+    public let load: Double
+    /// Relative change in the whole week's total load vs. the previous week — the same value on
+    /// every page.
+    public let loadChangeFraction: Double
+}
+
 /// Drives the week view (design doc §2.1): which week is displayed, the 3-week window the
 /// CTL/ATL/TSB chart shows, and the day-by-day activities/plans below it.
 ///
@@ -128,6 +154,74 @@ public final class WeekViewModel {
     /// the first frame, before `.task` runs). Used by the day list's CTL/ATL/TSB pills (MVP1-40).
     public func metrics(on day: Date) -> FitnessMetrics? {
         model.metrics.first { calendar.isDate($0.day, inSameDayAs: day) }
+    }
+
+    /// One page per sport for the week view's stats pager (MVP1-52; design doc: "a weekly overview
+    /// highlighting one sport's duration/distance/TRIMP … above the rest") — ``AthleteProfile/mainSport``
+    /// always first, then every other sport with activity in the displayed week, most distance
+    /// first (ties broken alphabetically) for a deterministic order. Always at least one page (the
+    /// main sport's, zero-filled if it had no activity this week), so the pager never has nothing
+    /// to show.
+    public func sportStatsPages(asOf today: Date = .now) -> [SportStatsPage] {
+        let current = periodStats(weekStart: displayedWeekStart, asOf: today)
+        let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: displayedWeekStart) ?? displayedWeekStart
+        let previous = periodStats(weekStart: previousWeekStart, asOf: today)
+
+        let mainSport = model.athlete.mainSport
+        let otherSports = current.bySport.keys
+            .filter { $0 != mainSport }
+            .sorted { lhs, rhs in
+                let lhsDistance = current.bySport[lhs]?.distanceMeters ?? 0
+                let rhsDistance = current.bySport[rhs]?.distanceMeters ?? 0
+                return lhsDistance != rhsDistance ? lhsDistance > rhsDistance : lhs.displayName < rhs.displayName
+            }
+        let loadChangeFraction = Self.changeFraction(current.totalLoad - previous.totalLoad, of: previous.totalLoad)
+
+        return ([mainSport] + otherSports).map { sport in
+            let currentSport = current.bySport[sport] ?? Self.zeroSportStats(sport)
+            let previousSport = previous.bySport[sport] ?? Self.zeroSportStats(sport)
+            return SportStatsPage(
+                sport: sport,
+                distanceMeters: currentSport.distanceMeters,
+                time: currentSport.time,
+                distanceChangeFraction: Self.changeFraction(
+                    currentSport.distanceMeters - previousSport.distanceMeters, of: previousSport.distanceMeters
+                ),
+                timeChangeFraction: Self.changeFraction(currentSport.time - previousSport.time, of: previousSport.time),
+                load: current.totalLoad,
+                loadChangeFraction: loadChangeFraction
+            )
+        }
+    }
+
+    /// Descriptive totals (every sport, not just one) for the calendar week starting `weekStart` —
+    /// shared by ``sportStatsPages(asOf:)`` for both the displayed week and the previous one.
+    private func periodStats(weekStart: Date, asOf today: Date) -> PeriodStats {
+        let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+        return statisticsCalculator.periodStats(
+            activities: model.activities,
+            plans: model.plans,
+            workouts: model.workouts,
+            athlete: model.athlete,
+            range: weekStart...weekEnd,
+            asOf: today,
+            previous: nil
+        )
+    }
+
+    private static func zeroSportStats(_ sport: Sport) -> SportPeriodStats {
+        SportPeriodStats(sport: sport, distanceMeters: 0, time: 0, load: 0, timeInZone: TimeInZone(), activityCount: 0)
+    }
+
+    /// Unlike `PeriodDelta` (which reports 0 for a zero previous total, to avoid `.nan`), this
+    /// reports `.infinity` instead — going from no activity to some really is an unbounded
+    /// increase, and the stats pager renders that case as "+∞%" explicitly rather than showing a
+    /// misleadingly literal "+0%" for what's actually the biggest possible jump. `previousTotal ==
+    /// 0` only reports 0 when `delta` (== the current total, since `previousTotal` is 0) is also 0
+    /// — no activity in either week is genuinely "no change", not an infinite one.
+    private static func changeFraction(_ delta: Double, of previousTotal: Double) -> Double {
+        guard previousTotal != 0 else { return delta == 0 ? 0 : .infinity }
+        return delta / previousTotal
     }
 
     /// `activity`'s training load (TRIMP), computed the same way ``activityDetailViewModel(for:)``

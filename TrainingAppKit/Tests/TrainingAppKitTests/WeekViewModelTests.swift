@@ -212,6 +212,136 @@ struct WeekViewModelTests {
         #expect(loaded == 180.0)
     }
 
+    @Test("sportStatsPages(asOf:) has exactly one, zero-filled page for the main sport when nothing was tracked")
+    func sportStatsPagesZeroFillsWhenNoActivity() async {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+
+        let pages = viewModel.sportStatsPages(asOf: day(0))
+
+        #expect(pages.map(\.sport) == [model.athlete.mainSport])
+        let page = pages[0]
+        #expect(page.distanceMeters == 0)
+        #expect(page.time == 0)
+        #expect(page.load == 0)
+        // Neither week had any activity -- genuinely "no change", not an infinite one.
+        #expect(page.distanceChangeFraction == 0)
+        #expect(page.timeChangeFraction == 0)
+        #expect(page.loadChangeFraction == 0)
+    }
+
+    @Test("sportStatsPages(asOf:) computes this week's totals and their percentage change vs. last week")
+    func sportStatsPagesComputesPercentageChange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+        let previousWeekDay = calendar.date(byAdding: .day, value: -7, to: viewModel.displayedWeekStart)!
+
+        // 10000m/2000s last week, 15000m/3000s this week -- both +50%.
+        let previousActivity = Activity(
+            source: .manual, sport: athlete.mainSport, start: previousWeekDay,
+            duration: 2000, distanceMeters: 10000
+        )
+        let currentActivity = Activity(
+            source: .manual, sport: athlete.mainSport, start: viewModel.displayedWeekStart,
+            duration: 3000, distanceMeters: 15000
+        )
+        try await store.upsert([previousActivity, currentActivity])
+        await viewModel.load(asOf: day(0))
+
+        let page = try #require(viewModel.sportStatsPages(asOf: day(0)).first)
+
+        #expect(page.distanceMeters == 15000)
+        #expect(page.time == 3000)
+        #expect(abs(page.distanceChangeFraction - 0.5) < 0.0001)
+        #expect(abs(page.timeChangeFraction - 0.5) < 0.0001)
+    }
+
+    @Test("sportStatsPages(asOf:) reports an infinite change from a zero previous-week baseline")
+    func sportStatsPagesReportsInfiniteChangeFromZeroBaseline() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        // No activity last week at all, some this week -- an unbounded increase, not "+0%".
+        let currentActivity = Activity(
+            source: .manual, sport: athlete.mainSport, start: viewModel.displayedWeekStart,
+            duration: 1800, distanceMeters: 5000
+        )
+        try await store.upsert([currentActivity])
+        await viewModel.load(asOf: day(0))
+
+        let page = try #require(viewModel.sportStatsPages(asOf: day(0)).first)
+
+        #expect(page.distanceChangeFraction == .infinity)
+        #expect(page.timeChangeFraction == .infinity)
+        // Load stays 0 for both weeks here (no heart-rate/RPE data for either activity) -- a
+        // genuine 0-over-0, not an infinite change.
+        #expect(page.loadChangeFraction == 0)
+    }
+
+    @Test("sportStatsPages(asOf:) puts the main sport first, then other tracked sports by distance descending")
+    func sportStatsPagesOrdersMainSportFirstThenByDistance() async throws {
+        let (store, stores) = makeStores()
+        // Default AthleteProfile.fixture() has .running as mainSport.
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let running = Activity(
+            source: .manual, sport: .running, start: viewModel.displayedWeekStart,
+            duration: 1800, distanceMeters: 5000
+        )
+        let cycling = Activity(
+            source: .manual, sport: .cycling, start: viewModel.displayedWeekStart,
+            duration: 3600, distanceMeters: 30000
+        )
+        let swimming = Activity(
+            source: .manual, sport: .swimming, start: viewModel.displayedWeekStart,
+            duration: 1200, distanceMeters: 1000
+        )
+        try await store.upsert([running, cycling, swimming])
+        await viewModel.load(asOf: day(0))
+
+        let pages = viewModel.sportStatsPages(asOf: day(0))
+
+        // Running is the main sport, so it leads even though cycling covered more distance;
+        // cycling then swimming follow, ordered by distance descending.
+        #expect(pages.map(\.sport) == [.running, .cycling, .swimming])
+    }
+
+    @Test("sportStatsPages(asOf:) reports the whole week's total load, unchanged across every page")
+    func sportStatsPagesLoadIsWholeWeekTotalOnEveryPage() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        // Both scored via perceivedExertion, so each contributes real (non-zero) load.
+        let running = Activity(
+            source: .manual, sport: .running, start: viewModel.displayedWeekStart,
+            duration: 1800, perceivedExertion: 5
+        )
+        let cycling = Activity(
+            source: .manual, sport: .cycling, start: viewModel.displayedWeekStart,
+            duration: 3600, perceivedExertion: 7
+        )
+        try await store.upsert([running, cycling])
+        await viewModel.load(asOf: day(0))
+
+        let pages = viewModel.sportStatsPages(asOf: day(0))
+
+        #expect(pages.map(\.sport) == [.running, .cycling])
+        let totalLoad = pages[0].load
+        #expect(totalLoad > 0)
+        // Load isn't sliced per sport here -- both pages report the same whole-week total.
+        #expect(pages.allSatisfy { $0.load == totalLoad })
+    }
+
     @Test("activityDetailViewModel(for:) wires the model's athlete through")
     func activityDetailViewModelUsesModelAthlete() {
         let (_, stores) = makeStores()
