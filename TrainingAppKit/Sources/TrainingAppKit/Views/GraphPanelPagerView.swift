@@ -14,10 +14,17 @@ struct GraphPanelPagerView: View {
     let metrics: [FitnessMetrics]
     let displayedWeekRange: ClosedRange<Date>
     let timeInZoneByDay: [DayTimeInZone]
-
-    @State private var selectedIndex = 0
+    /// Owned by `WeekView`, not this view's own `@State`: the current carousel page is torn down
+    /// and rebuilt with a fresh identity on every week change (`.id(dates.first)`, needed to reset
+    /// the day list's own scroll position) and can also be recycled by the enclosing `LazyVStack`
+    /// during scrolling — either would silently reset a plain `@State` back to page 0. Living on
+    /// `WeekView` instead means the selected page survives both.
+    @Binding var selectedIndex: Int
     /// Tracks the finger during a drag, on top of `selectedIndex`'s base position — 0 while idle,
-    /// same role as `WeekView.dragOffset`/`SportStatsPagerView.dragOffset`.
+    /// same role as `WeekView.dragOffset`/`SportStatsPagerView.dragOffset`. Fine to keep as local
+    /// `@State`, unlike `selectedIndex`: it's meaningless outside an in-progress gesture, so losing
+    /// it to a page rebuild mid-navigation (there's never a gesture in flight when that happens)
+    /// isn't observable.
     @State private var dragOffset: CGFloat = 0
 
     private static let pageCount = 3

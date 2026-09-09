@@ -75,6 +75,12 @@ public struct WeekView: View {
     /// `minHeight` so the timeline connector still reaches the bottom of a short week. See
     /// `weekPageHeader`'s `.onGeometryChange` for where this is measured.
     @State private var statsBarHeight: CGFloat = 0
+    /// The graph panel's currently selected page — owned here, not by `GraphPanelPagerView` itself,
+    /// so it survives both a week change (the current carousel page gets a fresh `.id(dates.first)`
+    /// identity, needed to reset the day list's own scroll position) and the enclosing `LazyVStack`
+    /// recycling the panel during scrolling. See `GraphPanelPagerView.selectedIndex`'s own doc
+    /// comment.
+    @State private var graphPanelSelectedIndex = 0
 
     private static let weekChangeAnimation: Animation = .easeInOut(duration: 0.25)
     /// Fraction of the page width a drag needs to clear, at release, to commit to the next/
@@ -343,7 +349,8 @@ public struct WeekView: View {
             GraphPanelPagerView(
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
-                timeInZoneByDay: viewModel.timeInZoneByDay()
+                timeInZoneByDay: viewModel.timeInZoneByDay(),
+                selectedIndex: $graphPanelSelectedIndex
             )
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)

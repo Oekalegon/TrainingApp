@@ -3,8 +3,9 @@ import SwiftUI
 import TrainingCore
 
 /// The week view's graph panel "Form" page (MVP1-55, design doc §2.1) — the 3-week Form (TSB)
-/// trend, plotted over muted background bands for each `TSBZone`. Fitness/Fatigue (CTL/ATL) and
-/// daily load moved to their own pages when the panel became a pager; see `GraphPanelPagerView`/
+/// trend, plotted over muted background bands for each `TSBZone`, zone names annotated on the
+/// chart itself rather than in a separate legend. Fitness/Fatigue (CTL/ATL) and daily load moved
+/// to their own pages when the panel became a pager; see `GraphPanelPagerView`/
 /// `DailyLoadChartView`.
 struct FitnessChartView: View {
     let metrics: [FitnessMetrics]
@@ -13,16 +14,18 @@ struct FitnessChartView: View {
     /// the athlete has scrolled to.
     let displayedWeekRange: ClosedRange<Date>
     /// Days after this are projected/estimated rather than actual history (see
-    /// `FitnessMetrics.isProjected`), so the Form line renders dashed past this point.
+    /// `FitnessMetrics.isProjected`), so the Form lines render dashed past this point.
     let today: Date = .now
 
-    /// Dash pattern for the projected/future portion of the Form line.
+    /// Dash pattern for the projected/future portion of both Form lines.
     private static let futureLineStyle = StrokeStyle(dash: [5, 4])
+    private static let rawLineWidth: CGFloat = 1
+    private static let smoothedLineWidth: CGFloat = 3
 
     /// The visible y-domain, wide enough to show every `TSBZone` as a full band (including a
     /// sliver of `injuryRisk`/`detraining`, whose own real boundaries are unbounded) rather than
     /// clipping the outermost ones to a zero-height edge.
-    private static let formDomain: ClosedRange<Double> = -35...30
+    private static let formDomain: ClosedRange<Double> = -40...30
 
     /// One `TSBZone`'s band — lower/upper bounds and a muted color to shade it. Mirrors `TSBZone`'s
     /// own (internal-to-TrainingKit) boundaries with `PlanGuardrails()`'s defaults
@@ -34,6 +37,10 @@ struct FitnessChartView: View {
         let color: Color
         let label: String
     }
+
+    /// The zone boundary values, in ascending order — also where the chart's horizontal gridlines
+    /// and leading axis labels sit, instead of an arbitrary evenly-spaced stride.
+    private static let zoneBoundaries: [Double] = [-30, -10, 5, 25]
 
     private static let zoneBands: [ZoneBand] = [
         ZoneBand(lowerBound: formDomain.lowerBound, upperBound: -30, color: .red, label: "Risk"),
@@ -55,86 +62,121 @@ struct FitnessChartView: View {
         ChartDayDomain.range(for: metrics)
     }
 
+    // Split out of `body` (each as its own `@ChartContentBuilder` property) rather than inlined
+    // directly in one `Chart { ... }` block: with every zone band, the week-highlight rectangle,
+    // and four `LineMark` series (raw/smoothed × past/future) all in one expression, the compiler
+    // was unable to type-check `body` in reasonable time — the same class of timeout
+    // `TimeInZoneChartView` hit, fixed the same way there (see its own comment).
+    @ChartContentBuilder
+    private var zoneBandMarks: some ChartContent {
+        ForEach(Self.zoneBands, id: \.label) { band in
+            RectangleMark(
+                yStart: .value("Lower", band.lowerBound),
+                yEnd: .value("Upper", band.upperBound)
+            )
+            .foregroundStyle(band.color.opacity(0.12))
+        }
+    }
+
+    @ChartContentBuilder
+    private var weekHighlightMark: some ChartContent {
+        RectangleMark(
+            xStart: .value("Week start", displayedWeekRange.lowerBound),
+            xEnd: .value("Week end", displayedWeekRange.upperBound)
+        )
+        .foregroundStyle(Color.primary.opacity(0.1))
+    }
+
+    /// The thin grey line follows the exact TSB values (linear interpolation, one segment per
+    /// day); the thick white line (`smoothedLineMarks`) traces the same values through a smoothed
+    /// (Catmull-Rom) spline — two views onto one series, not two different metrics.
+    @ChartContentBuilder
+    private var rawLineMarks: some ChartContent {
+        ForEach(pastPoints, id: \.day) { point in
+            LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                .foregroundStyle(by: .value("Series", "Form (raw)"))
+                .lineStyle(StrokeStyle(lineWidth: Self.rawLineWidth))
+                .interpolationMethod(.linear)
+        }
+        ForEach(futurePoints, id: \.day) { point in
+            LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                .foregroundStyle(by: .value("Series", "Form (raw) (projected)"))
+                .lineStyle(StrokeStyle(lineWidth: Self.rawLineWidth, dash: Self.futureLineStyle.dash))
+                .interpolationMethod(.linear)
+        }
+    }
+
+    @ChartContentBuilder
+    private var smoothedLineMarks: some ChartContent {
+        ForEach(pastPoints, id: \.day) { point in
+            LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                .foregroundStyle(by: .value("Series", "Form (smoothed)"))
+                .lineStyle(StrokeStyle(lineWidth: Self.smoothedLineWidth))
+                .interpolationMethod(.catmullRom)
+        }
+        ForEach(futurePoints, id: \.day) { point in
+            LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                .foregroundStyle(by: .value("Series", "Form (smoothed) (projected)"))
+                .lineStyle(StrokeStyle(lineWidth: Self.smoothedLineWidth, dash: Self.futureLineStyle.dash))
+                .interpolationMethod(.catmullRom)
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 8) {
-            Chart {
-                ForEach(Self.zoneBands, id: \.label) { band in
-                    RectangleMark(
-                        yStart: .value("Lower", band.lowerBound),
-                        yEnd: .value("Upper", band.upperBound)
-                    )
-                    .foregroundStyle(band.color.opacity(0.12))
-                }
-
-                RectangleMark(
-                    xStart: .value("Week start", displayedWeekRange.lowerBound),
-                    xEnd: .value("Week end", displayedWeekRange.upperBound)
-                )
-                .foregroundStyle(Color.primary.opacity(0.1))
-
-                ForEach(pastPoints, id: \.day) { point in
-                    LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
-                        .foregroundStyle(by: .value("Series", "Form (TSB)"))
-                }
-
-                ForEach(futurePoints, id: \.day) { point in
-                    LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
-                        .foregroundStyle(by: .value("Series", "Form (TSB) (projected)"))
-                        .lineStyle(Self.futureLineStyle)
+        Chart {
+            zoneBandMarks
+            weekHighlightMark
+            rawLineMarks
+            smoothedLineMarks
+        }
+        .chartForegroundStyleScale([
+            "Form (raw)": Color.gray,
+            "Form (smoothed)": Color.white,
+            // Distinct series keys from the solid segments above, mapped to the same colors —
+            // Swift Charts merges LineMarks sharing the same foregroundStyle(by:) value into one
+            // continuous stroked path, so each dashed future segment needs its own key or its
+            // .lineStyle() gets silently discarded in favor of the solid segment's style.
+            "Form (raw) (projected)": Color.gray,
+            "Form (smoothed) (projected)": Color.white,
+        ])
+        .chartXScale(domain: dayDomain)
+        .chartYScale(domain: Self.formDomain)
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+            }
+        }
+        .chartYAxis {
+            // Leading, not the default trailing: the zone names sit on the trailing edge (see
+            // .chartOverlay below), so the numeric labels need the other side. Only at the zone
+            // boundaries, not an arbitrary evenly-spaced stride — the gridlines' job here is to
+            // mark where one zone ends and the next begins, not to give a generic numeric scale.
+            AxisMarks(position: .leading, values: Self.zoneBoundaries) { _ in
+                AxisGridLine()
+                AxisValueLabel()
+            }
+        }
+        .chartLegend(.hidden)
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                if let plotFrame = proxy.plotFrame {
+                    let plotArea = geometry[plotFrame]
+                    ForEach(Self.zoneBands, id: \.label) { band in
+                        let midValue = (band.lowerBound + band.upperBound) / 2
+                        if let y = proxy.position(forY: midValue) {
+                            Text(band.label)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 70, alignment: .trailing)
+                                .position(x: plotArea.maxX - 38, y: plotArea.minY + y)
+                        }
+                    }
                 }
             }
-            .chartForegroundStyleScale([
-                "Form (TSB)": TrainingMetricKind.form.color,
-                // A distinct series key from the solid segment above, mapped to the same color —
-                // Swift Charts merges LineMarks sharing the same foregroundStyle(by:) value into
-                // one continuous stroked path, so the dashed future segment needs its own key or
-                // its .lineStyle() gets silently discarded in favor of the solid segment's style.
-                "Form (TSB) (projected)": TrainingMetricKind.form.color,
-            ])
-            .chartXScale(domain: dayDomain)
-            .chartYScale(domain: Self.formDomain)
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .day, count: 7)) { _ in
-                    AxisGridLine()
-                    AxisTick()
-                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                }
-            }
-            .chartLegend(.hidden)
-            .frame(height: 140)
-            .padding(.horizontal)
-
-            HStack(spacing: 8) {
-                legendEntry("Form", .form)
-                Spacer(minLength: 12)
-                ForEach(Self.zoneBands, id: \.label) { band in
-                    zoneLegendEntry(band)
-                }
-            }
-            .font(.caption2)
-            .padding(.horizontal)
         }
-    }
-
-    private func legendEntry(_ title: String, _ kind: TrainingMetricKind) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: kind.icon)
-                .foregroundStyle(kind.color)
-                // The visible Text right after it already carries the meaning — without this,
-                // VoiceOver announces the icon's own SF Symbol name first (e.g. "battery 100
-                // percent") immediately before "Fitness", which reads as redundant/confusing.
-                .accessibilityHidden(true)
-            Text(title)
-        }
-        .font(.caption)
-    }
-
-    private func zoneLegendEntry(_ band: ZoneBand) -> some View {
-        HStack(spacing: 3) {
-            Circle()
-                .fill(band.color)
-                .frame(width: 6, height: 6)
-            Text(band.label)
-        }
+        .frame(height: 172)
+        .padding(.horizontal)
     }
 }
