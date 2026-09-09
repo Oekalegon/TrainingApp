@@ -203,12 +203,13 @@ public struct WeekView: View {
                 }
                 // Continues the timeline past the last day's own connector (which stops at that
                 // day's own bottom padding) down through whatever space `minHeight` below adds —
-                // same line color/x-offset as `DayActivitiesSection`'s own connector, so it reads
-                // as one uninterrupted line rather than two segments that happen to line up.
+                // same line color/width/x-offset as `DayActivitiesSection`'s own connector (shared
+                // via `WeekdayPillView`'s constants), so it reads as one uninterrupted line rather
+                // than two segments that happen to line up.
                 Rectangle()
                     .fill(unhighlightedPillBackground)
-                    .frame(width: 2)
-                    .padding(.leading, WeekdayPillView.columnWidth / 2 - 1)
+                    .frame(width: WeekdayPillView.connectorLineWidth)
+                    .padding(.leading, WeekdayPillView.connectorLineLeadingPadding)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(minHeight: pageHeight, alignment: .top)

@@ -150,9 +150,9 @@ struct DayActivitiesSection: View {
             if showsConnector {
                 Rectangle()
                     .fill(unhighlightedPillBackground)
-                    .frame(width: 2)
+                    .frame(width: WeekdayPillView.connectorLineWidth)
                     .frame(maxHeight: .infinity)
-                    .padding(.leading, WeekdayPillView.columnWidth / 2 - 1)
+                    .padding(.leading, WeekdayPillView.connectorLineLeadingPadding)
             }
         }
     }
@@ -172,6 +172,14 @@ struct WeekdayPillView: View {
     /// `minimumScaleFactor` on the pill's text is the real safety net if a locale's weekday
     /// abbreviation or a two-digit day ever needs more room than this affords.
     static let columnWidth: CGFloat = 60
+
+    /// Width of the timeline connector line (`DayActivitiesSection`'s own connector and
+    /// `WeekView`'s trailing filler that extends it past the last day both draw a line this wide).
+    static let connectorLineWidth: CGFloat = 2
+    /// Leading inset that centers a `connectorLineWidth`-wide line under this pill's column — the
+    /// single source both connector-drawing call sites use, so the two segments can't drift apart
+    /// and stop lining up if `columnWidth`/`connectorLineWidth` ever change.
+    static let connectorLineLeadingPadding = columnWidth / 2 - connectorLineWidth / 2
 
     /// Weekday abbreviation + day-of-month, e.g. "Mon 9" — kept as one `Text` (rather than two
     /// stacked) so it fits on a single line at a small enough size to still read clearly inside
