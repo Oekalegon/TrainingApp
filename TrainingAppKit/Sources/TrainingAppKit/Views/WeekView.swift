@@ -1,6 +1,17 @@
 import SwiftUI
 import TrainingCore
 
+/// Background behind the fitness chart and the main-sport stats row (MVP1-52) — plain white (an
+/// elevated dark grey in dark mode), distinct from `weekViewBackground` below it so the two
+/// sections read as separate surfaces, divided by a `Divider()` rather than a color change alone.
+#if os(iOS)
+private let chartSectionBackground = Color(.systemBackground)
+#else
+// This view only ever ships on iOS; the fallback exists purely so TrainingAppKit (built for both
+// iOS and macOS, per Package.swift) still compiles on macOS, e.g. for host-side tooling/tests.
+private let chartSectionBackground = Color.white
+#endif
+
 /// The week tab's screen (design doc §2.1): a 3-week CTL/ATL/TSB chart centered on the displayed
 /// week, that week's activities/plans below it, swipe-to-navigate between weeks, "Today" and
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
@@ -149,8 +160,19 @@ public struct WeekView: View {
     /// direct-manipulation paging control.
     private var weekContent: some View {
         VStack(spacing: 0) {
-            FitnessChartView(metrics: viewModel.chartMetrics, displayedWeekRange: viewModel.displayedWeekRange)
-                .padding(.vertical, 8)
+            // Chart and main-sport stats row share one white section background, separated from
+            // each other and from the day list below by a `Divider()` (MVP1-52) — the day list
+            // itself keeps sitting on `weekViewBackground`, applied at the outer `Group` in `body`.
+            VStack(spacing: 0) {
+                FitnessChartView(metrics: viewModel.chartMetrics, displayedWeekRange: viewModel.displayedWeekRange)
+                    .padding(.vertical, 8)
+                Divider()
+                SportStatsPagerView(pages: viewModel.sportStatsPages())
+                    .padding(.vertical, 12)
+            }
+            .background(chartSectionBackground)
+
+            Divider()
 
             GeometryReader { geometry in
                 let pageWidth = geometry.size.width
@@ -214,6 +236,11 @@ public struct WeekView: View {
             }
             .frame(minHeight: pageHeight, alignment: .top)
             .padding(.horizontal)
+            // Without this, the first weekday pill sits flush against the divider separating this
+            // list from the main-sport stats row above it (MVP1-52) — everything below the first
+            // row already has this same breathing room via each `DayActivitiesSection`'s own
+            // `.padding(.bottom, 20)`.
+            .padding(.top, 12)
         }
         // Without this, each of the three carousel slots keeps the same underlying scroll view
         // identity (and thus scroll position) across weeks, since only its row data changes --

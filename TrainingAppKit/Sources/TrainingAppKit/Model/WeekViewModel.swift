@@ -16,6 +16,11 @@ public final class WeekViewModel {
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
     /// uses, so a card's headline Load number always agrees with the detail sheet's own figure.
     private let statisticsCalculator = StatisticsCalculator()
+    /// Memoizes ``sportStatsPages(asOf:)`` — see that method's own doc comment for why this exists.
+    /// `@ObservationIgnored` since it's a pure implementation-detail cache, not user-facing state;
+    /// writing to it shouldn't itself trigger a view update.
+    @ObservationIgnored
+    private var sportStatsPagesCache: (weekStart: Date, activityCount: Int, today: Date, pages: [SportStatsPage])?
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
@@ -128,6 +133,94 @@ public final class WeekViewModel {
     /// the first frame, before `.task` runs). Used by the day list's CTL/ATL/TSB pills (MVP1-40).
     public func metrics(on day: Date) -> FitnessMetrics? {
         model.metrics.first { calendar.isDate($0.day, inSameDayAs: day) }
+    }
+
+    /// One page per sport for the week view's stats pager (MVP1-52; design doc: "a weekly overview
+    /// highlighting one sport's duration/distance/TRIMP … above the rest") — ``AthleteProfile/mainSport``
+    /// always first, then every other sport with activity in the displayed week, most distance
+    /// first (ties broken alphabetically) for a deterministic order. Always at least one page (the
+    /// main sport's, zero-filled if it had no activity this week), so the pager never has nothing
+    /// to show.
+    ///
+    /// Memoized on `(displayedWeekStart, model.activities.count, today's calendar day)`: `WeekView`
+    /// calls this from its `weekContent` computed property, which SwiftUI re-evaluates on every
+    /// `@State` change — including every touch-move frame of the *day list*'s own unrelated swipe
+    /// gesture. Without a cache, each of those frames would redundantly re-run two full
+    /// `periodStats` computations (one `LoadCalculator` invocation per activity, each) even though
+    /// neither the displayed week nor the underlying data changed — the same class of freeze this
+    /// codebase already fixed once for the day list itself (MVP1-19).
+    public func sportStatsPages(asOf today: Date = .now) -> [SportStatsPage] {
+        if let cache = sportStatsPagesCache,
+            cache.weekStart == displayedWeekStart,
+            cache.activityCount == model.activities.count,
+            calendar.isDate(cache.today, inSameDayAs: today) {
+            return cache.pages
+        }
+        let pages = computeSportStatsPages(asOf: today)
+        sportStatsPagesCache = (displayedWeekStart, model.activities.count, today, pages)
+        return pages
+    }
+
+    private func computeSportStatsPages(asOf today: Date) -> [SportStatsPage] {
+        let current = periodStats(weekStart: displayedWeekStart, asOf: today)
+        let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: displayedWeekStart) ?? displayedWeekStart
+        let previous = periodStats(weekStart: previousWeekStart, asOf: today)
+
+        let mainSport = model.athlete.mainSport
+        let otherSports = current.bySport.keys
+            .filter { $0 != mainSport }
+            .sorted { lhs, rhs in
+                let lhsDistance = current.bySport[lhs]?.distanceMeters ?? 0
+                let rhsDistance = current.bySport[rhs]?.distanceMeters ?? 0
+                return lhsDistance != rhsDistance ? lhsDistance > rhsDistance : lhs.displayName < rhs.displayName
+            }
+        let loadChangeFraction = Self.changeFraction(current.totalLoad - previous.totalLoad, of: previous.totalLoad)
+
+        return ([mainSport] + otherSports).map { sport in
+            let currentSport = current.bySport[sport] ?? Self.zeroSportStats(sport)
+            let previousSport = previous.bySport[sport] ?? Self.zeroSportStats(sport)
+            return SportStatsPage(
+                sport: sport,
+                distanceMeters: currentSport.distanceMeters,
+                time: currentSport.time,
+                distanceChangeFraction: Self.changeFraction(
+                    currentSport.distanceMeters - previousSport.distanceMeters, of: previousSport.distanceMeters
+                ),
+                timeChangeFraction: Self.changeFraction(currentSport.time - previousSport.time, of: previousSport.time),
+                load: current.totalLoad,
+                loadChangeFraction: loadChangeFraction
+            )
+        }
+    }
+
+    /// Descriptive totals (every sport, not just one) for the calendar week starting `weekStart` —
+    /// shared by ``sportStatsPages(asOf:)`` for both the displayed week and the previous one.
+    private func periodStats(weekStart: Date, asOf today: Date) -> PeriodStats {
+        let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+        return statisticsCalculator.periodStats(
+            activities: model.activities,
+            plans: model.plans,
+            workouts: model.workouts,
+            athlete: model.athlete,
+            range: weekStart...weekEnd,
+            asOf: today,
+            previous: nil
+        )
+    }
+
+    private static func zeroSportStats(_ sport: Sport) -> SportPeriodStats {
+        SportPeriodStats(sport: sport, distanceMeters: 0, time: 0, load: 0, timeInZone: TimeInZone(), activityCount: 0)
+    }
+
+    /// Unlike `PeriodDelta` (which reports 0 for a zero previous total, to avoid `.nan`), this
+    /// reports `.infinity` instead — going from no activity to some really is an unbounded
+    /// increase, and the stats pager renders that case as "+∞%" explicitly rather than showing a
+    /// misleadingly literal "+0%" for what's actually the biggest possible jump. `previousTotal ==
+    /// 0` only reports 0 when `delta` (== the current total, since `previousTotal` is 0) is also 0
+    /// — no activity in either week is genuinely "no change", not an infinite one.
+    private static func changeFraction(_ delta: Double, of previousTotal: Double) -> Double {
+        guard previousTotal != 0 else { return delta == 0 ? 0 : .infinity }
+        return delta / previousTotal
     }
 
     /// `activity`'s training load (TRIMP), computed the same way ``activityDetailViewModel(for:)``
