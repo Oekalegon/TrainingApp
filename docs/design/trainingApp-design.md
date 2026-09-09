@@ -92,6 +92,11 @@ remember or restore which tab was last active.
   things that happened; a day with neither renders its pill with an empty content column rather
   than a "rest day" placeholder. A planned activity with no matching `completedActivityID` renders
   distinctly (e.g. outlined/muted) from a completed one.
+- Each day's row also shows that day's Load / Fitness / Fatigue / Form (TRIMP / CTL / ATL / TSB) as
+  compact icon+value pills, trailing-aligned, one icon per metric matching the chart legend above
+  (MVP1-40). A day with no completed activities shows only the Form pill — Load/Fitness/Fatigue
+  describe that day's training input, which has nothing to say on a day nothing happened, while
+  Form is a trend that still moves whether or not the athlete trained that day.
 - **Gestures**: horizontal swipe moves the displayed week by ±1 week (re-centers the chart,
   reloads the day list). Both the chart and the day list scroll together — the displayed week is
   one piece of state, not two.

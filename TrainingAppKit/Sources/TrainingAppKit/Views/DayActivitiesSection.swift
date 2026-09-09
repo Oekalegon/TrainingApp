@@ -134,9 +134,8 @@ struct WeekdayPillView: View {
 }
 
 /// Load/CTL/ATL/TSB shown as compact value+icon pills beside a weekday row (design doc §2.1,
-/// MVP1-40) — an SF Symbol per metric (bolt for Load, a full/quarter battery for Fitness/Fatigue,
-/// a half-swung gauge for Form) rather than the raw abbreviations, matching how
-/// `FitnessChartView`'s legend now pairs the same icons with each series' name.
+/// MVP1-40) — each metric's `TrainingMetricKind` icon rather than the raw abbreviations, matching
+/// how `FitnessChartView`'s legend pairs the same icons with each series' name.
 private struct DayMetricsPillRow: View {
     let metrics: FitnessMetrics
     /// `true` on a day with no completed activities — Load/Fitness/Fatigue describe that day's
@@ -160,14 +159,14 @@ private struct DayMetricsPillRow: View {
     var body: some View {
         HStack(spacing: 0) {
             if !showsOnlyForm {
-                MetricPillView(icon: "bolt.fill", value: metrics.load.formatted(Self.unsignedFormat))
+                MetricPillView(kind: .load, value: metrics.load.formatted(Self.unsignedFormat))
                 Spacer().frame(width: Self.loadGroupSpacing)
-                MetricPillView(icon: "battery.100", value: metrics.ctl.formatted(Self.unsignedFormat))
+                MetricPillView(kind: .fitness, value: metrics.ctl.formatted(Self.unsignedFormat))
                 Spacer().frame(width: Self.metricSpacing)
-                MetricPillView(icon: "battery.25", value: metrics.atl.formatted(Self.unsignedFormat))
+                MetricPillView(kind: .fatigue, value: metrics.atl.formatted(Self.unsignedFormat))
                 Spacer().frame(width: Self.metricSpacing)
             }
-            MetricPillView(icon: "gauge.with.dots.needle.50percent", value: metrics.tsb.formatted(Self.signedFormat))
+            MetricPillView(kind: .form, value: metrics.tsb.formatted(Self.signedFormat))
         }
     }
 }
@@ -179,14 +178,14 @@ private struct DayMetricsPillRow: View {
 /// since the icon shape alone already disambiguates Load/Fitness/Fatigue/Form at this size. The
 /// value carries no pill/background at all, so it doesn't compete visually with the icon.
 private struct MetricPillView: View {
-    let icon: String
+    let kind: TrainingMetricKind
     let value: String
 
     var body: some View {
         HStack(spacing: 4) {
             Text(value)
                 .foregroundStyle(.primary)
-            Image(systemName: icon)
+            Image(systemName: kind.icon)
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
@@ -198,6 +197,12 @@ private struct MetricPillView: View {
         // Same reasoning as `WeekdayPillView`: the icon pill is a small fixed-size badge, capped
         // rather than unbounded, so it stays compact even at large accessibility text sizes.
         .dynamicTypeSize(.large)
+        // Without this, VoiceOver reads the icon's own SF Symbol name ("battery 100 percent")
+        // instead of what it actually represents here — combining the two elements into one and
+        // giving it an explicit label makes this read as "Fitness, 42" instead of two
+        // disconnected fragments ("42", then "battery 100 percent").
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(kind.name), \(value)")
     }
 }
 
