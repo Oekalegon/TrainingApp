@@ -25,7 +25,7 @@ struct FitnessChartView: View {
     /// The visible y-domain, wide enough to show every `TSBZone` as a full band (including a
     /// sliver of `injuryRisk`/`detraining`, whose own real boundaries are unbounded) rather than
     /// clipping the outermost ones to a zero-height edge.
-    private static let formDomain: ClosedRange<Double> = -40...30
+    private static let formDomain: ClosedRange<Double> = -45...40
 
     /// One `TSBZone`'s band — lower/upper bounds and a muted color to shade it. Mirrors `TSBZone`'s
     /// own (internal-to-TrainingKit) boundaries with `PlanGuardrails()`'s defaults
