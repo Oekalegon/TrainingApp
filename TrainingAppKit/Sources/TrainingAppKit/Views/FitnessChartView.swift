@@ -130,18 +130,21 @@ struct FitnessChartView: View {
         .padding(.horizontal)
 
         HStack(spacing: 12) {
-            legendEntry("Fitness (CTL)", .blue)
-            legendEntry("Fatigue (ATL)", .orange)
-            legendEntry("Form (TSB)", .green)
-            legendEntry("Daily load (TRIMP)", .red)
+            // Same icon-per-metric mapping as the day list's metric pills (MVP1-40), so a metric
+            // reads as the same icon whether it's here or beside a weekday row.
+            legendEntry("Fitness", "battery.100", .blue)
+            legendEntry("Fatigue", "battery.25", .orange)
+            legendEntry("Form", "gauge.with.dots.needle.50percent", .green)
+            legendEntry("Daily load", "bolt.fill", .red)
         }
         .font(.caption)
         .padding(.horizontal)
     }
 
-    private func legendEntry(_ title: String, _ color: Color) -> some View {
+    private func legendEntry(_ title: String, _ icon: String, _ color: Color) -> some View {
         HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
+            Image(systemName: icon)
+                .foregroundStyle(color)
             Text(title)
         }
     }

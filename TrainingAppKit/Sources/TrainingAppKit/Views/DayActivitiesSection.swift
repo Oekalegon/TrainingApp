@@ -1,6 +1,11 @@
 import SwiftUI
 import TrainingCore
 
+/// Background for every un-highlighted pill/badge on the day list's timeline — `WeekdayPillView`'s
+/// own pill and each `MetricPillView`'s label, so they read as one consistent pill style rather
+/// than two independently-tuned ones.
+private let unhighlightedPillBackground = Color.secondary.opacity(0.12)
+
 /// Renders one day's row in the week view's day list (design doc §2.1, MVP1-39): a weekday pill
 /// marking its place on the list's vertical timeline, and — beside it — that day's completed and
 /// planned activities, planned ones rendered visibly distinct.
@@ -47,6 +52,13 @@ struct DayActivitiesSection: View {
     }
 
     var body: some View {
+        // `.top`, not `.firstTextBaseline`: the weekday pill and each metric pill's label are the
+        // same font size and the same vertical padding (see `WeekdayPillView`/`MetricPillView`),
+        // so their pill boxes are exactly the same height — top-aligning the two columns lines up
+        // those boxes exactly, which in turn lines up their text. `.firstTextBaseline` relies on
+        // SwiftUI's own baseline-guide propagation through the nested stacks/frames in the content
+        // column, which doesn't reliably resolve to the same value as this simpler, guaranteed
+        // approach.
         HStack(alignment: .top, spacing: 12) {
             VStack(spacing: 0) {
                 WeekdayPillView(date: date, isToday: isToday, timeZone: timeZone)
@@ -61,7 +73,8 @@ struct DayActivitiesSection: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 if let metrics {
-                    DayMetricsPillRow(metrics: metrics)
+                    DayMetricsPillRow(metrics: metrics, showsOnlyForm: activities.isEmpty)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 ForEach(activities) { activity in
                     ActivityRow(activity: activity, timeZone: timeZone, onSelect: { onSelectActivity(activity) })
@@ -90,10 +103,6 @@ struct WeekdayPillView: View {
     /// `minimumScaleFactor` on the pill's text is the real safety net if a locale's weekday
     /// abbreviation or a two-digit day ever needs more room than this affords.
     static let columnWidth: CGFloat = 60
-    private static let height: CGFloat = 24
-    /// Shared with the capsule fill below — pulled out so a future pill style (e.g. MVP1-40's
-    /// metric pills) can match this one instead of re-tuning its own opacity.
-    private static let unhighlightedBackground = Color.secondary.opacity(0.12)
 
     /// Weekday abbreviation + day-of-month, e.g. "Mon 9" — kept as one `Text` (rather than two
     /// stacked) so it fits on a single line at a small enough size to still read clearly inside
@@ -106,15 +115,15 @@ struct WeekdayPillView: View {
 
     var body: some View {
         Text(date, format: Self.format(timeZone: timeZone))
-            .font(.system(size: 9, weight: .regular, design: .default))
+            .font(.system(size: 11, weight: .regular, design: .default))
             .textCase(.uppercase)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .padding(.horizontal, 8)
-            .frame(height: Self.height)
+            .padding(.vertical, 3)
             .foregroundStyle(isToday ? Color.white : Color.primary)
             .background {
-                Capsule().fill(isToday ? Color.accentColor : Self.unhighlightedBackground)
+                Capsule().fill(isToday ? Color.accentColor : unhighlightedPillBackground)
             }
             // This pill is deliberately fixed-size (it's a small badge, not body text), so it
             // doesn't scale with the rest of the row at larger accessibility text sizes — capped
@@ -124,50 +133,70 @@ struct WeekdayPillView: View {
     }
 }
 
-/// CTL/ATL/TSB shown as compact value+label pills beside a weekday row (design doc §2.1,
-/// MVP1-40) — color-matched to `FitnessChartView`'s legend (blue/orange/green) so the day list
-/// reads as the same three series as the chart above it, just localized to one day.
+/// Load/CTL/ATL/TSB shown as compact value+icon pills beside a weekday row (design doc §2.1,
+/// MVP1-40) — an SF Symbol per metric (bolt for Load, a full/quarter battery for Fitness/Fatigue,
+/// a half-swung gauge for Form) rather than the raw abbreviations, matching how
+/// `FitnessChartView`'s legend now pairs the same icons with each series' name.
 private struct DayMetricsPillRow: View {
     let metrics: FitnessMetrics
+    /// `true` on a day with no completed activities — Load/Fitness/Fatigue describe that day's
+    /// training input, which has nothing to say on a day nothing happened, so only Form (TSB, a
+    /// trend that moves whether or not the athlete trained that day) is worth showing.
+    let showsOnlyForm: Bool
 
-    /// CTL/ATL are unsigned moving averages of load — no sign shown. TSB is a balance that reads
-    /// meaningfully as positive ("fresh") or negative ("fatigued"), so it always shows its sign.
+    /// Extra spacing between Load and Fitness, on top of ``metricSpacing`` — Load is that day's
+    /// raw load, a different kind of number from the three smoothed CTL/ATL/TSB series that
+    /// follow it, so the wider gap reads as "one metric, then a separate group of three" rather
+    /// than four equally-related values.
+    private static let loadGroupSpacing: CGFloat = 24
+    private static let metricSpacing: CGFloat = 15
+
+    /// Load/CTL/ATL are unsigned — no sign shown. TSB is a balance that reads meaningfully as
+    /// positive ("fresh") or negative ("fatigued"), so it always shows its sign.
     private static let unsignedFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
     private static let signedFormat = FloatingPointFormatStyle<Double>.number
         .sign(strategy: .always()).precision(.fractionLength(0))
 
     var body: some View {
-        HStack(spacing: 4) {
-            MetricPillView(label: "CTL", value: metrics.ctl.formatted(Self.unsignedFormat), color: .blue)
-            MetricPillView(label: "ATL", value: metrics.atl.formatted(Self.unsignedFormat), color: .orange)
-            MetricPillView(label: "TSB", value: metrics.tsb.formatted(Self.signedFormat), color: .green)
+        HStack(spacing: 0) {
+            if !showsOnlyForm {
+                MetricPillView(icon: "bolt.fill", value: metrics.load.formatted(Self.unsignedFormat))
+                Spacer().frame(width: Self.loadGroupSpacing)
+                MetricPillView(icon: "battery.100", value: metrics.ctl.formatted(Self.unsignedFormat))
+                Spacer().frame(width: Self.metricSpacing)
+                MetricPillView(icon: "battery.25", value: metrics.atl.formatted(Self.unsignedFormat))
+                Spacer().frame(width: Self.metricSpacing)
+            }
+            MetricPillView(icon: "gauge.with.dots.needle.50percent", value: metrics.tsb.formatted(Self.signedFormat))
         }
     }
 }
 
-/// One metric's value+label pill, e.g. "CTL 42" — the label tinted to match its series color, the
-/// value in the ordinary text color so three adjacent colored labels don't turn into a wall of
-/// color that's harder to read than plain text.
+/// One metric's plain value followed by its icon pill, e.g. "42" then a "battery.100" pill — only
+/// the icon sits in a pill (grey, matching `WeekdayPillView`'s own). The icon is plain `.primary`,
+/// not tinted per metric — matching `FitnessChartView`'s legend (which pairs the same icon with
+/// its series color) would need the value's own color scale threaded down here for no real gain,
+/// since the icon shape alone already disambiguates Load/Fitness/Fatigue/Form at this size. The
+/// value carries no pill/background at all, so it doesn't compete visually with the icon.
 private struct MetricPillView: View {
-    let label: String
+    let icon: String
     let value: String
-    let color: Color
 
     var body: some View {
-        HStack(spacing: 3) {
-            Text(label)
-                .foregroundStyle(color)
+        HStack(spacing: 4) {
             Text(value)
                 .foregroundStyle(.primary)
+            Image(systemName: icon)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background {
+                    Capsule().fill(unhighlightedPillBackground)
+                }
         }
-        .font(.system(size: 9, weight: .regular, design: .default))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background {
-            Capsule().fill(color.opacity(0.12))
-        }
-        // Same reasoning as `WeekdayPillView`: a small fixed-size badge, capped rather than
-        // unbounded, so it stays a compact pill even at large accessibility text sizes.
+        .font(.system(size: 11, weight: .regular, design: .default))
+        // Same reasoning as `WeekdayPillView`: the icon pill is a small fixed-size badge, capped
+        // rather than unbounded, so it stays compact even at large accessibility text sizes.
         .dynamicTypeSize(.large)
     }
 }
