@@ -15,6 +15,7 @@ playground.xcworkspace
 .swiftpm/
 
 .build/
+build/
 
 # OS files
 .DS_Store

@@ -110,6 +110,26 @@ public final class WeekViewModel {
         return displayedWeekStart...end
     }
 
+    /// The calendar week number of ``displayedWeekStart``, for the week view's title (MVP1-56).
+    public var displayedWeekOfYear: Int {
+        calendar.component(.weekOfYear, from: displayedWeekStart)
+    }
+
+    /// A short "Sep 8 – Sep 14, 2026" description of the displayed week, for the subtitle under
+    /// ``displayedWeekOfYear`` (MVP1-56) — the year sits on the end date only, unless the week
+    /// crosses a year boundary (e.g. "Dec 29, 2026 – Jan 4, 2027"), in which case both ends show
+    /// their own year so the range doesn't read as if it were entirely in the later one.
+    public var displayedWeekDateRangeDescription: String {
+        let weekEnd = calendar.date(byAdding: .day, value: 6, to: displayedWeekStart) ?? displayedWeekStart
+        let bareFormat = Date.FormatStyle(calendar: calendar, timeZone: athleteTimeZone)
+            .day().month(.abbreviated)
+        let withYearFormat = bareFormat.year()
+        let crossesYearBoundary = calendar.component(.year, from: displayedWeekStart)
+            != calendar.component(.year, from: weekEnd)
+        let startFormat = crossesYearBoundary ? withYearFormat : bareFormat
+        return "\(displayedWeekStart.formatted(startFormat)) – \(weekEnd.formatted(withYearFormat))"
+    }
+
     /// Completed activities on `day`, in start-time order.
     public func activities(on day: Date) -> [Activity] {
         model.activities
@@ -329,6 +349,13 @@ public final class WeekViewModel {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = athlete.timeZone
         calendar.firstWeekday = athlete.weekStartsOn.rawValue
+        // ISO-8601's rule, not Foundation's Gregorian default (1): a week belongs to a year only
+        // if at least 4 of its days fall in that year. Without this, `displayedWeekOfYear` (MVP1-56)
+        // disagrees with the week number every other fitness platform shows near a year boundary —
+        // e.g. Foundation's default calls the Mon–Sun week containing a Sunday Jan 1 "week 1" of the
+        // new year, while ISO-8601 (and the athlete's expectation) calls it week 52/53 of the one
+        // before it.
+        calendar.minimumDaysInFirstWeek = 4
         return calendar
     }
 
