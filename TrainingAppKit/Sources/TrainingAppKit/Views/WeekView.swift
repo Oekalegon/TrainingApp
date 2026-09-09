@@ -150,12 +150,13 @@ public struct WeekView: View {
 
             GeometryReader { geometry in
                 let pageWidth = geometry.size.width
+                let pageHeight = geometry.size.height
                 HStack(spacing: 0) {
-                    dayList(for: viewModel.weekDates(offsetWeeks: -1))
+                    dayList(for: viewModel.weekDates(offsetWeeks: -1), pageHeight: pageHeight)
                         .frame(width: pageWidth)
-                    dayList(for: viewModel.weekDates(offsetWeeks: 0))
+                    dayList(for: viewModel.weekDates(offsetWeeks: 0), pageHeight: pageHeight)
                         .frame(width: pageWidth)
-                    dayList(for: viewModel.weekDates(offsetWeeks: 1))
+                    dayList(for: viewModel.weekDates(offsetWeeks: 1), pageHeight: pageHeight)
                         .frame(width: pageWidth)
                 }
                 // Base position centers the "current" (middle) page; dragOffset then tracks the
@@ -173,14 +174,20 @@ public struct WeekView: View {
     /// A plain `ScrollView`/`LazyVStack`, not `List`: once MVP1-20 dropped the per-day section
     /// headers, `List` wasn't buying anything here beyond default row styling — and both
     /// `.refreshable` and `.scrollDisabled` (used below) work identically on a `ScrollView`.
-    private func dayList(for dates: [Date]) -> some View {
+    ///
+    /// - Parameter pageHeight: The week view's own visible height (from `weekContent`'s
+    ///   `GeometryReader`) — the `LazyVStack` is given at least this as its `minHeight`, and a
+    ///   trailing filler segment after the last day absorbs whatever's left over, so the timeline
+    ///   extends all the way to the bottom of the week view even on a short week rather than
+    ///   stopping right after the last day's own content.
+    private func dayList(for dates: [Date], pageHeight: CGFloat) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(dates.enumerated()), id: \.element) { index, day in
                     DayActivitiesSection(
                         date: day,
                         isToday: viewModel.isToday(day),
-                        showsConnector: index < dates.count - 1,
+                        showsConnector: true,
                         metrics: viewModel.metrics(on: day),
                         activities: viewModel.activities(on: day),
                         plans: viewModel.plans(on: day),
@@ -190,7 +197,17 @@ public struct WeekView: View {
                         onSelectActivity: { selectedActivity = $0 }
                     )
                 }
+                // Continues the timeline past the last day's own connector (which stops at that
+                // day's own bottom padding) down through whatever space `minHeight` below adds —
+                // same line color/x-offset as `DayActivitiesSection`'s own connector, so it reads
+                // as one uninterrupted line rather than two segments that happen to line up.
+                Rectangle()
+                    .fill(unhighlightedPillBackground)
+                    .frame(width: 2)
+                    .padding(.leading, WeekdayPillView.columnWidth / 2 - 1)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            .frame(minHeight: pageHeight, alignment: .top)
             .padding(.horizontal)
         }
         // Without this, each of the three carousel slots keeps the same underlying scroll view
