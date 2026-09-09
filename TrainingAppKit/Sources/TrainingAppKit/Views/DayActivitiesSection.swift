@@ -1,13 +1,15 @@
 import SwiftUI
 import TrainingCore
 
-/// Renders one day's rows in the week view's day list: its completed activities and its planned
-/// activities — planned ones rendered visibly distinct (design doc §2.1).
+/// Renders one day's row in the week view's day list (design doc §2.1, MVP1-39): a weekday pill
+/// marking its place on the list's vertical timeline, and — beside it — that day's completed and
+/// planned activities, planned ones rendered visibly distinct.
 ///
-/// Contributes nothing at all for a day with neither (MVP1-20): no section header, no "rest day"
-/// placeholder row, so a week with only a couple of activities doesn't fill the list with empty
-/// scaffolding for the other five days. Each surviving row shows its own date/time, since there's
-/// no per-day header left to carry that context.
+/// Unlike the flat row list MVP1-20 introduced, every day in the displayed week gets a row here,
+/// whether or not it has activities: the weekday pill is what makes the list read as a timeline of
+/// the whole week, not just a list of things that happened. A day with neither activities nor
+/// plans still renders its pill, just with an empty content column beside it — no "rest day" text,
+/// since the empty space next to a pill already reads as "nothing that day".
 ///
 /// Deliberately holds no local `@State`: `WeekView` recreates the scroll view a given week's rows
 /// live in (via `.id(...)` on that week's first date) whenever the displayed week changes, so a
@@ -15,6 +17,12 @@ import TrainingCore
 /// here (an expand/collapse toggle, say) would be silently reset by the same mechanism. If this
 /// type ever needs its own state, that interaction needs accounting for first.
 struct DayActivitiesSection: View {
+    let date: Date
+    /// Whether `date` is today, in the athlete's calendar — highlights the weekday pill.
+    let isToday: Bool
+    /// Whether to draw the timeline connector below this row's pill — `false` for the last day in
+    /// the list, so the vertical line doesn't dangle past the final pill.
+    let showsConnector: Bool
     let activities: [Activity]
     let plans: [PlannedActivity]
     let workoutName: (PlannedActivity) -> String?
@@ -27,29 +35,86 @@ struct DayActivitiesSection: View {
     /// view building a `NavigationLink` itself.
     let onSelectActivity: (Activity) -> Void
 
-    /// Weekday + day + month, no time — used for planned activities, which only carry a calendar
-    /// day (`PlannedActivity.date`), not a time of day.
-    fileprivate static func dateFormat(timeZone: TimeZone) -> Date.FormatStyle {
-        var format = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated)
-        format.timeZone = timeZone
-        return format
-    }
-
-    /// `dateFormat` plus hour/minute — used for completed activities, which have a real start time.
-    fileprivate static func dateTimeFormat(timeZone: TimeZone) -> Date.FormatStyle {
-        var format = Date.FormatStyle.dateTime.weekday(.abbreviated).day().month(.abbreviated)
-            .hour().minute()
+    /// Hour + minute only — the weekday pill already carries the day, so completed activities'
+    /// rows only need their time of day.
+    fileprivate static func timeFormat(timeZone: TimeZone) -> Date.FormatStyle {
+        var format = Date.FormatStyle.dateTime.hour().minute()
         format.timeZone = timeZone
         return format
     }
 
     var body: some View {
-        ForEach(activities) { activity in
-            ActivityRow(activity: activity, timeZone: timeZone, onSelect: { onSelectActivity(activity) })
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 0) {
+                WeekdayPillView(date: date, isToday: isToday, timeZone: timeZone)
+                if showsConnector {
+                    Rectangle()
+                        .fill(.quaternary)
+                        .frame(width: 2)
+                        .frame(maxHeight: .infinity)
+                }
+            }
+            .frame(width: WeekdayPillView.columnWidth)
+
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(activities) { activity in
+                    ActivityRow(activity: activity, timeZone: timeZone, onSelect: { onSelectActivity(activity) })
+                }
+                ForEach(plans) { plan in
+                    PlannedActivityRow(plan: plan, workoutName: workoutName(plan))
+                }
+            }
+            .padding(.bottom, 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        ForEach(plans) { plan in
-            PlannedActivityRow(plan: plan, workoutName: workoutName(plan), timeZone: timeZone)
-        }
+    }
+}
+
+/// A weekday + day-of-month badge marking one day's position on the day list's vertical timeline
+/// (MVP1-39). Highlighted when it's today, so "today" reads at a glance while scrolling.
+struct WeekdayPillView: View {
+    let date: Date
+    let isToday: Bool
+    let timeZone: TimeZone
+
+    /// Width of the timeline column this pill sits in — not measured from the pill's actual
+    /// rendered width (which hugs its text via padding), just a fixed value comfortably wider
+    /// than "Wed 9" at this font size, so the connector line below it (drawn by
+    /// `DayActivitiesSection`, in a column of this same width) stays centered under it.
+    /// `minimumScaleFactor` on the pill's text is the real safety net if a locale's weekday
+    /// abbreviation or a two-digit day ever needs more room than this affords.
+    static let columnWidth: CGFloat = 60
+    private static let height: CGFloat = 24
+    /// Shared with the capsule fill below — pulled out so a future pill style (e.g. MVP1-40's
+    /// metric pills) can match this one instead of re-tuning its own opacity.
+    private static let unhighlightedBackground = Color.secondary.opacity(0.12)
+
+    /// Weekday abbreviation + day-of-month, e.g. "Mon 9" — kept as one `Text` (rather than two
+    /// stacked) so it fits on a single line at a small enough size to still read clearly inside
+    /// the pill.
+    private static func format(timeZone: TimeZone) -> Date.FormatStyle {
+        var format = Date.FormatStyle.dateTime.weekday(.abbreviated).day()
+        format.timeZone = timeZone
+        return format
+    }
+
+    var body: some View {
+        Text(date, format: Self.format(timeZone: timeZone))
+            .font(.system(size: 9, weight: .regular, design: .default))
+            .textCase(.uppercase)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 8)
+            .frame(height: Self.height)
+            .foregroundStyle(isToday ? Color.white : Color.primary)
+            .background {
+                Capsule().fill(isToday ? Color.accentColor : Self.unhighlightedBackground)
+            }
+            // This pill is deliberately fixed-size (it's a small badge, not body text), so it
+            // doesn't scale with the rest of the row at larger accessibility text sizes — capped
+            // rather than left unbounded, so a maxed-out Dynamic Type setting can't blow the
+            // pill's small footprint out to something that no longer reads as a compact badge.
+            .dynamicTypeSize(.large)
     }
 }
 
@@ -69,7 +134,7 @@ private struct ActivityRow: View {
                 VStack(alignment: .leading) {
                     Text(activity.sport.displayName)
                         .foregroundStyle(.primary)
-                    Text(activity.start, format: DayActivitiesSection.dateTimeFormat(timeZone: timeZone))
+                    Text(activity.start, format: DayActivitiesSection.timeFormat(timeZone: timeZone))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -90,18 +155,13 @@ private struct ActivityRow: View {
 private struct PlannedActivityRow: View {
     let plan: PlannedActivity
     let workoutName: String?
-    let timeZone: TimeZone
 
     var body: some View {
         if plan.completedActivityID == nil {
             HStack {
                 Image(systemName: "circle.dashed")
                     .foregroundStyle(.secondary)
-                VStack(alignment: .leading) {
-                    Text(workoutName ?? "Planned workout")
-                    Text(plan.date, format: DayActivitiesSection.dateFormat(timeZone: timeZone))
-                        .font(.caption)
-                }
+                Text(workoutName ?? "Planned workout")
                 Spacer()
             }
             .padding(.vertical, 8)
