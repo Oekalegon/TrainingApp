@@ -181,6 +181,7 @@ public struct WeekView: View {
                         date: day,
                         isToday: viewModel.isToday(day),
                         showsConnector: index < dates.count - 1,
+                        metrics: viewModel.metrics(on: day),
                         activities: viewModel.activities(on: day),
                         plans: viewModel.plans(on: day),
                         workoutName: { viewModel.workout(for: $0)?.name },

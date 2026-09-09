@@ -130,18 +130,28 @@ struct FitnessChartView: View {
         .padding(.horizontal)
 
         HStack(spacing: 12) {
-            legendEntry("Fitness (CTL)", .blue)
-            legendEntry("Fatigue (ATL)", .orange)
-            legendEntry("Form (TSB)", .green)
-            legendEntry("Daily load (TRIMP)", .red)
+            // Icon/color for each metric come from `TrainingMetricKind`, the same mapping the day
+            // list's metric pills (MVP1-40) use — so a metric reads as the same icon whether it's
+            // here or beside a weekday row. The title stays chart-specific ("Daily load", not
+            // `TrainingMetricKind.load.name`'s plain "Load"), since this legend labels an axis/
+            // series rather than one day's pill.
+            legendEntry("Fitness", .fitness)
+            legendEntry("Fatigue", .fatigue)
+            legendEntry("Form", .form)
+            legendEntry("Daily load", .load)
         }
         .font(.caption)
         .padding(.horizontal)
     }
 
-    private func legendEntry(_ title: String, _ color: Color) -> some View {
+    private func legendEntry(_ title: String, _ kind: TrainingMetricKind) -> some View {
         HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
+            Image(systemName: kind.icon)
+                .foregroundStyle(kind.color)
+                // The visible Text right after it already carries the meaning — without this,
+                // VoiceOver announces the icon's own SF Symbol name first (e.g. "battery 100
+                // percent") immediately before "Fitness", which reads as redundant/confusing.
+                .accessibilityHidden(true)
             Text(title)
         }
     }

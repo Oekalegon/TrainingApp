@@ -178,6 +178,23 @@ struct WeekViewModelTests {
         #expect(viewModel.workout(for: plan)?.id == workout.id)
     }
 
+    @Test("metrics(on:) returns the matching day's fitness metrics, nil outside the loaded range")
+    func metricsOnDayFiltersToThatCalendarDay() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let activity = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        try await store.upsert([activity])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let calendar = WeekViewModel.calendar(for: athlete)
+        let metricsOnDay2 = try #require(viewModel.metrics(on: day(2)))
+        #expect(calendar.isDate(metricsOnDay2.day, inSameDayAs: day(2)))
+        #expect(viewModel.metrics(on: day(100)) == nil)
+    }
+
     @Test("activityDetailViewModel(for:) wires the model's athlete through")
     func activityDetailViewModelUsesModelAthlete() {
         let (_, stores) = makeStores()
