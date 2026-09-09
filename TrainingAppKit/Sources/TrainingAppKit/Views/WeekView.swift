@@ -113,14 +113,14 @@ public struct WeekView: View {
             .navigationTitle("Week \(viewModel.displayedWeekOfYear)")
             #if os(iOS)
             .navigationSubtitle(viewModel.displayedWeekDateRangeDescription)
-            // Opaque, matching chartSectionBackground, so the nav bar reads as the same surface as
-            // the chart scrolling underneath it — not the system's default translucent chrome. A
-            // concrete resolved color, not `chartSectionBackground` itself: passed a dynamic/system
-            // `Color` (e.g. `Color(.systemBackground)`), the toolbar still renders its own
-            // translucent "glass" chrome layered on top regardless of `.visible`, while a fixed,
-            // already-resolved color is drawn flat and opaque as given.
+            // A concrete resolved color, not `chartSectionBackground` itself: passed a dynamic/
+            // system `Color` (e.g. `Color(.systemBackground)`), the toolbar still renders its own
+            // translucent "glass" chrome layered on top. Deliberately without a paired
+            // `.toolbarBackground(.visible, for:)`: forcing that broke the large title from ever
+            // reappearing once scrolled back to the top — the system's own `.automatic` visibility
+            // (background shown once scrolled, hidden at the top) works correctly on its own and
+            // still uses this color whenever it does show it.
             .toolbarBackground(toolbarBackgroundColor, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
             #endif
             .toolbar {
                 ToolbarItem(placement: leadingToolbarPlacement) {
@@ -355,9 +355,10 @@ public struct WeekView: View {
     }
 
     /// The pinned stats bar (MVP1-56) — see `weekPage`'s own doc comment for how it fits into the
-    /// scroll hierarchy. Lightly translucent (`.ultraThinMaterial`) so the day rows read as
-    /// scrolling underneath it once pinned, not behind an opaque panel — unlike `chartSectionBackground`
-    /// above it, which is deliberately opaque.
+    /// scroll hierarchy. Lightly translucent (`.thinMaterial`) so the day rows read as scrolling
+    /// underneath it once pinned, not behind an opaque panel — unlike `chartSectionBackground` above
+    /// it, which is deliberately opaque. `.ultraThinMaterial` let too much of the grey day-list
+    /// background bleed/tint through, reading as noticeably darker than the white chart above it.
     private var weekPageHeader: some View {
         VStack(spacing: 0) {
             Divider()
@@ -365,7 +366,7 @@ public struct WeekView: View {
                 .padding(.vertical, 12)
             Divider()
         }
-        .background(.ultraThinMaterial)
+        .background(.thinMaterial)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.height
         } action: { _, newHeight in
