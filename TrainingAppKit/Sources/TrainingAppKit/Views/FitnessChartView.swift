@@ -163,11 +163,11 @@ struct FitnessChartView: View {
             }
         }
         .chartYAxis {
-            // Leading, not the default trailing: the zone names sit on the trailing edge (see
-            // .chartOverlay below), so the numeric labels need the other side. Only at the zone
-            // boundaries, not an arbitrary evenly-spaced stride — the gridlines' job here is to
-            // mark where one zone ends and the next begins, not to give a generic numeric scale.
-            AxisMarks(position: .leading, values: Self.zoneBoundaries) { _ in
+            // Trailing, alongside the zone names (see .chartOverlay below) — both now read on the
+            // right. Only at the zone boundaries, not an arbitrary evenly-spaced stride — the
+            // gridlines' job here is to mark where one zone ends and the next begins, not to give
+            // a generic numeric scale.
+            AxisMarks(position: .trailing, values: Self.zoneBoundaries) { _ in
                 AxisGridLine()
                 AxisValueLabel()
             }

@@ -430,21 +430,21 @@ struct WeekViewModelTests {
         #expect(nextWeekPages[0].distanceMeters == 0)
     }
 
-    @Test("timeInZoneByDay() has exactly 7 entries matching weekDates, empty when there's no activity")
-    func timeInZoneByDayHasSevenEmptyEntriesWithNoActivities() async throws {
+    @Test("heartRateHistogram() has no bins and no zone boundaries when there's no activity or zone settings")
+    func heartRateHistogramEmptyWithNoActivities() async throws {
         let (_, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
-        let days = viewModel.timeInZoneByDay()
+        let histogram = viewModel.heartRateHistogram()
 
-        #expect(days.map(\.day) == viewModel.weekDates)
-        #expect(days.allSatisfy { $0.timeInZone.total == 0 })
+        #expect(histogram.bins.isEmpty)
+        #expect(histogram.zoneBoundariesBPM == nil)
     }
 
-    @Test("timeInZoneByDay() sums an activity's heart-rate time in zone onto its own day, not others")
-    func timeInZoneByDaySumsOntoOwnDay() async throws {
+    @Test("heartRateHistogram() bins an activity's heart-rate samples by bpm, with zone boundaries in bpm")
+    func heartRateHistogramBinsActivitySamples() async throws {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
@@ -455,7 +455,8 @@ struct WeekViewModelTests {
         let activityDay = viewModel.displayedWeekStart
         // 30s apart (well under the 60s gap threshold), so the whole 10 minutes forms one
         // continuous segment instead of being excluded as a pause -- same fixture pattern
-        // `ActivityDetailViewModelTests` uses for a heart-rate-scored activity.
+        // `ActivityDetailViewModelTests` uses for a heart-rate-scored activity. A constant 175bpm
+        // keeps every segment's average bpm in the same 3-wide bin, so the total lands in one bin.
         let samples = stride(from: 0, through: 600, by: 30).map {
             HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
         }
@@ -465,16 +466,16 @@ struct WeekViewModelTests {
         try await store.upsert([activity])
         await viewModel.load(asOf: day(0))
 
-        let days = viewModel.timeInZoneByDay()
+        let histogram = viewModel.heartRateHistogram()
 
-        let activityDayEntry = try #require(days.first { $0.day == activityDay })
-        #expect(activityDayEntry.timeInZone.total > 0)
-        // Every other day of the week has no activity, so its time in zone stays empty.
-        #expect(days.filter { $0.day != activityDay }.allSatisfy { $0.timeInZone.total == 0 })
+        let bin = try #require(histogram.bins.first { $0.bpm == 174 })
+        #expect(bin.seconds == 600)
+        #expect(histogram.bins.reduce(0) { $0 + $1.seconds } == 600)
+        #expect(histogram.zoneBoundariesBPM?.count == 6)
     }
 
-    @Test("timeInZoneByDay() invalidates its cache when the displayed week changes")
-    func timeInZoneByDayRecomputesAfterWeekNavigation() async throws {
+    @Test("heartRateHistogram() invalidates its cache when the displayed week changes")
+    func heartRateHistogramRecomputesAfterWeekNavigation() async throws {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
@@ -492,14 +493,14 @@ struct WeekViewModelTests {
         try await store.upsert([activity])
         await viewModel.load(asOf: day(0))
 
-        let firstWeekTotal = viewModel.timeInZoneByDay().reduce(0) { $0 + $1.timeInZone.total }
+        let firstWeekTotal = viewModel.heartRateHistogram().bins.reduce(0) { $0 + $1.seconds }
         #expect(firstWeekTotal > 0)
 
         // Same view model instance -- only `displayedWeekStart` changes. A cache keyed on the
         // wrong thing (or nothing at all) would incorrectly keep returning the first week's data
         // for the next (activity-free) week.
         viewModel.goToNextWeek()
-        let nextWeekTotal = viewModel.timeInZoneByDay().reduce(0) { $0 + $1.timeInZone.total }
+        let nextWeekTotal = viewModel.heartRateHistogram().bins.reduce(0) { $0 + $1.seconds }
 
         #expect(nextWeekTotal == 0)
     }
