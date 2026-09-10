@@ -114,16 +114,21 @@ struct TimeInZoneChartView: View {
     /// the type checker give up elsewhere in this file's history (see git blame); flattening avoids
     /// it here too.
     private struct PerActivityPoint: Identifiable {
-        let activityIndex: Int
+        /// A `String`, not the plain `Int` index — Swift Charts infers a raw `Int`/`Double`
+        /// `foregroundStyle(by:)` domain as a *continuous* (quantitative) scale rather than a
+        /// *discrete* one, which crashed deep inside Charts itself. `FitnessChartView`'s own
+        /// `foregroundStyle(by:)` series (`"Form (raw)"`, `"Form (smoothed)"`, etc.) use `String`
+        /// keys for the same reason.
+        let activitySeriesKey: String
         let bpm: Int
         let minutes: Double
-        var id: String { "\(activityIndex)-\(bpm)" }
+        var id: String { "\(activitySeriesKey)-\(bpm)" }
     }
 
     private var perActivityPoints: [PerActivityPoint] {
         perActivityHistograms.enumerated().flatMap { index, histogram in
             Self.densifiedMinutes(for: histogram, domain: domain).map { point in
-                PerActivityPoint(activityIndex: index, bpm: point.bpm, minutes: point.minutes)
+                PerActivityPoint(activitySeriesKey: "Activity \(index)", bpm: point.bpm, minutes: point.minutes)
             }
         }
     }
@@ -172,10 +177,11 @@ struct TimeInZoneChartView: View {
         if perActivityHistograms.isEmpty {
             chartMarks
         } else {
+            let seriesKeys = perActivityHistograms.indices.map { "Activity \($0)" }
             chartMarks
                 .chartForegroundStyleScale(
-                    domain: Array(0..<perActivityHistograms.count),
-                    range: Array(repeating: Color.gray.opacity(0.5), count: perActivityHistograms.count)
+                    domain: seriesKeys,
+                    range: Array(repeating: Color.gray.opacity(0.5), count: seriesKeys.count)
                 )
         }
     }
@@ -203,13 +209,18 @@ struct TimeInZoneChartView: View {
             // across activities -- without a distinguishing series, Swift Charts sorts every point
             // sharing a style by x and threads them into a single path.
             ForEach(perActivityPoints) { point in
-                LineMark(x: .value("BPM", point.bpm), y: .value("Minutes", point.minutes))
-                    .foregroundStyle(by: .value("Activity", point.activityIndex))
+                // `Double(point.bpm)`, not the plain `Int` — every mark in this chart plots "BPM"
+                // on x (this one, the combined line below, the zone bands, and the percentile
+                // rule), and mixing `Int` and `Double` plot values across marks sharing the same
+                // axis is a documented source of Charts crashing internally on real data; keeping
+                // one consistent type for that role avoids it.
+                LineMark(x: .value("BPM", Double(point.bpm)), y: .value("Minutes", point.minutes))
+                    .foregroundStyle(by: .value("Activity", point.activitySeriesKey))
                     .lineStyle(StrokeStyle(lineWidth: Self.perActivityLineWidth))
                     .interpolationMethod(.catmullRom)
             }
             ForEach(densifiedMinutesByBPM, id: \.bpm) { point in
-                LineMark(x: .value("BPM", point.bpm), y: .value("Minutes", point.minutes))
+                LineMark(x: .value("BPM", Double(point.bpm)), y: .value("Minutes", point.minutes))
                     .foregroundStyle(Color.primary)
                     .lineStyle(StrokeStyle(lineWidth: Self.smoothedLineWidth))
                     .interpolationMethod(.catmullRom)
