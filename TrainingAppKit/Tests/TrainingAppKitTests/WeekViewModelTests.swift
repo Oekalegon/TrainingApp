@@ -430,6 +430,160 @@ struct WeekViewModelTests {
         #expect(nextWeekPages[0].distanceMeters == 0)
     }
 
+    @Test("heartRateHistogram(for:) has no bins and no zone boundaries when there's no activity or zone settings")
+    func heartRateHistogramEmptyWithNoActivities() async throws {
+        let (_, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        await viewModel.refreshWeekCachesIfNeeded()
+
+        let histogram = viewModel.heartRateHistogram(for: viewModel.displayedWeekStart)
+        #expect(histogram.bins.isEmpty)
+        #expect(histogram.zoneBoundariesBPM == nil)
+    }
+
+    @Test("heartRateHistogram(for:) bins an activity's heart-rate samples by bpm, with zone boundaries in bpm")
+    func heartRateHistogramBinsActivitySamples() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activityDay = viewModel.displayedWeekStart
+        // 30s apart (well under the 60s gap threshold), so the whole 10 minutes forms one
+        // continuous segment instead of being excluded as a pause -- same fixture pattern
+        // `ActivityDetailViewModelTests` uses for a heart-rate-scored activity. A constant 175bpm
+        // keeps every segment's average bpm in the same 5-wide bin, so the total lands in one bin.
+        let samples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let activity = Activity(
+            source: .manual, sport: .running, start: activityDay, duration: 600, heartRate: samples
+        )
+        try await store.upsert([activity])
+        // load(asOf:) already recomputes the caches once the activity is loaded (see its own
+        // doc comment) -- no separate refreshWeekCachesIfNeeded() call needed here.
+        await viewModel.load(asOf: day(0))
+
+        let histogram = viewModel.heartRateHistogram(for: viewModel.displayedWeekStart)
+
+        let bin = try #require(histogram.bins.first { $0.bpm == 175 })
+        #expect(bin.seconds == 600)
+        #expect(histogram.bins.reduce(0) { $0 + $1.seconds } == 600)
+        #expect(histogram.zoneBoundariesBPM?.count == 6)
+    }
+
+    @Test("heartRateHistogram(for:) invalidates its cache when the displayed week changes")
+    func heartRateHistogramRecomputesAfterWeekNavigation() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activityDay = viewModel.displayedWeekStart
+        let samples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let activity = Activity(
+            source: .manual, sport: .running, start: activityDay, duration: 600, heartRate: samples
+        )
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let firstWeekTotal = viewModel.heartRateHistogram(for: viewModel.displayedWeekStart)
+            .bins.reduce(0) { $0 + $1.seconds }
+        #expect(firstWeekTotal > 0)
+
+        // Same view model instance -- only `displayedWeekStart` changes. Each week is keyed by its
+        // own `weekStart`, so looking up the (activity-free) next week should never return the
+        // first week's cached data.
+        viewModel.goToNextWeek()
+        await viewModel.refreshWeekCachesIfNeeded()
+        let nextWeekTotal = viewModel.heartRateHistogram(for: viewModel.displayedWeekStart)
+            .bins.reduce(0) { $0 + $1.seconds }
+
+        #expect(nextWeekTotal == 0)
+    }
+
+    @Test("heartRateHistogram(for:) recomputes for the same displayed week once activity count changes")
+    func heartRateHistogramRecomputesAfterActivityCountChanges() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let weekStart = viewModel.displayedWeekStart
+        let firstActivity = Activity(
+            source: .manual, sport: .running, start: weekStart, duration: 600,
+            heartRate: stride(from: 0, through: 600, by: 30).map {
+                HeartRateSample(time: weekStart.addingTimeInterval(TimeInterval($0)), bpm: 175)
+            }
+        )
+        try await store.upsert([firstActivity])
+        await viewModel.load(asOf: day(0))
+
+        let firstTotal = viewModel.heartRateHistogram(for: weekStart).bins.reduce(0) { $0 + $1.seconds }
+        #expect(firstTotal == 600)
+
+        // Same displayed week, no navigation -- only `model.activities.count` changes (as it would
+        // after a pull-to-refresh import). `refreshWeekCachesIfNeeded()`'s own fix (not clearing
+        // the cache synchronously, to avoid a spurious empty-state flash) must still land the
+        // freshly recomputed total here rather than getting stuck on the now-stale first value.
+        let secondActivity = Activity(
+            source: .manual, sport: .running, start: weekStart.addingTimeInterval(3600), duration: 600,
+            heartRate: stride(from: 0, through: 600, by: 30).map {
+                HeartRateSample(time: weekStart.addingTimeInterval(3600 + TimeInterval($0)), bpm: 140)
+            }
+        )
+        try await store.upsert([secondActivity])
+        await viewModel.load(asOf: day(0))
+
+        let secondTotal = viewModel.heartRateHistogram(for: weekStart).bins.reduce(0) { $0 + $1.seconds }
+        #expect(secondTotal == 1200)
+    }
+
+    @Test("heartRateHistogram(for:) prefetches the displayed week's immediate neighbors")
+    func heartRateHistogramPrefetchesNeighboringWeeks() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activityDay = viewModel.displayedWeekStart
+        let nextWeekDay = viewModel.athleteCalendar.date(byAdding: .day, value: 7, to: activityDay)!
+        let samples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let nextWeekSamples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: nextWeekDay.addingTimeInterval(TimeInterval($0)), bpm: 140)
+        }
+        let currentWeekActivity = Activity(
+            source: .manual, sport: .running, start: activityDay, duration: 600, heartRate: samples
+        )
+        let nextWeekActivity = Activity(
+            source: .manual, sport: .running, start: nextWeekDay, duration: 600, heartRate: nextWeekSamples
+        )
+        try await store.upsert([currentWeekActivity, nextWeekActivity])
+        await viewModel.load(asOf: day(0))
+
+        // Still on the first week, but the next week's own histogram should already be cached --
+        // a real navigation to it shouldn't need a fresh async computation.
+        let nextWeekStart = viewModel.athleteCalendar.date(byAdding: .day, value: 7, to: viewModel.displayedWeekStart)!
+        let prefetched = viewModel.heartRateHistogram(for: nextWeekStart)
+
+        #expect(prefetched.bins.reduce(0) { $0 + $1.seconds } > 0)
+    }
+
     @Test("activityDetailViewModel(for:) wires the model's athlete through")
     func activityDetailViewModelUsesModelAthlete() {
         let (_, stores) = makeStores()

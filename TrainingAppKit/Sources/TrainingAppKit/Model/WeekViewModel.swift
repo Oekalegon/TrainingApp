@@ -16,11 +16,29 @@ public final class WeekViewModel {
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
     /// uses, so a card's headline Load number always agrees with the detail sheet's own figure.
     private let statisticsCalculator = StatisticsCalculator()
-    /// Memoizes ``sportStatsPages(asOf:)`` — see that method's own doc comment for why this exists.
-    /// `@ObservationIgnored` since it's a pure implementation-detail cache, not user-facing state;
-    /// writing to it shouldn't itself trigger a view update.
+
+    /// Sport-stats pages, cached per week (keyed by that week's `weekStart`) — see
+    /// ``sportStatsPages(for:asOf:)``'s own doc comment. Not `@ObservationIgnored`: `WeekView`
+    /// reads this indirectly through that method, and needs the read tracked the same way a plain
+    /// stored property's would be.
+    private var sportStatsPagesCaches: [Date: [SportStatsPage]] = [:]
+    /// `(model.activities.count, today)` as of the last time ``sportStatsPagesCaches`` was
+    /// populated — either changing invalidates the whole cache (an import/dedup could change any
+    /// cached week's activities, not just the displayed one, and a new calendar day shifts every
+    /// week's own change-vs-previous-week percentages).
     @ObservationIgnored
-    private var sportStatsPagesCache: (weekStart: Date, activityCount: Int, today: Date, pages: [SportStatsPage])?
+    private var sportStatsPagesCachesKey: (activityCount: Int, today: Date)?
+
+    /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
+    /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
+    /// by ``refreshWeekCachesIfNeeded()``. Not `@ObservationIgnored`, for the same reason as
+    /// ``sportStatsPagesCaches``.
+    private var weekGraphCaches: [Date: HeartRateHistogram] = [:]
+    /// `model.activities.count` as of the last time ``weekGraphCaches`` was populated — see
+    /// ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch invalidates the whole
+    /// cache rather than trying to single out which weeks actually changed.
+    @ObservationIgnored
+    private var weekGraphCachesActivityCount: Int?
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
@@ -85,6 +103,21 @@ public final class WeekViewModel {
     public func weekDates(offsetWeeks weeks: Int) -> [Date] {
         let start = calendar.date(byAdding: .day, value: weeks * 7, to: displayedWeekStart) ?? displayedWeekStart
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+    }
+
+    /// ``displayedWeekStart`` and its immediate neighbors — the window ``sportStatsPagesCaches``/
+    /// ``weekGraphCaches`` keep cached, and the only weeks `WeekView`'s carousel ever shows at once.
+    private var cachedWeekStarts: [Date] {
+        [-7, 0, 7].compactMap { calendar.date(byAdding: .day, value: $0, to: displayedWeekStart) }
+    }
+
+    /// Completed activities in the 7-day week starting `weekStart` (which need not be
+    /// ``displayedWeekStart``), in the same terms ``activities(on:)`` filters a single day by —
+    /// used to compute an arbitrary cached week's own graph data.
+    private func activities(forWeekStarting weekStart: Date) -> [Activity] {
+        (0..<7)
+            .compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) }
+            .flatMap { activities(on: $0) }
     }
 
     /// The 3-week range (the week before, the displayed week, the week after) the chart covers
@@ -162,28 +195,49 @@ public final class WeekViewModel {
     /// main sport's, zero-filled if it had no activity this week), so the pager never has nothing
     /// to show.
     ///
-    /// Memoized on `(displayedWeekStart, model.activities.count, today's calendar day)`: `WeekView`
-    /// calls this from its `weekContent` computed property, which SwiftUI re-evaluates on every
-    /// `@State` change — including every touch-move frame of the *day list*'s own unrelated swipe
-    /// gesture. Without a cache, each of those frames would redundantly re-run two full
-    /// `periodStats` computations (one `LoadCalculator` invocation per activity, each) even though
-    /// neither the displayed week nor the underlying data changed — the same class of freeze this
-    /// codebase already fixed once for the day list itself (MVP1-19).
+    /// Convenience for ``displayedWeekStart``'s own pages — see ``sportStatsPages(for:asOf:)``'s
+    /// own doc comment.
     public func sportStatsPages(asOf today: Date = .now) -> [SportStatsPage] {
-        if let cache = sportStatsPagesCache,
-            cache.weekStart == displayedWeekStart,
-            cache.activityCount == model.activities.count,
-            calendar.isDate(cache.today, inSameDayAs: today) {
-            return cache.pages
+        sportStatsPages(for: displayedWeekStart, asOf: today)
+    }
+
+    /// One page per sport for the given week's stats pager (MVP1-52; design doc: "a weekly overview
+    /// highlighting one sport's duration/distance/TRIMP … above the rest") — ``AthleteProfile/mainSport``
+    /// always first, then every other sport with activity that week, most distance first (ties
+    /// broken alphabetically) for a deterministic order. Always at least one page (the main
+    /// sport's, zero-filled if it had no activity that week), so the pager never has nothing to
+    /// show.
+    ///
+    /// Cached per week (`weekStart`, not just ``displayedWeekStart``): `WeekView` calls this from
+    /// each of its 3 carousel pages' own pinned stats bar, including the previous/next week's,
+    /// which re-evaluate on every touch-move frame of the day list's own swipe gesture just like
+    /// the current page does. Without a cache keyed per week, each of those frames on each page
+    /// would redundantly re-run two full `periodStats` computations (one `LoadCalculator`
+    /// invocation per activity, each) even though neither that page's own week nor the underlying
+    /// data changed — the same class of freeze this codebase already fixed once for the day list
+    /// itself (MVP1-19). The whole cache is invalidated together (not per week) whenever
+    /// `model.activities.count` or `today`'s calendar day changes, since either can shift every
+    /// cached week's own figures at once.
+    public func sportStatsPages(for weekStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
+        let activityCount = model.activities.count
+        let keyIsCurrent = sportStatsPagesCachesKey.map {
+            $0.activityCount == activityCount && calendar.isDate($0.today, inSameDayAs: today)
+        } ?? false
+        if !keyIsCurrent {
+            sportStatsPagesCaches.removeAll()
+            sportStatsPagesCachesKey = (activityCount, today)
         }
-        let pages = computeSportStatsPages(asOf: today)
-        sportStatsPagesCache = (displayedWeekStart, model.activities.count, today, pages)
+        if let cached = sportStatsPagesCaches[weekStart] {
+            return cached
+        }
+        let pages = computeSportStatsPages(weekStart: weekStart, asOf: today)
+        sportStatsPagesCaches[weekStart] = pages
         return pages
     }
 
-    private func computeSportStatsPages(asOf today: Date) -> [SportStatsPage] {
-        let current = periodStats(weekStart: displayedWeekStart, asOf: today)
-        let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: displayedWeekStart) ?? displayedWeekStart
+    private func computeSportStatsPages(weekStart: Date, asOf today: Date) -> [SportStatsPage] {
+        let current = periodStats(weekStart: weekStart, asOf: today)
+        let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
         let previous = periodStats(weekStart: previousWeekStart, asOf: today)
 
         let mainSport = model.athlete.mainSport
@@ -252,6 +306,88 @@ public final class WeekViewModel {
         return summary.load.confidence > 0 ? summary.load.value : nil
     }
 
+    /// `weekStart`'s heart-rate histogram, for the graph panel's "Time in zone" page (MVP1-55) —
+    /// every completed activity in that week's raw heart-rate samples, binned by
+    /// `HeartRateHistogram.aggregating(_:athlete:)`. Empty until ``refreshWeekCachesIfNeeded()``
+    /// has cached `weekStart` — in practice near-instant for ``displayedWeekStart`` and its
+    /// immediate neighbors, which are the only weeks ever prefetched (see that method's own doc
+    /// comment) and so the only ones `WeekView`'s carousel ever asks for.
+    public func heartRateHistogram(for weekStart: Date) -> HeartRateHistogram {
+        weekGraphCaches[weekStart] ?? .empty
+    }
+
+    /// Prefetches (and evicts stale entries from) ``weekGraphCaches`` for ``displayedWeekStart``
+    /// and its immediate neighbors, so paging to a neighboring week almost always finds its graph
+    /// data already cached — computed while the athlete was still looking at a different week —
+    /// instead of needing a fresh async computation on every swipe. Called after every
+    /// load/import/dedup that could change the underlying activities, and by `WeekView` whenever
+    /// ``displayedWeekStart`` changes.
+    ///
+    /// The displayed week itself is computed first, at `.userInitiated` priority, so the graph
+    /// panel actually on screen updates as promptly as possible; its neighbors follow at the
+    /// lower `.utility` priority, so the scheduler still favors the visible week's own work over
+    /// prefetching ones the athlete isn't looking at yet. All still awaited here (structured
+    /// concurrency, not a detached fire-and-forget `Task`) — by the time `WeekView`'s own
+    /// `.task(id: displayedWeekStart)` next has anything else to do, the whole 3-week window is
+    /// settled, and a caller that only cares about the displayed week's own data (already updated
+    /// first) isn't kept waiting by anything else, since `WeekView` never awaits this call itself.
+    ///
+    /// A changed `activityCount` marks every currently cached week stale and due for
+    /// recomputation, but deliberately doesn't clear ``weekGraphCaches`` up front to do that —
+    /// `weekGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
+    /// (synchronously, before this method's first `await`) was visible to `TimeInZoneChartView` as
+    /// a real, if momentary, "no data" state — the displayed week's own chart flashing to its
+    /// empty-state view and back on every week-navigation `.task(id:)` firing that happened to load
+    /// a not-yet-seen neighboring week's activities (changing `activityCount`), even though the
+    /// same chart was on screen, correct, immediately before and after. Leaving the stale entry in
+    /// place until ``cacheWeekGraph(weekStart:priority:)`` overwrites it with a fresh one instead
+    /// shows one (very briefly) outdated frame rather than a spurious empty one — never a
+    /// user-visible difference in practice, since the underlying activities rarely change whichever
+    /// week's own histogram they'd affect this dramatically between one frame and the next.
+    public func refreshWeekCachesIfNeeded() async {
+        let activityCount = model.activities.count
+        let activityCountChanged = weekGraphCachesActivityCount != activityCount
+        if activityCountChanged {
+            weekGraphCachesActivityCount = activityCount
+        }
+        let window = cachedWeekStarts
+        let windowSet = Set(window)
+        weekGraphCaches = weekGraphCaches.filter { windowSet.contains($0.key) }
+
+        let displayedWeekStart = self.displayedWeekStart
+        if activityCountChanged || weekGraphCaches[displayedWeekStart] == nil {
+            await cacheWeekGraph(weekStart: displayedWeekStart, priority: .userInitiated)
+        }
+        for weekStart in window where weekStart != displayedWeekStart
+            && (activityCountChanged || weekGraphCaches[weekStart] == nil) {
+            await cacheWeekGraph(weekStart: weekStart, priority: .utility)
+        }
+    }
+
+    /// Computes one week's heart-rate histogram off the main actor and stores it in
+    /// ``weekGraphCaches``, unless the 3-week window has moved on again by the time it lands (a
+    /// stale result for a week no longer near ``displayedWeekStart`` is simply dropped, not
+    /// cached).
+    private func cacheWeekGraph(weekStart: Date, priority: TaskPriority) async {
+        let activityCount = model.activities.count
+        let weekActivities = activities(forWeekStarting: weekStart)
+        let athlete = model.athlete
+
+        let histogram = await Task.detached(priority: priority) {
+            HeartRateHistogram.aggregating(weekActivities, athlete: athlete)
+        }.value
+        guard isStillCacheable(weekStart, activityCount: activityCount) else { return }
+        weekGraphCaches[weekStart] = histogram
+    }
+
+    /// Whether a background computation for `weekStart` (started when `activityCount` was
+    /// `model.activities.count`) is still worth storing — `false` once either has moved on, since
+    /// the result is now either stale (a subsequent import changed the underlying activities) or
+    /// for a week that's fallen outside the 3-week window this cache keeps.
+    private func isStillCacheable(_ weekStart: Date, activityCount: Int) -> Bool {
+        cachedWeekStarts.contains(weekStart) && activityCount == model.activities.count
+    }
+
     /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day
     /// list's weekday pills (MVP1-39) to highlight today's row.
     public func isToday(_ day: Date, asOf today: Date = .now) -> Bool {
@@ -294,6 +430,7 @@ public final class WeekViewModel {
     /// nothing for the view to reconcile; MVP 1 has no load-failure UI.
     public func load(asOf today: Date = .now) async {
         try? await model.load(in: chartRange, asOf: today)
+        await refreshWeekCachesIfNeeded()
     }
 
     /// Runs a pull-to-refresh import via `refresher`. `TrainingModel.importActivities(from:)`
@@ -304,6 +441,7 @@ public final class WeekViewModel {
         isRefreshing = true
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
+        await refreshWeekCachesIfNeeded()
     }
 
     /// The empty-state "Connect Health data" action (design doc §2.1): requests authorization,
@@ -318,6 +456,7 @@ public final class WeekViewModel {
         } catch {
             return
         }
+        await refreshWeekCachesIfNeeded()
     }
 
     /// The athlete screen's "Force Full Resync" action (design doc §2.3): re-imports every
@@ -330,6 +469,7 @@ public final class WeekViewModel {
         isResyncing = true
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
+        await refreshWeekCachesIfNeeded()
     }
 
     /// The athlete screen's "Deduplicate Activities" action (MVP1-44): removes duplicate
@@ -343,6 +483,7 @@ public final class WeekViewModel {
         isDeduplicating = true
         defer { isDeduplicating = false }
         try? await model.deduplicateActivities(asOf: today)
+        await refreshWeekCachesIfNeeded()
     }
 
     static func calendar(for athlete: AthleteProfile) -> Calendar {

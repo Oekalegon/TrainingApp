@@ -2,19 +2,53 @@ import Charts
 import SwiftUI
 import TrainingCore
 
-/// The 3-week CTL/ATL/TSB trend chart at the top of the week view (design doc §2.1).
+/// The week view's graph panel "Form" page (MVP1-55, design doc §2.1) — the 3-week Form (TSB)
+/// trend, plotted over muted background bands for each `TSBZone`, zone names annotated on the
+/// chart itself rather than in a separate legend. Fitness/Fatigue (CTL/ATL) and daily load moved
+/// to their own pages when the panel became a pager; see `GraphPanelPagerView`/
+/// `DailyLoadChartView`.
 struct FitnessChartView: View {
     let metrics: [FitnessMetrics]
     /// Date range of the week currently visible in the day list (`WeekViewModel.displayedWeekRange`),
-    /// shaded behind the trend lines so the 3-week chart stays visually anchored to whichever week
+    /// shaded behind the trend line so the 3-week chart stays visually anchored to whichever week
     /// the athlete has scrolled to.
     let displayedWeekRange: ClosedRange<Date>
     /// Days after this are projected/estimated rather than actual history (see
-    /// `FitnessMetrics.isProjected`), so the CTL/ATL/TSB lines render dashed past this point.
+    /// `FitnessMetrics.isProjected`), so the Form lines render dashed past this point.
     let today: Date = .now
 
-    /// Dash pattern for the projected/future portion of each CTL/ATL/TSB line.
+    /// Dash pattern for the projected/future portion of both Form lines.
     private static let futureLineStyle = StrokeStyle(dash: [5, 4])
+    private static let rawLineWidth: CGFloat = 1
+    private static let smoothedLineWidth: CGFloat = 3
+
+    /// The visible y-domain, wide enough to show every `TSBZone` as a full band (including a
+    /// sliver of `injuryRisk`/`detraining`, whose own real boundaries are unbounded) rather than
+    /// clipping the outermost ones to a zero-height edge.
+    private static let formDomain: ClosedRange<Double> = -45...40
+
+    /// One `TSBZone`'s band — lower/upper bounds and a muted color to shade it. Mirrors `TSBZone`'s
+    /// own (internal-to-TrainingKit) boundaries with `PlanGuardrails()`'s defaults
+    /// (`minTSBOnRaceDay: 5`, `maxTSBOnRaceDay: 25`) — `AthleteProfile` doesn't carry its own tuned
+    /// guardrails yet, so those defaults are the only ones any athlete in this app actually has.
+    private struct ZoneBand {
+        let lowerBound: Double
+        let upperBound: Double
+        let color: Color
+        let label: String
+    }
+
+    /// The zone boundary values, in ascending order — also where the chart's horizontal gridlines
+    /// and leading axis labels sit, instead of an arbitrary evenly-spaced stride.
+    private static let zoneBoundaries: [Double] = [-30, -10, 5, 25]
+
+    private static let zoneBands: [ZoneBand] = [
+        ZoneBand(lowerBound: formDomain.lowerBound, upperBound: -30, color: .red, label: "Risk"),
+        ZoneBand(lowerBound: -30, upperBound: -10, color: .orange, label: "Training"),
+        ZoneBand(lowerBound: -10, upperBound: 5, color: .yellow, label: "Recovery"),
+        ZoneBand(lowerBound: 5, upperBound: 25, color: .green, label: "Race"),
+        ZoneBand(lowerBound: 25, upperBound: formDomain.upperBound, color: .blue, label: "Rest"),
+    ]
 
     private var pastPoints: [FitnessMetrics] {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).past
@@ -24,135 +58,139 @@ struct FitnessChartView: View {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).future
     }
 
-    private var dailyLoads: [DailyLoad] {
-        DailyLoad.aggregating(metrics)
-    }
-
-    /// Daily TRIMP load is a raw per-day value while CTL/ATL are smoothed moving averages of it,
-    /// so a single heavy training day can be several times larger than the smoothed lines. It's
-    /// drawn on its own trailing y-axis (rather than sharing the CTL/ATL/TSB domain) so a load
-    /// spike doesn't visually flatten the trend lines.
-    private var loadDomain: ClosedRange<Double> {
-        let maxLoad = dailyLoads.map(\.load).max() ?? 0
-        return 0...max(maxLoad * 1.1, 1)
-    }
-
-    /// Explicit x-domain shared by both overlaid charts, derived only from `metrics` — never from
-    /// `displayedWeekRange`. Without this, the line chart's auto-inferred domain could stretch to
-    /// include the RectangleMark's dates while the point chart's domain (which has no
-    /// RectangleMark) would not, misaligning the TRIMP dots against the CTL/ATL/TSB lines they're
-    /// meant to sit on. In practice `displayedWeekRange` is always the middle third of `metrics`'
-    /// own range, so this is a safety net rather than something normally exercised.
     private var dayDomain: ClosedRange<Date> {
-        guard let first = metrics.first?.day, let last = metrics.last?.day else {
-            let now = Date()
-            return now...now
+        ChartDayDomain.range(for: metrics)
+    }
+
+    // Split out of `body` (each as its own `@ChartContentBuilder` property) rather than inlined
+    // directly in one `Chart { ... }` block: with every zone band, the week-highlight rectangle,
+    // and four `LineMark` series (raw/smoothed × past/future) all in one expression, the compiler
+    // was unable to type-check `body` in reasonable time — the same class of timeout
+    // `TimeInZoneChartView` hit, fixed the same way there (see its own comment).
+    @ChartContentBuilder
+    private var zoneBandMarks: some ChartContent {
+        ForEach(Self.zoneBands, id: \.label) { band in
+            RectangleMark(
+                yStart: .value("Lower", band.lowerBound),
+                yEnd: .value("Upper", band.upperBound)
+            )
+            .foregroundStyle(band.color.opacity(0.12))
         }
-        return first...last
+    }
+
+    @ChartContentBuilder
+    private var weekHighlightMark: some ChartContent {
+        RectangleMark(
+            xStart: .value("Week start", displayedWeekRange.lowerBound),
+            xEnd: .value("Week end", displayedWeekRange.upperBound)
+        )
+        .foregroundStyle(Color.primary.opacity(0.1))
+    }
+
+    /// The thin grey line follows the exact TSB values (linear interpolation, one segment per
+    /// day); the thick white line (`smoothedLineMarks`) traces the same values through a smoothed
+    /// (Catmull-Rom) spline — two views onto one series, not two different metrics.
+    @ChartContentBuilder
+    private var rawLineMarks: some ChartContent {
+        ForEach(pastPoints, id: \.day) { point in
+            LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                .foregroundStyle(by: .value("Series", "Form (raw)"))
+                .lineStyle(StrokeStyle(lineWidth: Self.rawLineWidth))
+                .interpolationMethod(.linear)
+        }
+        ForEach(futurePoints, id: \.day) { point in
+            LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                .foregroundStyle(by: .value("Series", "Form (raw) (projected)"))
+                .lineStyle(StrokeStyle(lineWidth: Self.rawLineWidth, dash: Self.futureLineStyle.dash))
+                .interpolationMethod(.linear)
+        }
+    }
+
+    @ChartContentBuilder
+    private var smoothedLineMarks: some ChartContent {
+        ForEach(pastPoints, id: \.day) { point in
+            LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                .foregroundStyle(by: .value("Series", "Form (smoothed)"))
+                .lineStyle(StrokeStyle(lineWidth: Self.smoothedLineWidth))
+                .interpolationMethod(.catmullRom)
+        }
+        ForEach(futurePoints, id: \.day) { point in
+            LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
+                .foregroundStyle(by: .value("Series", "Form (smoothed) (projected)"))
+                .lineStyle(StrokeStyle(lineWidth: Self.smoothedLineWidth, dash: Self.futureLineStyle.dash))
+                .interpolationMethod(.catmullRom)
+        }
     }
 
     var body: some View {
-        ZStack {
-            Chart {
-                RectangleMark(
-                    xStart: .value("Week start", displayedWeekRange.lowerBound),
-                    xEnd: .value("Week end", displayedWeekRange.upperBound)
-                )
-                .foregroundStyle(Color.primary.opacity(0.1))
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Form")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
 
-                ForEach(pastPoints, id: \.day) { point in
-                    LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
-                        .foregroundStyle(by: .value("Series", "Fitness (CTL)"))
-                    LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
-                        .foregroundStyle(by: .value("Series", "Fatigue (ATL)"))
-                    LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
-                        .foregroundStyle(by: .value("Series", "Form (TSB)"))
-                }
-
-                ForEach(futurePoints, id: \.day) { point in
-                    LineMark(x: .value("Day", point.day), y: .value("CTL", point.ctl))
-                        .foregroundStyle(by: .value("Series", "Fitness (CTL) (projected)"))
-                        .lineStyle(Self.futureLineStyle)
-                    LineMark(x: .value("Day", point.day), y: .value("ATL", point.atl))
-                        .foregroundStyle(by: .value("Series", "Fatigue (ATL) (projected)"))
-                        .lineStyle(Self.futureLineStyle)
-                    LineMark(x: .value("Day", point.day), y: .value("TSB", point.tsb))
-                        .foregroundStyle(by: .value("Series", "Form (TSB) (projected)"))
-                        .lineStyle(Self.futureLineStyle)
-                }
-            }
-            .chartForegroundStyleScale([
-                "Fitness (CTL)": Color.blue,
-                "Fatigue (ATL)": Color.orange,
-                "Form (TSB)": Color.green,
-                // Distinct series keys from the solid segments above — Swift Charts merges
-                // LineMarks sharing the same foregroundStyle(by:) value into one continuous
-                // stroked path, so the dashed future segment needs its own key (mapped to the
-                // same color here) or its .lineStyle() gets silently discarded in favor of the
-                // solid segment's style.
-                "Fitness (CTL) (projected)": Color.blue,
-                "Fatigue (ATL) (projected)": Color.orange,
-                "Form (TSB) (projected)": Color.green,
-            ])
-            .chartXScale(domain: dayDomain)
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .day, count: 7)) { _ in
-                    AxisGridLine()
-                    AxisTick()
-                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                }
-            }
-            // The load chart below is the only one with a labeled y-axis. Left unhidden, Charts'
-            // own default leading axis for this chart would sit at the same position as the load
-            // axis (both charts share this frame) — invisible right now only because CTL/ATL/TSB
-            // are all reading 0 (MVP1-21), coincidentally matching the load axis's own domain.
-            .chartYAxis(.hidden)
-            .chartLegend(.hidden)
-
-            Chart(dailyLoads, id: \.day) { point in
-                PointMark(x: .value("Day", point.day), y: .value("TRIMP", point.load))
-                    .foregroundStyle(by: .value("Series", "Daily load (TRIMP)"))
-                    .symbolSize(20)
-            }
-            .chartForegroundStyleScale(["Daily load (TRIMP)": Color.red])
-            .chartXScale(domain: dayDomain)
-            .chartYScale(domain: loadDomain)
-            .chartYAxis {
-                // Leading (not trailing/right), since the CTL/ATL/TSB lines' rightmost points sit
-                // right at the plot's trailing edge — a trailing axis collided with them there,
-                // most visibly with the TSB line.
-                AxisMarks(position: .leading)
-            }
-            .chartXAxis(.hidden)
-            .chartLegend(.hidden)
+            chart
         }
-        .frame(height: 180)
-        .padding(.horizontal)
-
-        HStack(spacing: 12) {
-            // Icon/color for each metric come from `TrainingMetricKind`, the same mapping the day
-            // list's metric pills (MVP1-40) use — so a metric reads as the same icon whether it's
-            // here or beside a weekday row. The title stays chart-specific ("Daily load", not
-            // `TrainingMetricKind.load.name`'s plain "Load"), since this legend labels an axis/
-            // series rather than one day's pill.
-            legendEntry("Fitness", .fitness)
-            legendEntry("Fatigue", .fatigue)
-            legendEntry("Form", .form)
-            legendEntry("Daily load", .load)
-        }
-        .font(.caption)
-        .padding(.horizontal)
     }
 
-    private func legendEntry(_ title: String, _ kind: TrainingMetricKind) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: kind.icon)
-                .foregroundStyle(kind.color)
-                // The visible Text right after it already carries the meaning — without this,
-                // VoiceOver announces the icon's own SF Symbol name first (e.g. "battery 100
-                // percent") immediately before "Fitness", which reads as redundant/confusing.
-                .accessibilityHidden(true)
-            Text(title)
+    private var chart: some View {
+        Chart {
+            zoneBandMarks
+            weekHighlightMark
+            rawLineMarks
+            smoothedLineMarks
         }
+        // `.primary`/`.secondary`, not literal `.white`/`.gray`: those didn't adapt to the color
+        // scheme, so the "white" smoothed line disappeared against this chart's own white
+        // background in light mode instead of reading as black there.
+        .chartForegroundStyleScale([
+            "Form (raw)": Color.secondary,
+            "Form (smoothed)": Color.primary,
+            // Distinct series keys from the solid segments above, mapped to the same colors —
+            // Swift Charts merges LineMarks sharing the same foregroundStyle(by:) value into one
+            // continuous stroked path, so each dashed future segment needs its own key or its
+            // .lineStyle() gets silently discarded in favor of the solid segment's style.
+            "Form (raw) (projected)": Color.secondary,
+            "Form (smoothed) (projected)": Color.primary,
+        ])
+        .chartXScale(domain: dayDomain)
+        .chartYScale(domain: Self.formDomain)
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+            }
+        }
+        .chartYAxis {
+            // Trailing, alongside the zone names (see .chartOverlay below) — both now read on the
+            // right. Only at the zone boundaries, not an arbitrary evenly-spaced stride — the
+            // gridlines' job here is to mark where one zone ends and the next begins, not to give
+            // a generic numeric scale.
+            AxisMarks(position: .trailing, values: Self.zoneBoundaries) { _ in
+                AxisGridLine()
+                AxisValueLabel()
+            }
+        }
+        .chartLegend(.hidden)
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                if let plotFrame = proxy.plotFrame {
+                    let plotArea = geometry[plotFrame]
+                    ForEach(Self.zoneBands, id: \.label) { band in
+                        let midValue = (band.lowerBound + band.upperBound) / 2
+                        if let y = proxy.position(forY: midValue) {
+                            Text(band.label)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 70, alignment: .trailing)
+                                .position(x: plotArea.maxX - 38, y: plotArea.minY + y)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: 172)
+        .padding(.horizontal)
     }
 }
