@@ -162,7 +162,25 @@ struct TimeInZoneChartView: View {
         }
     }
 
+    /// Split out of `chart` so `.chartForegroundStyleScale(domain:range:)` (below) can be applied
+    /// conditionally: passing it an empty `domain`/`range` — which happens whenever
+    /// `perActivityHistograms` is still empty, e.g. every render before its first async load
+    /// completes — crashes deep inside Charts itself (an `EXC_BREAKPOINT` in Charts' own internal
+    /// scale setup, not a Swift-level precondition with a useful message).
+    @ViewBuilder
     private var chart: some View {
+        if perActivityHistograms.isEmpty {
+            chartMarks
+        } else {
+            chartMarks
+                .chartForegroundStyleScale(
+                    domain: Array(0..<perActivityHistograms.count),
+                    range: Array(repeating: Color.gray.opacity(0.5), count: perActivityHistograms.count)
+                )
+        }
+    }
+
+    private var chartMarks: some View {
         Chart {
             ForEach(zoneBands, id: \.label) { band in
                 RectangleMark(
@@ -197,10 +215,6 @@ struct TimeInZoneChartView: View {
                     .interpolationMethod(.catmullRom)
             }
         }
-        .chartForegroundStyleScale(
-            domain: Array(0..<perActivityHistograms.count),
-            range: Array(repeating: Color.gray.opacity(0.5), count: perActivityHistograms.count)
-        )
         .chartXScale(domain: domain)
         .chartXAxis {
             AxisMarks { _ in
