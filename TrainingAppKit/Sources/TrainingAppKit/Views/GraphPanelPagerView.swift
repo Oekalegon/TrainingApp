@@ -14,17 +14,27 @@ struct GraphPanelPagerView: View {
     let metrics: [FitnessMetrics]
     let displayedWeekRange: ClosedRange<Date>
     let timeInZoneByDay: [DayTimeInZone]
-    /// Owned by `WeekView`, not this view's own `@State`: the current carousel page is torn down
-    /// and rebuilt with a fresh identity on every week change (`.id(dates.first)`, needed to reset
-    /// the day list's own scroll position) and can also be recycled by the enclosing `LazyVStack`
-    /// during scrolling — either would silently reset a plain `@State` back to page 0. Living on
-    /// `WeekView` instead means the selected page survives both.
-    @Binding var selectedIndex: Int
+    /// Called whenever the page changes, so `WeekView` can remember it across a week change or a
+    /// scroll-triggered recycle (see `selectedIndex`'s own doc comment for why this is a one-way
+    /// callback rather than a `@Binding`).
+    let onSelectedIndexChange: (Int) -> Void
+
+    /// Local `@State`, seeded from `initialSelectedIndex` at init — not a `@Binding` to a value
+    /// `WeekView` owns, even though the selection does need to survive this view being torn down
+    /// and rebuilt (a week change gives the current carousel page a fresh `.id(dates.first)`
+    /// identity, needed to reset the day list's own scroll position; the enclosing `LazyVStack` can
+    /// also recycle this view during scrolling). A `@Binding` sourced from `WeekView`'s own `@State`
+    /// was tried first: since `WeekView.body` re-evaluates on every drag-gesture callback (other
+    /// `@State` there changes too, e.g. `graphPanelFrame`), each recomputes a *new* `Binding` value
+    /// for this property, and passing a newly-constructed `Binding` on every render made SwiftUI
+    /// tear down and rebuild this view's own `DragGesture` recognizer just as often — the gesture
+    /// recognized exactly one swipe, then stopped responding to any further touches, having been
+    /// silently replaced by a fresh, un-armed recognizer after that first swipe's own state update.
+    /// A local `@State`, written back out through `onSelectedIndexChange` instead, keeps the
+    /// recognizer's identity — and so its ability to keep recognizing new gestures — stable.
+    @State private var selectedIndex: Int
     /// Tracks the finger during a drag, on top of `selectedIndex`'s base position — 0 while idle,
-    /// same role as `WeekView.dragOffset`/`SportStatsPagerView.dragOffset`. Fine to keep as local
-    /// `@State`, unlike `selectedIndex`: it's meaningless outside an in-progress gesture, so losing
-    /// it to a page rebuild mid-navigation (there's never a gesture in flight when that happens)
-    /// isn't observable.
+    /// same role as `WeekView.dragOffset`/`SportStatsPagerView.dragOffset`.
     @State private var dragOffset: CGFloat = 0
 
     private static let pageCount = 3
@@ -35,6 +45,20 @@ struct GraphPanelPagerView: View {
     /// side by side in an `HStack`, don't otherwise report one shared height upward the way a
     /// single view would.
     private static let panelHeight: CGFloat = 190
+
+    init(
+        metrics: [FitnessMetrics],
+        displayedWeekRange: ClosedRange<Date>,
+        timeInZoneByDay: [DayTimeInZone],
+        initialSelectedIndex: Int,
+        onSelectedIndexChange: @escaping (Int) -> Void
+    ) {
+        self.metrics = metrics
+        self.displayedWeekRange = displayedWeekRange
+        self.timeInZoneByDay = timeInZoneByDay
+        self.onSelectedIndexChange = onSelectedIndexChange
+        _selectedIndex = State(initialValue: initialSelectedIndex)
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -74,6 +98,7 @@ struct GraphPanelPagerView: View {
                                 }
                                 dragOffset = 0
                             }
+                            onSelectedIndexChange(selectedIndex)
                         }
                 )
             }
@@ -104,9 +129,11 @@ struct GraphPanelPagerView: View {
             case .increment:
                 guard selectedIndex < Self.pageCount - 1 else { return }
                 withAnimation(Self.pageChangeAnimation) { selectedIndex += 1 }
+                onSelectedIndexChange(selectedIndex)
             case .decrement:
                 guard selectedIndex > 0 else { return }
                 withAnimation(Self.pageChangeAnimation) { selectedIndex -= 1 }
+                onSelectedIndexChange(selectedIndex)
             @unknown default:
                 break
             }

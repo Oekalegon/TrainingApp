@@ -75,14 +75,21 @@ public struct WeekView: View {
     /// `minHeight` so the timeline connector still reaches the bottom of a short week. See
     /// `weekPageHeader`'s `.onGeometryChange` for where this is measured.
     @State private var statsBarHeight: CGFloat = 0
-    /// The graph panel's currently selected page — owned here, not by `GraphPanelPagerView` itself,
-    /// so it survives both a week change (the current carousel page gets a fresh `.id(dates.first)`
-    /// identity, needed to reset the day list's own scroll position) and the enclosing `LazyVStack`
-    /// recycling the panel during scrolling. See `GraphPanelPagerView.selectedIndex`'s own doc
-    /// comment.
+    /// The graph panel's currently selected page — kept here too (in addition to
+    /// `GraphPanelPagerView`'s own local `@State`) purely as a safety net: `GraphPanelPagerView`
+    /// itself no longer gets torn down and rebuilt on a week change (see `weekPage`'s own doc
+    /// comment on why `.id(dates.first)` was dropped), so its local `@State` already survives that
+    /// on its own, but this still guards against the (currently untriggered, but not impossible)
+    /// case of the enclosing `LazyVStack` recycling the panel during scrolling. See
+    /// `GraphPanelPagerView.selectedIndex`'s own doc comment for why this is a one-way callback
+    /// (`GraphPanelPagerView.onSelectedIndexChange`), not a `@Binding`.
     @State private var graphPanelSelectedIndex = 0
 
     private static let weekChangeAnimation: Animation = .easeInOut(duration: 0.25)
+    /// The scroll anchor `weekPage`'s `ScrollViewReader` scrolls back to on a week change — see
+    /// that call site's own doc comment for why an explicit `scrollTo` replaced `.id(dates.first)`
+    /// forcing a fresh `ScrollView`.
+    private static let weekPageTopID = "WeekView.weekPageTop"
     /// Fraction of the page width a drag needs to clear, at release, to commit to the next/
     /// previous week rather than springing back.
     private static let commitThreshold: CGFloat = 0.3
@@ -300,15 +307,35 @@ public struct WeekView: View {
     private func weekPage(for dates: [Date], pageHeight: CGFloat, isCurrentPage: Bool) -> some View {
         Group {
             if isCurrentPage {
-                ScrollView {
-                    weekPageContent(for: dates, pageHeight: pageHeight, isCurrentPage: true)
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        weekPageContent(for: dates, pageHeight: pageHeight, isCurrentPage: true)
+                            .id(Self.weekPageTopID)
+                    }
+                    .refreshable {
+                        await viewModel.refresh()
+                    }
+                    // Locked for the duration of a horizontal swipe (see `isDraggingHorizontally`),
+                    // so a committed horizontal drag can't also scroll the page underneath it.
+                    .scrollDisabled(isDraggingHorizontally)
+                    // Explicit scroll-to-top on a week change, not `.id(dates.first)` forcing a
+                    // fresh `ScrollView` (this page's own previous approach, and still `weekPage`'s
+                    // pattern before MVP1-55): tearing the `ScrollView` down and rebuilding it while
+                    // `completeSwipe`'s own `withAnimation` (on the *ancestor* `weekContent` HStack)
+                    // was still resolving left `GraphPanelPagerView`'s freshly-remounted drag
+                    // gesture permanently unable to recognize any further touches — a `ScrollView`
+                    // that's never torn down doesn't have that failure mode, and this reaches the
+                    // same "start the new week scrolled to the top" result without it.
+                    .onChange(of: dates.first) { _, _ in
+                        // Deferred a tick, not called directly: `weekPageContent`'s own layout for
+                        // the new `dates` hasn't necessarily finished by the time this fires in the
+                        // same update as the data change, and `scrollTo` acting on the still-stale
+                        // geometry silently did nothing.
+                        DispatchQueue.main.async {
+                            scrollProxy.scrollTo(Self.weekPageTopID, anchor: .top)
+                        }
+                    }
                 }
-                .refreshable {
-                    await viewModel.refresh()
-                }
-                // Locked for the duration of a horizontal swipe (see `isDraggingHorizontally`), so
-                // a committed horizontal drag can't also scroll the page underneath it.
-                .scrollDisabled(isDraggingHorizontally)
             } else {
                 // No ScrollView: this page is only ever glimpsed mid-drag, so it's pinned to its
                 // resting (scrolled-to-top) appearance and clipped to the visible page bounds.
@@ -317,13 +344,6 @@ public struct WeekView: View {
                     .clipped()
             }
         }
-        // Without this, each of the three carousel slots keeps the same underlying view identity
-        // (and thus scroll position, for the current page) across weeks, since only its row data
-        // changes -- scrolling down in one week would leave the next week's content scrolled to the
-        // same offset instead of starting at the top. Keying on the week's first date forces a
-        // fresh view (and so a reset scroll position) exactly when the week actually changes, not
-        // on every unrelated re-render.
-        .id(dates.first)
         // Same reasoning as `.scrollDisabled` above, for taps: without this, a horizontal swipe
         // that starts on an `ActivityRow`/`PlannedActivityRow` button still recognizes as a tap on
         // release and opens the activity detail sheet in addition to paging the week.
@@ -350,7 +370,8 @@ public struct WeekView: View {
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
                 timeInZoneByDay: viewModel.timeInZoneByDay(),
-                selectedIndex: $graphPanelSelectedIndex
+                initialSelectedIndex: graphPanelSelectedIndex,
+                onSelectedIndexChange: { graphPanelSelectedIndex = $0 }
             )
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
