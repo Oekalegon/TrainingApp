@@ -50,19 +50,6 @@ struct TimeInZoneChartView: View {
         let label: String
     }
 
-    /// A provisional cool-to-hot ramp, distinct from `TrainingMetricKind`'s own colors — heart-rate
-    /// zone names/colors proper are still backlog (MVP1-54); this stands in until that ticket
-    /// assigns real ones.
-    private static func color(forZone zone: Int) -> Color {
-        switch zone {
-        case 1: .blue
-        case 2: .green
-        case 3: .yellow
-        case 4: .orange
-        default: .red
-        }
-    }
-
     /// The athlete's zone 1–5 range, padded by ``domainPadding`` on each side — see that
     /// property's own doc comment for why this doesn't also widen to fit the actual recorded data.
     private var domain: ClosedRange<Double> {
@@ -74,13 +61,15 @@ struct TimeInZoneChartView: View {
 
     private var zoneBands: [ZoneBand] {
         guard let boundaries = histogram.zoneBoundariesBPM, boundaries.count == 6 else { return [] }
-        let labels = ["Z1", "Z2", "Z3", "Z4", "Z5"]
-        return (0..<5).map { index in
-            ZoneBand(
+        return HeartRateZone.allCases.map { zone in
+            let index = zone.rawValue - 1
+            return ZoneBand(
                 lowerBound: boundaries[index],
                 upperBound: boundaries[index + 1],
-                color: Self.color(forZone: index + 1),
-                label: labels[index]
+                color: zone.color,
+                // Short "Z1"-style label, not `zone.displayName` — this annotates a narrow band
+                // directly on the chart, where a full name like "Threshold" wouldn't fit.
+                label: "Z\(zone.rawValue)"
             )
         }
     }
