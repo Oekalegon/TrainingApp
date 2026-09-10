@@ -43,6 +43,25 @@ struct HeartRateHistogramTests {
         #expect(histogram.percentileBPM(0.5) == 142.5)
     }
 
+    @Test("percentileBPM(_:) excludes time below zone 1's lower bound, but not time above zone 5's upper bound")
+    func percentileBPMExcludesBelowZone1() {
+        let histogram = HeartRateHistogram(
+            bins: [
+                // Below zone 1 (recovery/warmup) -- shouldn't count toward the total at all.
+                HeartRateHistogramBin(bpm: 80, seconds: 1000 * 60),
+                HeartRateHistogramBin(bpm: 100, seconds: 80 * 60),
+                // Above zone 5's upper bound (190) -- still counts, same as any other in-zone bin.
+                HeartRateHistogramBin(bpm: 195, seconds: 20 * 60),
+            ],
+            binWidth: 5,
+            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
+        )
+        // Of the in-zone 100 minutes (80 at 100bpm, 20 at 195bpm), the 80th percentile lands right
+        // at the boundary between the two -- same shape as `percentileBPMInterpolatesWithinBin`,
+        // just with the below-zone-1 bin (which would otherwise dominate the total) excluded.
+        #expect(histogram.percentileBPM(0.8) == 105)
+    }
+
     @Test("aggregating(_:athlete:) skips gaps longer than gapThresholdSeconds")
     func aggregatingSkipsLongGaps() {
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")

@@ -331,10 +331,23 @@ public final class WeekViewModel {
     /// `.task(id: displayedWeekStart)` next has anything else to do, the whole 3-week window is
     /// settled, and a caller that only cares about the displayed week's own data (already updated
     /// first) isn't kept waiting by anything else, since `WeekView` never awaits this call itself.
+    ///
+    /// A changed `activityCount` marks every currently cached week stale and due for
+    /// recomputation, but deliberately doesn't clear ``weekGraphCaches`` up front to do that —
+    /// `weekGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
+    /// (synchronously, before this method's first `await`) was visible to `TimeInZoneChartView` as
+    /// a real, if momentary, "no data" state — the displayed week's own chart flashing to its
+    /// empty-state view and back on every week-navigation `.task(id:)` firing that happened to load
+    /// a not-yet-seen neighboring week's activities (changing `activityCount`), even though the
+    /// same chart was on screen, correct, immediately before and after. Leaving the stale entry in
+    /// place until ``cacheWeekGraph(weekStart:priority:)`` overwrites it with a fresh one instead
+    /// shows one (very briefly) outdated frame rather than a spurious empty one — never a
+    /// user-visible difference in practice, since the underlying activities rarely change whichever
+    /// week's own histogram they'd affect this dramatically between one frame and the next.
     public func refreshWeekCachesIfNeeded() async {
         let activityCount = model.activities.count
-        if weekGraphCachesActivityCount != activityCount {
-            weekGraphCaches.removeAll()
+        let activityCountChanged = weekGraphCachesActivityCount != activityCount
+        if activityCountChanged {
             weekGraphCachesActivityCount = activityCount
         }
         let window = cachedWeekStarts
@@ -342,10 +355,11 @@ public final class WeekViewModel {
         weekGraphCaches = weekGraphCaches.filter { windowSet.contains($0.key) }
 
         let displayedWeekStart = self.displayedWeekStart
-        if weekGraphCaches[displayedWeekStart] == nil {
+        if activityCountChanged || weekGraphCaches[displayedWeekStart] == nil {
             await cacheWeekGraph(weekStart: displayedWeekStart, priority: .userInitiated)
         }
-        for weekStart in window where weekStart != displayedWeekStart && weekGraphCaches[weekStart] == nil {
+        for weekStart in window where weekStart != displayedWeekStart
+            && (activityCountChanged || weekGraphCaches[weekStart] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
     }

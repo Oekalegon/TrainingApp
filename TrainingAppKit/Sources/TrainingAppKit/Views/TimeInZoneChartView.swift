@@ -29,28 +29,19 @@ struct TimeInZoneChartView: View {
     /// the 80/20 polarized-training threshold's supporting role — it marks a reference point on
     /// the histogram, not a second series competing with it.
     private static let percentileLineWidth: CGFloat = 1
-    /// Padding (in bpm) added on either side of the athlete's zone 1–5 range, so the lowest/
-    /// highest zone don't get clipped to a zero-width sliver at the domain's own edge — mirrors
-    /// `FitnessChartView.formDomain`'s own padding around its zone boundaries. Purely cosmetic
-    /// breathing room around the zone bands, not runway for the smoothed line to decay through —
-    /// see ``recordedDataPadding`` for that.
-    private static let domainPadding: Double = 6
+    /// Padding (in bpm) added below zone 1's lower bound and above zone 5's upper bound — the
+    /// histogram is deliberately scoped to the zones themselves (design intent: this is a "time in
+    /// zone" chart, not a general heart-rate distribution), not widened to fit whatever the actual
+    /// recorded data happens to span. Also doubles as the density-filled runway
+    /// `.interpolationMethod(.catmullRom)` needs to visibly decay to zero before the domain's own
+    /// edge, rather than still reading as a non-zero value right at the boundary: a spline fit
+    /// through the zero-filled points beyond the real data (see `densifiedMinutesByBPM`) needs
+    /// several of them to flatten out before the edge is reached, and at the default 5bpm bin
+    /// width this gives it three.
+    private static let domainPadding: Double = 15
     /// Domain used when the athlete has no resolvable heart-rate zones at all (so there's no
     /// zone-boundary-based domain to fall back to) and the histogram itself has no bins yet.
     private static let fallbackDomain: ClosedRange<Double> = 60...200
-
-    /// How far beyond the actual min/max recorded bpm the domain needs to extend for
-    /// `.interpolationMethod(.catmullRom)` to visibly decay to zero before the edge, rather than
-    /// still reading as a non-zero value right at the boundary. A spline is fit through *all* of
-    /// the series' points, including the density-filled zero ones beyond the real data (see
-    /// `densifiedMinutes(for:domain:)`); with only one such zero point before the edge, the curve
-    /// is still easing toward it rather than having leveled out, which at the domain's own edge
-    /// reads as the real data being clipped even though every actual recorded bin is inside the
-    /// domain. Three bins' worth gives the spline enough points to flatten out before the edge is
-    /// reached.
-    private var recordedDataPadding: Double {
-        Double(histogram.binWidth) * 3
-    }
 
     private struct ZoneBand {
         let lowerBound: Double
@@ -72,26 +63,13 @@ struct TimeInZoneChartView: View {
         }
     }
 
-    /// The zone-based range (zone 1's lower bound through zone 5's upper, padded) widened to also
-    /// fully contain every bin with actual recorded time, in either direction — real heart-rate
-    /// data routinely dips below zone 1 (warmup, cool-down, rest between intervals) or reaches
-    /// above zone 5 (a hard effort at max heart rate), and a domain sized only to the *athlete's*
-    /// zone boundaries clipped that real data at both edges instead of showing it taper to zero.
+    /// The athlete's zone 1–5 range, padded by ``domainPadding`` on each side — see that
+    /// property's own doc comment for why this doesn't also widen to fit the actual recorded data.
     private var domain: ClosedRange<Double> {
-        var range = histogram.zoneBoundariesBPM.flatMap { boundaries -> ClosedRange<Double>? in
-            guard let lower = boundaries.first, let upper = boundaries.last else { return nil }
-            return (lower - Self.domainPadding)...(upper + Self.domainPadding)
-        } ?? Self.fallbackDomain
-
-        let padding = recordedDataPadding
-        let recordedBins = histogram.bins.filter { $0.seconds > 0 }
-        if let minBPM = recordedBins.map(\.bpm).min() {
-            range = min(range.lowerBound, Double(minBPM) - padding)...range.upperBound
-        }
-        if let maxBPM = recordedBins.map(\.bpm).max() {
-            range = range.lowerBound...max(range.upperBound, Double(maxBPM + histogram.binWidth) + padding)
-        }
-        return range
+        guard let boundaries = histogram.zoneBoundariesBPM,
+            let lower = boundaries.first, let upper = boundaries.last
+        else { return Self.fallbackDomain }
+        return (lower - Self.domainPadding)...(upper + Self.domainPadding)
     }
 
     private var zoneBands: [ZoneBand] {

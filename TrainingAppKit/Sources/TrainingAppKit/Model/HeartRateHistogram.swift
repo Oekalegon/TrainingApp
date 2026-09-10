@@ -63,15 +63,25 @@ public struct HeartRateHistogram: Sendable {
         )
     }
 
-    /// The bpm below which `fraction` of the histogram's total time falls — e.g. `percentileBPM(0.8)`
-    /// is the heart rate marking Seiler's 80/20 polarized-training threshold, the light-gray
-    /// vertical line `TimeInZoneChartView` draws. Interpolates linearly within whichever bin's
-    /// cumulative time first reaches `fraction` of the total, rather than snapping to that bin's
-    /// own (`binWidth`-wide) edge. `nil` when the histogram has no time recorded at all.
+    /// The bpm below which `fraction` of the histogram's *in-zone* time falls — e.g.
+    /// `percentileBPM(0.8)` is the heart rate marking Seiler's 80/20 polarized-training threshold,
+    /// the light-gray vertical line `TimeInZoneChartView` draws. Interpolates linearly within
+    /// whichever bin's cumulative time first reaches `fraction` of the total, rather than snapping
+    /// to that bin's own (`binWidth`-wide) edge. `nil` when the histogram has no in-zone time
+    /// recorded at all.
+    ///
+    /// Bins below `zoneBoundariesBPM`'s own Z1 lower bound (recovery heart rate, below the lowest
+    /// zone Seiler's 80/20 split is even defined over) are excluded — without `zoneBoundariesBPM`
+    /// (no resolvable zone settings), every bin counts. Nothing above the Z5 upper bound is
+    /// excluded: `HeartRateZoneModel` bounds Z5 at the athlete's max heart rate, but a real sensor
+    /// reading above that recorded max still belongs to "at or above Z5", not some undefined sixth
+    /// zone, so it counts the same as any other in-zone time.
     public func percentileBPM(_ fraction: Double) -> Double? {
-        let total = bins.reduce(0) { $0 + $1.seconds }
+        let lowerBound = zoneBoundariesBPM?.first
+        let inZoneBins = bins.filter { bin in lowerBound.map { Double(bin.bpm) >= $0 } ?? true }
+        let total = inZoneBins.reduce(0) { $0 + $1.seconds }
         guard total > 0 else { return nil }
-        let sorted = bins.sorted { $0.bpm < $1.bpm }
+        let sorted = inZoneBins.sorted { $0.bpm < $1.bpm }
         let target = total * fraction
         var cumulative: TimeInterval = 0
         for bin in sorted {
