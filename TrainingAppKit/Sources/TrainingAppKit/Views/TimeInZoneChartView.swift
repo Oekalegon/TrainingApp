@@ -3,19 +3,25 @@ import SwiftUI
 import TrainingCore
 
 /// The week view's graph panel "Time in zone" page (MVP1-55, design doc §2.1; histogram follow-up)
-/// — a heart-rate histogram of the displayed week's activities, binned every 3 bpm, plotted over
+/// — a heart-rate histogram of the displayed week's activities, binned every 5 bpm, plotted over
 /// muted background bands for each heart-rate zone (same visual language `FitnessChartView` uses
-/// for TSB zones) with a single smoothed line tracing the time spent at each bpm.
+/// for TSB zones) with a single smoothed line tracing the time spent at each bpm, and a light-gray
+/// rule at the 80th percentile (Seiler's 80/20 polarized-training threshold).
 ///
 /// Deliberately scoped to just the displayed week, not the 3-week window `FitnessChartView`/
 /// `DailyLoadChartView` share: unlike load/CTL/ATL/TSB (already computed for the whole
-/// `chartRange` by `TrainingModel.recompute`), the histogram here is built from raw samples on
-/// demand (`WeekViewModel.heartRateHistogram()`), and widening that to 21 days would triple the
-/// per-swipe-frame cost its memoization is built to avoid.
+/// `chartRange` by `TrainingModel.recompute`), the histogram here is built from raw samples —
+/// see `WeekViewModel.heartRateHistogram`'s own doc comment for why that's computed
+/// asynchronously off the main actor rather than synchronously here — and widening the window to
+/// 21 days would triple the cost of every recomputation.
 struct TimeInZoneChartView: View {
     let histogram: HeartRateHistogram
 
     private static let smoothedLineWidth: CGFloat = 3
+    /// Thinner than `smoothedLineWidth` and drawn before it in `chart` (so it sits behind), per
+    /// the 80/20 polarized-training threshold's supporting role — it marks a reference point on
+    /// the histogram, not a second series competing with it.
+    private static let percentileLineWidth: CGFloat = 1
     /// Padding (in bpm) added on either side of the athlete's zone 1–5 range, so the lowest/
     /// highest zone don't get clipped to a zero-width sliver at the domain's own edge — mirrors
     /// `FitnessChartView.formDomain`'s own padding around its zone boundaries.
@@ -88,9 +94,16 @@ struct TimeInZoneChartView: View {
         histogram.bins.contains { $0.seconds > 0 }
     }
 
+    /// The 80/20 polarized-training threshold (Seiler) — the heart rate below which 80% of the
+    /// displayed week's training time falls. `nil` (so `chart` draws no rule) when there's no time
+    /// recorded at all.
+    private var eightyPercentileBPM: Double? {
+        histogram.percentileBPM(0.8)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Time in Zone")
+            Text("Time in Zone [min]")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
@@ -119,6 +132,13 @@ struct TimeInZoneChartView: View {
                     xEnd: .value("Upper", band.upperBound)
                 )
                 .foregroundStyle(band.color.opacity(0.12))
+            }
+            // Drawn before the histogram line itself (so it renders behind it, per SwiftUI Charts'
+            // declaration-order stacking) and thinner — a supporting reference, not a second series.
+            if let eightyPercentileBPM {
+                RuleMark(x: .value("80th percentile", eightyPercentileBPM))
+                    .foregroundStyle(Color.gray)
+                    .lineStyle(StrokeStyle(lineWidth: Self.percentileLineWidth))
             }
             ForEach(densifiedMinutesByBPM, id: \.bpm) { point in
                 LineMark(x: .value("BPM", point.bpm), y: .value("Minutes", point.minutes))

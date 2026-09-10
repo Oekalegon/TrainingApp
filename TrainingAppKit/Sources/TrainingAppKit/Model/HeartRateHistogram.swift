@@ -4,7 +4,7 @@ import TrainingCore
 /// One bin of the week view's graph panel "Time in zone" page's heart-rate histogram (MVP1-55
 /// follow-up) — `bpm` is the bin's lower bound, `seconds` the total time any activity in the
 /// displayed week spent with a (consecutive-sample-averaged) heart rate in `bpm..<(bpm + binWidth)`.
-public struct HeartRateHistogramBin: Hashable {
+public struct HeartRateHistogramBin: Hashable, Sendable {
     public let bpm: Int
     public let seconds: TimeInterval
 }
@@ -12,7 +12,7 @@ public struct HeartRateHistogramBin: Hashable {
 /// A displayed week's heart-rate histogram, plus the athlete's current zone boundaries in bpm so
 /// the chart can shade the same bands the old zone-by-day bars used to color, now against a
 /// continuous bpm axis instead of discrete per-zone bars.
-public struct HeartRateHistogram {
+public struct HeartRateHistogram: Sendable {
     public let bins: [HeartRateHistogramBin]
     /// The bin width (in bpm) `bins` was built with — `TimeInZoneChartView` needs this to fill in
     /// the zero-time bins `bins` omits when it densifies the histogram into a continuous line.
@@ -22,6 +22,9 @@ public struct HeartRateHistogram {
     /// no threshold heart rate recorded, or no heart-rate zone settings at all) — see
     /// `HeartRateZoneModel.zoneRatioRange(_:)`.
     public let zoneBoundariesBPM: [Double]?
+
+    /// An empty histogram — `WeekViewModel`'s initial value before its first async load completes.
+    public static let empty = HeartRateHistogram(bins: [], binWidth: 5, zoneBoundariesBPM: nil)
 
     /// Builds a histogram of `activities`' combined heart-rate samples, binned every `binWidth`
     /// bpm.
@@ -36,7 +39,7 @@ public struct HeartRateHistogram {
     public static func aggregating(
         _ activities: [Activity],
         athlete: AthleteProfile,
-        binWidth: Int = 3,
+        binWidth: Int = 5,
         gapThresholdSeconds: TimeInterval = 60
     ) -> HeartRateHistogram {
         var totals: [Int: TimeInterval] = [:]
@@ -58,6 +61,28 @@ public struct HeartRateHistogram {
             binWidth: binWidth,
             zoneBoundariesBPM: zoneBoundariesBPM(for: athlete)
         )
+    }
+
+    /// The bpm below which `fraction` of the histogram's total time falls — e.g. `percentileBPM(0.8)`
+    /// is the heart rate marking Seiler's 80/20 polarized-training threshold, the light-gray
+    /// vertical line `TimeInZoneChartView` draws. Interpolates linearly within whichever bin's
+    /// cumulative time first reaches `fraction` of the total, rather than snapping to that bin's
+    /// own (`binWidth`-wide) edge. `nil` when the histogram has no time recorded at all.
+    public func percentileBPM(_ fraction: Double) -> Double? {
+        let total = bins.reduce(0) { $0 + $1.seconds }
+        guard total > 0 else { return nil }
+        let sorted = bins.sorted { $0.bpm < $1.bpm }
+        let target = total * fraction
+        var cumulative: TimeInterval = 0
+        for bin in sorted {
+            let cumulativeBeforeBin = cumulative
+            cumulative += bin.seconds
+            guard cumulative >= target else { continue }
+            guard bin.seconds > 0 else { return Double(bin.bpm) }
+            let fractionIntoBin = (target - cumulativeBeforeBin) / bin.seconds
+            return Double(bin.bpm) + fractionIntoBin * Double(binWidth)
+        }
+        return sorted.last.map { Double($0.bpm) + Double(binWidth) }
     }
 
     /// Re-derives zone boundaries in bpm from the athlete's current `HeartRateZoneModel`, using

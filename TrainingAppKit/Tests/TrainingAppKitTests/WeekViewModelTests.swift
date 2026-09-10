@@ -430,20 +430,20 @@ struct WeekViewModelTests {
         #expect(nextWeekPages[0].distanceMeters == 0)
     }
 
-    @Test("heartRateHistogram() has no bins and no zone boundaries when there's no activity or zone settings")
+    @Test("heartRateHistogram has no bins and no zone boundaries when there's no activity or zone settings")
     func heartRateHistogramEmptyWithNoActivities() async throws {
         let (_, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
-        let histogram = viewModel.heartRateHistogram()
+        await viewModel.refreshHeartRateHistogramIfNeeded()
 
-        #expect(histogram.bins.isEmpty)
-        #expect(histogram.zoneBoundariesBPM == nil)
+        #expect(viewModel.heartRateHistogram.bins.isEmpty)
+        #expect(viewModel.heartRateHistogram.zoneBoundariesBPM == nil)
     }
 
-    @Test("heartRateHistogram() bins an activity's heart-rate samples by bpm, with zone boundaries in bpm")
+    @Test("heartRateHistogram bins an activity's heart-rate samples by bpm, with zone boundaries in bpm")
     func heartRateHistogramBinsActivitySamples() async throws {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(
@@ -456,7 +456,7 @@ struct WeekViewModelTests {
         // 30s apart (well under the 60s gap threshold), so the whole 10 minutes forms one
         // continuous segment instead of being excluded as a pause -- same fixture pattern
         // `ActivityDetailViewModelTests` uses for a heart-rate-scored activity. A constant 175bpm
-        // keeps every segment's average bpm in the same 3-wide bin, so the total lands in one bin.
+        // keeps every segment's average bpm in the same 5-wide bin, so the total lands in one bin.
         let samples = stride(from: 0, through: 600, by: 30).map {
             HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
         }
@@ -464,17 +464,19 @@ struct WeekViewModelTests {
             source: .manual, sport: .running, start: activityDay, duration: 600, heartRate: samples
         )
         try await store.upsert([activity])
+        // load(asOf:) already recomputes the histogram once the activity is loaded (see its own
+        // doc comment) -- no separate refreshHeartRateHistogramIfNeeded() call needed here.
         await viewModel.load(asOf: day(0))
 
-        let histogram = viewModel.heartRateHistogram()
+        let histogram = viewModel.heartRateHistogram
 
-        let bin = try #require(histogram.bins.first { $0.bpm == 174 })
+        let bin = try #require(histogram.bins.first { $0.bpm == 175 })
         #expect(bin.seconds == 600)
         #expect(histogram.bins.reduce(0) { $0 + $1.seconds } == 600)
         #expect(histogram.zoneBoundariesBPM?.count == 6)
     }
 
-    @Test("heartRateHistogram() invalidates its cache when the displayed week changes")
+    @Test("heartRateHistogram invalidates its cache when the displayed week changes")
     func heartRateHistogramRecomputesAfterWeekNavigation() async throws {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(
@@ -493,14 +495,15 @@ struct WeekViewModelTests {
         try await store.upsert([activity])
         await viewModel.load(asOf: day(0))
 
-        let firstWeekTotal = viewModel.heartRateHistogram().bins.reduce(0) { $0 + $1.seconds }
+        let firstWeekTotal = viewModel.heartRateHistogram.bins.reduce(0) { $0 + $1.seconds }
         #expect(firstWeekTotal > 0)
 
         // Same view model instance -- only `displayedWeekStart` changes. A cache keyed on the
         // wrong thing (or nothing at all) would incorrectly keep returning the first week's data
         // for the next (activity-free) week.
         viewModel.goToNextWeek()
-        let nextWeekTotal = viewModel.heartRateHistogram().bins.reduce(0) { $0 + $1.seconds }
+        await viewModel.refreshHeartRateHistogramIfNeeded()
+        let nextWeekTotal = viewModel.heartRateHistogram.bins.reduce(0) { $0 + $1.seconds }
 
         #expect(nextWeekTotal == 0)
     }

@@ -21,9 +21,6 @@ public final class WeekViewModel {
     /// writing to it shouldn't itself trigger a view update.
     @ObservationIgnored
     private var sportStatsPagesCache: (weekStart: Date, activityCount: Int, today: Date, pages: [SportStatsPage])?
-    /// Memoizes ``heartRateHistogram()`` — see that method's own doc comment for why this exists.
-    @ObservationIgnored
-    private var heartRateHistogramCache: (weekStart: Date, activityCount: Int, histogram: HeartRateHistogram)?
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
@@ -259,21 +256,39 @@ public final class WeekViewModel {
     /// (MVP1-55) — every completed activity in the displayed week's raw heart-rate samples,
     /// binned by `HeartRateHistogram.aggregating(_:athlete:)`.
     ///
-    /// Memoized on `(displayedWeekStart, model.activities.count)`, the same pattern
-    /// ``sportStatsPages(asOf:)`` uses and for the same reason: `WeekView` re-evaluates this from a
-    /// `@State` change on every touch-move frame of the day list's own swipe gesture, and each call
-    /// would otherwise re-walk every sample of every activity in the displayed week on every one
-    /// of those frames.
-    public func heartRateHistogram() -> HeartRateHistogram {
-        if let cache = heartRateHistogramCache,
-            cache.weekStart == displayedWeekStart,
-            cache.activityCount == model.activities.count {
-            return cache.histogram
+    /// Computed off the main actor by ``refreshHeartRateHistogramIfNeeded()`` and published here
+    /// as a plain, `@Observable`-tracked property rather than a synchronous method `WeekView`
+    /// calls directly from its body — walking every sample of every activity in the displayed week
+    /// was a small but noticeable hitch on the main thread during a week-change swipe. Starts
+    /// empty until the first load completes.
+    public private(set) var heartRateHistogram = HeartRateHistogram.empty
+    /// Memoizes ``refreshHeartRateHistogramIfNeeded()`` — see that method's own doc comment.
+    @ObservationIgnored
+    private var heartRateHistogramCache: (weekStart: Date, activityCount: Int, histogram: HeartRateHistogram)?
+
+    /// Recomputes ``heartRateHistogram`` off the main actor if `displayedWeekStart` or
+    /// `model.activities.count` has changed since the last computation — called after every load/
+    /// import/dedup that could change either, mirroring the memoization ``sportStatsPages(asOf:)``
+    /// does synchronously (the histogram can't do the same directly, since walking every sample of
+    /// every activity in the displayed week is heavy enough to visibly hitch the main thread
+    /// during a week-change swipe if done inline).
+    public func refreshHeartRateHistogramIfNeeded() async {
+        let weekStart = displayedWeekStart
+        let activityCount = model.activities.count
+        if let cache = heartRateHistogramCache, cache.weekStart == weekStart, cache.activityCount == activityCount {
+            heartRateHistogram = cache.histogram
+            return
         }
         let weekActivities = weekDates.flatMap { activities(on: $0) }
-        let histogram = HeartRateHistogram.aggregating(weekActivities, athlete: model.athlete)
-        heartRateHistogramCache = (displayedWeekStart, model.activities.count, histogram)
-        return histogram
+        let athlete = model.athlete
+        let histogram = await Task.detached(priority: .userInitiated) {
+            HeartRateHistogram.aggregating(weekActivities, athlete: athlete)
+        }.value
+        heartRateHistogramCache = (weekStart, activityCount, histogram)
+        // The displayed week (or a subsequent import) may have moved on again while the above was
+        // computing off the main actor -- don't clobber a newer result with this stale one.
+        guard weekStart == displayedWeekStart, activityCount == model.activities.count else { return }
+        heartRateHistogram = histogram
     }
 
     /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day
@@ -318,6 +333,7 @@ public final class WeekViewModel {
     /// nothing for the view to reconcile; MVP 1 has no load-failure UI.
     public func load(asOf today: Date = .now) async {
         try? await model.load(in: chartRange, asOf: today)
+        await refreshHeartRateHistogramIfNeeded()
     }
 
     /// Runs a pull-to-refresh import via `refresher`. `TrainingModel.importActivities(from:)`
@@ -328,6 +344,7 @@ public final class WeekViewModel {
         isRefreshing = true
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
+        await refreshHeartRateHistogramIfNeeded()
     }
 
     /// The empty-state "Connect Health data" action (design doc §2.1): requests authorization,
@@ -342,6 +359,7 @@ public final class WeekViewModel {
         } catch {
             return
         }
+        await refreshHeartRateHistogramIfNeeded()
     }
 
     /// The athlete screen's "Force Full Resync" action (design doc §2.3): re-imports every
@@ -354,6 +372,7 @@ public final class WeekViewModel {
         isResyncing = true
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
+        await refreshHeartRateHistogramIfNeeded()
     }
 
     /// The athlete screen's "Deduplicate Activities" action (MVP1-44): removes duplicate
@@ -367,6 +386,7 @@ public final class WeekViewModel {
         isDeduplicating = true
         defer { isDeduplicating = false }
         try? await model.deduplicateActivities(asOf: today)
+        await refreshHeartRateHistogramIfNeeded()
     }
 
     static func calendar(for athlete: AthleteProfile) -> Calendar {
