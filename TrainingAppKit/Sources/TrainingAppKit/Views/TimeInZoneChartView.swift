@@ -5,8 +5,9 @@ import TrainingCore
 /// The week view's graph panel "Time in zone" page (MVP1-55, design doc §2.1; histogram follow-up)
 /// — a heart-rate histogram of the displayed week's activities, binned every 5 bpm, plotted over
 /// muted background bands for each heart-rate zone (same visual language `FitnessChartView` uses
-/// for TSB zones) with a single smoothed line tracing the time spent at each bpm, and a light-gray
-/// rule at the 80th percentile (Seiler's 80/20 polarized-training threshold).
+/// for TSB zones) with a single smoothed line tracing the time spent at each bpm, a light-gray
+/// rule (labeled with an "80" pill) at the 80th percentile (Seiler's 80/20 polarized-training
+/// threshold), and a very thin grey line per activity underneath the combined one.
 ///
 /// Deliberately scoped to just the displayed week, not the 3-week window `FitnessChartView`/
 /// `DailyLoadChartView` share: unlike load/CTL/ATL/TSB (already computed for the whole
@@ -16,12 +17,20 @@ import TrainingCore
 /// 21 days would triple the cost of every recomputation.
 struct TimeInZoneChartView: View {
     let histogram: HeartRateHistogram
+    /// Each of the displayed week's activities' own heart-rate histogram, drawn as a very thin
+    /// grey line under `histogram`'s own combined one — see
+    /// `WeekViewModel.perActivityHeartRateHistograms`'s own doc comment for why this fills in
+    /// progressively rather than arriving all at once.
+    let perActivityHistograms: [HeartRateHistogram]
 
     private static let smoothedLineWidth: CGFloat = 3
     /// Thinner than `smoothedLineWidth` and drawn before it in `chart` (so it sits behind), per
     /// the 80/20 polarized-training threshold's supporting role — it marks a reference point on
     /// the histogram, not a second series competing with it.
     private static let percentileLineWidth: CGFloat = 1
+    /// Thinner still — one of these draws per activity, so even a handful of them shouldn't read
+    /// as more prominent than the single combined line they sit underneath.
+    private static let perActivityLineWidth: CGFloat = 0.5
     /// Padding (in bpm) added on either side of the athlete's zone 1–5 range, so the lowest/
     /// highest zone don't get clipped to a zero-width sliver at the domain's own edge — mirrors
     /// `FitnessChartView.formDomain`'s own padding around its zone boundaries.
@@ -76,17 +85,46 @@ struct TimeInZoneChartView: View {
         }
     }
 
-    /// The histogram densified into one point per `binWidth`-wide step across `domain`, zero-filled
+    /// `histogram` densified into one point per `binWidth`-wide step across `domain`, zero-filled
     /// where `histogram.bins` has no data — without this, `LineMark`'s catmullRom interpolation
     /// would smooth straight across the gaps between the (otherwise sparse) real bins instead of
     /// dipping to zero, which reads as heart-rate time existing where none was actually recorded.
     private var densifiedMinutesByBPM: [(bpm: Int, minutes: Double)] {
+        Self.densifiedMinutes(for: histogram, domain: domain)
+    }
+
+    /// Same densification as ``densifiedMinutesByBPM``, generalized so `chart` can also apply it
+    /// to each of `perActivityHistograms` against the shared `domain` those lines and the combined
+    /// one all plot against.
+    private static func densifiedMinutes(
+        for histogram: HeartRateHistogram, domain: ClosedRange<Double>
+    ) -> [(bpm: Int, minutes: Double)] {
         let secondsByBin = Dictionary(uniqueKeysWithValues: histogram.bins.map { ($0.bpm, $0.seconds) })
         let binWidth = histogram.binWidth
         let lowerBin = Int((domain.lowerBound / Double(binWidth)).rounded(.down)) * binWidth
         let upperBin = Int((domain.upperBound / Double(binWidth)).rounded(.up)) * binWidth
         return stride(from: lowerBin, through: upperBin, by: binWidth).map { bpm in
             (bpm, (secondsByBin[bpm] ?? 0) / 60)
+        }
+    }
+
+    /// One activity's own densified point, flattened out of `perActivityHistograms` up front so
+    /// `chart` is a single flat `ForEach` rather than a nested one — the nested form (a `ForEach`
+    /// of activities, each containing a `ForEach` of bpm points) was the exact pattern that made
+    /// the type checker give up elsewhere in this file's history (see git blame); flattening avoids
+    /// it here too.
+    private struct PerActivityPoint: Identifiable {
+        let activityIndex: Int
+        let bpm: Int
+        let minutes: Double
+        var id: String { "\(activityIndex)-\(bpm)" }
+    }
+
+    private var perActivityPoints: [PerActivityPoint] {
+        perActivityHistograms.enumerated().flatMap { index, histogram in
+            Self.densifiedMinutes(for: histogram, domain: domain).map { point in
+                PerActivityPoint(activityIndex: index, bpm: point.bpm, minutes: point.minutes)
+            }
         }
     }
 
@@ -140,6 +178,18 @@ struct TimeInZoneChartView: View {
                     .foregroundStyle(Color.gray)
                     .lineStyle(StrokeStyle(lineWidth: Self.percentileLineWidth))
             }
+            // Also drawn before the combined line, same reasoning — each activity's own histogram
+            // is a supporting detail underneath the week's combined one, not a competing series.
+            // `.foregroundStyle(by:)` (with every index mapped to the same grey right below) is
+            // what keeps each activity's points from being connected into one zigzagging line
+            // across activities -- without a distinguishing series, Swift Charts sorts every point
+            // sharing a style by x and threads them into a single path.
+            ForEach(perActivityPoints) { point in
+                LineMark(x: .value("BPM", point.bpm), y: .value("Minutes", point.minutes))
+                    .foregroundStyle(by: .value("Activity", point.activityIndex))
+                    .lineStyle(StrokeStyle(lineWidth: Self.perActivityLineWidth))
+                    .interpolationMethod(.catmullRom)
+            }
             ForEach(densifiedMinutesByBPM, id: \.bpm) { point in
                 LineMark(x: .value("BPM", point.bpm), y: .value("Minutes", point.minutes))
                     .foregroundStyle(Color.primary)
@@ -147,6 +197,10 @@ struct TimeInZoneChartView: View {
                     .interpolationMethod(.catmullRom)
             }
         }
+        .chartForegroundStyleScale(
+            domain: Array(0..<perActivityHistograms.count),
+            range: Array(repeating: Color.gray.opacity(0.5), count: perActivityHistograms.count)
+        )
         .chartXScale(domain: domain)
         .chartXAxis {
             AxisMarks { _ in
@@ -174,6 +228,17 @@ struct TimeInZoneChartView: View {
                                 .foregroundStyle(.secondary)
                                 .position(x: plotArea.minX + x, y: plotArea.minY + 10)
                         }
+                    }
+                    if let eightyPercentileBPM, let x = proxy.position(forX: eightyPercentileBPM) {
+                        Text("80")
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.gray))
+                            // Near the bottom of the plot area, above where the x-axis itself
+                            // renders (that's outside plotArea, in the margin below `maxY`).
+                            .position(x: plotArea.minX + x, y: plotArea.maxY - 10)
                     }
                 }
             }

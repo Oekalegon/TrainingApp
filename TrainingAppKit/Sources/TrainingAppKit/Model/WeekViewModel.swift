@@ -265,30 +265,72 @@ public final class WeekViewModel {
     /// Memoizes ``refreshHeartRateHistogramIfNeeded()`` — see that method's own doc comment.
     @ObservationIgnored
     private var heartRateHistogramCache: (weekStart: Date, activityCount: Int, histogram: HeartRateHistogram)?
+    /// Each of the displayed week's activities' own heart-rate histogram, for the thin per-activity
+    /// lines `TimeInZoneChartView` draws under the combined ``heartRateHistogram`` line — computed
+    /// (and this array filled in) one activity at a time, after ``heartRateHistogram`` itself, so
+    /// the combined line never waits on them. Activities with no heart-rate samples are skipped
+    /// (an all-zero histogram has nothing to draw). Order matches `weekDates.flatMap { activities(on:) }`'s.
+    public private(set) var perActivityHeartRateHistograms: [HeartRateHistogram] = []
+    /// Memoizes ``refreshHeartRateHistogramIfNeeded()``'s per-activity pass — see
+    /// ``perActivityHeartRateHistograms``'s own doc comment.
+    @ObservationIgnored
+    private var perActivityHeartRateHistogramsCache: (weekStart: Date, activityCount: Int, histograms: [HeartRateHistogram])?
 
-    /// Recomputes ``heartRateHistogram`` off the main actor if `displayedWeekStart` or
-    /// `model.activities.count` has changed since the last computation — called after every load/
-    /// import/dedup that could change either, mirroring the memoization ``sportStatsPages(asOf:)``
-    /// does synchronously (the histogram can't do the same directly, since walking every sample of
-    /// every activity in the displayed week is heavy enough to visibly hitch the main thread
-    /// during a week-change swipe if done inline).
+    /// Recomputes ``heartRateHistogram`` (and, once that's done, ``perActivityHeartRateHistograms``)
+    /// off the main actor if `displayedWeekStart` or `model.activities.count` has changed since the
+    /// last computation — called after every load/import/dedup that could change either, mirroring
+    /// the memoization ``sportStatsPages(asOf:)`` does synchronously (the histogram can't do the
+    /// same directly, since walking every sample of every activity in the displayed week is heavy
+    /// enough to visibly hitch the main thread during a week-change swipe if done inline).
     public func refreshHeartRateHistogramIfNeeded() async {
         let weekStart = displayedWeekStart
         let activityCount = model.activities.count
-        if let cache = heartRateHistogramCache, cache.weekStart == weekStart, cache.activityCount == activityCount {
-            heartRateHistogram = cache.histogram
-            return
-        }
         let weekActivities = weekDates.flatMap { activities(on: $0) }
         let athlete = model.athlete
-        let histogram = await Task.detached(priority: .userInitiated) {
-            HeartRateHistogram.aggregating(weekActivities, athlete: athlete)
-        }.value
-        heartRateHistogramCache = (weekStart, activityCount, histogram)
-        // The displayed week (or a subsequent import) may have moved on again while the above was
-        // computing off the main actor -- don't clobber a newer result with this stale one.
-        guard weekStart == displayedWeekStart, activityCount == model.activities.count else { return }
-        heartRateHistogram = histogram
+
+        if let cache = heartRateHistogramCache, cache.weekStart == weekStart, cache.activityCount == activityCount {
+            heartRateHistogram = cache.histogram
+        } else {
+            let histogram = await Task.detached(priority: .userInitiated) {
+                HeartRateHistogram.aggregating(weekActivities, athlete: athlete)
+            }.value
+            // The displayed week (or a subsequent import) may have moved on again while the above
+            // was computing off the main actor -- don't clobber a newer result with this stale one,
+            // and don't go on to the (now also stale) per-activity pass below.
+            guard weekStart == displayedWeekStart, activityCount == model.activities.count else { return }
+            heartRateHistogramCache = (weekStart, activityCount, histogram)
+            heartRateHistogram = histogram
+        }
+
+        await refreshPerActivityHeartRateHistograms(
+            weekStart: weekStart, activityCount: activityCount, activities: weekActivities, athlete: athlete
+        )
+    }
+
+    /// The per-activity pass ``refreshHeartRateHistogramIfNeeded()`` runs after the combined
+    /// histogram — see ``perActivityHeartRateHistograms``'s own doc comment for why this is one
+    /// `Task.detached` per activity (publishing each as it lands) rather than one batch. `.utility`,
+    /// not `.userInitiated`: these lines are a secondary detail the combined line doesn't need to
+    /// wait on, unlike ``heartRateHistogram`` itself.
+    private func refreshPerActivityHeartRateHistograms(
+        weekStart: Date, activityCount: Int, activities: [Activity], athlete: AthleteProfile
+    ) async {
+        if let cache = perActivityHeartRateHistogramsCache,
+            cache.weekStart == weekStart, cache.activityCount == activityCount {
+            perActivityHeartRateHistograms = cache.histograms
+            return
+        }
+        perActivityHeartRateHistograms = []
+        var results: [HeartRateHistogram] = []
+        for activity in activities where !activity.heartRate.isEmpty {
+            let histogram = await Task.detached(priority: .utility) {
+                HeartRateHistogram.aggregating([activity], athlete: athlete)
+            }.value
+            guard weekStart == displayedWeekStart, activityCount == model.activities.count else { return }
+            results.append(histogram)
+            perActivityHeartRateHistograms = results
+        }
+        perActivityHeartRateHistogramsCache = (weekStart, activityCount, results)
     }
 
     /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day

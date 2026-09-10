@@ -371,6 +371,7 @@ public struct WeekView: View {
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
                 heartRateHistogram: viewModel.heartRateHistogram,
+                perActivityHeartRateHistograms: viewModel.perActivityHeartRateHistograms,
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 }
             )
@@ -379,6 +380,7 @@ public struct WeekView: View {
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
                 heartRateHistogram: viewModel.heartRateHistogram,
+                perActivityHeartRateHistograms: viewModel.perActivityHeartRateHistograms,
                 selectedIndex: graphPanelSelectedIndex
             )
         }

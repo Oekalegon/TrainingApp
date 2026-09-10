@@ -508,6 +508,59 @@ struct WeekViewModelTests {
         #expect(nextWeekTotal == 0)
     }
 
+    @Test("perActivityHeartRateHistograms has one entry per activity with heart-rate samples, skipping those without")
+    func perActivityHeartRateHistogramsSkipsActivitiesWithNoSamples() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activityDay = viewModel.displayedWeekStart
+        let samples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let withHeartRate = Activity(
+            source: .manual, sport: .running, start: activityDay, duration: 600, heartRate: samples
+        )
+        let withoutHeartRate = Activity(
+            source: .manual, sport: .cycling, start: activityDay.addingTimeInterval(3600), duration: 600
+        )
+        try await store.upsert([withHeartRate, withoutHeartRate])
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.perActivityHeartRateHistograms.count == 1)
+        let bin = try #require(viewModel.perActivityHeartRateHistograms.first?.bins.first { $0.bpm == 175 })
+        #expect(bin.seconds == 600)
+    }
+
+    @Test("perActivityHeartRateHistograms invalidates its cache when the displayed week changes")
+    func perActivityHeartRateHistogramsRecomputesAfterWeekNavigation() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activityDay = viewModel.displayedWeekStart
+        let samples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: activityDay.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let activity = Activity(
+            source: .manual, sport: .running, start: activityDay, duration: 600, heartRate: samples
+        )
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+        #expect(viewModel.perActivityHeartRateHistograms.count == 1)
+
+        viewModel.goToNextWeek()
+        await viewModel.refreshHeartRateHistogramIfNeeded()
+
+        #expect(viewModel.perActivityHeartRateHistograms.isEmpty)
+    }
+
     @Test("activityDetailViewModel(for:) wires the model's athlete through")
     func activityDetailViewModelUsesModelAthlete() {
         let (_, stores) = makeStores()
