@@ -511,6 +511,45 @@ struct WeekViewModelTests {
         #expect(nextWeekTotal == 0)
     }
 
+    @Test("heartRateHistogram(for:) recomputes for the same displayed week once activity count changes")
+    func heartRateHistogramRecomputesAfterActivityCountChanges() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let weekStart = viewModel.displayedWeekStart
+        let firstActivity = Activity(
+            source: .manual, sport: .running, start: weekStart, duration: 600,
+            heartRate: stride(from: 0, through: 600, by: 30).map {
+                HeartRateSample(time: weekStart.addingTimeInterval(TimeInterval($0)), bpm: 175)
+            }
+        )
+        try await store.upsert([firstActivity])
+        await viewModel.load(asOf: day(0))
+
+        let firstTotal = viewModel.heartRateHistogram(for: weekStart).bins.reduce(0) { $0 + $1.seconds }
+        #expect(firstTotal == 600)
+
+        // Same displayed week, no navigation -- only `model.activities.count` changes (as it would
+        // after a pull-to-refresh import). `refreshWeekCachesIfNeeded()`'s own fix (not clearing
+        // the cache synchronously, to avoid a spurious empty-state flash) must still land the
+        // freshly recomputed total here rather than getting stuck on the now-stale first value.
+        let secondActivity = Activity(
+            source: .manual, sport: .running, start: weekStart.addingTimeInterval(3600), duration: 600,
+            heartRate: stride(from: 0, through: 600, by: 30).map {
+                HeartRateSample(time: weekStart.addingTimeInterval(3600 + TimeInterval($0)), bpm: 140)
+            }
+        )
+        try await store.upsert([secondActivity])
+        await viewModel.load(asOf: day(0))
+
+        let secondTotal = viewModel.heartRateHistogram(for: weekStart).bins.reduce(0) { $0 + $1.seconds }
+        #expect(secondTotal == 1200)
+    }
+
     @Test("heartRateHistogram(for:) prefetches the displayed week's immediate neighbors")
     func heartRateHistogramPrefetchesNeighboringWeeks() async throws {
         let (store, stores) = makeStores()

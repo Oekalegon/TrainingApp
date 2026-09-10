@@ -83,12 +83,15 @@ remember or restore which tab was last active.
 ### 2.1 Week view
 
 - **Top**: a paged graph panel (Swift Charts, MVP1-55) — swipe between "Daily load" (each day's
-  TRIMP as bars), "Form" (CTL/ATL/TSB lines), and "Time in zone" (each day of the displayed week's
-  heart-rate zone breakdown, stacked by zone), with a page-dot indicator below. "Daily load" and
-  "Form" share the same 3-week window centered on the displayed week (the week before, the
-  displayed week, the week after), fed from `TrainingModel.metrics: [FitnessMetrics]`; "Time in
-  zone" is scoped to just the displayed week, computed on demand from each day's activities
-  (`WeekViewModel.timeInZoneByDay()`) rather than pre-aggregated by `TrainingModel`.
+  TRIMP as bars), "Form" (CTL/ATL/TSB lines), and "Time in zone" (a heart-rate histogram, binned
+  every 5bpm, plotted as one smoothed line over muted zone-1-through-5 bands with a light-gray
+  marker at the 80th percentile — Seiler's 80/20 polarized-training threshold, computed only from
+  in-zone time), with a page-dot indicator below. "Daily load" and "Form" share the same 3-week
+  window centered on the displayed week (the week before, the displayed week, the week after), fed
+  from `TrainingModel.metrics: [FitnessMetrics]`; "Time in zone" is scoped to just the displayed
+  week and its own domain (zone 1's lower bound through zone 5's upper, each padded 15bpm), built
+  on demand from that week's raw heart-rate samples (`WeekViewModel.heartRateHistogram(for:)`)
+  rather than pre-aggregated by `TrainingModel`.
 - **Below**: a vertical timeline, one row per day of the displayed week (MVP1-39) — a weekday pill
   ("Wed 9", highlighted for today) linked into the timeline by a connecting line (which continues
   past the last day down to the bottom of the week view, not just the last pill), with that day's

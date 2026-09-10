@@ -99,15 +99,22 @@ struct TimeInZoneChartView: View {
         }
     }
 
-    private var hasAnyTime: Bool {
-        histogram.bins.contains { $0.seconds > 0 }
-    }
-
     /// The 80/20 polarized-training threshold (Seiler) — the heart rate below which 80% of the
-    /// displayed week's training time falls. `nil` (so `chart` draws no rule) when there's no time
-    /// recorded at all.
+    /// displayed week's training time falls. `nil` (so `chart` draws no rule) when there's no
+    /// in-zone time recorded at all.
     private var eightyPercentileBPM: Double? {
         histogram.percentileBPM(0.8)
+    }
+
+    /// Whether `chart` has anything to show — deliberately keyed on ``eightyPercentileBPM`` (i.e.
+    /// the same in-zone filter `HeartRateHistogram.percentileBPM(_:)` applies), not on
+    /// `histogram.bins` directly: a week whose only recorded heart-rate samples fall below zone 1
+    /// (e.g. warmup/cooldown-only, no real zone training) has *some* bin with recorded time, but
+    /// every one of it sits outside `domain`, which only shows zone 1 through zone 5 — rendering
+    /// `chart` for that week would just draw a flat, empty-looking line instead of the more honest
+    /// "No Heart-Rate Data" placeholder.
+    private var hasAnyTime: Bool {
+        eightyPercentileBPM != nil
     }
 
     var body: some View {
