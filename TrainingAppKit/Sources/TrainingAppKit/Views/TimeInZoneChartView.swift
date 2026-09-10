@@ -55,7 +55,12 @@ struct TimeInZoneChartView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Time in Zone")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+
             Group {
                 if hasAnyTime {
                     chart
@@ -69,8 +74,6 @@ struct TimeInZoneChartView: View {
             }
             .frame(height: 140)
             .padding(.horizontal)
-
-            legend
         }
     }
 
@@ -100,20 +103,5 @@ struct TimeInZoneChartView: View {
             }
         }
         .chartLegend(.hidden)
-    }
-
-    private var legend: some View {
-        HStack(spacing: 8) {
-            ForEach(Self.zones, id: \.self) { zone in
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Self.color(forZone: zone))
-                        .frame(width: 8, height: 8)
-                    Text("Z\(zone)")
-                }
-            }
-        }
-        .font(.caption2)
-        .padding(.horizontal)
     }
 }

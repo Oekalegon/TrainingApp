@@ -10,9 +10,18 @@ struct DailyLoadChartView: View {
     /// Date range of the week currently visible in the day list, shaded behind the bars — same
     /// role as `FitnessChartView.displayedWeekRange`.
     let displayedWeekRange: ClosedRange<Date>
+    let today: Date = .now
 
-    private var dailyLoads: [DailyLoad] {
-        DailyLoad.aggregating(metrics)
+    /// Actual (completed) days' load — `FitnessMetricsSplit.pastAndFuture` also includes `today`
+    /// in `future`, which would double-draw its bar; `DailyLoad.aggregating` already drops
+    /// zero-load days, so there's no separate "did today already load" check needed here.
+    private var pastLoads: [DailyLoad] {
+        DailyLoad.aggregating(FitnessMetricsSplit.pastAndFuture(metrics, today: today).past)
+    }
+
+    /// Projected/planned days' load, rendered as muted bars distinct from actual history.
+    private var futureLoads: [DailyLoad] {
+        DailyLoad.aggregating(FitnessMetricsSplit.pastAndFuture(metrics, today: today).future)
     }
 
     private var dayDomain: ClosedRange<Date> {
@@ -20,7 +29,12 @@ struct DailyLoadChartView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Daily Load")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+
             Chart {
                 RectangleMark(
                     xStart: .value("Week start", displayedWeekRange.lowerBound),
@@ -28,9 +42,13 @@ struct DailyLoadChartView: View {
                 )
                 .foregroundStyle(Color.primary.opacity(0.1))
 
-                ForEach(dailyLoads, id: \.day) { point in
+                ForEach(pastLoads, id: \.day) { point in
                     BarMark(x: .value("Day", point.day, unit: .day), y: .value("TRIMP", point.load))
-                        .foregroundStyle(TrainingMetricKind.load.color)
+                        .foregroundStyle(Color.primary)
+                }
+                ForEach(futureLoads, id: \.day) { point in
+                    BarMark(x: .value("Day", point.day, unit: .day), y: .value("TRIMP", point.load))
+                        .foregroundStyle(Color.secondary)
                 }
             }
             .chartXScale(domain: dayDomain)
@@ -42,15 +60,6 @@ struct DailyLoadChartView: View {
                 }
             }
             .frame(height: 140)
-            .padding(.horizontal)
-
-            HStack(spacing: 4) {
-                Image(systemName: TrainingMetricKind.load.icon)
-                    .foregroundStyle(TrainingMetricKind.load.color)
-                    .accessibilityHidden(true)
-                Text("Daily load")
-            }
-            .font(.caption)
             .padding(.horizontal)
         }
     }

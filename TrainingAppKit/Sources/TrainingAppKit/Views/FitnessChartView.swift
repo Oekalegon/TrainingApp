@@ -123,6 +123,17 @@ struct FitnessChartView: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Form")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+
+            chart
+        }
+    }
+
+    private var chart: some View {
         Chart {
             zoneBandMarks
             weekHighlightMark
