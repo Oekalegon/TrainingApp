@@ -133,12 +133,33 @@ struct TimeInZoneChartView: View {
         var id: String { "\(activitySeriesKey)-\(bpm)" }
     }
 
+    /// Each activity densified only across *its own* recorded bpm range (padded by one bin width
+    /// on each side, so its line still tapers to zero rather than stopping abruptly), not the
+    /// shared chart-wide `domain` every other series here uses. A typical single activity's heart
+    /// rate covers a narrow slice of the full chart width (a steady-state run might span 20bpm
+    /// against a 100+bpm domain) — densifying it across the *whole* domain regardless plotted
+    /// mostly zero-value points, multiplying the chart's total mark count by however many
+    /// activities that week had for no visual benefit, and was reported as choppy panning/swiping
+    /// specifically on weeks with several activities — exactly what scales with this count.
     private var perActivityPoints: [PerActivityPoint] {
-        perActivityHistograms.enumerated().flatMap { index, histogram in
-            Self.densifiedMinutes(for: histogram, domain: domain).map { point in
+        perActivityHistograms.enumerated().flatMap { index, activityHistogram -> [PerActivityPoint] in
+            let ownDomain = Self.ownDomain(for: activityHistogram) ?? domain
+            return Self.densifiedMinutes(for: activityHistogram, domain: ownDomain).map { point in
                 PerActivityPoint(activitySeriesKey: "Activity \(index)", bpm: point.bpm, minutes: point.minutes)
             }
         }
+    }
+
+    /// The tightest bpm range (padded by one bin width on each side) that fully contains every bin
+    /// with recorded time in `histogram` — `nil` when it has none. See ``perActivityPoints``'s own
+    /// doc comment for why each activity densifies against this instead of the shared `domain`.
+    private static func ownDomain(for histogram: HeartRateHistogram) -> ClosedRange<Double>? {
+        let recordedBins = histogram.bins.filter { $0.seconds > 0 }
+        guard let minBPM = recordedBins.map(\.bpm).min(), let maxBPM = recordedBins.map(\.bpm).max() else {
+            return nil
+        }
+        let padding = Double(histogram.binWidth)
+        return (Double(minBPM) - padding)...(Double(maxBPM + histogram.binWidth) + padding)
     }
 
     private var hasAnyTime: Bool {
