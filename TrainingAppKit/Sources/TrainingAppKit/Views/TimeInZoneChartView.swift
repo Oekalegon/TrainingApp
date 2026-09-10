@@ -59,17 +59,25 @@ struct TimeInZoneChartView: View {
         }
     }
 
+    /// The zone-based range (zone 1's lower bound through zone 5's upper, padded) widened to also
+    /// fully contain every bin with actual recorded time, in either direction — real heart-rate
+    /// data routinely dips below zone 1 (warmup, cool-down, rest between intervals) or reaches
+    /// above zone 5 (a hard effort at max heart rate), and a domain sized only to the *athlete's*
+    /// zone boundaries clipped that real data at both edges instead of showing it taper to zero.
     private var domain: ClosedRange<Double> {
-        guard let boundaries = histogram.zoneBoundariesBPM,
-            let lower = boundaries.first,
-            let upper = boundaries.last
-        else {
-            guard let minBPM = histogram.bins.map(\.bpm).min(), let maxBPM = histogram.bins.map(\.bpm).max() else {
-                return Self.fallbackDomain
-            }
-            return Double(minBPM)...Double(maxBPM + histogram.binWidth)
+        var range = histogram.zoneBoundariesBPM.flatMap { boundaries -> ClosedRange<Double>? in
+            guard let lower = boundaries.first, let upper = boundaries.last else { return nil }
+            return (lower - Self.domainPadding)...(upper + Self.domainPadding)
+        } ?? Self.fallbackDomain
+
+        let recordedBins = histogram.bins.filter { $0.seconds > 0 }
+        if let minBPM = recordedBins.map(\.bpm).min() {
+            range = min(range.lowerBound, Double(minBPM) - Self.domainPadding)...range.upperBound
         }
-        return (lower - Self.domainPadding)...(upper + Self.domainPadding)
+        if let maxBPM = recordedBins.map(\.bpm).max() {
+            range = range.lowerBound...max(range.upperBound, Double(maxBPM + histogram.binWidth) + Self.domainPadding)
+        }
+        return range
     }
 
     private var zoneBands: [ZoneBand] {
