@@ -37,14 +37,16 @@ struct GraphPanelPagerView: View {
     /// same role as `WeekView.dragOffset`/`SportStatsPagerView.dragOffset`.
     @State private var dragOffset: CGFloat = 0
 
-    private static let pageCount = 3
+    /// Shared with `GraphPanelStaticPreview`'s own page dots, so the two stay in visual lockstep.
+    static let pageCount = 3
     private static let commitThreshold: CGFloat = 0.3
     private static let pageChangeAnimation: Animation = .easeInOut(duration: 0.25)
     /// Tall enough for the tallest page's chart (140pt) plus its legend row and spacing —
     /// `weekPageContent`'s `LazyVStack` needs a fixed height here since the three pages, laid out
     /// side by side in an `HStack`, don't otherwise report one shared height upward the way a
-    /// single view would.
-    private static let panelHeight: CGFloat = 190
+    /// single view would. Shared with `GraphPanelStaticPreview` so a mid-drag page transition
+    /// between the two doesn't visibly change height.
+    static let panelHeight: CGFloat = 190
 
     init(
         metrics: [FitnessMetrics],
@@ -138,5 +140,55 @@ struct GraphPanelPagerView: View {
                 break
             }
         }
+    }
+}
+
+/// A non-interactive stand-in for `GraphPanelPagerView`, used for the two off-screen (previous/
+/// next week) carousel pages in `WeekView.weekPageContent` — see that call site's own doc comment
+/// for why. Those pages are never touched (always `.disabled`), so unlike `GraphPanelPagerView`
+/// they carry no local `@State` and no drag gesture at all: they just render whichever chart
+/// `selectedIndex` (owned by `WeekView`, passed in fresh on every render) currently names, so they
+/// stay in sync with the interactive page instead of freezing on whatever page happened to be
+/// selected the first time each one ever mounted. Deliberately a *separate* type from
+/// `GraphPanelPagerView` rather than a mode flag on it: giving `GraphPanelPagerView` itself an
+/// externally-driven display path (an `isCurrentPage`-style parameter feeding a computed "which
+/// page to show" property) was tried first and — even though the interactive instance's own code
+/// path was left behaviorally identical — was enough to make its drag gesture stop responding
+/// after one swipe, for reasons that didn't reduce to anything as simple as `.id()` churn or a
+/// fresh `@Binding` (the two previously-known causes; see `GraphPanelPagerView.selectedIndex`'s
+/// own doc comment for the latter). A wholly separate, `@State`-free view for the two pages that
+/// were never interactive in the first place sidesteps the question entirely.
+struct GraphPanelStaticPreview: View {
+    let metrics: [FitnessMetrics]
+    let displayedWeekRange: ClosedRange<Date>
+    let timeInZoneByDay: [DayTimeInZone]
+    let selectedIndex: Int
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Group {
+                switch selectedIndex {
+                case 0:
+                    DailyLoadChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
+                case 1:
+                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
+                default:
+                    TimeInZoneChartView(days: timeInZoneByDay)
+                }
+            }
+            .frame(height: GraphPanelPagerView.panelHeight)
+
+            HStack(spacing: 4) {
+                ForEach(0..<GraphPanelPagerView.pageCount, id: \.self) { index in
+                    Circle()
+                        .fill(index == selectedIndex ? Color.primary : Color.primary.opacity(0.25))
+                        .frame(width: 5, height: 5)
+                }
+            }
+        }
+        // Never the one VoiceOver should land on: it's a same-frame preview of a page the user
+        // hasn't swiped to yet, not real, independent content — the interactive `GraphPanelPagerView`
+        // instance is the only one that should ever surface here.
+        .accessibilityHidden(true)
     }
 }

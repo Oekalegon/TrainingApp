@@ -359,13 +359,14 @@ public struct WeekView: View {
         .disabled(!isCurrentPage || (isDraggingHorizontally && !isSwipeExemptFromWeekChange))
     }
 
-    /// The shared content for one week's page — see `weekPage`'s own doc comment for why only the
-    /// current page wraps this in a real `ScrollView`. `isCurrentPage` is threaded down to
-    /// `weekPageHeader` and the graph panel purely so they know whether to report their frames for
-    /// gesture disambiguation (see `statsBarFrame`'s own doc comment) — a non-current page's frames
-    /// are meaningless for that since the page isn't the one on screen being swiped.
-    private func weekPageContent(for dates: [Date], pageHeight: CGFloat, isCurrentPage: Bool) -> some View {
-        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+    /// The graph panel shown atop one week's page: the interactive `GraphPanelPagerView` for the
+    /// current page, a non-interactive `GraphPanelStaticPreview` for the other two — see that
+    /// type's own doc comment for why they're two distinct view types (rather than one view with
+    /// an `isCurrentPage`-style mode flag) and why the two off-screen pages need their own display
+    /// path here at all rather than just reusing `GraphPanelPagerView` with a frozen initial page.
+    @ViewBuilder
+    private func graphPanel(isCurrentPage: Bool) -> some View {
+        if isCurrentPage {
             GraphPanelPagerView(
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
@@ -373,15 +374,33 @@ public struct WeekView: View {
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 }
             )
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
-            .background(chartSectionBackground)
-            .onGeometryChange(for: CGRect.self) { proxy in
-                proxy.frame(in: .named(weekSwipeCoordinateSpace))
-            } action: { _, newFrame in
-                guard isCurrentPage else { return }
-                graphPanelFrame = newFrame
-            }
+        } else {
+            GraphPanelStaticPreview(
+                metrics: viewModel.chartMetrics,
+                displayedWeekRange: viewModel.displayedWeekRange,
+                timeInZoneByDay: viewModel.timeInZoneByDay(),
+                selectedIndex: graphPanelSelectedIndex
+            )
+        }
+    }
+
+    /// The shared content for one week's page — see `weekPage`'s own doc comment for why only the
+    /// current page wraps this in a real `ScrollView`. `isCurrentPage` is threaded down to
+    /// `weekPageHeader` and the graph panel purely so they know whether to report their frames for
+    /// gesture disambiguation (see `statsBarFrame`'s own doc comment) — a non-current page's frames
+    /// are meaningless for that since the page isn't the one on screen being swiped.
+    private func weekPageContent(for dates: [Date], pageHeight: CGFloat, isCurrentPage: Bool) -> some View {
+        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+            graphPanel(isCurrentPage: isCurrentPage)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(chartSectionBackground)
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .named(weekSwipeCoordinateSpace))
+                } action: { _, newFrame in
+                    guard isCurrentPage else { return }
+                    graphPanelFrame = newFrame
+                }
             Section {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(dates.enumerated()), id: \.element) { index, day in

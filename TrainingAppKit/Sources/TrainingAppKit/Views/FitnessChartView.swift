@@ -129,15 +129,18 @@ struct FitnessChartView: View {
             rawLineMarks
             smoothedLineMarks
         }
+        // `.primary`/`.secondary`, not literal `.white`/`.gray`: those didn't adapt to the color
+        // scheme, so the "white" smoothed line disappeared against this chart's own white
+        // background in light mode instead of reading as black there.
         .chartForegroundStyleScale([
-            "Form (raw)": Color.gray,
-            "Form (smoothed)": Color.white,
+            "Form (raw)": Color.secondary,
+            "Form (smoothed)": Color.primary,
             // Distinct series keys from the solid segments above, mapped to the same colors —
             // Swift Charts merges LineMarks sharing the same foregroundStyle(by:) value into one
             // continuous stroked path, so each dashed future segment needs its own key or its
             // .lineStyle() gets silently discarded in favor of the solid segment's style.
-            "Form (raw) (projected)": Color.gray,
-            "Form (smoothed) (projected)": Color.white,
+            "Form (raw) (projected)": Color.secondary,
+            "Form (smoothed) (projected)": Color.primary,
         ])
         .chartXScale(domain: dayDomain)
         .chartYScale(domain: Self.formDomain)
