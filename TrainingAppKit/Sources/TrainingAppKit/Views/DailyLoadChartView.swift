@@ -12,16 +12,21 @@ struct DailyLoadChartView: View {
     let displayedWeekRange: ClosedRange<Date>
     let today: Date = .now
 
-    /// Actual (completed) days' load — `FitnessMetricsSplit.pastAndFuture` also includes `today`
-    /// in `future`, which would double-draw its bar; `DailyLoad.aggregating` already drops
-    /// zero-load days, so there's no separate "did today already load" check needed here.
+    /// Actual (completed) days' load, up to and including `today`.
+    ///
+    /// Deliberately not `FitnessMetricsSplit.pastAndFuture` — that helper includes `today` in
+    /// *both* halves on purpose, so `FitnessChartView`'s solid and dashed line segments connect
+    /// with no gap. Bars have no such continuity to preserve, and reusing it here silently drew
+    /// two overlapping `BarMark`s (stacked, since Charts groups same-x bars by default) for
+    /// today's own day — visibly a too-tall bar overshooting the y-axis.
     private var pastLoads: [DailyLoad] {
-        DailyLoad.aggregating(FitnessMetricsSplit.pastAndFuture(metrics, today: today).past)
+        DailyLoad.aggregating(metrics.filter { $0.day <= today })
     }
 
-    /// Projected/planned days' load, rendered as muted bars distinct from actual history.
+    /// Projected/planned days' load, strictly after `today` (see `pastLoads`'s own doc comment for
+    /// why not `today` too), rendered as muted bars distinct from actual history.
     private var futureLoads: [DailyLoad] {
-        DailyLoad.aggregating(FitnessMetricsSplit.pastAndFuture(metrics, today: today).future)
+        DailyLoad.aggregating(metrics.filter { $0.day > today })
     }
 
     private var dayDomain: ClosedRange<Date> {

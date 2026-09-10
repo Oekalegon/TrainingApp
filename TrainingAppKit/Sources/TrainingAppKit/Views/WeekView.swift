@@ -365,13 +365,13 @@ public struct WeekView: View {
     /// an `isCurrentPage`-style mode flag) and why the two off-screen pages need their own display
     /// path here at all rather than just reusing `GraphPanelPagerView` with a frozen initial page.
     @ViewBuilder
-    private func graphPanel(isCurrentPage: Bool) -> some View {
+    private func graphPanel(weekStart: Date, isCurrentPage: Bool) -> some View {
         if isCurrentPage {
             GraphPanelPagerView(
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
-                heartRateHistogram: viewModel.heartRateHistogram,
-                perActivityHeartRateHistograms: viewModel.perActivityHeartRateHistograms,
+                heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
+                perActivityHeartRateHistograms: viewModel.perActivityHeartRateHistograms(for: weekStart),
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 }
             )
@@ -379,8 +379,8 @@ public struct WeekView: View {
             GraphPanelStaticPreview(
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
-                heartRateHistogram: viewModel.heartRateHistogram,
-                perActivityHeartRateHistograms: viewModel.perActivityHeartRateHistograms,
+                heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
+                perActivityHeartRateHistograms: viewModel.perActivityHeartRateHistograms(for: weekStart),
                 selectedIndex: graphPanelSelectedIndex
             )
         }
@@ -391,9 +391,11 @@ public struct WeekView: View {
     /// `weekPageHeader` and the graph panel purely so they know whether to report their frames for
     /// gesture disambiguation (see `statsBarFrame`'s own doc comment) — a non-current page's frames
     /// are meaningless for that since the page isn't the one on screen being swiped.
+    @ViewBuilder
     private func weekPageContent(for dates: [Date], pageHeight: CGFloat, isCurrentPage: Bool) -> some View {
+        let weekStart = dates.first ?? viewModel.displayedWeekStart
         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-            graphPanel(isCurrentPage: isCurrentPage)
+            graphPanel(weekStart: weekStart, isCurrentPage: isCurrentPage)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
                 .background(chartSectionBackground)
@@ -438,7 +440,7 @@ public struct WeekView: View {
                 // `.padding(.bottom, 20)`.
                 .padding(.top, 12)
             } header: {
-                weekPageHeader(isCurrentPage: isCurrentPage)
+                weekPageHeader(weekStart: weekStart, isCurrentPage: isCurrentPage)
             }
         }
     }
@@ -453,10 +455,10 @@ public struct WeekView: View {
     ///   — see that property's own doc comment. All three carousel pages mount a `weekPageHeader`,
     ///   but only the current one is actually on screen/interactive, so only it should be allowed to
     ///   write that shared state (the other two's frames are for offscreen content).
-    private func weekPageHeader(isCurrentPage: Bool) -> some View {
+    private func weekPageHeader(weekStart: Date, isCurrentPage: Bool) -> some View {
         VStack(spacing: 0) {
             Divider()
-            SportStatsPagerView(pages: viewModel.sportStatsPages())
+            SportStatsPagerView(pages: viewModel.sportStatsPages(for: weekStart))
                 .padding(.vertical, 12)
             Divider()
         }
