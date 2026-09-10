@@ -29,19 +29,20 @@ struct DailyLoadChartView: View {
         DailyLoad.aggregating(metrics.filter { $0.day > today })
     }
 
-    /// `ChartDayDomain.range(for:)` widened by half a day on each end.
+    /// `ChartDayDomain.range(for:)` widened by a full day on each end.
     ///
     /// That shared range spans exactly the first day's start through the last day's start, which
-    /// is correct for `FitnessChartView`'s `LineMark`s (a single point plotted exactly at each
-    /// day has nothing to overflow) but not for this chart's `BarMark`s: with a `unit: .day` bar
-    /// centered on its own day, the very first/last bars each need half a day of room on their
-    /// outer side to render their full width — without it, the last day's bar (a real day, not a
-    /// rendering bug: e.g. the 7th day of the *next* window over) drew half on top of the trailing
-    /// axis instead of fully inside the plot.
+    /// is correct for `FitnessChartView`'s `LineMark`s (a single point plotted exactly at each day
+    /// has nothing to overflow) but not for this chart's `BarMark`s: a `unit: .day` bar spans the
+    /// *whole* following day from its own x-value, not a day centered on it, so the first/last
+    /// bars each need a full day of room on their outer side to render completely — half a day
+    /// (tried first) still left the last day's bar (a real day, not a rendering bug: e.g. the 7th
+    /// day of the *next* window over) half-drawn onto the trailing axis instead of fully inside
+    /// the plot.
     private var dayDomain: ClosedRange<Date> {
         let range = ChartDayDomain.range(for: metrics)
-        let halfDay: TimeInterval = 12 * 60 * 60
-        return range.lowerBound.addingTimeInterval(-halfDay)...range.upperBound.addingTimeInterval(halfDay)
+        let oneDay: TimeInterval = 24 * 60 * 60
+        return range.lowerBound.addingTimeInterval(-oneDay)...range.upperBound.addingTimeInterval(oneDay)
     }
 
     var body: some View {

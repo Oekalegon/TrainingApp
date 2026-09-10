@@ -29,18 +29,11 @@ public final class WeekViewModel {
     @ObservationIgnored
     private var sportStatsPagesCachesKey: (activityCount: Int, today: Date)?
 
-    /// One cached week's worth of graph-panel data — the combined heart-rate histogram and its
-    /// per-activity breakdown, computed together since both come from the same walk over that
-    /// week's activities. See ``weekGraphCaches``'s own doc comment for why these are cached (and
-    /// prefetched) per week rather than only ever describing the displayed one.
-    private struct WeekGraphCache {
-        var heartRateHistogram: HeartRateHistogram
-        var perActivityHistograms: [HeartRateHistogram]
-    }
-    /// Cached per week, keyed by that week's `weekStart` — at most 3 entries (``displayedWeekStart``
-    /// and its immediate neighbors) at any time, refreshed by ``refreshWeekCachesIfNeeded()``. Not
-    /// `@ObservationIgnored`, for the same reason as ``sportStatsPagesCaches``.
-    private var weekGraphCaches: [Date: WeekGraphCache] = [:]
+    /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
+    /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
+    /// by ``refreshWeekCachesIfNeeded()``. Not `@ObservationIgnored`, for the same reason as
+    /// ``sportStatsPagesCaches``.
+    private var weekGraphCaches: [Date: HeartRateHistogram] = [:]
     /// `model.activities.count` as of the last time ``weekGraphCaches`` was populated — see
     /// ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch invalidates the whole
     /// cache rather than trying to single out which weeks actually changed.
@@ -320,15 +313,7 @@ public final class WeekViewModel {
     /// immediate neighbors, which are the only weeks ever prefetched (see that method's own doc
     /// comment) and so the only ones `WeekView`'s carousel ever asks for.
     public func heartRateHistogram(for weekStart: Date) -> HeartRateHistogram {
-        weekGraphCaches[weekStart]?.heartRateHistogram ?? .empty
-    }
-
-    /// `weekStart`'s activities, each as its own heart-rate histogram, for the thin per-activity
-    /// lines `TimeInZoneChartView` draws under the combined ``heartRateHistogram(for:)`` line.
-    /// Activities with no heart-rate samples are skipped (an all-zero histogram has nothing to
-    /// draw). Empty until cached — see ``heartRateHistogram(for:)``'s own doc comment.
-    public func perActivityHeartRateHistograms(for weekStart: Date) -> [HeartRateHistogram] {
-        weekGraphCaches[weekStart]?.perActivityHistograms ?? []
+        weekGraphCaches[weekStart] ?? .empty
     }
 
     /// Prefetches (and evicts stale entries from) ``weekGraphCaches`` for ``displayedWeekStart``
@@ -358,22 +343,18 @@ public final class WeekViewModel {
 
         let displayedWeekStart = self.displayedWeekStart
         if weekGraphCaches[displayedWeekStart] == nil {
-            await cacheWeekGraph(weekStart: displayedWeekStart, priority: .userInitiated, progressivePerActivity: true)
+            await cacheWeekGraph(weekStart: displayedWeekStart, priority: .userInitiated)
         }
         for weekStart in window where weekStart != displayedWeekStart && weekGraphCaches[weekStart] == nil {
-            await cacheWeekGraph(weekStart: weekStart, priority: .utility, progressivePerActivity: false)
+            await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
     }
 
-    /// Computes one week's combined + per-activity heart-rate histograms off the main actor and
-    /// stores them in ``weekGraphCaches``, unless the 3-week window has moved on again by the time
-    /// each step lands (a stale result for a week no longer near ``displayedWeekStart`` is simply
-    /// dropped, not cached). `progressivePerActivity` publishes each activity's own histogram as
-    /// soon as it's ready (used for the displayed week, so `TimeInZoneChartView`'s combined line
-    /// never waits on the per-activity lines); neighboring weeks — not visible yet — instead wait
-    /// and store the whole batch at once, since there's no perceptible win to publishing those
-    /// incrementally before the athlete has even swiped to them.
-    private func cacheWeekGraph(weekStart: Date, priority: TaskPriority, progressivePerActivity: Bool) async {
+    /// Computes one week's heart-rate histogram off the main actor and stores it in
+    /// ``weekGraphCaches``, unless the 3-week window has moved on again by the time it lands (a
+    /// stale result for a week no longer near ``displayedWeekStart`` is simply dropped, not
+    /// cached).
+    private func cacheWeekGraph(weekStart: Date, priority: TaskPriority) async {
         let activityCount = model.activities.count
         let weekActivities = activities(forWeekStarting: weekStart)
         let athlete = model.athlete
@@ -382,22 +363,7 @@ public final class WeekViewModel {
             HeartRateHistogram.aggregating(weekActivities, athlete: athlete)
         }.value
         guard isStillCacheable(weekStart, activityCount: activityCount) else { return }
-        weekGraphCaches[weekStart] = WeekGraphCache(heartRateHistogram: histogram, perActivityHistograms: [])
-
-        var perActivity: [HeartRateHistogram] = []
-        for activity in weekActivities where !activity.heartRate.isEmpty {
-            let oneHistogram = await Task.detached(priority: priority) {
-                HeartRateHistogram.aggregating([activity], athlete: athlete)
-            }.value
-            guard isStillCacheable(weekStart, activityCount: activityCount) else { return }
-            perActivity.append(oneHistogram)
-            if progressivePerActivity {
-                weekGraphCaches[weekStart]?.perActivityHistograms = perActivity
-            }
-        }
-        if !progressivePerActivity {
-            weekGraphCaches[weekStart]?.perActivityHistograms = perActivity
-        }
+        weekGraphCaches[weekStart] = histogram
     }
 
     /// Whether a background computation for `weekStart` (started when `activityCount` was

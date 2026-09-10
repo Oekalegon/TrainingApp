@@ -14,7 +14,6 @@ struct GraphPanelPagerView: View {
     let metrics: [FitnessMetrics]
     let displayedWeekRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
-    let perActivityHeartRateHistograms: [HeartRateHistogram]
     /// Called whenever the page changes, so `WeekView` can remember it across a week change or a
     /// scroll-triggered recycle (see `selectedIndex`'s own doc comment for why this is a one-way
     /// callback rather than a `@Binding`).
@@ -53,14 +52,12 @@ struct GraphPanelPagerView: View {
         metrics: [FitnessMetrics],
         displayedWeekRange: ClosedRange<Date>,
         heartRateHistogram: HeartRateHistogram,
-        perActivityHeartRateHistograms: [HeartRateHistogram],
         initialSelectedIndex: Int,
         onSelectedIndexChange: @escaping (Int) -> Void
     ) {
         self.metrics = metrics
         self.displayedWeekRange = displayedWeekRange
         self.heartRateHistogram = heartRateHistogram
-        self.perActivityHeartRateHistograms = perActivityHeartRateHistograms
         self.onSelectedIndexChange = onSelectedIndexChange
         _selectedIndex = State(initialValue: initialSelectedIndex)
     }
@@ -79,12 +76,9 @@ struct GraphPanelPagerView: View {
                     FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
                         .frame(width: pageWidth)
                         .accessibilityHidden(selectedIndex != 1)
-                    TimeInZoneChartView(
-                        histogram: heartRateHistogram,
-                        perActivityHistograms: perActivityHeartRateHistograms
-                    )
-                    .frame(width: pageWidth)
-                    .accessibilityHidden(selectedIndex != 2)
+                    TimeInZoneChartView(histogram: heartRateHistogram)
+                        .frame(width: pageWidth)
+                        .accessibilityHidden(selectedIndex != 2)
                 }
                 // Without this, the HStack's own content-hugging height leaves GeometryReader
                 // positioning it at the top of this panel's full height rather than centering it —
@@ -168,7 +162,6 @@ struct GraphPanelStaticPreview: View {
     let metrics: [FitnessMetrics]
     let displayedWeekRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
-    let perActivityHeartRateHistograms: [HeartRateHistogram]
     let selectedIndex: Int
 
     var body: some View {
@@ -180,10 +173,7 @@ struct GraphPanelStaticPreview: View {
                 case 1:
                     FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
                 default:
-                    TimeInZoneChartView(
-                        histogram: heartRateHistogram,
-                        perActivityHistograms: perActivityHeartRateHistograms
-                    )
+                    TimeInZoneChartView(histogram: heartRateHistogram)
                 }
             }
             .frame(height: GraphPanelPagerView.panelHeight)

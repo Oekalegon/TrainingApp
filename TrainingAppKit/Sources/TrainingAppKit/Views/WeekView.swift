@@ -364,32 +364,13 @@ public struct WeekView: View {
     /// type's own doc comment for why they're two distinct view types (rather than one view with
     /// an `isCurrentPage`-style mode flag) and why the two off-screen pages need their own display
     /// path here at all rather than just reusing `GraphPanelPagerView` with a frozen initial page.
-    /// Whether a week-change slide (drag or its release-triggered settle animation) is currently
-    /// moving `weekContent`'s own HStack — used to suppress the per-activity histogram lines for
-    /// that duration. `isDraggingHorizontally` alone doesn't cover the settle animation:
-    /// `handleDragEnded` resets it synchronously once the drag ends, before `completeSwipe`'s own
-    /// animation actually finishes, so `isCompletingSwipe` is needed to keep covering that tail.
-    /// Excludes an exempt swipe (`isSwipeExemptFromWeekChange`, e.g. the graph panel's own
-    /// load/form/zone paging) — that never moves this HStack, so there's nothing to lighten here.
-    private var isSlidingWeeks: Bool {
-        (isDraggingHorizontally && !isSwipeExemptFromWeekChange) || isCompletingSwipe
-    }
-
     @ViewBuilder
     private func graphPanel(weekStart: Date, isCurrentPage: Bool) -> some View {
-        // Substituting `[]` here (rather than threading a "hide these" flag down into
-        // `TimeInZoneChartView`) while `isSlidingWeeks` is true: those per-activity lines were the
-        // one thing in this panel that scales with how many activities a week had, and were
-        // reported as the source of choppy panning specifically on busy weeks — dropping them for
-        // the duration of the slide (they reappear the instant it settles) removes that cost
-        // exactly when it was competing with the slide animation for main-thread time.
-        let perActivityHistograms = isSlidingWeeks ? [] : viewModel.perActivityHeartRateHistograms(for: weekStart)
         if isCurrentPage {
             GraphPanelPagerView(
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
-                perActivityHeartRateHistograms: perActivityHistograms,
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 }
             )
@@ -398,7 +379,6 @@ public struct WeekView: View {
                 metrics: viewModel.chartMetrics,
                 displayedWeekRange: viewModel.displayedWeekRange,
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
-                perActivityHeartRateHistograms: perActivityHistograms,
                 selectedIndex: graphPanelSelectedIndex
             )
         }
