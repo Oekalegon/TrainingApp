@@ -71,32 +71,10 @@ struct HeartRateHistogramChartView: View {
         }
     }
 
-    /// `histogram` densified into one point per `binWidth`-wide step across `domain`, zero-filled
-    /// where `histogram.bins` has no data — without this, `LineMark`'s interpolation would smooth
-    /// straight across the gaps between the (otherwise sparse) real bins instead of dipping to
-    /// zero, which reads as heart-rate time existing where none was actually recorded. Real
-    /// recorded time below zone 1 is shown here same as any other bin (it's meaningful — e.g.
-    /// warmup/cooldown recovery heart rate), not zeroed out; only ``HeartRateHistogram
-    /// .percentileBPM(_:)`` excludes it, for the unrelated purpose of keeping the 80/20 threshold
-    /// scoped to in-zone time.
-    ///
-    /// `histogram.bins`' keys sit on a fixed `binWidth` grid independent of `domain`'s own edges
-    /// (`domain` is offset from the athlete's zone boundaries, which don't fall on that grid), so
-    /// flooring/ceiling `domain.lowerBound`/`domain.upperBound` to the nearest bin can land one bin
-    /// *outside* `domain` on either side. Left unfiltered, a real (nonzero) bin just past that edge
-    /// got plotted, and the portion of the line between it and the next in-domain point rendered
-    /// already-risen right at the domain edge instead of reading zero there — visually, the curve
-    /// looked like it started before the x-axis' own left edge (MVP1-61). The trailing `filter`
-    /// drops any such out-of-domain point so nothing renders past what `chartXScale(domain:)`
-    /// actually shows.
-    private var densifiedMinutesByBPM: [(bpm: Int, minutes: Double)] {
-        let secondsByBin = Dictionary(uniqueKeysWithValues: histogram.bins.map { ($0.bpm, $0.seconds) })
-        let binWidth = histogram.binWidth
-        let lowerBin = Int((domain.lowerBound / Double(binWidth)).rounded(.down)) * binWidth
-        let upperBin = Int((domain.upperBound / Double(binWidth)).rounded(.up)) * binWidth
-        return stride(from: lowerBin, through: upperBin, by: binWidth)
-            .filter { Double($0) >= domain.lowerBound && Double($0) <= domain.upperBound }
-            .map { bpm in (bpm, (secondsByBin[bpm] ?? 0) / 60) }
+    /// `histogram` densified across ``domain`` — see `HeartRateHistogram.densifiedMinutes(domain:)`
+    /// for why this needs its own (unit-tested) logic rather than a simple bin lookup.
+    private var densifiedMinutesByBPM: [HeartRateHistogramPoint] {
+        histogram.densifiedMinutes(domain: domain)
     }
 
     /// The 80/20 polarized-training threshold (Seiler) — the heart rate below which 80% of the

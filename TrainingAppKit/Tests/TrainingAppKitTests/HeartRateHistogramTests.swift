@@ -106,6 +106,62 @@ struct HeartRateHistogramTests {
         #expect(bin.seconds == 30)
     }
 
+    @Test("densifiedMinutes(domain:) zero-fills bins the histogram has no data for")
+    func densifiedMinutesZeroFillsGaps() {
+        let histogram = HeartRateHistogram(
+            bins: [HeartRateHistogramBin(bpm: 110, seconds: 60)],
+            binWidth: 5,
+            zoneBoundariesBPM: nil
+        )
+        let points = histogram.densifiedMinutes(domain: 100...120)
+        #expect(points.map(\.bpm) == [100, 105, 110, 115, 120])
+        #expect(points.map(\.minutes) == [0, 0, 1, 0, 0])
+    }
+
+    @Test("densifiedMinutes(domain:) keeps real recorded time below zone 1, same as any other bin")
+    func densifiedMinutesKeepsBelowZone1Data() {
+        // Below zone 1 (recovery/warmup) at 90bpm -- unlike percentileBPM(_:), this shouldn't be
+        // excluded: it's meaningful recorded time and stays visible on the chart.
+        let histogram = HeartRateHistogram(
+            bins: [HeartRateHistogramBin(bpm: 90, seconds: 120)],
+            binWidth: 5,
+            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
+        )
+        let points = histogram.densifiedMinutes(domain: 85...100)
+        #expect(points.first { $0.bpm == 90 }?.minutes == 2)
+    }
+
+    @Test("densifiedMinutes(domain:) excludes a bin whose grid position falls outside domain")
+    func densifiedMinutesExcludesOutOfDomainBin() {
+        // Regression test for MVP1-61: `domain`'s own edges don't fall on the binWidth grid (they're
+        // offset from the athlete's zone boundaries), so the bin just below `domain.lowerBound` can
+        // still get visited by the stride. Its real (nonzero) value must not leak into the result --
+        // that's what previously made the histogram chart's curve look like it started rising before
+        // its own x-axis did.
+        let histogram = HeartRateHistogram(
+            bins: [
+                // This bin's own start (80) sits below domain.lowerBound (82), but the bin's range
+                // (80..<85) still straddles it -- exactly the case that leaked through before.
+                HeartRateHistogramBin(bpm: 80, seconds: 600),
+                HeartRateHistogramBin(bpm: 85, seconds: 60),
+            ],
+            binWidth: 5,
+            zoneBoundariesBPM: nil
+        )
+        let points = histogram.densifiedMinutes(domain: 82...90)
+        #expect(points.map(\.bpm).allSatisfy { $0 >= 82 })
+        #expect(points.first { $0.bpm == 80 } == nil)
+    }
+
+    @Test("densifiedMinutes(domain:) returns an empty result when no grid point falls inside domain")
+    func densifiedMinutesEmptyForNarrowDomain() {
+        // Bin-grid points sit at 100 and 105; a domain strictly between them (101...104) contains
+        // neither, so both get filtered out just like the out-of-domain case above.
+        let histogram = HeartRateHistogram(bins: [], binWidth: 5, zoneBoundariesBPM: nil)
+        let points = histogram.densifiedMinutes(domain: 101...104)
+        #expect(points.isEmpty)
+    }
+
     @Test("aggregating(_:athlete:) reports zone boundaries in bpm when the athlete has zone settings")
     func aggregatingResolvesZoneBoundaries() throws {
         let athlete = AthleteProfile.fixture(
