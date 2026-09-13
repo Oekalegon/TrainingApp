@@ -32,12 +32,9 @@ struct HeartRateHistogramChartView: View {
     /// Padding (in bpm) added below zone 1's lower bound and above zone 5's upper bound — the
     /// histogram is deliberately scoped to the zones themselves (design intent: this is a "time in
     /// zone" chart, not a general heart-rate distribution), not widened to fit whatever the actual
-    /// recorded data happens to span. Also doubles as the density-filled runway
-    /// `.interpolationMethod(.catmullRom)` needs to visibly decay to zero before the domain's own
-    /// edge, rather than still reading as a non-zero value right at the boundary: a spline fit
-    /// through the zero-filled points beyond the real data (see `densifiedMinutesByBPM`) needs
-    /// several of them to flatten out before the edge is reached, and at the default 5bpm bin
-    /// width this gives it three.
+    /// recorded data happens to span. Also gives the line a bit of zero-filled runway (see
+    /// `densifiedMinutesByBPM`) before the domain's own edge, so it visibly reads as decaying to
+    /// zero rather than still looking like a non-zero value right at the boundary.
     private static let domainPadding: Double = 15
     /// Domain used when the athlete has no resolvable heart-rate zones at all (so there's no
     /// zone-boundary-based domain to fall back to) and the histogram itself has no bins yet.
@@ -75,9 +72,9 @@ struct HeartRateHistogramChartView: View {
     }
 
     /// `histogram` densified into one point per `binWidth`-wide step across `domain`, zero-filled
-    /// where `histogram.bins` has no data — without this, `LineMark`'s catmullRom interpolation
-    /// would smooth straight across the gaps between the (otherwise sparse) real bins instead of
-    /// dipping to zero, which reads as heart-rate time existing where none was actually recorded.
+    /// where `histogram.bins` has no data — without this, `LineMark`'s interpolation would smooth
+    /// straight across the gaps between the (otherwise sparse) real bins instead of dipping to
+    /// zero, which reads as heart-rate time existing where none was actually recorded.
     private var densifiedMinutesByBPM: [(bpm: Int, minutes: Double)] {
         let secondsByBin = Dictionary(uniqueKeysWithValues: histogram.bins.map { ($0.bpm, $0.seconds) })
         let binWidth = histogram.binWidth
@@ -149,7 +146,13 @@ struct HeartRateHistogramChartView: View {
                 LineMark(x: .value("BPM", Double(point.bpm)), y: .value("Minutes", point.minutes))
                     .foregroundStyle(Color.primary)
                     .lineStyle(StrokeStyle(lineWidth: Self.smoothedLineWidth))
-                    .interpolationMethod(.catmullRom)
+                    // `.monotone`, not `.catmullRom`: at the zero-filled/real-data boundary (a
+                    // sharp jump from 0 to the first real bin's minutes), catmullRom's tangent at
+                    // the zero point ahead of that jump is pulled toward the nonzero point after
+                    // it, so the curve visibly starts rising several bpm before the real data
+                    // begins (MVP1-61) — `.monotone` doesn't overshoot past the values it's
+                    // actually interpolating between.
+                    .interpolationMethod(.monotone)
             }
         }
         .chartXScale(domain: domain)
