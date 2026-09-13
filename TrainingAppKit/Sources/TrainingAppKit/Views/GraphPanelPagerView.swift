@@ -2,7 +2,7 @@ import SwiftUI
 import TrainingCore
 
 /// The week view's graph panel (MVP1-55, design doc §2.1): pages between "Daily load", "Form"
-/// (CTL/ATL/TSB), and "Time in zone" for the displayed week.
+/// (CTL/ATL/TSB), and "Heart Rate Histogram" for the displayed week.
 ///
 /// A hand-rolled `DragGesture` + offset carousel, not `TabView(.page)` — same reasoning as
 /// `SportStatsPagerView`'s own carousel: `TabView`'s `UIPageViewController`-backed gesture
@@ -76,7 +76,7 @@ struct GraphPanelPagerView: View {
                     FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
                         .frame(width: pageWidth)
                         .accessibilityHidden(selectedIndex != 1)
-                    TimeInZoneChartView(histogram: heartRateHistogram)
+                    HeartRateHistogramChartView(histogram: heartRateHistogram)
                         .frame(width: pageWidth)
                         .accessibilityHidden(selectedIndex != 2)
                 }
@@ -173,7 +173,7 @@ struct GraphPanelStaticPreview: View {
                 case 1:
                     FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
                 default:
-                    TimeInZoneChartView(histogram: heartRateHistogram)
+                    HeartRateHistogramChartView(histogram: heartRateHistogram)
                 }
             }
             .frame(height: GraphPanelPagerView.panelHeight)

@@ -1,7 +1,7 @@
 import Foundation
 import TrainingCore
 
-/// One bin of the week view's graph panel "Time in zone" page's heart-rate histogram (MVP1-55
+/// One bin of the week view's graph panel "Heart Rate Histogram" page's heart-rate histogram (MVP1-55
 /// follow-up) — `bpm` is the bin's lower bound, `seconds` the total time any activity in the
 /// displayed week spent with a (consecutive-sample-averaged) heart rate in `bpm..<(bpm + binWidth)`.
 public struct HeartRateHistogramBin: Hashable, Sendable {
@@ -14,7 +14,7 @@ public struct HeartRateHistogramBin: Hashable, Sendable {
 /// continuous bpm axis instead of discrete per-zone bars.
 public struct HeartRateHistogram: Sendable {
     public let bins: [HeartRateHistogramBin]
-    /// The bin width (in bpm) `bins` was built with — `TimeInZoneChartView` needs this to fill in
+    /// The bin width (in bpm) `bins` was built with — `HeartRateHistogramChartView` needs this to fill in
     /// the zero-time bins `bins` omits when it densifies the histogram into a continuous line.
     public let binWidth: Int
     /// `[zone1.lower, zone1.upper, zone2.upper, zone3.upper, zone4.upper, zone5.upper]` in bpm, or
@@ -65,7 +65,7 @@ public struct HeartRateHistogram: Sendable {
 
     /// The bpm below which `fraction` of the histogram's *in-zone* time falls — e.g.
     /// `percentileBPM(0.8)` is the heart rate marking Seiler's 80/20 polarized-training threshold,
-    /// the light-gray vertical line `TimeInZoneChartView` draws. Interpolates linearly within
+    /// the light-gray vertical line `HeartRateHistogramChartView` draws. Interpolates linearly within
     /// whichever bin's cumulative time first reaches `fraction` of the total, rather than snapping
     /// to that bin's own (`binWidth`-wide) edge. `nil` when the histogram has no in-zone time
     /// recorded at all.

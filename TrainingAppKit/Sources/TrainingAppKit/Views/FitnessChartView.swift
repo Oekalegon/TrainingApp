@@ -66,7 +66,7 @@ struct FitnessChartView: View {
     // directly in one `Chart { ... }` block: with every zone band, the week-highlight rectangle,
     // and four `LineMark` series (raw/smoothed × past/future) all in one expression, the compiler
     // was unable to type-check `body` in reasonable time — the same class of timeout
-    // `TimeInZoneChartView` hit, fixed the same way there (see its own comment).
+    // `HeartRateHistogramChartView` hit, fixed the same way there (see its own comment).
     @ChartContentBuilder
     private var zoneBandMarks: some ChartContent {
         ForEach(Self.zoneBands, id: \.label) { band in

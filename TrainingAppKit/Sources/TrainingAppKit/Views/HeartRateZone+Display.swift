@@ -14,7 +14,7 @@ extension HeartRateZone {
     }
 
     /// A cool-to-hot ramp from easy (blue) to maximal (red) effort, for shading this zone's band
-    /// in charts (e.g. `TimeInZoneChartView`) — `TrainingCore` has no opinion on colors either.
+    /// in charts (e.g. `HeartRateHistogramChartView`) — `TrainingCore` has no opinion on colors either.
     var color: Color {
         switch self {
         case .recovery: .blue
