@@ -5,16 +5,18 @@ import TrainingCore
 /// cadence/elevation charts in MVP 1.
 struct ActivityDetailView: View {
     let viewModel: ActivityDetailViewModel
-    /// Runs `WeekViewModel.resolveOverlap(deleting:)` for the given activity id and dismisses this
-    /// sheet (MVP1-63) — `WeekView` supplies this; whichever side of `viewModel.overlapContext`
-    /// the athlete picks to delete, the sheet closes afterward since whatever's currently shown
-    /// (this activity, or its overlap context naming the other one) may no longer be accurate.
-    let onResolveOverlap: (UUID) -> Void
-    /// Runs `WeekViewModel.deleteActivity(_:asOf:)` and dismisses this sheet (MVP1-65) — the
-    /// bottom-of-list "Delete Activity" button's action, gated behind
-    /// `isShowingDeleteConfirmation`'s alert. Independent of `onResolveOverlap`: this is always
-    /// available, not just when `viewModel.overlapContext` flags an issue.
-    let onDelete: () -> Void
+    /// Runs `WeekViewModel.resolveOverlap(deleting:)` for the given activity id (MVP1-63) —
+    /// `WeekView` supplies this. `async` so the caller can await it before dismissing: whichever
+    /// side of `viewModel.overlapContext` the athlete picks to delete, the sheet should only close
+    /// once the delete has actually happened, not the instant the button is tapped.
+    let onResolveOverlap: (UUID) async -> Void
+    /// Runs `WeekViewModel.deleteActivity(_:asOf:)` (MVP1-65) — the bottom-of-list "Delete
+    /// Activity" button's action, gated behind `isShowingDeleteConfirmation`'s alert. `async` for
+    /// the same reason as `onResolveOverlap`: the caller awaits it before dismissing, rather than
+    /// firing a detached `Task` and dismissing immediately regardless of whether the delete has
+    /// actually run yet. Independent of `onResolveOverlap`: always available, not just when
+    /// `viewModel.overlapContext` flags an issue.
+    let onDelete: () async -> Void
     @Environment(\.dismiss) private var dismiss
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
     /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
@@ -35,8 +37,10 @@ struct ActivityDetailView: View {
                         context: overlapContext,
                         timeZone: viewModel.timeZone,
                         onResolve: { id in
-                            onResolveOverlap(id)
-                            dismiss()
+                            Task {
+                                await onResolveOverlap(id)
+                                dismiss()
+                            }
                         }
                     )
                 }
@@ -94,8 +98,10 @@ struct ActivityDetailView: View {
         // the bottom button.
         .alert("Delete Activity?", isPresented: $isShowingDeleteConfirmation) {
             Button("Delete", role: .destructive) {
-                onDelete()
-                dismiss()
+                Task {
+                    await onDelete()
+                    dismiss()
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
