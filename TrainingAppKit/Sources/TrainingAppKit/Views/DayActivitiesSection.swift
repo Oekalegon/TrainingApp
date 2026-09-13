@@ -73,6 +73,9 @@ struct DayActivitiesSection: View {
     /// `WeekViewModel.trainingLoad(for:)` couldn't score it, in which case the card omits the
     /// number rather than showing a misleading "0".
     let trainingLoad: (Activity) -> Double?
+    /// This activity's overlap issue, if any (MVP1-63) — see `WeekViewModel.overlapWarning(for:)`.
+    /// The card shows a warning badge when non-`nil`.
+    let overlapWarning: (Activity) -> OverlapRecommendation?
     /// The athlete's timezone — every date here is formatted with this, not the device's default,
     /// so the dates/times shown agree with how `WeekViewModel` grouped them into this day in the
     /// first place.
@@ -124,6 +127,7 @@ struct DayActivitiesSection: View {
                     ActivityCard(
                         activity: activity,
                         trainingLoad: trainingLoad(activity),
+                        overlapWarning: overlapWarning(activity),
                         onSelect: { onSelectActivity(activity) }
                     )
                 }
@@ -290,6 +294,20 @@ private struct MetricPillView: View {
     }
 }
 
+/// VoiceOver/tooltip text for `ActivityCard`'s overlap-warning badge (MVP1-63) — mirrors what
+/// `ActivityOverlapChecker`'s own doc comments say to do about each case, condensed to a phrase
+/// short enough to read as one badge's label rather than a full sentence.
+extension OverlapRecommendation {
+    var warningLabel: String {
+        switch self {
+        case .duplicate: "Possible duplicate activity"
+        case .merge: "Overlaps another activity with different data"
+        case .conflict: "Overlaps another activity"
+        case .possibleMultisport: "Close to another activity"
+        }
+    }
+}
+
 /// Corner radius shared by `ActivityCard` and `PlannedActivityCard` (design doc §2.1, MVP1-41),
 /// so a completed activity's filled card and a planned one's outlined card read as the same shape
 /// language sitting in the timeline between weekday rows, distinguished by fill/border rather than
@@ -313,6 +331,9 @@ private struct ActivityCard: View {
     /// the number entirely when this is `nil` (couldn't be computed) or rounds to `0` (nothing
     /// worth showing).
     let trainingLoad: Double?
+    /// This activity's overlap issue, from `WeekViewModel.overlapWarning(for:)` (MVP1-63) — `nil`
+    /// when it isn't part of any overlap worth flagging, in which case no badge shows.
+    let overlapWarning: OverlapRecommendation?
     let onSelect: () -> Void
 
     /// Matches `DayActivitiesSection`'s time label's top padding, so the label and this card's
@@ -337,6 +358,11 @@ private struct ActivityCard: View {
                         .frame(width: Self.iconWidth)
                     Text(activity.sport.displayName)
                         .foregroundStyle(.primary)
+                    if let overlapWarning {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel(overlapWarning.warningLabel)
+                    }
                     Spacer()
                     // Rounds first, then checks that against zero — `loadFormat` itself rounds to
                     // the nearest whole number, so a raw value like 0.3 is `> 0` but would still

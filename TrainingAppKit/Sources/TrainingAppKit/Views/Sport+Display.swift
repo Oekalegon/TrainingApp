@@ -5,6 +5,8 @@ extension Sport {
     var displayName: String {
         switch self {
         case .running: "Running"
+        case .indoorRunning: "Indoor Running"
+        case .outdoorRunning: "Outdoor Running"
         case .cycling: "Cycling"
         case .swimming: "Swimming"
         case .strength: "Strength"
@@ -18,7 +20,7 @@ extension Sport {
     /// An SF Symbol standing in for this sport in the week view's day list.
     var symbolName: String {
         switch self {
-        case .running: "figure.run"
+        case .running, .indoorRunning, .outdoorRunning: "figure.run"
         case .cycling: "figure.outdoor.cycle"
         case .swimming: "figure.pool.swim"
         case .strength: "figure.strengthtraining.traditional"
@@ -34,7 +36,7 @@ extension Sport {
     /// `.strength`/`.other` have no reliable distance, so they show just the headline line.
     var isEndurance: Bool {
         switch self {
-        case .running, .cycling, .swimming, .walking, .rowing, .hiking: true
+        case .running, .indoorRunning, .outdoorRunning, .cycling, .swimming, .walking, .rowing, .hiking: true
         case .strength, .other: false
         }
     }
