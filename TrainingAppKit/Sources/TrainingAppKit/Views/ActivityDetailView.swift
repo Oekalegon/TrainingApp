@@ -5,12 +5,22 @@ import TrainingCore
 /// cadence/elevation charts in MVP 1.
 struct ActivityDetailView: View {
     let viewModel: ActivityDetailViewModel
-    /// Runs `WeekViewModel.resolveOverlap(deleting:)` for the given activity id and dismisses this
-    /// sheet (MVP1-63) — `WeekView` supplies this; whichever side of `viewModel.overlapContext`
-    /// the athlete picks to delete, the sheet closes afterward since whatever's currently shown
-    /// (this activity, or its overlap context naming the other one) may no longer be accurate.
-    let onResolveOverlap: (UUID) -> Void
+    /// Runs `WeekViewModel.resolveOverlap(deleting:)` for the given activity id (MVP1-63) —
+    /// `WeekView` supplies this. `async` so the caller can await it before dismissing: whichever
+    /// side of `viewModel.overlapContext` the athlete picks to delete, the sheet should only close
+    /// once the delete has actually happened, not the instant the button is tapped.
+    let onResolveOverlap: (UUID) async -> Void
+    /// Runs `WeekViewModel.deleteActivity(_:asOf:)` (MVP1-65) — the bottom-of-list "Delete
+    /// Activity" button's action, gated behind `isShowingDeleteConfirmation`'s alert. `async` for
+    /// the same reason as `onResolveOverlap`: the caller awaits it before dismissing, rather than
+    /// firing a detached `Task` and dismissing immediately regardless of whether the delete has
+    /// actually run yet. Independent of `onResolveOverlap`: always available, not just when
+    /// `viewModel.overlapContext` flags an issue.
+    let onDelete: () async -> Void
     @Environment(\.dismiss) private var dismiss
+    /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
+    /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
+    @State private var isShowingDeleteConfirmation = false
 
     private var dateFormat: Date.FormatStyle {
         var format = Date.FormatStyle.dateTime.weekday(.wide).day().month(.wide).hour().minute()
@@ -27,8 +37,10 @@ struct ActivityDetailView: View {
                         context: overlapContext,
                         timeZone: viewModel.timeZone,
                         onResolve: { id in
-                            onResolveOverlap(id)
-                            dismiss()
+                            Task {
+                                await onResolveOverlap(id)
+                                dismiss()
+                            }
                         }
                     )
                 }
@@ -67,11 +79,34 @@ struct ActivityDetailView: View {
                     }
                 }
             }
+
+            // A centered red text button in its own section, not a toolbar icon (MVP1-65) --
+            // matches the "Delete Account"-style destructive action at the bottom of a Settings
+            // list, rather than a trash icon sitting next to everyday navigation controls.
+            Section {
+                Button("Delete Activity", role: .destructive) {
+                    isShowingDeleteConfirmation = true
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
         }
         .navigationTitle(viewModel.activity.sport.displayName)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // Irreversible from the UI (MVP1-65) -- always confirmed, never triggered directly from
+        // the bottom button.
+        .alert("Delete Activity?", isPresented: $isShowingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    await onDelete()
+                    dismiss()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
+        }
     }
 
     private var durationText: String {

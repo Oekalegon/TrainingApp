@@ -211,7 +211,8 @@ public struct WeekView: View {
                 NavigationStack {
                     ActivityDetailView(
                         viewModel: viewModel.activityDetailViewModel(for: activity),
-                        onResolveOverlap: { id in Task { await viewModel.resolveOverlap(deleting: id) } }
+                        onResolveOverlap: { id in await viewModel.resolveOverlap(deleting: id) },
+                        onDelete: { await viewModel.deleteActivity(activity) }
                     )
                 }
             }

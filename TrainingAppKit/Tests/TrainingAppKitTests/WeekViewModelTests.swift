@@ -457,6 +457,25 @@ struct WeekViewModelTests {
         #expect(try await store.activity(id: b.id) == nil)
     }
 
+    @Test("deleteActivity(_:asOf:) removes an activity unconditionally, not just an overlap side (MVP1-65)")
+    func deleteActivityRemovesAnyActivity() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        // No overlap involved at all -- proves this isn't limited to resolveOverlap's use case.
+        let solo = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        try await store.upsert([solo])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        #expect(viewModel.activities(on: day(2)).map(\.id) == [solo.id])
+
+        await viewModel.deleteActivity(solo, asOf: day(2))
+
+        #expect(viewModel.activities(on: day(2)).isEmpty)
+        #expect(try await store.activity(id: solo.id) == nil)
+    }
+
     @Test(
         "refresh(asOf:) sets overlapImportSummary from any real overlap, cleared by dismissOverlapImportSummary() (MVP1-63)"
     )
