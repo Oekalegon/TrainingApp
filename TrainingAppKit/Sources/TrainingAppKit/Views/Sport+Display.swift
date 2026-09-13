@@ -10,6 +10,7 @@ extension Sport {
         case .cycling: "Cycling"
         case .swimming: "Swimming"
         case .strength: "Strength"
+        case .coreStrengthTraining: "Core Strength Training"
         case .walking: "Walking"
         case .rowing: "Rowing"
         case .hiking: "Hiking"
@@ -24,6 +25,7 @@ extension Sport {
         case .cycling: "figure.outdoor.cycle"
         case .swimming: "figure.pool.swim"
         case .strength: "figure.strengthtraining.traditional"
+        case .coreStrengthTraining: "figure.core.training"
         case .walking: "figure.walk"
         case .rowing: "figure.rower"
         case .hiking: "figure.hiking"
@@ -37,7 +39,7 @@ extension Sport {
     var isEndurance: Bool {
         switch self {
         case .running, .indoorRunning, .outdoorRunning, .cycling, .swimming, .walking, .rowing, .hiking: true
-        case .strength, .other: false
+        case .strength, .coreStrengthTraining, .other: false
         }
     }
 }
