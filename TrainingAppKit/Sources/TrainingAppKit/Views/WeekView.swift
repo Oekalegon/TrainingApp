@@ -160,16 +160,12 @@ public struct WeekView: View {
             .toolbar {
                 ToolbarItem(placement: leadingToolbarPlacement) {
                     Button("Previous Week", systemImage: "chevron.left") {
-                        withAnimation(Self.weekChangeAnimation) {
-                            viewModel.goToPreviousWeek()
-                        }
+                        viewModel.goToPreviousWeek()
                     }
                 }
                 ToolbarItem(placement: leadingToolbarPlacement) {
                     Button("Next Week", systemImage: "chevron.right") {
-                        withAnimation(Self.weekChangeAnimation) {
-                            viewModel.goToNextWeek()
-                        }
+                        viewModel.goToNextWeek()
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -224,9 +220,7 @@ public struct WeekView: View {
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") {
-                            withAnimation(Self.weekChangeAnimation) {
-                                viewModel.goToWeek(containing: pickedDate)
-                            }
+                            viewModel.goToWeek(containing: pickedDate)
                             isShowingDatePicker = false
                         }
                     }
@@ -364,20 +358,32 @@ public struct WeekView: View {
     /// type's own doc comment for why they're two distinct view types (rather than one view with
     /// an `isCurrentPage`-style mode flag) and why the two off-screen pages need their own display
     /// path here at all rather than just reusing `GraphPanelPagerView` with a frozen initial page.
+    ///
+    /// Passes `weekStart`'s own ``WeekViewModel/chartMetrics(for:)``/``WeekViewModel/displayedWeekRange(for:)``,
+    /// not the unparameterized ``WeekViewModel/chartMetrics``/``WeekViewModel/displayedWeekRange``
+    /// (both of which always reflect `viewModel.displayedWeekStart`, not this particular page's own
+    /// week) — MVP1-32. Before this, every carousel page — including the previous/next ones a swipe
+    /// slides into view — rendered the *same* chart (whatever `displayedWeekStart` happened to be),
+    /// so the page that visibly became current after a swipe or button navigation genuinely hadn't
+    /// been showing its own data until that flip actually landed. Scoping each page to its own
+    /// `weekStart` means a neighbor page already shows its own correct, complete 3-week chart
+    /// beforehand — `load(asOf:)` fetches a wide enough range (`WeekViewModel.loadRange(for:calendar:)`)
+    /// for that to be true as soon as `displayedWeekStart` last changed, not just after the page in
+    /// question becomes current.
     @ViewBuilder
     private func graphPanel(weekStart: Date, isCurrentPage: Bool) -> some View {
         if isCurrentPage {
             GraphPanelPagerView(
-                metrics: viewModel.chartMetrics,
-                displayedWeekRange: viewModel.displayedWeekRange,
+                metrics: viewModel.chartMetrics(for: weekStart),
+                displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 }
             )
         } else {
             GraphPanelStaticPreview(
-                metrics: viewModel.chartMetrics,
-                displayedWeekRange: viewModel.displayedWeekRange,
+                metrics: viewModel.chartMetrics(for: weekStart),
+                displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
                 selectedIndex: graphPanelSelectedIndex
             )
@@ -512,6 +518,16 @@ public struct WeekView: View {
     /// three pages immediately recompute from the new `displayedWeekStart`, and the page that was
     /// just fully shown (e.g. "next") is now, by definition, the same content the "current" slot
     /// recomputes to — so nothing visibly moves a second time.
+    ///
+    /// No preloading here (MVP1-32's actual fix lives in `graphPanel(weekStart:isCurrentPage:)`
+    /// and `WeekViewModel.loadRange(for:calendar:)`, not in this method): the target week's own
+    /// chart is already complete by the time this runs, because `chartMetrics(for:)` reads
+    /// `model.metrics` scoped to *that* week, and `model.metrics` already reaches every immediate
+    /// neighbor of `displayedWeekStart` thanks to the widened range `load(asOf:)` fetches whenever
+    /// `displayedWeekStart` last changed. An earlier revision awaited an explicit preload here
+    /// before flipping, which fixed the same symptom but added a store round-trip's worth of
+    /// latency to every swipe and, worse, raced with a concurrent navigation with no serialization
+    /// between the two.
     private func completeSwipe(goingForward: Bool, pageWidth: CGFloat) {
         isCompletingSwipe = true
         withAnimation(Self.weekChangeAnimation) {
@@ -531,9 +547,18 @@ public struct WeekView: View {
     /// could be either side of the displayed week) to page toward, so this just updates
     /// `displayedWeekStart` directly — each page's content picks up the new dates and animates its
     /// own row-level changes, without paging anywhere.
+    ///
+    /// Deliberately *not* wrapped in `withAnimation`, same as the toolbar's Previous/Next Week
+    /// buttons and "Select Date": none of `FitnessChartView`/`DailyLoadChartView`/
+    /// `HeartRateHistogramChartView` apply their own `.animation(_:value:)`, so an explicit
+    /// `withAnimation` around a `displayedWeekStart` change is the only thing that would make
+    /// Swift Charts interpolate — its marks are `Animatable` and, given an animation, smoothly
+    /// slide their values and `chartXScale` domain from the old 3-week window to the new one. Since
+    /// the data is already complete either way (see `completeSwipe`'s own doc comment), that
+    /// interpolation has nothing to do with correctness, but visually it looks exactly like the
+    /// target week's data "growing in" after the rest — the same symptom this whole fix is for. A
+    /// plain, unanimated assignment snaps straight to the final, complete state instead.
     private func goToToday() {
-        withAnimation(Self.weekChangeAnimation) {
-            viewModel.goToToday()
-        }
+        viewModel.goToToday()
     }
 }

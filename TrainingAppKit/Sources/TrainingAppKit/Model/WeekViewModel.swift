@@ -120,18 +120,53 @@ public final class WeekViewModel {
             .flatMap { activities(on: $0) }
     }
 
-    /// The 3-week range (the week before, the displayed week, the week after) the chart covers
-    /// and `load(asOf:)` fetches.
+    /// The 3-week range (the week before, the displayed week, the week after) the chart covers.
     public var chartRange: ClosedRange<Date> {
-        let start = calendar.date(byAdding: .day, value: -7, to: displayedWeekStart) ?? displayedWeekStart
-        let end = calendar.date(byAdding: .day, value: 13, to: displayedWeekStart) ?? displayedWeekStart
+        chartRange(for: displayedWeekStart)
+    }
+
+    /// The 3-week range `chartRange` would be if ``displayedWeekStart`` were `weekStart` instead —
+    /// used by `WeekView`'s carousel so each page renders its own week's chart rather than
+    /// whichever week happens to be ``displayedWeekStart`` (MVP1-32).
+    public func chartRange(for weekStart: Date) -> ClosedRange<Date> {
+        Self.chartRange(for: weekStart, calendar: calendar)
+    }
+
+    private static func chartRange(for weekStart: Date, calendar: Calendar) -> ClosedRange<Date> {
+        let start = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
+        let end = calendar.date(byAdding: .day, value: 13, to: weekStart) ?? weekStart
+        return start...end
+    }
+
+    /// The range ``load(asOf:)`` actually fetches from the stores: wide enough to cover not just
+    /// `weekStart`'s own ``chartRange(for:)``, but its immediate neighbors' as well (MVP1-32) — so
+    /// `WeekView`'s carousel can render each neighbor page's own complete, correct 3-week chart
+    /// continuously (not just after actually navigating there), and a swipe or button navigation
+    /// never finds anything left to load once it flips ``displayedWeekStart``. Deliberately wider
+    /// than ``chartRange(for:)`` itself, which stays exactly 3 weeks — that's still the range each
+    /// page's own chart *displays*, just now backed by a `model.metrics` that already reaches far
+    /// enough to cover its neighbors' displays too.
+    private static func loadRange(for weekStart: Date, calendar: Calendar) -> ClosedRange<Date> {
+        let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
+        let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+        let start = chartRange(for: previousWeekStart, calendar: calendar).lowerBound
+        let end = chartRange(for: nextWeekStart, calendar: calendar).upperBound
         return start...end
     }
 
     /// `model.metrics` restricted to ``chartRange``, in day order.
     public var chartMetrics: [FitnessMetrics] {
-        model.metrics
-            .filter { chartRange.contains($0.day) }
+        chartMetrics(for: displayedWeekStart)
+    }
+
+    /// `model.metrics` restricted to ``chartRange(for:)``'s own range for `weekStart`, in day
+    /// order — `WeekView`'s carousel uses this (rather than the unparameterized ``chartMetrics``)
+    /// so each page renders *that page's own* 3-week window instead of whichever week happens to
+    /// be ``displayedWeekStart`` (MVP1-32).
+    public func chartMetrics(for weekStart: Date) -> [FitnessMetrics] {
+        let range = chartRange(for: weekStart)
+        return model.metrics
+            .filter { range.contains($0.day) }
             .sorted { $0.day < $1.day }
     }
 
@@ -139,8 +174,15 @@ public final class WeekViewModel {
     /// necessarily today's. Used to highlight that week's background on the fitness chart, so the
     /// 3-week trend stays visually anchored to whichever week the athlete has scrolled to.
     public var displayedWeekRange: ClosedRange<Date> {
-        let end = calendar.date(byAdding: .day, value: 7, to: displayedWeekStart) ?? displayedWeekStart
-        return displayedWeekStart...end
+        displayedWeekRange(for: displayedWeekStart)
+    }
+
+    /// The date range of `weekStart` — used by `WeekView`'s carousel (MVP1-32) so a
+    /// previous/next page highlights *its own* week's background rather than
+    /// ``displayedWeekStart``'s.
+    public func displayedWeekRange(for weekStart: Date) -> ClosedRange<Date> {
+        let end = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+        return weekStart...end
     }
 
     /// The calendar week number of ``displayedWeekStart``, for the week view's title (MVP1-56).
@@ -427,11 +469,13 @@ public final class WeekViewModel {
         displayedWeekStart = Self.weekStart(containing: date, calendar: calendar)
     }
 
-    /// Loads ``chartRange`` from the stores into `model`. Errors are swallowed — a failed load
-    /// leaves `model` exactly as it was (`TrainingModel.load(in:)`'s own guarantee), so there's
-    /// nothing for the view to reconcile; MVP 1 has no load-failure UI.
+    /// Loads ``loadRange(for:calendar:)`` for ``displayedWeekStart`` from the stores into `model`
+    /// — wider than ``chartRange`` itself, so `WeekView`'s neighbor carousel pages already have
+    /// their own complete chart data before the athlete ever swipes to them (MVP1-32). Errors are
+    /// swallowed — a failed load leaves `model` exactly as it was (`TrainingModel.load(in:)`'s own
+    /// guarantee), so there's nothing for the view to reconcile; MVP 1 has no load-failure UI.
     public func load(asOf today: Date = .now) async {
-        try? await model.load(in: chartRange, asOf: today)
+        try? await model.load(in: Self.loadRange(for: displayedWeekStart, calendar: calendar), asOf: today)
         await refreshWeekCachesIfNeeded()
     }
 
