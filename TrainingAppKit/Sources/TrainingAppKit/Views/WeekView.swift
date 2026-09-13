@@ -160,12 +160,12 @@ public struct WeekView: View {
             .toolbar {
                 ToolbarItem(placement: leadingToolbarPlacement) {
                     Button("Previous Week", systemImage: "chevron.left") {
-                        navigate(to: viewModel.weekDates(offsetWeeks: -1).first ?? viewModel.displayedWeekStart)
+                        viewModel.goToPreviousWeek()
                     }
                 }
                 ToolbarItem(placement: leadingToolbarPlacement) {
                     Button("Next Week", systemImage: "chevron.right") {
-                        navigate(to: viewModel.weekDates(offsetWeeks: 1).first ?? viewModel.displayedWeekStart)
+                        viewModel.goToNextWeek()
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -220,7 +220,7 @@ public struct WeekView: View {
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") {
-                            navigate(to: pickedDate)
+                            viewModel.goToWeek(containing: pickedDate)
                             isShowingDatePicker = false
                         }
                     }
@@ -367,9 +367,9 @@ public struct WeekView: View {
     /// so the page that visibly became current after a swipe or button navigation genuinely hadn't
     /// been showing its own data until that flip actually landed. Scoping each page to its own
     /// `weekStart` means a neighbor page already shows its own correct, complete 3-week chart
-    /// beforehand — `load(asOf:)`/`preload(weekStart:asOf:)` fetch a wide enough range
-    /// (`WeekViewModel.loadRange(for:calendar:)`) for that to be true as soon as `displayedWeekStart`
-    /// last changed, not just after the page in question becomes current.
+    /// beforehand — `load(asOf:)` fetches a wide enough range (`WeekViewModel.loadRange(for:calendar:)`)
+    /// for that to be true as soon as `displayedWeekStart` last changed, not just after the page in
+    /// question becomes current.
     @ViewBuilder
     private func graphPanel(weekStart: Date, isCurrentPage: Bool) -> some View {
         if isCurrentPage {
@@ -514,42 +514,32 @@ public struct WeekView: View {
 
     /// Finishes a swipe that cleared `commitThreshold`: animates `dragOffset` the rest of the way
     /// to fully reveal the next/previous page, then — once that's done — advances `viewModel` and
-    /// resets `dragOffset` to 0 in the same beat. That reset is invisible: the three pages
-    /// immediately recompute from the new `displayedWeekStart`, and the page that was just fully
-    /// shown (e.g. "next") is now, by definition, the same content the "current" slot recomputes
-    /// to — so nothing visibly moves a second time.
+    /// resets `dragOffset` to 0 in the same (non-animated) beat. That reset is invisible: the
+    /// three pages immediately recompute from the new `displayedWeekStart`, and the page that was
+    /// just fully shown (e.g. "next") is now, by definition, the same content the "current" slot
+    /// recomputes to — so nothing visibly moves a second time.
     ///
-    /// Preloads the target week's own 3-week chart range *concurrently* with the slide animation,
-    /// not after it (MVP1-32): advancing `displayedWeekStart` first and only then loading (as
-    /// `WeekView`'s own `.task(id: viewModel.displayedWeekStart)` does) leaves a window where the
-    /// chart's `chartMetrics` filters the *not-yet-updated* `model.metrics` by the *new*
-    /// `chartRange` — a genuine gap (e.g. the week furthest from the swipe direction briefly
-    /// missing entirely), not just stale data. Starting the preload here, alongside the slide
-    /// rather than in its `completion`, means the wait for it (if any) is `max(slide duration,
-    /// preload duration)` instead of the sum of the two — awaiting it only after the slide already
-    /// finished would extend, not shrink, how long the incoming page keeps showing the old week's
-    /// data before flipping.
+    /// No preloading here (MVP1-32's actual fix lives in `graphPanel(weekStart:isCurrentPage:)`
+    /// and `WeekViewModel.loadRange(for:calendar:)`, not in this method): the target week's own
+    /// chart is already complete by the time this runs, because `chartMetrics(for:)` reads
+    /// `model.metrics` scoped to *that* week, and `model.metrics` already reaches every immediate
+    /// neighbor of `displayedWeekStart` thanks to the widened range `load(asOf:)` fetches whenever
+    /// `displayedWeekStart` last changed. An earlier revision awaited an explicit preload here
+    /// before flipping, which fixed the same symptom but added a store round-trip's worth of
+    /// latency to every swipe and, worse, raced with a concurrent navigation with no serialization
+    /// between the two.
     private func completeSwipe(goingForward: Bool, pageWidth: CGFloat) {
         isCompletingSwipe = true
-        let targetWeekStart = viewModel.weekDates(offsetWeeks: goingForward ? 1 : -1).first
-        let preload = Task {
-            if let targetWeekStart {
-                await viewModel.preload(weekStart: targetWeekStart)
-            }
-        }
         withAnimation(Self.weekChangeAnimation) {
             dragOffset = goingForward ? -pageWidth : pageWidth
         } completion: {
-            Task {
-                await preload.value
-                dragOffset = 0
-                if goingForward {
-                    viewModel.goToNextWeek()
-                } else {
-                    viewModel.goToPreviousWeek()
-                }
-                isCompletingSwipe = false
+            dragOffset = 0
+            if goingForward {
+                viewModel.goToNextWeek()
+            } else {
+                viewModel.goToPreviousWeek()
             }
+            isCompletingSwipe = false
         }
     }
 
@@ -557,41 +547,18 @@ public struct WeekView: View {
     /// could be either side of the displayed week) to page toward, so this just updates
     /// `displayedWeekStart` directly — each page's content picks up the new dates and animates its
     /// own row-level changes, without paging anywhere.
+    ///
+    /// Deliberately *not* wrapped in `withAnimation`, same as the toolbar's Previous/Next Week
+    /// buttons and "Select Date": none of `FitnessChartView`/`DailyLoadChartView`/
+    /// `HeartRateHistogramChartView` apply their own `.animation(_:value:)`, so an explicit
+    /// `withAnimation` around a `displayedWeekStart` change is the only thing that would make
+    /// Swift Charts interpolate — its marks are `Animatable` and, given an animation, smoothly
+    /// slide their values and `chartXScale` domain from the old 3-week window to the new one. Since
+    /// the data is already complete either way (see `completeSwipe`'s own doc comment), that
+    /// interpolation has nothing to do with correctness, but visually it looks exactly like the
+    /// target week's data "growing in" after the rest — the same symptom this whole fix is for. A
+    /// plain, unanimated assignment snaps straight to the final, complete state instead.
     private func goToToday() {
-        navigate(to: .now)
-    }
-
-    /// Preloads `date`'s own week's chart range, then (animated) navigates `displayedWeekStart`
-    /// there — shared by the toolbar's Previous/Next Week and "Today" buttons and "Select Date",
-    /// none of which page through the target week the way a swipe does.
-    ///
-    /// Without the preload, each of these would exhibit the same flash `completeSwipe` guards
-    /// against (MVP1-32; see that method's own doc comment, and
-    /// `WeekViewModel.preload(weekStart:asOf:)`'s, for why) — a bare, unpreloaded
-    /// `displayedWeekStart` assignment briefly leaves `chartMetrics` filtering the *old*
-    /// `model.metrics` by the *new* `chartRange`, so the graph flashes the previous week's now-
-    /// incomplete shape until `WeekView`'s own `.task(id: viewModel.displayedWeekStart)` catches up.
-    /// `WeekViewModel.weekStart(containing:calendar:)` resolves `date` to its own week's start
-    /// first, so the preloaded range lines up exactly with what `chartRange` becomes once
-    /// `goToWeek(containing:)` actually navigates there — passing `date` itself (e.g. "now",
-    /// partway through today) straight to `preload(weekStart:)` would offset the preloaded range
-    /// from the final one by however far `date` sits into its own week.
-    ///
-    /// Deliberately *not* wrapped in `withAnimation`, unlike this method's own previous revision:
-    /// none of `FitnessChartView`/`DailyLoadChartView`/`HeartRateHistogramChartView` apply their
-    /// own `.animation(_:value:)`, so an explicit `withAnimation` here was the only thing making
-    /// Swift Charts interpolate — its marks are `Animatable` and, given one, smoothly slide their
-    /// values and `chartXScale` domain from the old 3-week window to the new one. Since the data
-    /// itself is already complete by the time this assignment runs (the preload above finished
-    /// first), that interpolation had nothing to do with correctness — but visually it looked
-    /// exactly like the target week's data "growing in" after the rest, which is the bug this
-    /// preload was meant to fix in the first place. A plain, unanimated assignment instead snaps
-    /// straight to the final, complete state.
-    private func navigate(to date: Date) {
-        let weekStart = WeekViewModel.weekStart(containing: date, calendar: viewModel.athleteCalendar)
-        Task {
-            await viewModel.preload(weekStart: weekStart)
-            viewModel.goToWeek(containing: date)
-        }
+        viewModel.goToToday()
     }
 }

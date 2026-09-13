@@ -126,9 +126,8 @@ public final class WeekViewModel {
     }
 
     /// The 3-week range `chartRange` would be if ``displayedWeekStart`` were `weekStart` instead —
-    /// used both by `WeekView`'s carousel (to render each neighbor page's own chart, not the
-    /// currently displayed week's — MVP1-32) and by ``preload(weekStart:asOf:)`` (to fetch a
-    /// target week's data ahead of actually navigating there).
+    /// used by `WeekView`'s carousel so each page renders its own week's chart rather than
+    /// whichever week happens to be ``displayedWeekStart`` (MVP1-32).
     public func chartRange(for weekStart: Date) -> ClosedRange<Date> {
         Self.chartRange(for: weekStart, calendar: calendar)
     }
@@ -139,14 +138,14 @@ public final class WeekViewModel {
         return start...end
     }
 
-    /// The range `load(asOf:)`/`preload(weekStart:asOf:)` actually fetch from the stores: wide
-    /// enough to cover not just `weekStart`'s own ``chartRange(for:)``, but its immediate
-    /// neighbors' as well (MVP1-32) — so `WeekView`'s carousel can render each neighbor page's own
-    /// complete, correct 3-week chart continuously (not just after actually navigating there), and
-    /// a swipe or button navigation never finds anything left to load once it flips
-    /// ``displayedWeekStart``. Deliberately wider than ``chartRange(for:)`` itself, which stays
-    /// exactly 3 weeks — that's still the range each page's own chart *displays*, just now backed
-    /// by a `model.metrics` that already reaches far enough to cover its neighbors' displays too.
+    /// The range ``load(asOf:)`` actually fetches from the stores: wide enough to cover not just
+    /// `weekStart`'s own ``chartRange(for:)``, but its immediate neighbors' as well (MVP1-32) — so
+    /// `WeekView`'s carousel can render each neighbor page's own complete, correct 3-week chart
+    /// continuously (not just after actually navigating there), and a swipe or button navigation
+    /// never finds anything left to load once it flips ``displayedWeekStart``. Deliberately wider
+    /// than ``chartRange(for:)`` itself, which stays exactly 3 weeks — that's still the range each
+    /// page's own chart *displays*, just now backed by a `model.metrics` that already reaches far
+    /// enough to cover its neighbors' displays too.
     private static func loadRange(for weekStart: Date, calendar: Calendar) -> ClosedRange<Date> {
         let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
         let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
@@ -478,22 +477,6 @@ public final class WeekViewModel {
     public func load(asOf today: Date = .now) async {
         try? await model.load(in: Self.loadRange(for: displayedWeekStart, calendar: calendar), asOf: today)
         await refreshWeekCachesIfNeeded()
-    }
-
-    /// Fetches ``loadRange(for:calendar:)`` for `weekStart`, without actually changing
-    /// ``displayedWeekStart`` (MVP1-32).
-    ///
-    /// `TrainingModel.load(in:)` replaces `model.metrics` outright with whatever the given range
-    /// covers, rather than merging it into what's already loaded. So flipping
-    /// ``displayedWeekStart`` before that finishes leaves a window where ``chartMetrics`` filters
-    /// the *old* `model.metrics` by the *new* (wider-reaching) ``chartRange`` — a real gap, not
-    /// just stale data, for whichever few days the new range reaches that the old one didn't (e.g.
-    /// swiping forward one week always reaches one more week's worth of days than was loaded
-    /// before). Calling this first and awaiting it — as `WeekView`'s swipe-completion handler
-    /// does — means `model` already covers the target range by the time ``displayedWeekStart``
-    /// actually flips, so ``chartMetrics`` never has anything to be missing.
-    public func preload(weekStart: Date, asOf today: Date = .now) async {
-        try? await model.load(in: Self.loadRange(for: weekStart, calendar: calendar), asOf: today)
     }
 
     /// Runs a pull-to-refresh import via `refresher`. `TrainingModel.importActivities(from:)`
