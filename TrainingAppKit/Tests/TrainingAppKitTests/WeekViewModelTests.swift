@@ -347,6 +347,142 @@ struct WeekViewModelTests {
         #expect(loaded == 180.0)
     }
 
+    @Test(
+        "overlapWarning(for:) surfaces a real overlap issue, but not a possibleMultisport pairing (MVP1-63)"
+    )
+    func overlapWarningSkipsPossibleMultisportButSurfacesRealIssues() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+
+        // Same time span, same sport, differing data (only `a` has heart-rate samples) -> .merge.
+        let a = Activity(
+            source: .manual, sport: .running, start: day(2), duration: 1800,
+            heartRate: [HeartRateSample(time: day(2), bpm: 140)]
+        )
+        let b = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        // Fully contained within `a`, different sport -> .possibleMultisport, not a warning.
+        let leg = Activity(source: .manual, sport: .cycling, start: day(2).addingTimeInterval(60), duration: 60)
+        // No overlap with anything.
+        let unrelated = Activity(source: .manual, sport: .swimming, start: day(4), duration: 1800)
+        try await store.upsert([a, b, leg, unrelated])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.overlapWarning(for: a) == .merge)
+        #expect(viewModel.overlapWarning(for: b) == .merge)
+        #expect(viewModel.overlapWarning(for: leg) == nil)
+        #expect(viewModel.overlapWarning(for: unrelated) == nil)
+    }
+
+    @Test(
+        "overlapContext(for:) names the specific other activity, including a possibleMultisport pairing (MVP1-63)"
+    )
+    func overlapContextNamesTheOtherActivity() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+
+        let a = Activity(
+            source: .manual, sport: .running, start: day(2), duration: 1800,
+            heartRate: [HeartRateSample(time: day(2), bpm: 140)]
+        )
+        let b = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        let contained = Activity(source: .manual, sport: .swimming, start: day(3), duration: 3600)
+        let leg = Activity(source: .manual, sport: .cycling, start: day(3).addingTimeInterval(60), duration: 60)
+        try await store.upsert([a, b, contained, leg])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let mergeContext = try #require(viewModel.overlapContext(for: a))
+        #expect(mergeContext.recommendation == .merge)
+        #expect(mergeContext.otherActivity.id == b.id)
+
+        // Unlike overlapWarning(for:), this surfaces possibleMultisport too (MVP1-29: the detail
+        // sheet is where all four recommendation types should appear distinctly).
+        let multisportContext = try #require(viewModel.overlapContext(for: leg))
+        #expect(multisportContext.recommendation == .possibleMultisport)
+        #expect(multisportContext.otherActivity.id == contained.id)
+
+        let unrelated = Activity(source: .manual, sport: .rowing, start: day(5), duration: 1800)
+        try await store.upsert([unrelated])
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        #expect(viewModel.overlapContext(for: unrelated) == nil)
+    }
+
+    @Test("overlapReviewItems lists every non-multisport-flagged activity once, sorted by start (MVP1-63)")
+    func overlapReviewItemsListsAndSorts() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+
+        // A slight start offset (still within sameSessionTolerance) so `a`/`b` sort deterministically.
+        let a = Activity(
+            source: .manual, sport: .running, start: day(3), duration: 1800,
+            heartRate: [HeartRateSample(time: day(3), bpm: 140)]
+        )
+        let b = Activity(
+            source: .manual, sport: .running, start: day(3).addingTimeInterval(10), duration: 1800
+        )
+        // A possibleMultisport pairing -- excluded from the review list.
+        let contained = Activity(source: .manual, sport: .swimming, start: day(2), duration: 3600)
+        let leg = Activity(source: .manual, sport: .cycling, start: day(2).addingTimeInterval(60), duration: 60)
+        try await store.upsert([a, b, contained, leg])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.overlapReviewItems.map(\.activity.id) == [a.id, b.id])
+        #expect(viewModel.overlapReviewItems.map(\.recommendation) == [.merge, .merge])
+    }
+
+    @Test("resolveOverlap(deleting:) removes the activity from the store and from activities(on:) (MVP1-63)")
+    func resolveOverlapDeletesActivity() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let a = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        let b = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        try await store.upsert([a, b])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        #expect(viewModel.activities(on: day(2)).count == 2)
+
+        await viewModel.resolveOverlap(deleting: b.id, asOf: day(2))
+
+        #expect(viewModel.activities(on: day(2)).map(\.id) == [a.id])
+        #expect(try await store.activity(id: b.id) == nil)
+    }
+
+    @Test(
+        "refresh(asOf:) sets overlapImportSummary from any real overlap, cleared by dismissOverlapImportSummary() (MVP1-63)"
+    )
+    func refreshSetsOverlapImportSummary() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let a = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        let b = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        // A possibleMultisport pairing -- doesn't count toward the summary.
+        let contained = Activity(source: .manual, sport: .swimming, start: day(3), duration: 3600)
+        let leg = Activity(source: .manual, sport: .cycling, start: day(3).addingTimeInterval(60), duration: 60)
+        try await store.upsert([a, b, contained, leg])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+        #expect(viewModel.overlapImportSummary == nil)
+
+        await viewModel.refresh(asOf: day(0))
+
+        #expect(viewModel.overlapImportSummary?.activityCount == 2)
+
+        viewModel.dismissOverlapImportSummary()
+        #expect(viewModel.overlapImportSummary == nil)
+    }
+
     @Test("sportStatsPages(asOf:) has exactly one, zero-filled page for the main sport when nothing was tracked")
     func sportStatsPagesZeroFillsWhenNoActivity() async {
         let model = makeModel()

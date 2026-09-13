@@ -36,6 +36,14 @@ public struct WeekView: View {
     /// The activity currently shown in the detail sheet, or `nil` when none is presented.
     /// `Activity` is `Identifiable`, so `.sheet(item:)` handles show/dismiss from this alone.
     @State private var selectedActivity: Activity?
+    /// Whether the overlap-review sheet (MVP1-63), opened by tapping the import summary banner, is
+    /// presented.
+    @State private var isShowingOverlapReview = false
+    /// Set by a row tap in the overlap-review sheet, then consumed by that sheet's `onDismiss` to
+    /// open `selectedActivity`'s own detail sheet — chained this way (rather than presenting the
+    /// detail sheet directly from on top of the review sheet) since SwiftUI only reliably supports
+    /// one sheet on a view at a time.
+    @State private var pendingOverlapActivity: Activity?
     /// Horizontal offset applied to the previous/current/next page `HStack`, on top of its base
     /// "current page centered" position — 0 while idle, tracking the finger during a drag, then
     /// animated to a full page width (commit) or back to 0 (cancel) once the drag ends. Nothing
@@ -130,6 +138,18 @@ public struct WeekView: View {
                     weekContent
                 }
             }
+            // Sits above the tab bar, only while there's something to review (MVP1-63) — the
+            // aggregate summary Don's refinement calls for: one banner after an import finds
+            // overlap issues, not a warning per activity as each is found.
+            .safeAreaInset(edge: .bottom) {
+                if let summary = viewModel.overlapImportSummary {
+                    OverlapImportSummaryBanner(
+                        summary: summary,
+                        onReview: { isShowingOverlapReview = true },
+                        onDismiss: { viewModel.dismissOverlapImportSummary() }
+                    )
+                }
+            }
             // A light (dark in dark mode) grey rather than the plain system background, so
             // DayActivitiesSection's pills/timeline (recessed relative to this) and its activity
             // cards (elevated relative to this) both have something to visually contrast against.
@@ -189,11 +209,37 @@ public struct WeekView: View {
                 // into. Dismissal is the standard swipe-down gesture every sheet gets for free --
                 // no explicit close button.
                 NavigationStack {
-                    ActivityDetailView(viewModel: viewModel.activityDetailViewModel(for: activity))
+                    ActivityDetailView(
+                        viewModel: viewModel.activityDetailViewModel(for: activity),
+                        onResolveOverlap: { id in Task { await viewModel.resolveOverlap(deleting: id) } }
+                    )
                 }
             }
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
+            }
+            // Opens `pendingOverlapActivity`'s own detail sheet only once this one has actually
+            // finished dismissing — see that property's own doc comment for why this two-step
+            // handoff, rather than presenting straight from on top of this sheet.
+            .sheet(
+                isPresented: $isShowingOverlapReview,
+                onDismiss: {
+                    if let pendingOverlapActivity {
+                        selectedActivity = pendingOverlapActivity
+                        self.pendingOverlapActivity = nil
+                    }
+                }
+            ) {
+                NavigationStack {
+                    OverlapReviewView(
+                        items: viewModel.overlapReviewItems,
+                        timeZone: viewModel.athleteTimeZone,
+                        onSelect: { activity in
+                            pendingOverlapActivity = activity
+                            isShowingOverlapReview = false
+                        }
+                    )
+                }
             }
         }
     }
@@ -421,6 +467,7 @@ public struct WeekView: View {
                             plans: viewModel.plans(on: day),
                             workoutName: { viewModel.workout(for: $0)?.name },
                             trainingLoad: { viewModel.trainingLoad(for: $0) },
+                            overlapWarning: { viewModel.overlapWarning(for: $0) },
                             timeZone: viewModel.athleteTimeZone,
                             onSelectActivity: { selectedActivity = $0 }
                         )
