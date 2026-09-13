@@ -628,6 +628,30 @@ struct WeekViewModelTests {
         #expect(model.activities.map(\.id) == [activity.id])
     }
 
+    @Test("preload(weekStart:) loads the target week's chartRange without changing displayedWeekStart (MVP1-32)")
+    func preloadFetchesTargetChartRangeWithoutNavigating() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let originalDisplayedWeekStart = viewModel.displayedWeekStart
+
+        // Two weeks ahead of today: inside the *next* week's chartRange (its own +13 days reaches
+        // this far) but outside the currently displayed week's chartRange (its own +13 days
+        // doesn't) -- proves preload actually reaches the target week's own wider window, not just
+        // whatever's already loaded.
+        let calendar = WeekViewModel.calendar(for: athlete)
+        let targetWeekStart = calendar.date(byAdding: .day, value: 7, to: originalDisplayedWeekStart)!
+        let farDay = calendar.date(byAdding: .day, value: 20, to: originalDisplayedWeekStart)!
+        let activity = Activity(source: .manual, sport: .running, start: farDay, duration: 1800)
+        try await store.upsert([activity])
+
+        await viewModel.preload(weekStart: targetWeekStart, asOf: day(0))
+
+        #expect(model.activities.map(\.id) == [activity.id])
+        #expect(viewModel.displayedWeekStart == originalDisplayedWeekStart)
+    }
+
     @Test("hasNoActivities reflects whether an import has ever happened, for the empty-state prompt")
     func hasNoActivitiesReflectsModelState() async throws {
         let (store, stores) = makeStores()

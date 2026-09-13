@@ -123,8 +123,15 @@ public final class WeekViewModel {
     /// The 3-week range (the week before, the displayed week, the week after) the chart covers
     /// and `load(asOf:)` fetches.
     public var chartRange: ClosedRange<Date> {
-        let start = calendar.date(byAdding: .day, value: -7, to: displayedWeekStart) ?? displayedWeekStart
-        let end = calendar.date(byAdding: .day, value: 13, to: displayedWeekStart) ?? displayedWeekStart
+        Self.chartRange(for: displayedWeekStart, calendar: calendar)
+    }
+
+    /// The 3-week range `chartRange` would be if ``displayedWeekStart`` were `weekStart` instead —
+    /// used by ``preload(weekStart:asOf:)`` to fetch a target week's data ahead of actually
+    /// navigating there.
+    private static func chartRange(for weekStart: Date, calendar: Calendar) -> ClosedRange<Date> {
+        let start = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
+        let end = calendar.date(byAdding: .day, value: 13, to: weekStart) ?? weekStart
         return start...end
     }
 
@@ -433,6 +440,22 @@ public final class WeekViewModel {
     public func load(asOf today: Date = .now) async {
         try? await model.load(in: chartRange, asOf: today)
         await refreshWeekCachesIfNeeded()
+    }
+
+    /// Fetches the 3-week range `chartRange` would cover if ``displayedWeekStart`` were `weekStart`,
+    /// without actually changing ``displayedWeekStart`` (MVP1-32).
+    ///
+    /// `TrainingModel.load(in:)` replaces `model.metrics` outright with whatever the given range
+    /// covers, rather than merging it into what's already loaded. So flipping
+    /// ``displayedWeekStart`` before that finishes leaves a window where ``chartMetrics`` filters
+    /// the *old* `model.metrics` by the *new* (wider-reaching) ``chartRange`` — a real gap, not
+    /// just stale data, for whichever few days the new range reaches that the old one didn't (e.g.
+    /// swiping forward one week always reaches one more week's worth of days than was loaded
+    /// before). Calling this first and awaiting it — as `WeekView`'s swipe-completion handler
+    /// does — means `model` already covers the target range by the time ``displayedWeekStart``
+    /// actually flips, so ``chartMetrics`` never has anything to be missing.
+    public func preload(weekStart: Date, asOf today: Date = .now) async {
+        try? await model.load(in: Self.chartRange(for: weekStart, calendar: calendar), asOf: today)
     }
 
     /// Runs a pull-to-refresh import via `refresher`. `TrainingModel.importActivities(from:)`

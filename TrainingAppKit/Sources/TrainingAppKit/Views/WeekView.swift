@@ -160,16 +160,12 @@ public struct WeekView: View {
             .toolbar {
                 ToolbarItem(placement: leadingToolbarPlacement) {
                     Button("Previous Week", systemImage: "chevron.left") {
-                        withAnimation(Self.weekChangeAnimation) {
-                            viewModel.goToPreviousWeek()
-                        }
+                        navigate(to: viewModel.weekDates(offsetWeeks: -1).first ?? viewModel.displayedWeekStart)
                     }
                 }
                 ToolbarItem(placement: leadingToolbarPlacement) {
                     Button("Next Week", systemImage: "chevron.right") {
-                        withAnimation(Self.weekChangeAnimation) {
-                            viewModel.goToNextWeek()
-                        }
+                        navigate(to: viewModel.weekDates(offsetWeeks: 1).first ?? viewModel.displayedWeekStart)
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -224,9 +220,7 @@ public struct WeekView: View {
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") {
-                            withAnimation(Self.weekChangeAnimation) {
-                                viewModel.goToWeek(containing: pickedDate)
-                            }
+                            navigate(to: pickedDate)
                             isShowingDatePicker = false
                         }
                     }
@@ -507,23 +501,39 @@ public struct WeekView: View {
     }
 
     /// Finishes a swipe that cleared `commitThreshold`: animates `dragOffset` the rest of the way
-    /// to fully reveal the next/previous page, then — once that's done — advances `viewModel` and
-    /// resets `dragOffset` to 0 in the same (non-animated) beat. That reset is invisible: the
-    /// three pages immediately recompute from the new `displayedWeekStart`, and the page that was
-    /// just fully shown (e.g. "next") is now, by definition, the same content the "current" slot
-    /// recomputes to — so nothing visibly moves a second time.
+    /// to fully reveal the next/previous page, then — once that's done — preloads the target
+    /// week's own 3-week chart range before advancing `viewModel` and resetting `dragOffset` to 0
+    /// in the same beat. That reset is invisible: the three pages immediately recompute from the
+    /// new `displayedWeekStart`, and the page that was just fully shown (e.g. "next") is now, by
+    /// definition, the same content the "current" slot recomputes to — so nothing visibly moves a
+    /// second time.
+    ///
+    /// The preload (MVP1-32) matters because advancing `displayedWeekStart` first and only then
+    /// loading (as `WeekView`'s own `.task(id: viewModel.displayedWeekStart)` does) leaves a window
+    /// where the chart's `chartMetrics` filters the *not-yet-updated* `model.metrics` by the *new*
+    /// `chartRange` — a genuine gap (e.g. the week furthest from the swipe direction briefly
+    /// missing entirely), not just stale data, until that `.task` catches up a few tenths of a
+    /// second later. Awaiting ``WeekViewModel/preload(weekStart:asOf:)`` here first means `model`
+    /// already covers the target range by the time `displayedWeekStart` actually flips, so that
+    /// `.task` finds nothing left to change and the chart never visibly flashes.
     private func completeSwipe(goingForward: Bool, pageWidth: CGFloat) {
         isCompletingSwipe = true
+        let targetWeekStart = viewModel.weekDates(offsetWeeks: goingForward ? 1 : -1).first
         withAnimation(Self.weekChangeAnimation) {
             dragOffset = goingForward ? -pageWidth : pageWidth
         } completion: {
-            dragOffset = 0
-            if goingForward {
-                viewModel.goToNextWeek()
-            } else {
-                viewModel.goToPreviousWeek()
+            Task {
+                if let targetWeekStart {
+                    await viewModel.preload(weekStart: targetWeekStart)
+                }
+                dragOffset = 0
+                if goingForward {
+                    viewModel.goToNextWeek()
+                } else {
+                    viewModel.goToPreviousWeek()
+                }
+                isCompletingSwipe = false
             }
-            isCompletingSwipe = false
         }
     }
 
@@ -532,8 +542,31 @@ public struct WeekView: View {
     /// `displayedWeekStart` directly — each page's content picks up the new dates and animates its
     /// own row-level changes, without paging anywhere.
     private func goToToday() {
-        withAnimation(Self.weekChangeAnimation) {
-            viewModel.goToToday()
+        navigate(to: .now)
+    }
+
+    /// Preloads `date`'s own week's chart range, then (animated) navigates `displayedWeekStart`
+    /// there — shared by the toolbar's Previous/Next Week and "Today" buttons and "Select Date",
+    /// none of which page through the target week the way a swipe does.
+    ///
+    /// Without the preload, each of these would exhibit the same flash `completeSwipe` guards
+    /// against (MVP1-32; see that method's own doc comment, and
+    /// `WeekViewModel.preload(weekStart:asOf:)`'s, for why) — a bare, unpreloaded
+    /// `displayedWeekStart` assignment briefly leaves `chartMetrics` filtering the *old*
+    /// `model.metrics` by the *new* `chartRange`, so the graph flashes the previous week's now-
+    /// incomplete shape until `WeekView`'s own `.task(id: viewModel.displayedWeekStart)` catches up.
+    /// `WeekViewModel.weekStart(containing:calendar:)` resolves `date` to its own week's start
+    /// first, so the preloaded range lines up exactly with what `chartRange` becomes once
+    /// `goToWeek(containing:)` actually navigates there — passing `date` itself (e.g. "now",
+    /// partway through today) straight to `preload(weekStart:)` would offset the preloaded range
+    /// from the final one by however far `date` sits into its own week.
+    private func navigate(to date: Date) {
+        let weekStart = WeekViewModel.weekStart(containing: date, calendar: viewModel.athleteCalendar)
+        Task {
+            await viewModel.preload(weekStart: weekStart)
+            withAnimation(Self.weekChangeAnimation) {
+                viewModel.goToWeek(containing: date)
+            }
         }
     }
 }
