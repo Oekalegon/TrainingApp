@@ -66,28 +66,40 @@ struct OverlapReviewView: View {
     }
 
     var body: some View {
-        List(items) { item in
-            Button {
-                onSelect(item.activity)
-            } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.activity.sport.displayName)
-                            .foregroundStyle(.primary)
-                        Text(item.activity.start, format: Self.dateFormat(timeZone: timeZone))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        Group {
+            if items.isEmpty {
+                // Reachable if every overlap gets resolved elsewhere between the banner's tap and
+                // this sheet's presentation -- rare, but a blank List with no explanation would
+                // otherwise look broken rather than "nothing left to review".
+                ContentUnavailableView(
+                    "No Overlaps", systemImage: "checkmark.circle",
+                    description: Text("Nothing left to review.")
+                )
+            } else {
+                List(items) { item in
+                    Button {
+                        onSelect(item.activity)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.activity.sport.displayName)
+                                    .foregroundStyle(.primary)
+                                Text(item.activity.start, format: Self.dateFormat(timeZone: timeZone))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(item.recommendation.reviewLabel)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
-                    Spacer()
-                    Text(item.recommendation.reviewLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                    .buttonStyle(.plain)
                 }
             }
-            .buttonStyle(.plain)
         }
         .navigationTitle("Overlapping Activities")
         #if os(iOS)

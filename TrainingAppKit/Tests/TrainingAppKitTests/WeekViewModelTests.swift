@@ -483,6 +483,31 @@ struct WeekViewModelTests {
         #expect(viewModel.overlapImportSummary == nil)
     }
 
+    @Test("connectHealthData(asOf:) and resyncActivities(asOf:) also set overlapImportSummary (MVP1-63)")
+    func connectHealthDataAndResyncAlsoSetOverlapImportSummary() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let a = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        let b = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        try await store.upsert([a, b])
+
+        let connectModel = TrainingModel(stores: stores, athlete: athlete)
+        let connectViewModel = WeekViewModel(model: connectModel, refresher: FakeRefresher(), today: day(0))
+        await connectViewModel.load(asOf: day(0))
+        #expect(connectViewModel.overlapImportSummary == nil)
+        await connectViewModel.connectHealthData(asOf: day(0))
+        #expect(connectViewModel.overlapImportSummary?.activityCount == 2)
+
+        let (resyncStore, resyncStores) = makeStores()
+        try await resyncStore.upsert([a, b])
+        let resyncModel = TrainingModel(stores: resyncStores, athlete: athlete)
+        let resyncViewModel = WeekViewModel(model: resyncModel, refresher: FakeRefresher(), today: day(0))
+        await resyncViewModel.load(asOf: day(0))
+        #expect(resyncViewModel.overlapImportSummary == nil)
+        await resyncViewModel.resyncActivities(asOf: day(0))
+        #expect(resyncViewModel.overlapImportSummary?.activityCount == 2)
+    }
+
     @Test("sportStatsPages(asOf:) has exactly one, zero-filled page for the main sport when nothing was tracked")
     func sportStatsPagesZeroFillsWhenNoActivity() async {
         let model = makeModel()

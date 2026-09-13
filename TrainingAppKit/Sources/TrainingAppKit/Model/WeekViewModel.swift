@@ -347,17 +347,33 @@ public final class WeekViewModel {
         return delta / previousTotal
     }
 
-    /// The overlap issue worth warning about for `activity`, if any (MVP1-63) — the first advice
-    /// from ``TrainingModel/overlapAdvice`` naming `activity` on either side, skipping
-    /// ``OverlapRecommendation/possibleMultisport`` entries. That case describes activities that
+    /// `activity.id` → the overlap issue worth warning about, for every activity named by a real
+    /// (non-``OverlapRecommendation/possibleMultisport``) advice — one pass over
+    /// ``TrainingModel/overlapAdvice`` rather than the N passes ``overlapWarning(for:)`` would need
+    /// re-filtering it per activity. `TrainingModel.overlapAdvice` itself reruns
+    /// `ActivityOverlapChecker.findOverlaps(in:)` on every access (its own doc comment warns a
+    /// SwiftUI-`body` caller to cache it), and `DayActivitiesSection` calls ``overlapWarning(for:)``
+    /// once per activity card while building the day list — the same `body`-during-swipe path
+    /// `sportStatsPagesCaches`/`weekGraphCaches` already exist to keep MVP1-19's freeze from
+    /// recurring, so batching this into a single dictionary build per access is worth doing even
+    /// though `ActivityOverlapChecker` itself is cheap at today's realistic activity counts.
+    private var overlapWarningsByActivityID: [UUID: OverlapRecommendation] {
+        var result: [UUID: OverlapRecommendation] = [:]
+        for advice in model.overlapAdvice {
+            if case .possibleMultisport = advice.recommendation { continue }
+            for id in [advice.first, advice.second] where result[id] == nil {
+                result[id] = advice.recommendation
+            }
+        }
+        return result
+    }
+
+    /// The overlap issue worth warning about for `activity`, if any (MVP1-63) — skips
+    /// ``OverlapRecommendation/possibleMultisport``: that case describes activities that
     /// legitimately sit close together (e.g. a triathlon's separately-logged legs) rather than a
     /// problem, so it isn't surfaced as a warning; `.duplicate`/`.merge`/`.conflict` all are.
     public func overlapWarning(for activity: Activity) -> OverlapRecommendation? {
-        for advice in model.overlapAdvice where advice.first == activity.id || advice.second == activity.id {
-            if case .possibleMultisport = advice.recommendation { continue }
-            return advice.recommendation
-        }
-        return nil
+        overlapWarningsByActivityID[activity.id]
     }
 
     /// `activity`'s overlap context — its recommendation plus the specific other activity it

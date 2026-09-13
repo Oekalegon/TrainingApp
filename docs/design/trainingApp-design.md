@@ -131,6 +131,17 @@ remember or restore which tab was last active.
 - **Empty state**: if `TrainingModel.activities` is empty (e.g. first launch before HealthKit
   authorization / initial sync), show an inline prompt — "Connect Health data" — that triggers
   the HealthKit authorization request. No separate onboarding screen (deferred to MVP 2, see §6).
+- **Overlap warning badge** (MVP1-63): an `Activity` card shows a small orange warning triangle
+  when `WeekViewModel.overlapWarning(for:)` finds a real issue (`.duplicate`/`.merge`/`.conflict`
+  from `TrainingModel.overlapAdvice`) — `.possibleMultisport` (e.g. a triathlon's separately-logged
+  legs) is deliberately not treated as a warning here, since it isn't a problem. Purely passive;
+  resolving it happens in the activity detail sheet (§2.2).
+- **Overlap import summary banner** (MVP1-63): the app's first transient banner/toast — after
+  `refresh`/`connectHealthData`/`resyncActivities` finds any real overlap, a dismissible banner
+  ("N activities have overlaps to review") appears once, docked above the tab bar
+  (`.safeAreaInset(edge: .bottom)`). Deliberately aggregated rather than surfaced per activity as
+  each is found during import. Tapping it opens a review sheet (`OverlapReviewView`) listing every
+  affected activity; tapping a row opens that activity's own detail sheet (§2.2).
 
 ### 2.2 Activity detail
 
@@ -141,6 +152,16 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 - Load/TRIMP for the activity, and time-in-zone breakdown if heart-rate samples are present
   (`Statistics`'s `TimeInZone`).
 - No map/route rendering, no cadence/elevation charts — text/stat rows only for MVP 1.
+- **Overlap section** (MVP1-63): shown when `WeekViewModel.overlapContext(for:)` finds this
+  activity part of a pair — unlike the day-list badge above, this includes `.possibleMultisport`
+  (informational only, no action), since the detail sheet is where all four
+  `OverlapRecommendation` cases are meant to surface distinctly (MVP1-29). `.duplicate` offers a
+  single "Remove Duplicate" action (the pair's `remove` side is already decided);
+  `.merge`/`.conflict` offer both "keep this, delete other" and "keep other, delete this", routed
+  through `WeekViewModel.resolveOverlap(deleting:)` → `TrainingModel.deleteActivity(id:)`. Real
+  field-level merge (picking which source's data to keep per field) and multisport-leg linking
+  aren't implemented — both need new `TrainingCore` data modeling — so `.merge` gets the delete-one
+  fallback rather than an actual field picker.
 
 Tapping a *planned* (not-yet-completed) activity is out of scope for detail — MVP 1 doesn't
 render workout structure detail, only the plan's date/expected load inline in the week view.
