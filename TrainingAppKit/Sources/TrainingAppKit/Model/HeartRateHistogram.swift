@@ -9,6 +9,13 @@ public struct HeartRateHistogramBin: Hashable, Sendable {
     public let seconds: TimeInterval
 }
 
+/// One point of `HeartRateHistogram.densifiedMinutes(domain:)`'s continuous, `binWidth`-stepped
+/// line — see that method's own doc comment.
+public struct HeartRateHistogramPoint: Hashable, Sendable {
+    public let bpm: Int
+    public let minutes: Double
+}
+
 /// A displayed week's heart-rate histogram, plus the athlete's current zone boundaries in bpm so
 /// the chart can shade the same bands the old zone-by-day bars used to color, now against a
 /// continuous bpm axis instead of discrete per-zone bars.
@@ -93,6 +100,31 @@ public struct HeartRateHistogram: Sendable {
             return Double(bin.bpm) + fractionIntoBin * Double(binWidth)
         }
         return sorted.last.map { Double($0.bpm) + Double(binWidth) }
+    }
+
+    /// `bins` densified into one point per `binWidth`-wide step across `domain`, zero-filled where
+    /// `bins` has no data — without this, `HeartRateHistogramChartView`'s `LineMark` interpolation
+    /// would smooth straight across the gaps between the (otherwise sparse) real bins instead of
+    /// dipping to zero, which reads as heart-rate time existing where none was actually recorded.
+    /// Real recorded time below zone 1 is included same as any other bin (it's meaningful — e.g.
+    /// warmup/cooldown recovery heart rate); only `percentileBPM(_:)` excludes it, for the
+    /// unrelated purpose of keeping the 80/20 threshold scoped to in-zone time.
+    ///
+    /// `bins`' keys sit on a fixed `binWidth` grid independent of `domain`'s own edges (a caller
+    /// like `HeartRateHistogramChartView` typically derives `domain` from the athlete's zone
+    /// boundaries, which don't fall on that grid), so flooring/ceiling `domain`'s bounds to the
+    /// nearest bin can land one bin *outside* `domain` on either side. The trailing `filter` drops
+    /// any such out-of-domain point rather than letting its real (nonzero) value leak in — without
+    /// it, the line between that point and the next in-domain one would render already-risen right
+    /// at the domain edge instead of reading zero there, which is what made the histogram chart's
+    /// curve look like it started before its own x-axis did (MVP1-61).
+    public func densifiedMinutes(domain: ClosedRange<Double>) -> [HeartRateHistogramPoint] {
+        let secondsByBin = Dictionary(uniqueKeysWithValues: bins.map { ($0.bpm, $0.seconds) })
+        let lowerBin = Int((domain.lowerBound / Double(binWidth)).rounded(.down)) * binWidth
+        let upperBin = Int((domain.upperBound / Double(binWidth)).rounded(.up)) * binWidth
+        return stride(from: lowerBin, through: upperBin, by: binWidth)
+            .filter { Double($0) >= domain.lowerBound && Double($0) <= domain.upperBound }
+            .map { HeartRateHistogramPoint(bpm: $0, minutes: (secondsByBin[$0] ?? 0) / 60) }
     }
 
     /// Re-derives zone boundaries in bpm from the athlete's current `HeartRateZoneModel`, using
