@@ -47,22 +47,13 @@ struct HeartRateHistogramChartView: View {
         let label: String
     }
 
-    /// The athlete's zone 1–5 range, unpadded — the actual bpm span the "in zone" data covers,
-    /// as opposed to ``domain``'s padded version used for the chart's own x-axis. Used to zero out
-    /// real recorded time below zone 1 in ``densifiedMinutesByBPM`` (see that property's own doc
-    /// comment for why looking it up unfiltered was a bug, not just a cosmetic rough edge).
-    private var zoneRange: ClosedRange<Double>? {
-        guard let boundaries = histogram.zoneBoundariesBPM,
-            let lower = boundaries.first, let upper = boundaries.last
-        else { return nil }
-        return lower...upper
-    }
-
     /// The athlete's zone 1–5 range, padded by ``domainPadding`` on each side — see that
     /// property's own doc comment for why this doesn't also widen to fit the actual recorded data.
     private var domain: ClosedRange<Double> {
-        guard let zoneRange else { return Self.fallbackDomain }
-        return (zoneRange.lowerBound - Self.domainPadding)...(zoneRange.upperBound + Self.domainPadding)
+        guard let boundaries = histogram.zoneBoundariesBPM,
+            let lower = boundaries.first, let upper = boundaries.last
+        else { return Self.fallbackDomain }
+        return (lower - Self.domainPadding)...(upper + Self.domainPadding)
     }
 
     private var zoneBands: [ZoneBand] {
@@ -83,27 +74,29 @@ struct HeartRateHistogramChartView: View {
     /// `histogram` densified into one point per `binWidth`-wide step across `domain`, zero-filled
     /// where `histogram.bins` has no data — without this, `LineMark`'s interpolation would smooth
     /// straight across the gaps between the (otherwise sparse) real bins instead of dipping to
-    /// zero, which reads as heart-rate time existing where none was actually recorded.
+    /// zero, which reads as heart-rate time existing where none was actually recorded. Real
+    /// recorded time below zone 1 is shown here same as any other bin (it's meaningful — e.g.
+    /// warmup/cooldown recovery heart rate), not zeroed out; only ``HeartRateHistogram
+    /// .percentileBPM(_:)`` excludes it, for the unrelated purpose of keeping the 80/20 threshold
+    /// scoped to in-zone time.
     ///
-    /// Bins below ``zoneRange``'s lower bound are forced to zero here even when `histogram.bins`
-    /// has real recorded seconds for them (e.g. warmup/cooldown recovery-HR time) — the padded
-    /// portion of `domain` below zone 1 is meant to be a zero-filled runway only (design intent:
-    /// this chart shows "time in zone", not a general heart-rate distribution, matching
-    /// `HeartRateHistogram.percentileBPM(_:)`'s own exclusion of below-zone-1 bins). Without this,
-    /// real below-zone-1 time bled into that runway and made the curve visibly start rising
-    /// several bpm before zone 1 itself did (MVP1-61). Nothing above the Z5 upper bound is
-    /// filtered, for the same reason `percentileBPM(_:)` doesn't: it still belongs to "at or above
-    /// Z5", not some undefined zone beyond the chart's own data.
+    /// `histogram.bins`' keys sit on a fixed `binWidth` grid independent of `domain`'s own edges
+    /// (`domain` is offset from the athlete's zone boundaries, which don't fall on that grid), so
+    /// flooring/ceiling `domain.lowerBound`/`domain.upperBound` to the nearest bin can land one bin
+    /// *outside* `domain` on either side. Left unfiltered, a real (nonzero) bin just past that edge
+    /// got plotted, and the portion of the line between it and the next in-domain point rendered
+    /// already-risen right at the domain edge instead of reading zero there — visually, the curve
+    /// looked like it started before the x-axis' own left edge (MVP1-61). The trailing `filter`
+    /// drops any such out-of-domain point so nothing renders past what `chartXScale(domain:)`
+    /// actually shows.
     private var densifiedMinutesByBPM: [(bpm: Int, minutes: Double)] {
         let secondsByBin = Dictionary(uniqueKeysWithValues: histogram.bins.map { ($0.bpm, $0.seconds) })
         let binWidth = histogram.binWidth
         let lowerBin = Int((domain.lowerBound / Double(binWidth)).rounded(.down)) * binWidth
         let upperBin = Int((domain.upperBound / Double(binWidth)).rounded(.up)) * binWidth
-        return stride(from: lowerBin, through: upperBin, by: binWidth).map { bpm in
-            let belowZoneRange = zoneRange.map { Double(bpm) < $0.lowerBound } ?? false
-            let minutes = belowZoneRange ? 0 : (secondsByBin[bpm] ?? 0) / 60
-            return (bpm, minutes)
-        }
+        return stride(from: lowerBin, through: upperBin, by: binWidth)
+            .filter { Double($0) >= domain.lowerBound && Double($0) <= domain.upperBound }
+            .map { bpm in (bpm, (secondsByBin[bpm] ?? 0) / 60) }
     }
 
     /// The 80/20 polarized-training threshold (Seiler) — the heart rate below which 80% of the
