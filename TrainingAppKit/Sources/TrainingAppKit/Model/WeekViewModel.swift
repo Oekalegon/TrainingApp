@@ -306,7 +306,8 @@ public final class WeekViewModel {
         return summary.load.confidence > 0 ? summary.load.value : nil
     }
 
-    /// `weekStart`'s heart-rate histogram, for the graph panel's "Time in zone" page (MVP1-55) —
+    /// `weekStart`'s heart-rate histogram, for the graph panel's "Heart Rate Histogram" page
+    /// (MVP1-55) —
     /// every completed activity in that week's raw heart-rate samples, binned by
     /// `HeartRateHistogram.aggregating(_:athlete:)`. Empty until ``refreshWeekCachesIfNeeded()``
     /// has cached `weekStart` — in practice near-instant for ``displayedWeekStart`` and its
@@ -335,10 +336,11 @@ public final class WeekViewModel {
     /// A changed `activityCount` marks every currently cached week stale and due for
     /// recomputation, but deliberately doesn't clear ``weekGraphCaches`` up front to do that —
     /// `weekGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
-    /// (synchronously, before this method's first `await`) was visible to `TimeInZoneChartView` as
-    /// a real, if momentary, "no data" state — the displayed week's own chart flashing to its
-    /// empty-state view and back on every week-navigation `.task(id:)` firing that happened to load
-    /// a not-yet-seen neighboring week's activities (changing `activityCount`), even though the
+    /// (synchronously, before this method's first `await`) was visible to
+    /// `HeartRateHistogramChartView` as a real, if momentary, "no data" state — the displayed
+    /// week's own chart flashing to its empty-state view and back on every week-navigation
+    /// `.task(id:)` firing that happened to load a not-yet-seen neighboring week's activities
+    /// (changing `activityCount`), even though the
     /// same chart was on screen, correct, immediately before and after. Leaving the stale entry in
     /// place until ``cacheWeekGraph(weekStart:priority:)`` overwrites it with a fresh one instead
     /// shows one (very briefly) outdated frame rather than a spurious empty one — never a

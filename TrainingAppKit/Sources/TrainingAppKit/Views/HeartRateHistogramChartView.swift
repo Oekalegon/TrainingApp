@@ -2,12 +2,12 @@ import Charts
 import SwiftUI
 import TrainingCore
 
-/// The week view's graph panel "Time in zone" page (MVP1-55, design doc §2.1; histogram follow-up)
-/// — a heart-rate histogram of the displayed week's activities, binned every 5 bpm, plotted over
-/// muted background bands for each heart-rate zone (same visual language `FitnessChartView` uses
-/// for TSB zones) with a single smoothed line tracing the time spent at each bpm, and a light-gray
-/// rule (labeled with an "80" pill) at the 80th percentile (Seiler's 80/20 polarized-training
-/// threshold).
+/// The week view's graph panel "Heart Rate Histogram" page (MVP1-55, design doc §2.1;
+/// histogram follow-up) — a heart-rate histogram of the displayed week's activities, binned
+/// every 5 bpm, plotted over muted background bands for each heart-rate zone (same visual
+/// language `FitnessChartView` uses for TSB zones) with a single smoothed line tracing the time
+/// spent at each bpm, and a light-gray rule (labeled with an "80" pill) at the 80th percentile
+/// (Seiler's 80/20 polarized-training threshold).
 ///
 /// Deliberately scoped to just the displayed week, not the 3-week window `FitnessChartView`/
 /// `DailyLoadChartView` share: unlike load/CTL/ATL/TSB (already computed for the whole
@@ -21,7 +21,7 @@ import TrainingCore
 /// underlying data pipeline, just this view's use of it) after it was identified as the source of
 /// choppy panning/swiping on weeks with several activities, and hiding it only during the
 /// week-change slide wasn't enough to fix that on its own.
-struct TimeInZoneChartView: View {
+struct HeartRateHistogramChartView: View {
     let histogram: HeartRateHistogram
 
     private static let smoothedLineWidth: CGFloat = 3
@@ -108,7 +108,7 @@ struct TimeInZoneChartView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Time in Zone [min]")
+            Text("Heart Rate Histogram")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
@@ -163,7 +163,6 @@ struct TimeInZoneChartView: View {
         .chartYAxis {
             AxisMarks(position: .trailing) { _ in
                 AxisGridLine()
-                AxisValueLabel()
             }
         }
         .chartLegend(.hidden)
