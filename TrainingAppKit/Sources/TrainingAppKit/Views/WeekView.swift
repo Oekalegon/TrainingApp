@@ -358,20 +358,32 @@ public struct WeekView: View {
     /// type's own doc comment for why they're two distinct view types (rather than one view with
     /// an `isCurrentPage`-style mode flag) and why the two off-screen pages need their own display
     /// path here at all rather than just reusing `GraphPanelPagerView` with a frozen initial page.
+    ///
+    /// Passes `weekStart`'s own ``WeekViewModel/chartMetrics(for:)``/``WeekViewModel/displayedWeekRange(for:)``,
+    /// not the unparameterized ``WeekViewModel/chartMetrics``/``WeekViewModel/displayedWeekRange``
+    /// (both of which always reflect `viewModel.displayedWeekStart`, not this particular page's own
+    /// week) — MVP1-32. Before this, every carousel page — including the previous/next ones a swipe
+    /// slides into view — rendered the *same* chart (whatever `displayedWeekStart` happened to be),
+    /// so the page that visibly became current after a swipe or button navigation genuinely hadn't
+    /// been showing its own data until that flip actually landed. Scoping each page to its own
+    /// `weekStart` means a neighbor page already shows its own correct, complete 3-week chart
+    /// beforehand — `load(asOf:)`/`preload(weekStart:asOf:)` fetch a wide enough range
+    /// (`WeekViewModel.loadRange(for:calendar:)`) for that to be true as soon as `displayedWeekStart`
+    /// last changed, not just after the page in question becomes current.
     @ViewBuilder
     private func graphPanel(weekStart: Date, isCurrentPage: Bool) -> some View {
         if isCurrentPage {
             GraphPanelPagerView(
-                metrics: viewModel.chartMetrics,
-                displayedWeekRange: viewModel.displayedWeekRange,
+                metrics: viewModel.chartMetrics(for: weekStart),
+                displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 }
             )
         } else {
             GraphPanelStaticPreview(
-                metrics: viewModel.chartMetrics,
-                displayedWeekRange: viewModel.displayedWeekRange,
+                metrics: viewModel.chartMetrics(for: weekStart),
+                displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
                 selectedIndex: graphPanelSelectedIndex
             )

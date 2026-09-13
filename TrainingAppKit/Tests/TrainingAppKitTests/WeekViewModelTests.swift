@@ -89,6 +89,79 @@ struct WeekViewModelTests {
         #expect(dayCount == 20)
     }
 
+    @Test("chartRange(for:) matches chartRange for the currently displayed week, and shifts for others")
+    func chartRangeForWeekStartMatchesUnparameterizedForDisplayedWeek() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: model.athlete)
+
+        #expect(viewModel.chartRange(for: viewModel.displayedWeekStart) == viewModel.chartRange)
+
+        let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: viewModel.displayedWeekStart)!
+        let nextRangeStart = calendar.date(byAdding: .day, value: -7, to: nextWeekStart)!
+        let nextRangeEnd = calendar.date(byAdding: .day, value: 13, to: nextWeekStart)!
+        #expect(viewModel.chartRange(for: nextWeekStart) == nextRangeStart...nextRangeEnd)
+    }
+
+    @Test(
+        "chartMetrics(for:) scopes to that week's own chartRange, independent of displayedWeekStart (MVP1-32)"
+    )
+    func chartMetricsForWeekStartIsScopedToThatWeek() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        // Inside the *next* week's own chartRange but outside the currently displayed week's --
+        // proves chartMetrics(for:) reads the given week's own window, not displayedWeekStart's.
+        let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: viewModel.displayedWeekStart)!
+        let dayInNextWeeksRange = calendar.date(byAdding: .day, value: 18, to: viewModel.displayedWeekStart)!
+        let activity = Activity(source: .manual, sport: .running, start: dayInNextWeeksRange, duration: 1800)
+        try await store.upsert([activity])
+
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.chartMetrics(for: nextWeekStart).contains { calendar.isDate($0.day, inSameDayAs: dayInNextWeeksRange) })
+        #expect(!viewModel.chartMetrics.contains { calendar.isDate($0.day, inSameDayAs: dayInNextWeeksRange) })
+    }
+
+    @Test("displayedWeekRange(for:) matches displayedWeekRange for the currently displayed week, and shifts for others")
+    func displayedWeekRangeForWeekStartMatchesUnparameterizedForDisplayedWeek() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: model.athlete)
+
+        #expect(viewModel.displayedWeekRange(for: viewModel.displayedWeekStart) == viewModel.displayedWeekRange)
+
+        let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: viewModel.displayedWeekStart)!
+        let expectedNextRange = nextWeekStart...calendar.date(byAdding: .day, value: 7, to: nextWeekStart)!
+        #expect(viewModel.displayedWeekRange(for: nextWeekStart) == expectedNextRange)
+    }
+
+    @Test(
+        "load(asOf:) fetches wide enough to cover the displayed week's neighbors' own chartRanges, not just its own (MVP1-32)"
+    )
+    func loadFetchesWideEnoughForNeighboringWeeksOwnCharts() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        // Outside the displayed week's own chartRange (whose upper bound is +13 days) but inside
+        // the *next* week's chartRange (+7 -7...+7 +13 = 0...+20) -- proves `load` reaches far
+        // enough for WeekView's "next" carousel page to render its own complete chart immediately,
+        // without waiting for a swipe to trigger a further load.
+        let dayInNextWeeksRange = calendar.date(byAdding: .day, value: 18, to: viewModel.displayedWeekStart)!
+        let activity = Activity(source: .manual, sport: .running, start: dayInNextWeeksRange, duration: 1800)
+        try await store.upsert([activity])
+
+        await viewModel.load(asOf: day(0))
+
+        #expect(model.activities.map(\.id) == [activity.id])
+    }
+
     @Test("displayedWeekRange tracks displayedWeekStart, following navigation rather than staying on today")
     func displayedWeekRangeFollowsNavigation() {
         let model = makeModel()
