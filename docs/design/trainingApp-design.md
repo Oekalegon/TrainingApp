@@ -162,7 +162,9 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   field-level merge (picking which source's data to keep per field) and multisport-leg linking
   aren't implemented — both need new `TrainingCore` data modeling — so `.merge` gets the delete-one
   fallback rather than an actual field picker.
-- **Delete Activity** (MVP1-65): a toolbar trash button, independent of the Overlap section above
+- **Delete Activity** (MVP1-65): a centered red text button in its own section at the bottom of the
+  list — matching a Settings-style "Delete Account" pattern, not a toolbar icon — independent of
+  the Overlap section above
   (always available, not just when `overlapAdvice` flags something) — e.g. a bad HealthKit import
   the athlete just wants gone. Gated behind a confirmation alert ("Delete Activity? This can't be
   undone."), since it's irreversible from the UI. Routed through

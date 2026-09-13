@@ -11,13 +11,13 @@ struct ActivityDetailView: View {
     /// (this activity, or its overlap context naming the other one) may no longer be accurate.
     let onResolveOverlap: (UUID) -> Void
     /// Runs `WeekViewModel.deleteActivity(_:asOf:)` and dismisses this sheet (MVP1-65) — the
-    /// toolbar "Delete Activity" button's action, gated behind `isShowingDeleteConfirmation`'s
-    /// alert. Independent of `onResolveOverlap`: this is always available, not just when
-    /// `viewModel.overlapContext` flags an issue.
+    /// bottom-of-list "Delete Activity" button's action, gated behind
+    /// `isShowingDeleteConfirmation`'s alert. Independent of `onResolveOverlap`: this is always
+    /// available, not just when `viewModel.overlapContext` flags an issue.
     let onDelete: () -> Void
     @Environment(\.dismiss) private var dismiss
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
-    /// irreversible-from-the-UI action, so it's never triggered directly from the toolbar button.
+    /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
     @State private var isShowingDeleteConfirmation = false
 
     private var dateFormat: Date.FormatStyle {
@@ -75,20 +75,23 @@ struct ActivityDetailView: View {
                     }
                 }
             }
+
+            // A centered red text button in its own section, not a toolbar icon (MVP1-65) --
+            // matches the "Delete Account"-style destructive action at the bottom of a Settings
+            // list, rather than a trash icon sitting next to everyday navigation controls.
+            Section {
+                Button("Delete Activity", role: .destructive) {
+                    isShowingDeleteConfirmation = true
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
         }
         .navigationTitle(viewModel.activity.sport.displayName)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar {
-            ToolbarItem(placement: .destructiveAction) {
-                Button("Delete Activity", systemImage: "trash", role: .destructive) {
-                    isShowingDeleteConfirmation = true
-                }
-            }
-        }
         // Irreversible from the UI (MVP1-65) -- always confirmed, never triggered directly from
-        // the toolbar button.
+        // the bottom button.
         .alert("Delete Activity?", isPresented: $isShowingDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 onDelete()
