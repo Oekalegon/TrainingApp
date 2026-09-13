@@ -427,9 +427,24 @@ public final class WeekViewModel {
 
     /// Resolves one side of an overlap by deleting it (MVP1-63) — the activity detail sheet's
     /// action for ``OverlapRecommendation/duplicate(keep:remove:)``/``OverlapRecommendation/merge``/
-    /// ``OverlapRecommendation/conflict``: "remove this one, keep the other". Failures fail
-    /// silently, same as every other store-mutating action here — MVP 1 has no error UI.
+    /// ``OverlapRecommendation/conflict``: "remove this one, keep the other".
     public func resolveOverlap(deleting id: UUID, asOf today: Date = .now) async {
+        await deleteActivity(id: id, asOf: today)
+    }
+
+    /// The activity detail sheet's general "Delete Activity" action (MVP1-65), independent of any
+    /// overlap — e.g. a bad HealthKit import the athlete just wants gone, not something
+    /// ``TrainingModel/overlapAdvice`` flagged. The view gates this behind its own confirmation
+    /// alert before calling it; this method itself performs the delete unconditionally.
+    public func deleteActivity(_ activity: Activity, asOf today: Date = .now) async {
+        await deleteActivity(id: activity.id, asOf: today)
+    }
+
+    /// Shared by ``resolveOverlap(deleting:)`` and ``deleteActivity(_:asOf:)`` — both ultimately
+    /// just delete one activity by id (MVP1-64's soft-delete/tombstone semantics live entirely in
+    /// `TrainingModel.deleteActivity(id:asOf:)` itself, not here). Failures fail silently, same as
+    /// every other store-mutating action here — MVP 1 has no error UI.
+    private func deleteActivity(id: UUID, asOf today: Date) async {
         try? await model.deleteActivity(id: id, asOf: today)
         await refreshWeekCachesIfNeeded()
     }

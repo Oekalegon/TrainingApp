@@ -10,7 +10,15 @@ struct ActivityDetailView: View {
     /// the athlete picks to delete, the sheet closes afterward since whatever's currently shown
     /// (this activity, or its overlap context naming the other one) may no longer be accurate.
     let onResolveOverlap: (UUID) -> Void
+    /// Runs `WeekViewModel.deleteActivity(_:asOf:)` and dismisses this sheet (MVP1-65) — the
+    /// toolbar "Delete Activity" button's action, gated behind `isShowingDeleteConfirmation`'s
+    /// alert. Independent of `onResolveOverlap`: this is always available, not just when
+    /// `viewModel.overlapContext` flags an issue.
+    let onDelete: () -> Void
     @Environment(\.dismiss) private var dismiss
+    /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
+    /// irreversible-from-the-UI action, so it's never triggered directly from the toolbar button.
+    @State private var isShowingDeleteConfirmation = false
 
     private var dateFormat: Date.FormatStyle {
         var format = Date.FormatStyle.dateTime.weekday(.wide).day().month(.wide).hour().minute()
@@ -72,6 +80,24 @@ struct ActivityDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .destructiveAction) {
+                Button("Delete Activity", systemImage: "trash", role: .destructive) {
+                    isShowingDeleteConfirmation = true
+                }
+            }
+        }
+        // Irreversible from the UI (MVP1-65) -- always confirmed, never triggered directly from
+        // the toolbar button.
+        .alert("Delete Activity?", isPresented: $isShowingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                onDelete()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
+        }
     }
 
     private var durationText: String {
