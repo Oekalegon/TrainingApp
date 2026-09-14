@@ -85,7 +85,7 @@ struct DayActivitiesSection: View {
     /// view building a `NavigationLink` itself.
     let onSelectActivity: (Activity) -> Void
     /// Called when one of this row's Load/Fitness/Fatigue/Form pills is tapped (MVP1-45) —
-    /// `WeekView` opens the fitness metrics info sheet scrolled to that specific metric.
+    /// `WeekView` opens the fitness metrics info sheet showing just that metric's explanation.
     let onSelectMetric: (TrainingMetricKind) -> Void
 
     /// Hour + minute only — shown beside each activity card on the timeline, in the same column
@@ -270,7 +270,7 @@ private struct DayMetricsPillRow: View {
 /// its series color) would need the value's own color scale threaded down here for no real gain,
 /// since the icon shape alone already disambiguates Load/Fitness/Fatigue/Form at this size. The
 /// value carries no pill/background at all, so it doesn't compete visually with the icon. Tapping
-/// anywhere on the pill (MVP1-45) opens the fitness metrics info sheet scrolled to this metric.
+/// anywhere on the pill (MVP1-45) opens the fitness metrics info sheet for just this metric.
 private struct MetricPillView: View {
     let kind: TrainingMetricKind
     let value: String
