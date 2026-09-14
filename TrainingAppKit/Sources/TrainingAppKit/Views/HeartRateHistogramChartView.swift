@@ -113,7 +113,7 @@ struct HeartRateHistogramChartView: View {
                     )
                 }
             }
-            .frame(height: 140)
+            .frame(height: 172)
             .padding(.horizontal)
         }
     }
