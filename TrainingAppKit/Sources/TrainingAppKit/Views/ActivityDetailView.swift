@@ -70,13 +70,23 @@ struct ActivityDetailView: View {
             }
 
             if viewModel.summary.timeInZone.total > 0 {
-                Section("Time in Zone") {
+                Section {
                     ForEach(1...5, id: \.self) { zone in
                         let seconds = viewModel.summary.timeInZone.seconds[zone] ?? 0
                         if seconds > 0 {
                             LabeledContent("Zone \(zone)", value: zoneText(seconds: seconds, zone: zone))
                         }
                     }
+                } header: {
+                    Text("Time in Zone")
+                } footer: {
+                    // The same zone breakdown above, collapsed into the two-bucket 80/20
+                    // (polarized-training) model (MVP1-48) -- zone 0 (below zone 1) and zones 1-2
+                    // are "Low", zones 3-5 are "Moderate-High", matching
+                    // `TimeInZone.polarizedSplit`'s own zone grouping. A footer under the same
+                    // section, not a second `Section`, since it's a rollup of the rows above it
+                    // rather than new information.
+                    Text("\(lowPercentText) low, \(moderateToHighPercentText) moderate-to-high")
                 }
             }
 
@@ -126,6 +136,18 @@ struct ActivityDetailView: View {
         let fraction = viewModel.summary.timeInZone.fraction(of: zone)
         let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
         return "\(duration) (\(percent))"
+    }
+
+    private var polarizedSplit: PolarizedIntensitySplit {
+        viewModel.summary.timeInZone.polarizedSplit
+    }
+
+    private var lowPercentText: String {
+        polarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private var moderateToHighPercentText: String {
+        polarizedSplit.moderateToHighFraction.formatted(.percent.precision(.fractionLength(0)))
     }
 }
 

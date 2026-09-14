@@ -4,11 +4,15 @@ import TrainingCore
 /// Per-sport stats shown directly below the fitness chart (design doc: `AthleteProfile.mainSport`,
 /// MVP1-52) — one swipeable page per sport with activity in the displayed week, main sport first.
 /// A fixed leading icon (the current page's sport) plus paging dots stay in place while the
-/// trailing Distance/Time/Load figures page underneath, each followed by its percentage change
-/// versus the previous week. Distance and time are omitted for a non-endurance sport (e.g.
-/// `.strength`), same rule `ActivityCard` uses for its own second line; Load is always the whole
-/// week's total across every sport (see `SportStatsPage`'s own doc comment), so it reads the same
-/// on every page.
+/// trailing Distance/Time/Load/LIT figures page underneath, each followed by its percentage change
+/// versus the previous week (except LIT, which doesn't have one — see `StatsPageView`'s doc
+/// comment). Distance and time are omitted for a non-endurance sport (e.g. `.strength`), same rule
+/// `ActivityCard` uses for its own second line; Load is always the whole week's total across every
+/// sport (see `SportStatsPage`'s own doc comment), so it reads the same on every page. LIT (MVP1-48
+/// — "Low Intensity Training", the 80/20 polarized-training split) only appears for a sport where
+/// that guideline is a meaningful lens at all (``Sport/supportsLowIntensityTrainingSplit``) and
+/// that has zone-classified time this week — unlike Load, it's genuinely scoped to that page's own
+/// sport (see `SportStatsPage`'s own doc comment for why).
 struct SportStatsPagerView: View {
     let pages: [SportStatsPage]
 
@@ -134,8 +138,8 @@ struct SportStatsPagerView: View {
     }
 }
 
-/// One page's Distance/Time/Load figures, each followed by its percentage change — the swipeable
-/// content `SportStatsPagerView`'s carousel pages between.
+/// One page's Distance/Time/Load(/LIT) figures, each followed by its percentage change — the
+/// swipeable content `SportStatsPagerView`'s carousel pages between.
 private struct StatsPageView: View {
     let page: SportStatsPage
 
@@ -155,6 +159,9 @@ private struct StatsPageView: View {
                 statItem(value: durationString, changeFraction: page.timeChangeFraction, label: "Time")
             }
             statItem(value: loadString, changeFraction: page.loadChangeFraction, label: "Load")
+            if page.sport.supportsLowIntensityTrainingSplit, page.polarizedSplit.total > 0 {
+                litItem
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -171,6 +178,35 @@ private struct StatsPageView: View {
         page.load.formatted(Self.loadFormat)
     }
 
+    private var lowIntensityFractionString: String {
+        page.polarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    /// "LIT" ("Low Intensity Training", MVP1-48) — the fraction of this sport's own zone-classified
+    /// time spent at low intensity (the 80/20 polarized-training split). No percent-change line
+    /// under it like `statItem`'s other figures: it's already a fraction directly comparable week
+    /// to week, so a relative "+N%" on top would misleadingly suggest another running total (same
+    /// reasoning this view used before it moved back inline). One step smaller than the other
+    /// items' `.footnote` — a deliberately quieter, secondary figure next to Distance/Time/Load
+    /// rather than a fourth equally-weighted headline number.
+    private var litItem: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text(lowIntensityFractionString)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text("LIT")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        // Without this, VoiceOver reads the bare abbreviation as the literal word "lit" instead of
+        // what it stands for — same problem `DayActivitiesSection`'s `MetricPillView` solves for
+        // CTL/ATL/TSB by spelling out "Fitness"/"Fatigue"/"Form" rather than the raw abbreviation.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Low Intensity Training, \(lowIntensityFractionString)")
+    }
+
     private func statItem(value: String, changeFraction: Double, label: String) -> some View {
         let percentText = Text(percentString(changeFraction))
             .font(.caption2)
@@ -182,8 +218,18 @@ private struct StatsPageView: View {
             // its "+33%") — `.minimumScaleFactor` only has that effect within a single `Text`, and
             // without it the value can end up truncated ("3:00:…") or wrapped instead of both
             // segments shrinking uniformly.
+            //
+            // `.footnote`, not `.subheadline`: a fixed, shared base size across every stat item is
+            // deliberate here, not just a smaller default. `.minimumScaleFactor` only shrinks a
+            // `Text` that doesn't fit its *own* allotted space, independently of its siblings — a
+            // short value like Load's "48" never needs to shrink, while a longer one like
+            // Distance's "12.3 km +8%" does, so at `.subheadline` the two ended up visibly
+            // different sizes in the same row. `.footnote` comfortably fits realistic values
+            // without shrinking in the common case, so every item renders at the same size instead
+            // of each independently deciding its own; `.minimumScaleFactor` stays only as a safety
+            // net for the rare value that's still too wide even at this smaller base.
             Text("\(value) \(percentText)")
-                .font(.subheadline)
+                .font(.footnote)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

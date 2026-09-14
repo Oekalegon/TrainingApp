@@ -42,4 +42,17 @@ extension Sport {
         case .strength, .coreStrengthTraining, .other: false
         }
     }
+
+    /// Whether the 80/20 (LIT, "Low Intensity Training") polarized-training split (MVP1-48) is a
+    /// meaningful figure for this sport — narrower than ``isEndurance``. This is about a sport
+    /// where the athlete deliberately trains a mix of easy and hard sessions, so the split actually
+    /// says something; an incidentally low-intensity sport like ``walking``/``hiking`` would
+    /// trivially read close to 100% low every week regardless of training discipline, which is
+    /// noise rather than a useful signal.
+    var supportsLowIntensityTrainingSplit: Bool {
+        switch self {
+        case .running, .indoorRunning, .outdoorRunning, .cycling: true
+        case .swimming, .strength, .coreStrengthTraining, .walking, .rowing, .hiking, .other: false
+        }
+    }
 }

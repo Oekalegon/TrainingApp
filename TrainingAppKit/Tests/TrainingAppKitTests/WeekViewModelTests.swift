@@ -657,6 +657,82 @@ struct WeekViewModelTests {
         #expect(pages.allSatisfy { $0.load == totalLoad })
     }
 
+    @Test("sportStatsPages(asOf:) scopes the 80/20 intensity split to each page's own sport, not blended across sports")
+    func sportStatsPagesPolarizedSplitIsScopedPerSport() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let weekStart = viewModel.displayedWeekStart
+        // 175bpm (well above threshold with a 50/190 resting/max split) lands in a
+        // moderate-to-high zone; 100bpm lands low -- same fixture pattern
+        // `heartRateHistogramBinsActivitySamples` uses. Running gets only the hard samples,
+        // cycling only the easy ones -- if the split were still blended across sports (as it
+        // briefly was), each page would incorrectly report the same 50/50 mix instead of its own
+        // sport's 100% moderate-to-high / 100% low.
+        let hardSamples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: weekStart.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let easySamples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: weekStart.addingTimeInterval(3600 + TimeInterval($0)), bpm: 100)
+        }
+        let running = Activity(source: .manual, sport: .running, start: weekStart, duration: 600, heartRate: hardSamples)
+        let cycling = Activity(
+            source: .manual, sport: .cycling, start: weekStart.addingTimeInterval(3600), duration: 600,
+            heartRate: easySamples
+        )
+        try await store.upsert([running, cycling])
+        await viewModel.load(asOf: day(0))
+
+        let pages = viewModel.sportStatsPages(asOf: day(0))
+
+        #expect(pages.map(\.sport) == [.running, .cycling])
+        let runningSplit = pages[0].polarizedSplit
+        #expect(runningSplit.total == 600)
+        #expect(runningSplit.lowSeconds == 0)
+        #expect(runningSplit.moderateToHighSeconds == 600)
+        let cyclingSplit = pages[1].polarizedSplit
+        #expect(cyclingSplit.total == 600)
+        #expect(cyclingSplit.lowSeconds == 600)
+        #expect(cyclingSplit.moderateToHighSeconds == 0)
+    }
+
+    @Test("sportStatsPages(asOf:) includes a planned workout's projected intensity in a still-projected week's split")
+    func sportStatsPagesPolarizedSplitIncludesPlannedWorkoutProjection() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        // Entirely in the future -- no completed activities at all, so the split (and its
+        // isProjected flag) can only come from PlannedWorkoutProjector's estimate.
+        let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: viewModel.displayedWeekStart)!
+        // `.heartRateZone(2)` lands in zone 2 with a 50/190 resting/max split (midpoint ratio 0.65
+        // falls inside the karvonen zone-2 range), which `polarizedSplit` counts as "low" -- same
+        // zone-mapping precedent `activitiesAndPlansFilterByDay` uses for its own workout fixture.
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: nextWeekStart)
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: day(0))
+
+        let pages = viewModel.sportStatsPages(for: nextWeekStart, asOf: day(0))
+
+        let split = pages[0].polarizedSplit
+        #expect(split.total == 1800)
+        #expect(split.lowSeconds == 1800)
+        #expect(split.moderateToHighSeconds == 0)
+    }
+
     @Test("sportStatsPages(asOf:) invalidates its cache when the displayed week changes")
     func sportStatsPagesRecomputesAfterWeekNavigation() async throws {
         let (store, stores) = makeStores()
