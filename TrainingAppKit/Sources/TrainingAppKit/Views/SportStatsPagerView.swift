@@ -10,13 +10,16 @@ import TrainingCore
 /// week's total across every sport (see `SportStatsPage`'s own doc comment), so it reads the same
 /// on every page.
 ///
-/// Below that row, a second line reports the whole week's 80/20 low-intensity split (MVP1-48),
-/// omitted entirely when the week has no zone-classified time at all (no heart-rate data, no
-/// planned workout with an intensity target). This is a separate row rather than a fifth
-/// candidate for the pager's own trailing HStack: that row is already tight (icon, paging dots,
-/// and up to three per-page stat items in a fixed 44pt height, sized for the narrowest supported
-/// device) — adding another column there risked squeezing or clipping the existing figures, since
-/// this value doesn't page per sport anyway (it's whole-week, like `load`).
+/// Below that row, a second line reports the *currently paged-to sport's* 80/20 low-intensity
+/// split (MVP1-48) — unlike `load`, this genuinely varies per sport (see `SportStatsPage`'s own
+/// doc comment for why blending it across sports would defeat the guideline's point), so it
+/// follows `selectedIndex` the same way the leading icon does: it updates once a swipe commits to
+/// a new page, not continuously during the drag. Omitted entirely when the selected sport has no
+/// zone-classified time at all that week (no heart-rate data, no planned workout with an intensity
+/// target). This is a separate row rather than a fourth item in the pager's own trailing HStack:
+/// that row is already tight (icon, paging dots, and up to three per-page stat items in a fixed
+/// 44pt height, sized for the narrowest supported device) — adding another column there risked
+/// squeezing or clipping the existing figures.
 struct SportStatsPagerView: View {
     let pages: [SportStatsPage]
 
@@ -36,11 +39,12 @@ struct SportStatsPagerView: View {
         pages.indices.contains(selectedIndex) ? pages[selectedIndex].sport : (pages.first?.sport ?? .running)
     }
 
-    /// The whole week's low-intensity fraction, shared by every page — `nil` when the week has no
-    /// zone-classified time at all, so the caption row below is omitted rather than showing a
-    /// meaningless "0%".
+    /// The selected page's own low-intensity fraction — same `selectedIndex`-with-`pages.first`
+    /// fallback as `selectedSport` — or `nil` when that sport has no zone-classified time at all
+    /// this week, so the caption row below is omitted rather than showing a meaningless "0%".
     private var polarizedSplit: PolarizedIntensitySplit? {
-        let split = pages.first?.polarizedSplit
+        let page = pages.indices.contains(selectedIndex) ? pages[selectedIndex] : pages.first
+        let split = page?.polarizedSplit
         return (split?.total ?? 0) > 0 ? split : nil
     }
 
@@ -160,13 +164,15 @@ struct SportStatsPagerView: View {
 
     /// A trailing-aligned caption reporting `split`'s low-intensity fraction, e.g. "82% low
     /// intensity this week" — its own accessibility element, separate from `statsBar`'s combined
-    /// one, since it doesn't page and isn't part of that gesture-driven carousel.
+    /// one, since it doesn't page and isn't part of that gesture-driven carousel. `.footnote`, not
+    /// `.caption2`, to match `StatsPageView`'s own value figures (see its `statItem`'s doc comment
+    /// for why they share one fixed size rather than each auto-shrinking to its own content).
     private func lowIntensityCaption(for split: PolarizedIntensitySplit) -> some View {
         let percent = split.lowFraction.formatted(.percent.precision(.fractionLength(0)))
         return HStack {
             Spacer()
             Text("\(percent) low intensity this week")
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal)
@@ -222,8 +228,18 @@ private struct StatsPageView: View {
             // its "+33%") — `.minimumScaleFactor` only has that effect within a single `Text`, and
             // without it the value can end up truncated ("3:00:…") or wrapped instead of both
             // segments shrinking uniformly.
+            //
+            // `.footnote`, not `.subheadline`: a fixed, shared base size across every stat item is
+            // deliberate here, not just a smaller default. `.minimumScaleFactor` only shrinks a
+            // `Text` that doesn't fit its *own* allotted space, independently of its siblings — a
+            // short value like Load's "48" never needs to shrink, while a longer one like
+            // Distance's "12.3 km +8%" does, so at `.subheadline` the two ended up visibly
+            // different sizes in the same row. `.footnote` comfortably fits realistic values
+            // without shrinking in the common case, so every item renders at the same size instead
+            // of each independently deciding its own; `.minimumScaleFactor` stays only as a safety
+            // net for the rare value that's still too wide even at this smaller base.
             Text("\(value) \(percentText)")
-                .font(.subheadline)
+                .font(.footnote)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

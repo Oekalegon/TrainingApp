@@ -108,12 +108,16 @@ remember or restore which tab was last active.
   pager (main sport first) showing that sport's Distance/Time for the displayed week, each with
   its percentage change vs. the previous week; Load (TRIMP) is always the whole week's total
   across every sport rather than a per-sport figure, so it reads the same regardless of which
-  sport's page is showing. Below that row, a second line reports the whole week's 80/20
-  low-intensity split (MVP1-48) — the fraction of zone-classified time spent at low intensity
-  (Polarized-training guideline; see `TrainingCore.PolarizedIntensitySplit`), also a whole-week
-  figure independent of which sport's page is showing. Omitted entirely for a week with no
-  zone-classified time at all (no heart-rate data, and no planned workout carrying an intensity
-  target).
+  sport's page is showing. Below that row, a second line reports the *currently paged-to sport's
+  own* 80/20 low-intensity split (MVP1-48) — the fraction of that sport's zone-classified time
+  spent at low intensity (polarized-training guideline; see
+  `TrainingCore.PolarizedIntensitySplit`). Deliberately scoped per sport rather than blended across
+  every sport the way Load is: an incidental low-intensity sport (e.g. walking) diluting a
+  dedicated training sport's own hard/easy mix would make the guideline trivially easy to satisfy
+  without actually controlling that sport's own intensity distribution. Follows the pager's
+  selected page (like Distance/Time), updating once a swipe commits rather than continuously
+  during the drag; omitted entirely when the selected sport has no zone-classified time at all that
+  week (no heart-rate data, and no planned workout carrying an intensity target).
 - Each completed `Activity` renders as a card on the timeline (MVP1-41), its start time shown
   separately on the timeline itself rather than inside the card. A card's headline line has the
   sport's icon, its name, and — trailing-aligned — its Load (TRIMP), omitted entirely when it's

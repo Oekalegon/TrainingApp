@@ -657,8 +657,8 @@ struct WeekViewModelTests {
         #expect(pages.allSatisfy { $0.load == totalLoad })
     }
 
-    @Test("sportStatsPages(asOf:) reports the whole week's 80/20 intensity split, unchanged across every page")
-    func sportStatsPagesPolarizedSplitIsWholeWeekTotalOnEveryPage() async throws {
+    @Test("sportStatsPages(asOf:) scopes the 80/20 intensity split to each page's own sport, not blended across sports")
+    func sportStatsPagesPolarizedSplitIsScopedPerSport() async throws {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
@@ -669,8 +669,10 @@ struct WeekViewModelTests {
         let weekStart = viewModel.displayedWeekStart
         // 175bpm (well above threshold with a 50/190 resting/max split) lands in a
         // moderate-to-high zone; 100bpm lands low -- same fixture pattern
-        // `heartRateHistogramBinsActivitySamples` uses, just split across two sports so the
-        // per-page invariant (same split on every page) actually gets exercised.
+        // `heartRateHistogramBinsActivitySamples` uses. Running gets only the hard samples,
+        // cycling only the easy ones -- if the split were still blended across sports (as it
+        // briefly was), each page would incorrectly report the same 50/50 mix instead of its own
+        // sport's 100% moderate-to-high / 100% low.
         let hardSamples = stride(from: 0, through: 600, by: 30).map {
             HeartRateSample(time: weekStart.addingTimeInterval(TimeInterval($0)), bpm: 175)
         }
@@ -688,12 +690,14 @@ struct WeekViewModelTests {
         let pages = viewModel.sportStatsPages(asOf: day(0))
 
         #expect(pages.map(\.sport) == [.running, .cycling])
-        let split = pages[0].polarizedSplit
-        #expect(split.total == 1200)
-        #expect(split.lowSeconds == 600)
-        #expect(split.moderateToHighSeconds == 600)
-        // Not sliced per sport -- both pages report the same whole-week split.
-        #expect(pages.allSatisfy { $0.polarizedSplit == split })
+        let runningSplit = pages[0].polarizedSplit
+        #expect(runningSplit.total == 600)
+        #expect(runningSplit.lowSeconds == 0)
+        #expect(runningSplit.moderateToHighSeconds == 600)
+        let cyclingSplit = pages[1].polarizedSplit
+        #expect(cyclingSplit.total == 600)
+        #expect(cyclingSplit.lowSeconds == 600)
+        #expect(cyclingSplit.moderateToHighSeconds == 0)
     }
 
     @Test("sportStatsPages(asOf:) includes a planned workout's projected intensity in a still-projected week's split")

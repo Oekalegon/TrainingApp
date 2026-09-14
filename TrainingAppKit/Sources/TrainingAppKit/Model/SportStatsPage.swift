@@ -25,10 +25,13 @@ public struct SportStatsPage: Identifiable, Hashable {
     /// Relative change in the whole week's total load vs. the previous week — the same value on
     /// every page.
     public let loadChangeFraction: Double
-    /// The whole week's low vs. moderate-to-high intensity time split (the 80/20
-    /// polarized-training guideline, MVP1-48) across every sport — the same value on every page,
-    /// for the same reason `load` is: it isn't meaningfully attributable to one sport. Blends in
-    /// planned/structured workouts' projected zone time for a still-projected week, the same way
-    /// `load` already does.
+    /// This sport's own low vs. moderate-to-high intensity time split for the displayed week (the
+    /// 80/20 polarized-training guideline, MVP1-48) — unlike `load`, this *is* scoped per sport:
+    /// the guideline is about how a given training discipline's own sessions are distributed
+    /// across intensity (Fitzgerald's "80% of your running", not "80% of everything you did this
+    /// week"), so blending in an incidental low-intensity sport like walking would make the figure
+    /// trivially easy to hit without actually controlling a training sport's own hard/easy mix.
+    /// Blends in that sport's planned/structured workouts' projected zone time for a
+    /// still-projected week, the same way `distanceMeters`/`time` already do.
     public let polarizedSplit: PolarizedIntensitySplit
 }

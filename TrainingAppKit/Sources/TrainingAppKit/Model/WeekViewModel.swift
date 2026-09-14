@@ -313,7 +313,7 @@ public final class WeekViewModel {
                 timeChangeFraction: Self.changeFraction(currentSport.time - previousSport.time, of: previousSport.time),
                 load: current.totalLoad,
                 loadChangeFraction: loadChangeFraction,
-                polarizedSplit: current.timeInZone.polarizedSplit
+                polarizedSplit: currentSport.timeInZone.polarizedSplit
             )
         }
     }
