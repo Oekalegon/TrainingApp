@@ -36,6 +36,10 @@ public struct WeekView: View {
     /// pill in the day list, so that sheet shows just that metric rather than all four; cleared
     /// (`nil`) for the toolbar's general entry point, which always shows all four.
     @State private var focusedMetricKind: TrainingMetricKind?
+    /// The day whose pill was tapped to open `focusedMetricKind`'s own chart (MVP1-45) — that
+    /// chart highlights this specific day/reads its value, rather than the chart just showing the
+    /// 3-week trend with nothing singled out. Meaningless while `focusedMetricKind` is `nil`.
+    @State private var focusedMetricDay = Date()
     /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
     /// the sheet opens, so the picker starts near whatever week is currently on screen.
     @State private var pickedDate = Date()
@@ -232,7 +236,7 @@ public struct WeekView: View {
                 datePickerSheet
             }
             .sheet(isPresented: $isShowingMetricsInfo) {
-                FitnessMetricsInfoView(focusedKind: focusedMetricKind)
+                FitnessMetricsInfoView(focusedKind: focusedMetricKind, chartContext: focusedMetricChartContext)
             }
             // Opens `pendingOverlapActivity`'s own detail sheet only once this one has actually
             // finished dismissing — see that property's own doc comment for why this two-step
@@ -258,6 +262,20 @@ public struct WeekView: View {
                 }
             }
         }
+    }
+
+    /// `FitnessMetricsInfoView`'s own chart data for `focusedMetricDay`'s week (MVP1-45) — `nil`
+    /// while `focusedMetricKind` is (the toolbar's all-four entry point never sets a day, so there's
+    /// nothing to build a chart around).
+    private var focusedMetricChartContext: FitnessMetricsInfoView.ChartContext? {
+        guard focusedMetricKind != nil else { return nil }
+        let weekStart = WeekViewModel.weekStart(containing: focusedMetricDay, calendar: viewModel.athleteCalendar)
+        return FitnessMetricsInfoView.ChartContext(
+            metrics: viewModel.chartMetrics(for: weekStart),
+            displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
+            touchedDay: focusedMetricDay,
+            calendar: viewModel.athleteCalendar
+        )
     }
 
     private var datePickerSheet: some View {
@@ -488,6 +506,7 @@ public struct WeekView: View {
                             onSelectActivity: { selectedActivity = $0 },
                             onSelectMetric: { kind in
                                 focusedMetricKind = kind
+                                focusedMetricDay = day
                                 isShowingMetricsInfo = true
                             }
                         )

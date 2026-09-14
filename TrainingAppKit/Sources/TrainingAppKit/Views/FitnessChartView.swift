@@ -22,34 +22,6 @@ struct FitnessChartView: View {
     private static let rawLineWidth: CGFloat = 1
     private static let smoothedLineWidth: CGFloat = 3
 
-    /// The visible y-domain, wide enough to show every `TSBZone` as a full band (including a
-    /// sliver of `injuryRisk`/`detraining`, whose own real boundaries are unbounded) rather than
-    /// clipping the outermost ones to a zero-height edge.
-    private static let formDomain: ClosedRange<Double> = -45...40
-
-    /// One `TSBZone`'s band — lower/upper bounds and a muted color to shade it. Mirrors `TSBZone`'s
-    /// own (internal-to-TrainingKit) boundaries with `PlanGuardrails()`'s defaults
-    /// (`minTSBOnRaceDay: 5`, `maxTSBOnRaceDay: 25`) — `AthleteProfile` doesn't carry its own tuned
-    /// guardrails yet, so those defaults are the only ones any athlete in this app actually has.
-    private struct ZoneBand {
-        let lowerBound: Double
-        let upperBound: Double
-        let color: Color
-        let label: String
-    }
-
-    /// The zone boundary values, in ascending order — also where the chart's horizontal gridlines
-    /// and leading axis labels sit, instead of an arbitrary evenly-spaced stride.
-    private static let zoneBoundaries: [Double] = [-30, -10, 5, 25]
-
-    private static let zoneBands: [ZoneBand] = [
-        ZoneBand(lowerBound: formDomain.lowerBound, upperBound: -30, color: .red, label: "Risk"),
-        ZoneBand(lowerBound: -30, upperBound: -10, color: .orange, label: "Training"),
-        ZoneBand(lowerBound: -10, upperBound: 5, color: .yellow, label: "Recovery"),
-        ZoneBand(lowerBound: 5, upperBound: 25, color: .green, label: "Race"),
-        ZoneBand(lowerBound: 25, upperBound: formDomain.upperBound, color: .blue, label: "Rest"),
-    ]
-
     private var pastPoints: [FitnessMetrics] {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).past
     }
@@ -69,7 +41,7 @@ struct FitnessChartView: View {
     // `HeartRateHistogramChartView` hit, fixed the same way there (see its own comment).
     @ChartContentBuilder
     private var zoneBandMarks: some ChartContent {
-        ForEach(Self.zoneBands, id: \.label) { band in
+        ForEach(TSBZoneBand.all, id: \.label) { band in
             RectangleMark(
                 yStart: .value("Lower", band.lowerBound),
                 yEnd: .value("Upper", band.upperBound)
@@ -154,7 +126,7 @@ struct FitnessChartView: View {
             "Form (smoothed) (projected)": Color.primary,
         ])
         .chartXScale(domain: dayDomain)
-        .chartYScale(domain: Self.formDomain)
+        .chartYScale(domain: TSBZoneBand.domain)
         .chartXAxis {
             AxisMarks(values: .stride(by: .day, count: 7)) { _ in
                 AxisGridLine()
@@ -167,7 +139,7 @@ struct FitnessChartView: View {
             // right. Only at the zone boundaries, not an arbitrary evenly-spaced stride — the
             // gridlines' job here is to mark where one zone ends and the next begins, not to give
             // a generic numeric scale.
-            AxisMarks(position: .trailing, values: Self.zoneBoundaries) { _ in
+            AxisMarks(position: .trailing, values: TSBZoneBand.boundaries) { _ in
                 AxisGridLine()
                 AxisValueLabel()
             }
@@ -177,7 +149,7 @@ struct FitnessChartView: View {
             GeometryReader { geometry in
                 if let plotFrame = proxy.plotFrame {
                     let plotArea = geometry[plotFrame]
-                    ForEach(Self.zoneBands, id: \.label) { band in
+                    ForEach(TSBZoneBand.all, id: \.label) { band in
                         let midValue = (band.lowerBound + band.upperBound) / 2
                         if let y = proxy.position(forY: midValue) {
                             Text(band.label)
