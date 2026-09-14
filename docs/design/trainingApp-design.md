@@ -105,19 +105,21 @@ remember or restore which tab was last active.
   describe that day's training input, which has nothing to say on a day nothing happened, while
   Form is a trend that still moves whether or not the athlete trained that day.
 - A pinned stats bar (MVP1-52) sits between the chart and the day list: a swipeable per-sport
-  pager (main sport first) showing that sport's Distance/Time for the displayed week, each with
-  its percentage change vs. the previous week; Load (TRIMP) is always the whole week's total
-  across every sport rather than a per-sport figure, so it reads the same regardless of which
-  sport's page is showing. Below that row, a second line reports the *currently paged-to sport's
-  own* 80/20 low-intensity split (MVP1-48) — the fraction of that sport's zone-classified time
-  spent at low intensity (polarized-training guideline; see
-  `TrainingCore.PolarizedIntensitySplit`). Deliberately scoped per sport rather than blended across
-  every sport the way Load is: an incidental low-intensity sport (e.g. walking) diluting a
-  dedicated training sport's own hard/easy mix would make the guideline trivially easy to satisfy
-  without actually controlling that sport's own intensity distribution. Follows the pager's
-  selected page (like Distance/Time), updating once a swipe commits rather than continuously
-  during the drag; omitted entirely when the selected sport has no zone-classified time at all that
-  week (no heart-rate data, and no planned workout carrying an intensity target).
+  pager (main sport first) showing that sport's Distance/Time/Load for the displayed week, each
+  with its percentage change vs. the previous week, plus "LIT" ("Low Intensity Training", MVP1-48)
+  — the fraction of that sport's own zone-classified time spent at low intensity (the 80/20
+  polarized-training guideline; see `TrainingCore.PolarizedIntensitySplit`), shown a step smaller
+  than the other figures as a secondary, supporting number rather than an equally-weighted fourth
+  headline. Load is always the whole week's total across every sport rather than a per-sport
+  figure, so it reads the same regardless of which sport's page is showing; LIT is the opposite —
+  deliberately scoped to that page's own sport, since blending it across every sport the way Load
+  is would let an incidental low-intensity sport (e.g. walking) dilute a dedicated training sport's
+  own hard/easy mix, making the guideline trivially easy to satisfy without actually controlling
+  that sport's own intensity distribution. LIT only appears for a sport where the guideline is a
+  meaningful lens at all (currently running and cycling —
+  `Sport.supportsLowIntensityTrainingSplit`) and only once that sport has zone-classified time this
+  week; it's omitted for every other sport (walking's own split would trivially read near 100% low
+  every week, which is noise, not signal) and for a sport with none of that data yet.
 - Each completed `Activity` renders as a card on the timeline (MVP1-41), its start time shown
   separately on the timeline itself rather than inside the card. A card's headline line has the
   sport's icon, its name, and — trailing-aligned — its Load (TRIMP), omitted entirely when it's
