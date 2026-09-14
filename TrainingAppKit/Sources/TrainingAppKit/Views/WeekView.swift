@@ -30,6 +30,8 @@ public struct WeekView: View {
     #endif
     /// Whether the "Select Date" sheet is presented.
     @State private var isShowingDatePicker = false
+    /// Whether the fitness metrics info sheet (MVP1-45) is presented.
+    @State private var isShowingMetricsInfo = false
     /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
     /// the sheet opens, so the picker starts near whatever week is currently on screen.
     @State private var pickedDate = Date()
@@ -199,6 +201,11 @@ public struct WeekView: View {
                         isShowingDatePicker = true
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Fitness Metrics", systemImage: "info.circle") {
+                        isShowingMetricsInfo = true
+                    }
+                }
             }
             .task(id: viewModel.displayedWeekStart) {
                 await viewModel.load()
@@ -218,6 +225,9 @@ public struct WeekView: View {
             }
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
+            }
+            .sheet(isPresented: $isShowingMetricsInfo) {
+                FitnessMetricsInfoView()
             }
             // Opens `pendingOverlapActivity`'s own detail sheet only once this one has actually
             // finished dismissing — see that property's own doc comment for why this two-step

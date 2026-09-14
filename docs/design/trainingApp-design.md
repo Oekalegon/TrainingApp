@@ -139,7 +139,11 @@ remember or restore which tab was last active.
   reloads the day list). Both the chart and the day list scroll together — the displayed week is
   one piece of state, not two.
 - **Toolbar**: "Today" button resets the displayed week to the current calendar week; "Select
-  Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date.
+  Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date;
+  "Fitness Metrics" (MVP1-45, `FitnessMetricsInfoView`) opens a purely informational sheet
+  explaining what Load, Fitness (CTL), Fatigue (ATL), and Form (TSB) each mean and how they're
+  computed — one `Section` per metric, its `TrainingMetricKind` icon/color as the header so it
+  reads consistently with the chart legend and the day list's own pills.
 - **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
