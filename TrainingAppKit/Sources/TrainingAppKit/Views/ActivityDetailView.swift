@@ -78,6 +78,17 @@ struct ActivityDetailView: View {
                         }
                     }
                 }
+
+                // The same zone breakdown above, collapsed into the two-bucket 80/20
+                // (polarized-training) model (MVP1-48) -- Zone 1-2 is "Low", Zone 3-5 is
+                // "Moderate-High", matching `TimeInZone.polarizedSplit`'s own zone grouping.
+                Section("Intensity Split") {
+                    LabeledContent("Low", value: splitText(seconds: polarizedSplit.lowSeconds, fraction: polarizedSplit.lowFraction))
+                    LabeledContent(
+                        "Moderate–High",
+                        value: splitText(seconds: polarizedSplit.moderateToHighSeconds, fraction: polarizedSplit.moderateToHighFraction)
+                    )
+                }
             }
 
             // A centered red text button in its own section, not a toolbar icon (MVP1-65) --
@@ -124,6 +135,16 @@ struct ActivityDetailView: View {
     private func zoneText(seconds: TimeInterval, zone: Int) -> String {
         let duration = Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes]))
         let fraction = viewModel.summary.timeInZone.fraction(of: zone)
+        let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
+        return "\(duration) (\(percent))"
+    }
+
+    private var polarizedSplit: PolarizedIntensitySplit {
+        viewModel.summary.timeInZone.polarizedSplit
+    }
+
+    private func splitText(seconds: TimeInterval, fraction: Double) -> String {
+        let duration = Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes]))
         let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
         return "\(duration) (\(percent))"
     }

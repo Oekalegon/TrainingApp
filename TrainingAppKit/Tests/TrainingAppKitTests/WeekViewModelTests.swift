@@ -657,6 +657,45 @@ struct WeekViewModelTests {
         #expect(pages.allSatisfy { $0.load == totalLoad })
     }
 
+    @Test("sportStatsPages(asOf:) reports the whole week's 80/20 intensity split, unchanged across every page")
+    func sportStatsPagesPolarizedSplitIsWholeWeekTotalOnEveryPage() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let weekStart = viewModel.displayedWeekStart
+        // 175bpm (well above threshold with a 50/190 resting/max split) lands in a
+        // moderate-to-high zone; 100bpm lands low -- same fixture pattern
+        // `heartRateHistogramBinsActivitySamples` uses, just split across two sports so the
+        // per-page invariant (same split on every page) actually gets exercised.
+        let hardSamples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: weekStart.addingTimeInterval(TimeInterval($0)), bpm: 175)
+        }
+        let easySamples = stride(from: 0, through: 600, by: 30).map {
+            HeartRateSample(time: weekStart.addingTimeInterval(3600 + TimeInterval($0)), bpm: 100)
+        }
+        let running = Activity(source: .manual, sport: .running, start: weekStart, duration: 600, heartRate: hardSamples)
+        let cycling = Activity(
+            source: .manual, sport: .cycling, start: weekStart.addingTimeInterval(3600), duration: 600,
+            heartRate: easySamples
+        )
+        try await store.upsert([running, cycling])
+        await viewModel.load(asOf: day(0))
+
+        let pages = viewModel.sportStatsPages(asOf: day(0))
+
+        #expect(pages.map(\.sport) == [.running, .cycling])
+        let split = pages[0].polarizedSplit
+        #expect(split.total == 1200)
+        #expect(split.lowSeconds == 600)
+        #expect(split.moderateToHighSeconds == 600)
+        // Not sliced per sport -- both pages report the same whole-week split.
+        #expect(pages.allSatisfy { $0.polarizedSplit == split })
+    }
+
     @Test("sportStatsPages(asOf:) invalidates its cache when the displayed week changes")
     func sportStatsPagesRecomputesAfterWeekNavigation() async throws {
         let (store, stores) = makeStores()

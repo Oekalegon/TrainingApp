@@ -6,9 +6,11 @@ import TrainingCore
 /// A fixed leading icon (the current page's sport) plus paging dots stay in place while the
 /// trailing Distance/Time/Load figures page underneath, each followed by its percentage change
 /// versus the previous week. Distance and time are omitted for a non-endurance sport (e.g.
-/// `.strength`), same rule `ActivityCard` uses for its own second line; Load is always the whole
-/// week's total across every sport (see `SportStatsPage`'s own doc comment), so it reads the same
-/// on every page.
+/// `.strength`), same rule `ActivityCard` uses for its own second line; Load and the 80/20
+/// low-intensity split (MVP1-48) are always the whole week's totals across every sport (see
+/// `SportStatsPage`'s own doc comment), so they read the same on every page. The split is omitted
+/// entirely when the week has no zone-classified time at all (no heart-rate data, no planned
+/// workout with an intensity target).
 struct SportStatsPagerView: View {
     let pages: [SportStatsPage]
 
@@ -155,6 +157,9 @@ private struct StatsPageView: View {
                 statItem(value: durationString, changeFraction: page.timeChangeFraction, label: "Time")
             }
             statItem(value: loadString, changeFraction: page.loadChangeFraction, label: "Load")
+            if page.polarizedSplit.total > 0 {
+                plainStatItem(value: lowSplitString, label: "Low Intensity")
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -171,6 +176,14 @@ private struct StatsPageView: View {
         page.load.formatted(Self.loadFormat)
     }
 
+    /// The week's fraction of zone-classified time spent at low intensity (the 80/20
+    /// polarized-training split's "80" side, MVP1-48) — the moderate-to-high complement isn't
+    /// shown alongside it, the same way `SportStatsPage` shows only one number for each of its
+    /// other stats rather than a value plus its own remainder.
+    private var lowSplitString: String {
+        page.polarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
+    }
+
     private func statItem(value: String, changeFraction: Double, label: String) -> some View {
         let percentText = Text(percentString(changeFraction))
             .font(.caption2)
@@ -183,6 +196,23 @@ private struct StatsPageView: View {
             // without it the value can end up truncated ("3:00:…") or wrapped instead of both
             // segments shrinking uniformly.
             Text("\(value) \(percentText)")
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// A stat item with no percent-change line under it, for a value that isn't a running total
+    /// (like `load`/`distanceMeters`/`time`) but a fraction already comparable week to week on its
+    /// own terms — a relative "+N%" change on top of it would misleadingly suggest another running
+    /// total.
+    private func plainStatItem(value: String, label: String) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text(value)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
