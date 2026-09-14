@@ -200,6 +200,11 @@ private struct StatsPageView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+        // Without this, VoiceOver reads the bare abbreviation as the literal word "lit" instead of
+        // what it stands for — same problem `DayActivitiesSection`'s `MetricPillView` solves for
+        // CTL/ATL/TSB by spelling out "Fitness"/"Fatigue"/"Form" rather than the raw abbreviation.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Low Intensity Training, \(lowIntensityFractionString)")
     }
 
     private func statItem(value: String, changeFraction: Double, label: String) -> some View {
