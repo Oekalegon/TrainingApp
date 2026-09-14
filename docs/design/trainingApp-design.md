@@ -166,8 +166,12 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 
 - Sport, start time, duration, distance (if present).
 - Load/TRIMP for the activity, and time-in-zone breakdown if heart-rate samples are present
-  (`Statistics`'s `TimeInZone`) — its section footer additionally rolls that same breakdown up
-  into the 80/20 low vs. moderate-to-high split (MVP1-48, `TimeInZone.polarizedSplit`).
+  (`Statistics`'s `TimeInZone`) — every zone 1 through 5 is listed, not just the ones this
+  activity actually reached (MVP1-70), each preceded by a small dot in that zone's own color
+  (`HeartRateZone.color`, the same ramp `HeartRateHistogramChartView` already uses for its zone
+  bands), so the row itself carries the same color association as the chart above it. Its section
+  footer additionally rolls that same breakdown up into the 80/20 low vs. moderate-to-high split
+  (MVP1-48, `TimeInZone.polarizedSplit`).
 - No map/route rendering, no cadence/elevation charts — text/stat rows only for MVP 1.
 - **Overlap section** (MVP1-63): shown when `WeekViewModel.overlapContext(for:)` finds this
   activity part of a pair — unlike the day-list badge above, this includes `.possibleMultisport`

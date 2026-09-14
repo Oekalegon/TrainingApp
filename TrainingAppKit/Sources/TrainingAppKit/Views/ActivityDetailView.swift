@@ -71,10 +71,27 @@ struct ActivityDetailView: View {
 
             if viewModel.summary.timeInZone.total > 0 {
                 Section {
-                    ForEach(1...5, id: \.self) { zone in
-                        let seconds = viewModel.summary.timeInZone.seconds[zone] ?? 0
-                        if seconds > 0 {
-                            LabeledContent("Zone \(zone)", value: zoneText(seconds: seconds, zone: zone))
+                    // Every zone 1...5, not just the ones this activity actually reached (MVP1-70)
+                    // -- unlike the day list's/week pager's own zone-derived figures, this is meant
+                    // to read as the full five-zone scale the athlete can compare a session against,
+                    // not just a summary of what happened. Iterates `HeartRateZone.allCases`, not a
+                    // bare `1...5`, so `zone.color` below never needs a fallback for an
+                    // out-of-range raw value -- there isn't one to guard against.
+                    ForEach(HeartRateZone.allCases, id: \.self) { zone in
+                        let seconds = viewModel.summary.timeInZone.seconds[zone.rawValue] ?? 0
+                        LabeledContent {
+                            Text(zoneText(seconds: seconds, zone: zone.rawValue))
+                        } label: {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(zone.color)
+                                    .frame(width: 8, height: 8)
+                                    // Decorative only -- the zone number right next to it already
+                                    // says what VoiceOver needs; without this it would add a
+                                    // second, unlabeled stop to the swipe order for every row.
+                                    .accessibilityHidden(true)
+                                Text("Zone \(zone.rawValue)")
+                            }
                         }
                     }
                 } header: {
