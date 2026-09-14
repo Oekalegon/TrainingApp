@@ -76,7 +76,7 @@ struct DailyLoadChartView: View {
                     AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                 }
             }
-            .frame(height: 140)
+            .frame(height: 172)
             .padding(.horizontal)
         }
     }

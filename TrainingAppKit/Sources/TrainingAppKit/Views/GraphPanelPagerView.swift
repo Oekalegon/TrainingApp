@@ -41,7 +41,7 @@ struct GraphPanelPagerView: View {
     static let pageCount = 3
     private static let commitThreshold: CGFloat = 0.3
     private static let pageChangeAnimation: Animation = .easeInOut(duration: 0.25)
-    /// Tall enough for the tallest page's chart (140pt) plus its legend row and spacing —
+    /// Tall enough for the tallest page's chart (172pt) plus its legend row and spacing —
     /// `weekPageContent`'s `LazyVStack` needs a fixed height here since the three pages, laid out
     /// side by side in an `HStack`, don't otherwise report one shared height upward the way a
     /// single view would. Shared with `GraphPanelStaticPreview` so a mid-drag page transition
