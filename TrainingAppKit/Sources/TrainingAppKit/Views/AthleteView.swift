@@ -41,6 +41,29 @@ struct AthleteView: View {
                         }
                         LabeledContent("Method", value: settings.zoneMethod.displayName)
                     }
+
+                    // Each zone's own bpm range under the settings above (MVP1-71) -- a separate
+                    // section, not more rows in "Heart Rate Zones", since these five are a distinct
+                    // reference table derived from those settings rather than another setting of
+                    // their own. Same colored-dot-before-name treatment as the activity detail
+                    // sheet's own zone list (MVP1-70), for the same `HeartRateZone.color` ramp.
+                    if !viewModel.heartRateZoneRanges.isEmpty {
+                        Section("Zones") {
+                            ForEach(viewModel.heartRateZoneRanges) { zoneRange in
+                                LabeledContent {
+                                    Text(bpmRangeText(zoneRange.bpmRange))
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Circle()
+                                            .fill(zoneRange.zone.color)
+                                            .frame(width: 8, height: 8)
+                                            .accessibilityHidden(true)
+                                        Text("Zone \(zoneRange.zone.rawValue)")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
                     Section("Heart Rate Zones") {
                         Text("No heart-rate zone settings on record yet.")
@@ -112,6 +135,12 @@ struct AthleteView: View {
                 Text("Permanently removes duplicate activities left over from an older version of the app. This can't be undone.")
             }
         }
+    }
+
+    /// "120–133 bpm" — whole-number bpm on both ends, matching every other bpm figure on this
+    /// screen (Resting/Max/Lactate Threshold above).
+    private func bpmRangeText(_ range: ClosedRange<Double>) -> String {
+        "\(Int(range.lowerBound.rounded()))–\(Int(range.upperBound.rounded())) bpm"
     }
 }
 

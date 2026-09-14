@@ -211,7 +211,12 @@ imported biometric data looks right, not to be a settings screen:
   manual avatar picker gets added alongside real editing later.
 - Name, biological sex.
 - Current heart-rate zone settings (`athlete.currentHeartRateZoneSettings`): resting HR, max HR,
-  lactate threshold HR (if set), zone method.
+  lactate threshold HR (if set), zone method — plus a "Zones" table (MVP1-71,
+  `AthleteViewModel.heartRateZoneRanges`) listing each named zone's own bpm range under those
+  settings (`HeartRateZoneModel.zoneBPMRange(_:)`), each preceded by a colored dot in that zone's
+  color (`HeartRateZone.color`), same treatment as the activity detail sheet's own zone list
+  (MVP1-70). Omitted when there are no settings on record yet, or when the current method can't
+  resolve a zone at all (`.lactateThreshold` with no LTHR set).
 - Pace model's threshold pace (`paceModel.thresholdPaceSecondsPerKilometer`), shown as min/km.
 - Week-starts-on, time zone — minor, but confirms the app is bucketing days the way the athlete
   expects.

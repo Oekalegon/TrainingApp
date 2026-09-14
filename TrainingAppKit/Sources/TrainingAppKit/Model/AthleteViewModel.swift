@@ -33,6 +33,19 @@ public struct AthleteViewModel {
         athlete.currentHeartRateZoneSettings
     }
 
+    /// Every named zone's bpm range under ``currentHeartRateZoneSettings``, in zone order
+    /// (1 through 5) — empty when there are no settings on record yet, or when the current
+    /// method can't resolve a zone at all (`.lactateThreshold` with no LTHR set, matching
+    /// `HeartRateZoneModel.zoneBPMRange(_:)`'s own `nil` cases).
+    public var heartRateZoneRanges: [HeartRateZoneRange] {
+        guard let settings = currentHeartRateZoneSettings else { return [] }
+        let model = HeartRateZoneModel(settings: settings)
+        return HeartRateZone.allCases.compactMap { zone in
+            guard let bpmRange = model.zoneBPMRange(zone.rawValue) else { return nil }
+            return HeartRateZoneRange(zone: zone, bpmRange: bpmRange)
+        }
+    }
+
     /// Threshold pace as minutes:seconds per kilometer, e.g. "4:00 /km".
     public var thresholdPaceText: String {
         let totalSeconds = Int(athlete.paceModel.thresholdPaceSecondsPerKilometer.rounded())
