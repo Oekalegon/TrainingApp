@@ -84,6 +84,9 @@ struct DayActivitiesSection: View {
     /// sheet, not a navigation push, so this hands back the tapped `Activity` rather than this
     /// view building a `NavigationLink` itself.
     let onSelectActivity: (Activity) -> Void
+    /// Called when one of this row's Load/Fitness/Fatigue/Form pills is tapped (MVP1-45) —
+    /// `WeekView` opens the fitness metrics info sheet scrolled to that specific metric.
+    let onSelectMetric: (TrainingMetricKind) -> Void
 
     /// Hour + minute only — shown beside each activity card on the timeline, in the same column
     /// the weekday pill sits in above it (MVP1-41; the pill itself already carries the day).
@@ -99,7 +102,7 @@ struct DayActivitiesSection: View {
                 WeekdayPillView(date: date, isToday: isToday, timeZone: timeZone)
                     .frame(width: WeekdayPillView.columnWidth)
                 if let metrics {
-                    DayMetricsPillRow(metrics: metrics, showsOnlyForm: activities.isEmpty)
+                    DayMetricsPillRow(metrics: metrics, showsOnlyForm: activities.isEmpty, onSelectMetric: onSelectMetric)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
@@ -230,6 +233,8 @@ private struct DayMetricsPillRow: View {
     /// training input, which has nothing to say on a day nothing happened, so only Form (TSB, a
     /// trend that moves whether or not the athlete trained that day) is worth showing.
     let showsOnlyForm: Bool
+    /// Called with the tapped pill's metric (MVP1-45).
+    let onSelectMetric: (TrainingMetricKind) -> Void
 
     /// Extra spacing between Load and Fitness, on top of ``metricSpacing`` — Load is that day's
     /// raw load, a different kind of number from the three smoothed CTL/ATL/TSB series that
@@ -247,14 +252,14 @@ private struct DayMetricsPillRow: View {
     var body: some View {
         HStack(spacing: 0) {
             if !showsOnlyForm {
-                MetricPillView(kind: .load, value: metrics.load.formatted(Self.unsignedFormat))
+                MetricPillView(kind: .load, value: metrics.load.formatted(Self.unsignedFormat), onSelect: onSelectMetric)
                 Spacer().frame(width: Self.loadGroupSpacing)
-                MetricPillView(kind: .fitness, value: metrics.ctl.formatted(Self.unsignedFormat))
+                MetricPillView(kind: .fitness, value: metrics.ctl.formatted(Self.unsignedFormat), onSelect: onSelectMetric)
                 Spacer().frame(width: Self.metricSpacing)
-                MetricPillView(kind: .fatigue, value: metrics.atl.formatted(Self.unsignedFormat))
+                MetricPillView(kind: .fatigue, value: metrics.atl.formatted(Self.unsignedFormat), onSelect: onSelectMetric)
                 Spacer().frame(width: Self.metricSpacing)
             }
-            MetricPillView(kind: .form, value: metrics.tsb.formatted(Self.signedFormat))
+            MetricPillView(kind: .form, value: metrics.tsb.formatted(Self.signedFormat), onSelect: onSelectMetric)
         }
     }
 }
@@ -264,33 +269,43 @@ private struct DayMetricsPillRow: View {
 /// not tinted per metric — matching `FitnessChartView`'s legend (which pairs the same icon with
 /// its series color) would need the value's own color scale threaded down here for no real gain,
 /// since the icon shape alone already disambiguates Load/Fitness/Fatigue/Form at this size. The
-/// value carries no pill/background at all, so it doesn't compete visually with the icon.
+/// value carries no pill/background at all, so it doesn't compete visually with the icon. Tapping
+/// anywhere on the pill (MVP1-45) opens the fitness metrics info sheet scrolled to this metric.
 private struct MetricPillView: View {
     let kind: TrainingMetricKind
     let value: String
+    let onSelect: (TrainingMetricKind) -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(value)
-                .foregroundStyle(.primary)
-            Image(systemName: kind.icon)
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background {
-                    Capsule().fill(unhighlightedPillBackground)
-                }
+        Button {
+            onSelect(kind)
+        } label: {
+            HStack(spacing: 4) {
+                Text(value)
+                    .foregroundStyle(.primary)
+                Image(systemName: kind.icon)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background {
+                        Capsule().fill(unhighlightedPillBackground)
+                    }
+            }
+            .font(.system(size: 11, weight: .regular, design: .default))
+            // Same reasoning as `WeekdayPillView`: the icon pill is a small fixed-size badge, capped
+            // rather than unbounded, so it stays compact even at large accessibility text sizes.
+            .dynamicTypeSize(.large)
         }
-        .font(.system(size: 11, weight: .regular, design: .default))
-        // Same reasoning as `WeekdayPillView`: the icon pill is a small fixed-size badge, capped
-        // rather than unbounded, so it stays compact even at large accessibility text sizes.
-        .dynamicTypeSize(.large)
+        // Plain, not the default button chrome (tint color, press-state dimming beyond what a
+        // small pill needs) — this is a small inline value/icon, not a call-to-action button.
+        .buttonStyle(.plain)
         // Without this, VoiceOver reads the icon's own SF Symbol name ("battery 100 percent")
         // instead of what it actually represents here — combining the two elements into one and
         // giving it an explicit label makes this read as "Fitness, 42" instead of two
         // disconnected fragments ("42", then "battery 100 percent").
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(kind.name), \(value)")
+        .accessibilityHint("Opens an explanation of \(kind.name)")
     }
 }
 

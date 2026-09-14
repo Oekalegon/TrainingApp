@@ -103,7 +103,8 @@ remember or restore which tab was last active.
   compact icon+value pills, trailing-aligned, one icon per metric matching the chart legend above
   (MVP1-40). A day with no completed activities shows only the Form pill — Load/Fitness/Fatigue
   describe that day's training input, which has nothing to say on a day nothing happened, while
-  Form is a trend that still moves whether or not the athlete trained that day.
+  Form is a trend that still moves whether or not the athlete trained that day. Tapping any pill
+  (MVP1-45) opens the fitness metrics info sheet scrolled to that specific metric's explanation.
 - A pinned stats bar (MVP1-52) sits between the chart and the day list: a swipeable per-sport
   pager (main sport first) showing that sport's Distance/Time/Load for the displayed week, each
   with its percentage change vs. the previous week, plus "LIT" ("Low Intensity Training", MVP1-48)
@@ -140,11 +141,13 @@ remember or restore which tab was last active.
   one piece of state, not two.
 - **Toolbar**: "Today" button resets the displayed week to the current calendar week; "Select
   Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date;
-  "Fitness Metrics" (MVP1-45, `FitnessMetricsInfoView`) opens a purely informational sheet
-  explaining what Load (TRIMP), Fitness (CTL), Fatigue (ATL), and Form (TSB) each mean and how
-  they're computed — one `Section` per metric, headed by its name and sports-science abbreviation
-  together (`TrainingMetricKind.name`/`.abbreviation`) plus its icon/color, so it reads
-  consistently with the chart legend and the day list's own pills.
+  "Fitness Metrics" (MVP1-45, `FitnessMetricsInfoView`) opens the same purely informational sheet
+  a day-list pill tap does (see above), at the top of the list rather than scrolled to a specific
+  metric. The sheet explains what Load (TRIMP), Fitness (CTL), Fatigue (ATL), and Form (TSB) each
+  mean and how they're computed — one `Section` per metric, headed by its name and sports-science
+  abbreviation together (`TrainingMetricKind.name`/`.abbreviation`) plus its icon, deliberately
+  plain/un-tinted rather than colored per metric — matching the day list's own pills
+  (`MetricPillView`'s doc comment), not the chart legend's colored one.
 - **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated

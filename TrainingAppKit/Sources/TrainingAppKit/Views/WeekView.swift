@@ -32,6 +32,10 @@ public struct WeekView: View {
     @State private var isShowingDatePicker = false
     /// Whether the fitness metrics info sheet (MVP1-45) is presented.
     @State private var isShowingMetricsInfo = false
+    /// Which metric the info sheet should scroll to on appear — set when opened by tapping a
+    /// specific pill in the day list rather than the toolbar's general entry point, and cleared
+    /// (`nil`) for the toolbar case so that one always opens at the top.
+    @State private var focusedMetricKind: TrainingMetricKind?
     /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
     /// the sheet opens, so the picker starts near whatever week is currently on screen.
     @State private var pickedDate = Date()
@@ -203,6 +207,7 @@ public struct WeekView: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Fitness Metrics", systemImage: "info.circle") {
+                        focusedMetricKind = nil
                         isShowingMetricsInfo = true
                     }
                 }
@@ -227,7 +232,7 @@ public struct WeekView: View {
                 datePickerSheet
             }
             .sheet(isPresented: $isShowingMetricsInfo) {
-                FitnessMetricsInfoView()
+                FitnessMetricsInfoView(focusedKind: focusedMetricKind)
             }
             // Opens `pendingOverlapActivity`'s own detail sheet only once this one has actually
             // finished dismissing — see that property's own doc comment for why this two-step
@@ -480,7 +485,11 @@ public struct WeekView: View {
                             trainingLoad: { viewModel.trainingLoad(for: $0) },
                             overlapWarning: { viewModel.overlapWarning(for: $0) },
                             timeZone: viewModel.athleteTimeZone,
-                            onSelectActivity: { selectedActivity = $0 }
+                            onSelectActivity: { selectedActivity = $0 },
+                            onSelectMetric: { kind in
+                                focusedMetricKind = kind
+                                isShowingMetricsInfo = true
+                            }
                         )
                     }
                     // Continues the timeline past the last day's own connector (which stops at
