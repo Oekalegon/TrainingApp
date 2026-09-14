@@ -32,6 +32,18 @@ enum TrainingMetricKind: CaseIterable {
         }
     }
 
+    /// The underlying sports-science term's own abbreviation — shown alongside `name` in the
+    /// metrics info sheet (MVP1-45), since that's the term this app's day-to-day numbers actually
+    /// come from (a search for "TRIMP"/"CTL"/"ATL"/"TSB" should land here, not just "Load").
+    var abbreviation: String {
+        switch self {
+        case .load: "TRIMP"
+        case .fitness: "CTL"
+        case .fatigue: "ATL"
+        case .form: "TSB"
+        }
+    }
+
     /// Series color used by `FitnessChartView`'s trend lines and legend. The day list's pills
     /// deliberately don't use this — see `MetricPillView`'s doc comment.
     var color: Color {
@@ -46,26 +58,29 @@ enum TrainingMetricKind: CaseIterable {
     /// Plain-language explanation for the metrics info sheet (MVP1-45) — what the number actually
     /// measures and, for the three trend metrics, the rolling window/formula behind it (TrainingKit
     /// design doc §5: CTL is a 42-day EWMA of Load, ATL a 7-day EWMA, TSB the day-before difference
-    /// between them), so the numbers on screen aren't a mystery.
+    /// between them), so the numbers on screen aren't a mystery. Doesn't repeat `abbreviation`
+    /// inline (e.g. spelling out "Chronic Training Load" for CTL) -- the sheet's header already
+    /// shows `name` and `abbreviation` side by side, so restating the full term here would just be
+    /// the same information twice in the same section.
     var explanation: String {
         switch self {
         case .load:
-            return "Training load for a single day, computed from your heart-rate data using a "
-                + "Banister-style TRIMP formula. Duration and intensity both count, so a short hard "
-                + "session and a long easy one can land on a similar number."
+            return "Training Impulse for a single day, computed from your heart-rate data using a "
+                + "Banister-style formula. Duration and intensity both count, so a short hard session "
+                + "and a long easy one can land on a similar number."
         case .fitness:
-            return "Your Chronic Training Load (CTL) — a slow, 42-day rolling average of Load. It "
-                + "builds gradually with consistent training and fades just as gradually when "
-                + "training drops off, tracking your underlying aerobic fitness."
+            return "A slow, 42-day rolling average of Load. It builds gradually with consistent "
+                + "training and fades just as gradually when training drops off, tracking your "
+                + "underlying aerobic fitness."
         case .fatigue:
-            return "Your Acute Training Load (ATL) — a fast, 7-day rolling average of Load. It rises "
-                + "quickly after a hard week and falls quickly once you ease off, tracking how tired "
-                + "your recent training has left you."
+            return "A fast, 7-day rolling average of Load. It rises quickly after a hard week and "
+                + "falls quickly once you ease off, tracking how tired your recent training has left "
+                + "you."
         case .form:
-            return "Training Stress Balance (TSB): yesterday's Fitness minus yesterday's Fatigue. "
-                + "Positive means you're fresher than your fitness would suggest — good timing for a "
-                + "big effort. Negative means fatigue currently outweighs fitness — normal during a "
-                + "hard training block, but worth watching if it stays low for a long time."
+            return "Yesterday's Fitness minus yesterday's Fatigue. Positive means you're fresher than "
+                + "your fitness would suggest — good timing for a big effort. Negative means fatigue "
+                + "currently outweighs fitness — normal during a hard training block, but worth "
+                + "watching if it stays low for a long time."
         }
     }
 }

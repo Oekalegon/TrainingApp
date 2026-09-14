@@ -13,7 +13,7 @@ struct FitnessMetricsInfoView: View {
                     Text(kind.explanation)
                         .foregroundStyle(.secondary)
                 } header: {
-                    Label(kind.name, systemImage: kind.icon)
+                    Label("\(kind.name) (\(kind.abbreviation))", systemImage: kind.icon)
                         .foregroundStyle(kind.color)
                         // The header's own default styling already renders it as a small caption;
                         // without this the icon+name reads at that same tiny size instead of
