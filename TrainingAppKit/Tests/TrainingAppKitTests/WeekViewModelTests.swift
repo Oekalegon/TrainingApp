@@ -696,6 +696,39 @@ struct WeekViewModelTests {
         #expect(pages.allSatisfy { $0.polarizedSplit == split })
     }
 
+    @Test("sportStatsPages(asOf:) includes a planned workout's projected intensity in a still-projected week's split")
+    func sportStatsPagesPolarizedSplitIncludesPlannedWorkoutProjection() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(
+            timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
+        )
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        // Entirely in the future -- no completed activities at all, so the split (and its
+        // isProjected flag) can only come from PlannedWorkoutProjector's estimate.
+        let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: viewModel.displayedWeekStart)!
+        // `.heartRateZone(2)` lands in zone 2 with a 50/190 resting/max split (midpoint ratio 0.65
+        // falls inside the karvonen zone-2 range), which `polarizedSplit` counts as "low" -- same
+        // zone-mapping precedent `activitiesAndPlansFilterByDay` uses for its own workout fixture.
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: nextWeekStart)
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: day(0))
+
+        let pages = viewModel.sportStatsPages(for: nextWeekStart, asOf: day(0))
+
+        let split = pages[0].polarizedSplit
+        #expect(split.total == 1800)
+        #expect(split.lowSeconds == 1800)
+        #expect(split.moderateToHighSeconds == 0)
+    }
+
     @Test("sportStatsPages(asOf:) invalidates its cache when the displayed week changes")
     func sportStatsPagesRecomputesAfterWeekNavigation() async throws {
         let (store, stores) = makeStores()

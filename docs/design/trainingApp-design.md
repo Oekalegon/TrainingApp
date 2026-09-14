@@ -104,6 +104,16 @@ remember or restore which tab was last active.
   (MVP1-40). A day with no completed activities shows only the Form pill — Load/Fitness/Fatigue
   describe that day's training input, which has nothing to say on a day nothing happened, while
   Form is a trend that still moves whether or not the athlete trained that day.
+- A pinned stats bar (MVP1-52) sits between the chart and the day list: a swipeable per-sport
+  pager (main sport first) showing that sport's Distance/Time for the displayed week, each with
+  its percentage change vs. the previous week; Load (TRIMP) is always the whole week's total
+  across every sport rather than a per-sport figure, so it reads the same regardless of which
+  sport's page is showing. Below that row, a second line reports the whole week's 80/20
+  low-intensity split (MVP1-48) — the fraction of zone-classified time spent at low intensity
+  (Polarized-training guideline; see `TrainingCore.PolarizedIntensitySplit`), also a whole-week
+  figure independent of which sport's page is showing. Omitted entirely for a week with no
+  zone-classified time at all (no heart-rate data, and no planned workout carrying an intensity
+  target).
 - Each completed `Activity` renders as a card on the timeline (MVP1-41), its start time shown
   separately on the timeline itself rather than inside the card. A card's headline line has the
   sport's icon, its name, and — trailing-aligned — its Load (TRIMP), omitted entirely when it's
@@ -150,7 +160,8 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 
 - Sport, start time, duration, distance (if present).
 - Load/TRIMP for the activity, and time-in-zone breakdown if heart-rate samples are present
-  (`Statistics`'s `TimeInZone`).
+  (`Statistics`'s `TimeInZone`) — its section footer additionally rolls that same breakdown up
+  into the 80/20 low vs. moderate-to-high split (MVP1-48, `TimeInZone.polarizedSplit`).
 - No map/route rendering, no cadence/elevation charts — text/stat rows only for MVP 1.
 - **Overlap section** (MVP1-63): shown when `WeekViewModel.overlapContext(for:)` finds this
   activity part of a pair — unlike the day-list badge above, this includes `.possibleMultisport`

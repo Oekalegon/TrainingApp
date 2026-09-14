@@ -70,24 +70,23 @@ struct ActivityDetailView: View {
             }
 
             if viewModel.summary.timeInZone.total > 0 {
-                Section("Time in Zone") {
+                Section {
                     ForEach(1...5, id: \.self) { zone in
                         let seconds = viewModel.summary.timeInZone.seconds[zone] ?? 0
                         if seconds > 0 {
                             LabeledContent("Zone \(zone)", value: zoneText(seconds: seconds, zone: zone))
                         }
                     }
-                }
-
-                // The same zone breakdown above, collapsed into the two-bucket 80/20
-                // (polarized-training) model (MVP1-48) -- Zone 1-2 is "Low", Zone 3-5 is
-                // "Moderate-High", matching `TimeInZone.polarizedSplit`'s own zone grouping.
-                Section("Intensity Split") {
-                    LabeledContent("Low", value: splitText(seconds: polarizedSplit.lowSeconds, fraction: polarizedSplit.lowFraction))
-                    LabeledContent(
-                        "Moderate–High",
-                        value: splitText(seconds: polarizedSplit.moderateToHighSeconds, fraction: polarizedSplit.moderateToHighFraction)
-                    )
+                } header: {
+                    Text("Time in Zone")
+                } footer: {
+                    // The same zone breakdown above, collapsed into the two-bucket 80/20
+                    // (polarized-training) model (MVP1-48) -- zone 0 (below zone 1) and zones 1-2
+                    // are "Low", zones 3-5 are "Moderate-High", matching
+                    // `TimeInZone.polarizedSplit`'s own zone grouping. A footer under the same
+                    // section, not a second `Section`, since it's a rollup of the rows above it
+                    // rather than new information.
+                    Text("\(lowPercentText) low, \(moderateToHighPercentText) moderate-to-high")
                 }
             }
 
@@ -143,10 +142,12 @@ struct ActivityDetailView: View {
         viewModel.summary.timeInZone.polarizedSplit
     }
 
-    private func splitText(seconds: TimeInterval, fraction: Double) -> String {
-        let duration = Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes]))
-        let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
-        return "\(duration) (\(percent))"
+    private var lowPercentText: String {
+        polarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private var moderateToHighPercentText: String {
+        polarizedSplit.moderateToHighFraction.formatted(.percent.precision(.fractionLength(0)))
     }
 }
 

@@ -6,11 +6,17 @@ import TrainingCore
 /// A fixed leading icon (the current page's sport) plus paging dots stay in place while the
 /// trailing Distance/Time/Load figures page underneath, each followed by its percentage change
 /// versus the previous week. Distance and time are omitted for a non-endurance sport (e.g.
-/// `.strength`), same rule `ActivityCard` uses for its own second line; Load and the 80/20
-/// low-intensity split (MVP1-48) are always the whole week's totals across every sport (see
-/// `SportStatsPage`'s own doc comment), so they read the same on every page. The split is omitted
-/// entirely when the week has no zone-classified time at all (no heart-rate data, no planned
-/// workout with an intensity target).
+/// `.strength`), same rule `ActivityCard` uses for its own second line; Load is always the whole
+/// week's total across every sport (see `SportStatsPage`'s own doc comment), so it reads the same
+/// on every page.
+///
+/// Below that row, a second line reports the whole week's 80/20 low-intensity split (MVP1-48),
+/// omitted entirely when the week has no zone-classified time at all (no heart-rate data, no
+/// planned workout with an intensity target). This is a separate row rather than a fifth
+/// candidate for the pager's own trailing HStack: that row is already tight (icon, paging dots,
+/// and up to three per-page stat items in a fixed 44pt height, sized for the narrowest supported
+/// device) — adding another column there risked squeezing or clipping the existing figures, since
+/// this value doesn't page per sport anyway (it's whole-week, like `load`).
 struct SportStatsPagerView: View {
     let pages: [SportStatsPage]
 
@@ -30,7 +36,24 @@ struct SportStatsPagerView: View {
         pages.indices.contains(selectedIndex) ? pages[selectedIndex].sport : (pages.first?.sport ?? .running)
     }
 
+    /// The whole week's low-intensity fraction, shared by every page — `nil` when the week has no
+    /// zone-classified time at all, so the caption row below is omitted rather than showing a
+    /// meaningless "0%".
+    private var polarizedSplit: PolarizedIntensitySplit? {
+        let split = pages.first?.polarizedSplit
+        return (split?.total ?? 0) > 0 ? split : nil
+    }
+
     var body: some View {
+        VStack(spacing: 4) {
+            statsBar
+            if let polarizedSplit {
+                lowIntensityCaption(for: polarizedSplit)
+            }
+        }
+    }
+
+    private var statsBar: some View {
         HStack(spacing: 14) {
             HStack(spacing: 6) {
                 Image(systemName: selectedSport.symbolName)
@@ -134,6 +157,21 @@ struct SportStatsPagerView: View {
             }
         }
     }
+
+    /// A trailing-aligned caption reporting `split`'s low-intensity fraction, e.g. "82% low
+    /// intensity this week" — its own accessibility element, separate from `statsBar`'s combined
+    /// one, since it doesn't page and isn't part of that gesture-driven carousel.
+    private func lowIntensityCaption(for split: PolarizedIntensitySplit) -> some View {
+        let percent = split.lowFraction.formatted(.percent.precision(.fractionLength(0)))
+        return HStack {
+            Spacer()
+            Text("\(percent) low intensity this week")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal)
+        .accessibilityElement(children: .combine)
+    }
 }
 
 /// One page's Distance/Time/Load figures, each followed by its percentage change — the swipeable
@@ -157,9 +195,6 @@ private struct StatsPageView: View {
                 statItem(value: durationString, changeFraction: page.timeChangeFraction, label: "Time")
             }
             statItem(value: loadString, changeFraction: page.loadChangeFraction, label: "Load")
-            if page.polarizedSplit.total > 0 {
-                plainStatItem(value: lowSplitString, label: "Low Intensity")
-            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -176,14 +211,6 @@ private struct StatsPageView: View {
         page.load.formatted(Self.loadFormat)
     }
 
-    /// The week's fraction of zone-classified time spent at low intensity (the 80/20
-    /// polarized-training split's "80" side, MVP1-48) — the moderate-to-high complement isn't
-    /// shown alongside it, the same way `SportStatsPage` shows only one number for each of its
-    /// other stats rather than a value plus its own remainder.
-    private var lowSplitString: String {
-        page.polarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
-    }
-
     private func statItem(value: String, changeFraction: Double, label: String) -> some View {
         let percentText = Text(percentString(changeFraction))
             .font(.caption2)
@@ -196,23 +223,6 @@ private struct StatsPageView: View {
             // without it the value can end up truncated ("3:00:…") or wrapped instead of both
             // segments shrinking uniformly.
             Text("\(value) \(percentText)")
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// A stat item with no percent-change line under it, for a value that isn't a running total
-    /// (like `load`/`distanceMeters`/`time`) but a fraction already comparable week to week on its
-    /// own terms — a relative "+N%" change on top of it would misleadingly suggest another running
-    /// total.
-    private func plainStatItem(value: String, label: String) -> some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            Text(value)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
