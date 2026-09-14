@@ -21,6 +21,12 @@ targets:
       - path: iOS/Sources
     resources:
       - path: iOS/Resources/Assets.xcassets
+    info:
+      path: Generated/Info.plist
+      properties:
+        # Lets CloudKit silent push notifications wake the app to sync while backgrounded.
+        UIBackgroundModes:
+          - remote-notification
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.oekalegon.trainingapp
