@@ -125,22 +125,34 @@ struct MetricDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                periodPicker
-                    .padding(.horizontal)
-                valueHeader
-                    .padding(.horizontal)
-                chartCard
-                formZoneSection
-                aboutSection
-                    .padding(.horizontal)
+            VStack(alignment: .leading, spacing: 0) {
+                // Everything through the chart reads as one continuous white surface -- the nav
+                // bar, picker, value/date header and chart band -- matching Apple Health's own
+                // "white above, grouped cards below" split rather than the grouped background
+                // running underneath the header too.
+                VStack(alignment: .leading, spacing: 20) {
+                    periodPicker
+                        .padding(.horizontal)
+                        .padding(.top)
+                    valueHeader
+                        .padding(.horizontal)
+                    chartCard
+                }
+                .background(metricDetailChartCardBackground)
+                VStack(alignment: .leading, spacing: 20) {
+                    formZoneSection
+                    aboutSection
+                        .padding(.horizontal)
+                }
+                .padding(.vertical)
             }
-            .padding(.vertical)
         }
         .background(metricDetailBackground)
         .navigationTitle("\(kind.name) (\(kind.abbreviation))")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(metricDetailChartCardBackground, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         #endif
         .task(id: period) {
             guard period != .week else {
