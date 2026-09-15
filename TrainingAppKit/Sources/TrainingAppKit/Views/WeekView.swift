@@ -30,19 +30,26 @@ public struct WeekView: View {
     #endif
     /// Whether the "Select Date" sheet is presented.
     @State private var isShowingDatePicker = false
-    /// `MetricDetailView`'s own navigation-push state (MVP1-45), or `nil` while none is pushed —
-    /// set by tapping a day-list pill (`onSelectMetric` below). A single `Hashable`/`Identifiable`
-    /// value driving both the push and its content together (`.navigationDestination(item:)`, same
-    /// pattern `.sheet(item:)` uses for `selectedActivity` below), rather than a separate `Bool`
-    /// plus `TrainingMetricKind`/`Date` set together in one action: setting those three separately
-    /// let the destination builder see a still-stale kind/day the first time it presented in a
-    /// session (the same race `.sheet(isPresented:)` had before `selectedActivity` moved to this
-    /// pattern).
+    /// `MetricDetailView`'s own navigation-push state (MVP1-45/MVP1-60), or `nil` while none is
+    /// pushed — set by tapping a day-list pill (`onSelectMetric` below, a `.day` subject) or the
+    /// graph panel itself (`showGraphInfo(forPage:)`, a `.week` subject). A single `Hashable`/
+    /// `Identifiable` value driving both the push and its content together
+    /// (`.navigationDestination(item:)`, same pattern `.sheet(item:)` uses for `selectedActivity`
+    /// below), rather than a separate `Bool` plus `TrainingMetricKind`/subject set together in one
+    /// action: setting those separately let the destination builder see a still-stale kind/subject
+    /// the first time it presented in a session (the same race `.sheet(isPresented:)` had before
+    /// `selectedActivity` moved to this pattern).
     @State private var metricsInfoPresentation: MetricsInfoPresentation?
     /// `MetricDetailView`'s own selected chart period (MVP1-45) — owned here, not by
     /// `MetricDetailView` itself, so it's retained across separate pushes: tap Load, pick "Month",
     /// go back, tap Fitness, and it's still "Month" rather than resetting.
     @State private var metricsChartPeriod: ChartPeriod = .week
+    /// `HeartRateZoneDetailView`'s own navigation-push state (MVP1-60), or `nil` while none is
+    /// pushed — set by tapping the graph panel while its "Time in Zone" page is showing. `Bool`, not
+    /// an `Identifiable` item: unlike `MetricsInfoPresentation` there's no per-tap payload (kind,
+    /// day) that could go stale between separate taps, so `.navigationDestination(isPresented:)`
+    /// doesn't have the staleness risk that pattern exists to avoid.
+    @State private var isShowingHeartRateZoneInfo = false
     /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
     /// the sheet opens, so the picker starts near whatever week is currently on screen.
     @State private var pickedDate = Date()
@@ -244,6 +251,13 @@ public struct WeekView: View {
                     metricsProvider: { range in await viewModel.metrics(in: range) }
                 )
             }
+            // Same reasoning as the destination above -- a real push, not a sheet.
+            .navigationDestination(isPresented: $isShowingHeartRateZoneInfo) {
+                HeartRateZoneDetailView(
+                    histogram: viewModel.heartRateHistogram(for: viewModel.displayedWeekStart),
+                    weekDateRangeText: viewModel.displayedWeekDateRangeDescription
+                )
+            }
             // Opens `pendingOverlapActivity`'s own detail sheet only once this one has actually
             // finished dismissing — see that property's own doc comment for why this two-step
             // handoff, rather than presenting straight from on top of this sheet.
@@ -270,14 +284,43 @@ public struct WeekView: View {
         }
     }
 
-    /// `MetricDetailView`'s own chart data for `presentation`'s day (MVP1-45).
+    /// `MetricDetailView`'s own chart data for `presentation`'s subject (MVP1-45/MVP1-60) — the week
+    /// whose `chartMetrics(for:)` seeds the screen is the one containing a `.day` subject's own day,
+    /// or a `.week` subject's own start, either way found the same way.
     private func chartContext(for presentation: MetricsInfoPresentation) -> MetricChartContext {
-        let weekStart = WeekViewModel.weekStart(containing: presentation.day, calendar: viewModel.athleteCalendar)
+        let anchor: Date
+        switch presentation.subject {
+        case .day(let day): anchor = day
+        case .week(let range): anchor = range.lowerBound
+        }
+        let weekStart = WeekViewModel.weekStart(containing: anchor, calendar: viewModel.athleteCalendar)
         return MetricChartContext(
             metrics: viewModel.chartMetrics(for: weekStart),
-            touchedDay: presentation.day,
+            subject: presentation.subject,
             calendar: viewModel.athleteCalendar
         )
+    }
+
+    /// Opens the info screen for whichever graph-panel page (MVP1-60) was tapped: `.dailyLoad` and
+    /// `.form` reuse `MetricDetailView` — the same screen a day-list pill tap opens — with a
+    /// `.week` subject covering the *displayed* week (`viewModel.displayedWeekStart`): the graph
+    /// panel is only ever tappable on the current page (`GraphPanelPagerView.onTapPage`, wired only
+    /// where `isCurrentPage` is true in `graphPanel(weekStart:isCurrentPage:)`), and the current
+    /// page's own `weekStart` always equals `displayedWeekStart` anyway. `.timeInZone` has no
+    /// per-metric equivalent to reuse — `HeartRateZoneDetailView` is its own, separately-pushed
+    /// screen (see `isShowingHeartRateZoneInfo`'s own doc comment). Switches over `GraphPanelPage`
+    /// exhaustively, not a raw page index, so adding a fourth page is a compiler error here until
+    /// this is taught what it opens, rather than a silent fall-through to the wrong screen.
+    private func showGraphInfo(for page: GraphPanelPage) {
+        let weekRange = viewModel.displayedWeekRange(for: viewModel.displayedWeekStart)
+        switch page {
+        case .dailyLoad:
+            metricsInfoPresentation = MetricsInfoPresentation(kind: .load, subject: .week(weekRange))
+        case .form:
+            metricsInfoPresentation = MetricsInfoPresentation(kind: .form, subject: .week(weekRange))
+        case .timeInZone:
+            isShowingHeartRateZoneInfo = true
+        }
     }
 
     private var datePickerSheet: some View {
@@ -460,7 +503,8 @@ public struct WeekView: View {
                 displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
                 initialSelectedIndex: graphPanelSelectedIndex,
-                onSelectedIndexChange: { graphPanelSelectedIndex = $0 }
+                onSelectedIndexChange: { graphPanelSelectedIndex = $0 },
+                onTapPage: { page in showGraphInfo(for: page) }
             )
         } else {
             GraphPanelStaticPreview(
@@ -507,7 +551,7 @@ public struct WeekView: View {
                             timeZone: viewModel.athleteTimeZone,
                             onSelectActivity: { selectedActivity = $0 },
                             onSelectMetric: { kind in
-                                metricsInfoPresentation = MetricsInfoPresentation(kind: kind, day: day)
+                                metricsInfoPresentation = MetricsInfoPresentation(kind: kind, subject: .day(day))
                             }
                         )
                     }
@@ -649,12 +693,13 @@ public struct WeekView: View {
     }
 }
 
-/// `WeekView.metricsInfoPresentation`'s value (MVP1-45) — which pill was tapped and on which day.
-/// `Identifiable`/`Hashable` (the latter for `.navigationDestination(item:)`, which needs it) via a
-/// fresh `UUID` per instance (not `kind`/`day` themselves) so tapping the *same* metric/day twice
-/// in a row while that push is already showing still counts as a new one.
+/// `WeekView.metricsInfoPresentation`'s value (MVP1-45/MVP1-60) — which metric, and its subject (a
+/// day-list pill's own day, or the whole displayed week from a graph-panel tap). `Identifiable`/
+/// `Hashable` (the latter for `.navigationDestination(item:)`, which needs it) via a fresh `UUID`
+/// per instance (not `kind`/`subject` themselves) so tapping the *same* metric/subject twice in a
+/// row while that push is already showing still counts as a new one.
 private struct MetricsInfoPresentation: Identifiable, Hashable {
     let id = UUID()
     let kind: TrainingMetricKind
-    let day: Date
+    let subject: MetricDetailSubject
 }

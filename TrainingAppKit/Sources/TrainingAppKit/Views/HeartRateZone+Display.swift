@@ -24,4 +24,23 @@ extension HeartRateZone {
         case .anaerobic: .red
         }
     }
+
+    /// Plain-language description of this zone (MVP1-60), condensed from this case's own doc
+    /// comment in `TrainingCore` — explains what training in this zone actually feels like/is for.
+    var explanation: String {
+        switch self {
+        case .recovery:
+            return "Very light effort, easily sustained — active recovery between hard sessions."
+        case .aerobic:
+            return "Comfortable, conversational effort — the bulk of aerobic base-building volume."
+        case .tempo:
+            return "Moderately hard, \"comfortably hard\" effort — sustainable for a long interval "
+                + "but not a full conversation."
+        case .threshold:
+            return "Hard effort at or just below lactate threshold — sustainable for tens of "
+                + "minutes at most."
+        case .anaerobic:
+            return "Maximal or near-maximal effort — short, hard intervals near VO2 max."
+        }
+    }
 }

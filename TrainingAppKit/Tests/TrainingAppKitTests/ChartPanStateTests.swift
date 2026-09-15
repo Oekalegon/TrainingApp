@@ -32,7 +32,7 @@ struct ChartPanStateTests {
     func panAnchorRightwardDragRevealsThePast() {
         let calendar = utc
         let anchor = day(100)
-        var state = ChartPanState(
+        let state = ChartPanState(
             anchorDate: anchor,
             loadedRange: day(0)...day(200),
             chartWidth: 280
