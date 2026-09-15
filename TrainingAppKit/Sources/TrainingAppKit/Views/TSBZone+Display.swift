@@ -10,7 +10,7 @@ extension TSBZone {
         case .training: "Training"
         case .recovery: "Recovery"
         case .race: "Race"
-        case .detraining: "Rest"
+        case .detraining: "Detraining"
         }
     }
 
