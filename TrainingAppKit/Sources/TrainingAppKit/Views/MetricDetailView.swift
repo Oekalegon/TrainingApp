@@ -38,8 +38,9 @@ private let metricDetailAboutCardBackground = Color(white: 0.97)
 /// names the metric (e.g. "Form (TSB)") in the nav bar itself, so the scroll content below doesn't
 /// repeat it. Top to bottom: a period-picker segmented control first — reachable immediately,
 /// before scrolling past anything else — then the touched day's own value in a large bold number
-/// (with unit, if the metric has one — and, for Form, that day's own TSB zone label at the same
-/// large size right next to the value), the day's own date underneath, that metric's own trend
+/// (and, for Form, that day's own TSB zone label at the same large size right next to the value —
+/// `abbreviation` in the nav title already covers what a unit would otherwise say, e.g. "TRIMP" for
+/// Load), the day's own date underneath, that metric's own trend
 /// chart in a plain white band stretching the full width (not a rounded card — the chart itself
 /// keeps its own inset), the touched day's own zone name+explanation card for Form only, and
 /// finally an "About `name`" card — each of those last two a title sitting above a rounded,
@@ -166,18 +167,11 @@ struct MetricDetailView: View {
     private var valueHeader: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(touchedValueText)
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                    if let unit = kind.unit {
-                        Text(unit)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                // The touched day's own TSB zone, at the same size as Load's unit would be, but
-                // `.primary` -- naming the zone is as central to reading Form's value as the
-                // number itself, not a secondary annotation.
+                Text(touchedValueText)
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                // The touched day's own TSB zone, at the same size the Form value's own unit would
+                // be if it had one, but `.primary` -- naming the zone is as central to reading
+                // Form's value as the number itself, not a secondary annotation.
                 if let touchedZone {
                     Text(touchedZone.label)
                         .font(.title3.weight(.semibold))
@@ -249,6 +243,9 @@ struct MetricDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.title3.weight(.bold))
+                // Matches the card's own `.padding()` below, so the title's leading edge lines up
+                // with the body text inside the card rather than the card's own outer edge.
+                .padding(.horizontal)
             Text(body)
                 .foregroundStyle(.primary)
                 .padding()

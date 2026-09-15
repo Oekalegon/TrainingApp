@@ -44,16 +44,6 @@ enum TrainingMetricKind: CaseIterable {
         }
     }
 
-    /// A short unit suffix for this metric's own value, shown next to the big number in the
-    /// metrics info sheet's header (MVP1-45) — e.g. "87 TRIMP" for Load. `nil` for the three
-    /// EWMA/derived scores (Fitness/Fatigue/Form), which have no unit of their own beyond "points".
-    var unit: String? {
-        switch self {
-        case .load: "TRIMP"
-        case .fitness, .fatigue, .form: nil
-        }
-    }
-
     /// Series color used by `FitnessChartView`'s trend lines and legend. The day list's pills
     /// deliberately don't use this — see `MetricPillView`'s doc comment.
     var color: Color {
