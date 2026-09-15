@@ -187,16 +187,21 @@ struct MetricDetailView: View {
         return values.reduce(0, +) / Double(values.count)
     }
 
-    /// "42" for a single day, "Avg 42" for a week -- the averaging itself needs no separate
-    /// disclosure (a week obviously isn't one day's own reading), but the label makes clear this
-    /// number isn't the same kind of reading as a day subject's own value.
     private var subjectValueText: String {
         guard let subjectValue else { return "–" }
         let format = kind == .form ? Self.signedValueFormat : Self.unsignedValueFormat
-        let formatted = subjectValue.formatted(format)
+        return subjectValue.formatted(format)
+    }
+
+    /// "Average", shown above the value for a `.week` subject only -- a week's own value is a
+    /// mean across every loaded day in it, not one day's own reading, so this disclosure sits
+    /// above the number rather than folded into it (e.g. a one-word "Avg" prefix on the value
+    /// itself, tried first and dropped: it read as part of the number rather than a label above
+    /// it). `nil` for a `.day` subject, which needs no such disclosure at all.
+    private var subjectCaptionText: String? {
         switch chartContext.subject {
-        case .day: return formatted
-        case .week: return "Avg \(formatted)"
+        case .day: return nil
+        case .week: return "Average"
         }
     }
 
@@ -267,6 +272,11 @@ struct MetricDetailView: View {
 
     private var valueHeader: some View {
         VStack(alignment: .leading, spacing: 2) {
+            if let subjectCaptionText {
+                Text(subjectCaptionText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(subjectValueText)
                     .font(.system(size: 40, weight: .bold, design: .rounded))

@@ -3,12 +3,12 @@ import TrainingCore
 
 /// The "Time in Zone" graph panel's own detail screen (MVP1-60) — pushed the same way
 /// `MetricDetailView` is (`WeekView`'s `NavigationStack`, a graph-panel tap), reusing its Apple
-/// Health-style visual language (white band with the chart, grouped "About" cards below) even
-/// though the underlying data doesn't fit `MetricDetailView` itself: a heart-rate histogram is a
-/// distribution across the displayed week, not one metric with a single day's or week's own value,
-/// so there's no big-number header here — just the week's own date range, the same
-/// `HeartRateHistogramChartView` the graph panel itself shows (just given more room), and one card
-/// per zone explaining what it means.
+/// Health-style visual language (a caption/value/date header, white band with the chart, grouped
+/// "About" cards below) even though a heart-rate histogram doesn't fit `MetricDetailView` itself:
+/// it's a distribution across the displayed week, not one metric with a single day's or week's own
+/// value. The one number worth surfacing as this screen's own "value" is the 80th-percentile heart
+/// rate (Seiler's 80/20 polarized-training threshold, the same one `HeartRateHistogramChartView`
+/// marks on the chart itself) — everything else about the distribution is what the chart is for.
 struct HeartRateZoneDetailView: View {
     let histogram: HeartRateHistogram
     /// `WeekViewModel.displayedWeekDateRangeDescription` — this panel is only ever reachable by
@@ -16,15 +16,24 @@ struct HeartRateZoneDetailView: View {
     /// (possibly different) week the way `MetricChartContext` has to account for.
     let weekDateRangeText: String
 
+    /// The 80th-percentile heart rate, `nil` when the week has no in-zone time recorded at all
+    /// (the same condition `HeartRateHistogramChartView.hasAnyTime` checks, via the same call).
+    private var eightyPercentileBPM: Double? {
+        histogram.percentileBPM(0.8)
+    }
+
+    private var percentileValueText: String {
+        guard let eightyPercentileBPM else { return "–" }
+        return "\(Int(eightyPercentileBPM.rounded()))"
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // Same "white above, grouped cards below" split as `MetricDetailView` — see that
                 // type's own doc comment.
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(weekDateRangeText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 20) {
+                    valueHeader
                         .padding(.horizontal)
                         .padding(.top)
                     chartCard
@@ -42,6 +51,31 @@ struct HeartRateZoneDetailView: View {
         .toolbarBackground(metricDetailChartCardBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         #endif
+    }
+
+    /// Same layout as `MetricDetailView.valueHeader`: a caption above the value (here always shown,
+    /// not conditional on a `.week`-vs-`.day` subject the way that one is, since this screen only
+    /// ever has one "kind" of value), the value itself with its own "bpm" unit, then the week's own
+    /// date range underneath.
+    private var valueHeader: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("80% Percentile Heart Rate")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(percentileValueText)
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                if eightyPercentileBPM != nil {
+                    Text("bpm")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(weekDateRangeText)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Taller than the graph panel's own 172pt (MVP1-55) — this screen has nothing else competing
