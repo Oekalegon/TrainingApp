@@ -62,35 +62,25 @@ struct MetricDetailView: View {
     let metricsProvider: (ClosedRange<Date>) async -> [FitnessMetrics]
 
     /// What the chart actually renders from — always a wider buffer than what's on screen (see
-    /// `bufferRange(around:)`), so dragging the chart can pan the visible window without waiting on
-    /// a refetch each time. Seeded from `chartContext.metrics` for an instant first paint, then
-    /// replaced by a proper buffer fetched via `metricsProvider` once `.task(id: period)` runs.
+    /// `ChartPanState.bufferRange(around:period:calendar:)`), so dragging the chart can pan the
+    /// visible window without waiting on a refetch each time. Seeded from `chartContext.metrics`
+    /// for an instant first paint, then replaced by a proper buffer fetched via `metricsProvider`
+    /// once `.task(id: period)` runs.
     @State private var displayedMetrics: [FitnessMetrics]
-    /// The range currently loaded into `displayedMetrics` — a pan gesture is clamped so the visible
-    /// window it produces never steps outside this, since there's no data beyond it to show yet.
-    @State private var loadedRange: ClosedRange<Date>
-    /// The center date `periodRange`/`visibleRange` are built around — separate from
-    /// `chartContext.touchedDay`, which stays fixed to the tapped day's own header value/date/zone
-    /// no matter how far the chart itself is panned. Reset back to `touchedDay` whenever `period`
-    /// changes, so switching periods always re-centers on the tapped day rather than wherever a
-    /// previous pan left it.
-    @State private var anchorDate: Date
-    /// The chart's own rendered width in points, captured once via a `GeometryReader` behind
-    /// `chartCard` — lets a pan gesture convert its pixel translation into a day offset at
-    /// (approximately) the chart's own pixel-per-day scale, so the plotted line/bars track the
-    /// finger at roughly 1:1 speed rather than lagging or overshooting it.
-    @State private var chartWidth: CGFloat = 1
-    /// Live, uncommitted translation from an in-progress pan gesture — added on top of `anchorDate`
-    /// only while the drag is active, and folded into `anchorDate` itself once it ends
+    /// The chart's own pan/anchor/buffer-window state — a plain, testable type (see its own doc
+    /// comment) rather than a handful of parallel `@State` vars living directly on this view.
+    @State private var panState: ChartPanState
+    /// Live, uncommitted translation from an in-progress pan gesture — added on top of
+    /// `panState.anchorDate` only while the drag is active, and folded into it once the drag ends
     /// (`commitPan(translation:)`). A plain `@State` (not `@GestureState`) so `onEnded` can read the
     /// final value after the gesture has already reset the `@GestureState` back to zero.
     @State private var dragTranslation: CGFloat = 0
     /// The most recent background buffer fetch, if any — cancelled and replaced by each new one
-    /// (`.task(id: period)` or a pan landing near `loadedRange`'s own edge) so two overlapping
-    /// fetches can never race to overwrite `displayedMetrics`/`loadedRange` with a stale result:
-    /// whichever fetch starts last cancels every earlier one, and `loadBuffer(around:)` itself
-    /// checks `Task.isCancelled` before writing, so a cancelled fetch's result is simply dropped
-    /// even if `metricsProvider` still runs it to completion.
+    /// (`.task(id: period)` or a pan landing near `panState.loadedRange`'s own edge) so two
+    /// overlapping fetches can never race to overwrite `displayedMetrics`/`panState.loadedRange`
+    /// with a stale result: whichever fetch starts last cancels every earlier one, and
+    /// `loadBuffer(around:)` itself checks `Task.isCancelled` before writing, so a cancelled
+    /// fetch's result is simply dropped even if `metricsProvider` still runs it to completion.
     @State private var bufferTask: Task<Void, Never>?
 
     init(
@@ -104,72 +94,43 @@ struct MetricDetailView: View {
         self._period = period
         self.metricsProvider = metricsProvider
         self._displayedMetrics = State(initialValue: chartContext.metrics)
-        self._loadedRange = State(initialValue: ChartDayDomain.range(for: chartContext.metrics))
-        self._anchorDate = State(initialValue: chartContext.touchedDay)
+        self._panState = State(
+            initialValue: ChartPanState(
+                anchorDate: chartContext.touchedDay,
+                loadedRange: ChartDayDomain.range(for: chartContext.metrics)
+            )
+        )
     }
 
     private static let unsignedValueFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
     private static let signedValueFormat = FloatingPointFormatStyle<Double>.number
         .sign(strategy: .always()).precision(.fractionLength(0))
 
-    /// A buffer three times as wide as `period`'s own range around `anchor` — one extra span's
-    /// worth of history and future on top of what's actually shown, so a pan gesture has real room
-    /// to move before it runs out of loaded data and has to wait on `metricsProvider` again.
-    private func bufferRange(around anchor: Date) -> ClosedRange<Date> {
-        let base = period.range(around: anchor, calendar: chartContext.calendar)
-        let span = base.upperBound.timeIntervalSince(base.lowerBound)
-        return base.lowerBound.addingTimeInterval(-span)...base.upperBound.addingTimeInterval(span)
-    }
-
-    /// Converts a drag gesture's horizontal translation into a clamped candidate `anchorDate` —
-    /// shared by the live (in-progress) and committed (`onEnded`) cases so both agree on exactly
-    /// where a given translation lands. Dragging right reveals the past (translation is positive,
-    /// so the offset is negative — earlier), matching a plain scroll view's own "content follows
-    /// the finger" feel.
-    private func panAnchor(for translation: CGFloat) -> Date {
-        guard chartWidth > 1, translation != 0 else { return anchorDate }
-        let visibleSpanDays = periodRange.upperBound.timeIntervalSince(periodRange.lowerBound) / 86_400
-        let daysPerPoint = visibleSpanDays / Double(chartWidth)
-        let dayOffset = Int((-Double(translation) * daysPerPoint).rounded())
-        let candidate = chartContext.calendar.date(byAdding: .day, value: dayOffset, to: anchorDate) ?? anchorDate
-        return clamped(candidate)
-    }
-
-    /// Keeps `period.range(around:)` for the candidate anchor fully inside `loadedRange` — panning
-    /// stops at the edge of what's actually loaded instead of revealing a blank chart beyond it.
-    private func clamped(_ candidate: Date) -> Date {
-        guard
-            let earliestAllowed = chartContext.calendar.date(byAdding: .day, value: period.lookbackDays, to: loadedRange.lowerBound),
-            let latestAllowed = chartContext.calendar.date(byAdding: .day, value: -7, to: loadedRange.upperBound),
-            earliestAllowed <= latestAllowed
-        else { return anchorDate }
-        return min(max(candidate, earliestAllowed), latestAllowed)
-    }
-
     private var periodRange: ClosedRange<Date> {
-        period.range(around: anchorDate, calendar: chartContext.calendar)
+        period.range(around: panState.anchorDate, calendar: chartContext.calendar)
     }
 
     /// The chart's actual on-screen window — `periodRange` re-centered on wherever an in-progress
     /// drag currently sits, so the plotted range moves continuously with the finger rather than
     /// only jumping once the gesture ends.
     private var visibleRange: ClosedRange<Date> {
-        period.range(around: panAnchor(for: dragTranslation), calendar: chartContext.calendar)
+        let liveAnchor = panState.panAnchor(for: dragTranslation, period: period, calendar: chartContext.calendar)
+        return period.range(around: liveAnchor, calendar: chartContext.calendar)
     }
 
-    /// Commits an ended pan gesture's final translation into `anchorDate`, then tops up the loaded
-    /// buffer in the background if that landed close enough to `loadedRange`'s own edge that another
-    /// pan the same way would run out of data.
+    /// Commits an ended pan gesture's final translation into `panState.anchorDate`, then tops up
+    /// the loaded buffer in the background if that landed close enough to `loadedRange`'s own edge
+    /// that another pan the same way would run out of data.
     private func commitPan(translation: CGFloat) {
-        anchorDate = panAnchor(for: translation)
+        panState.anchorDate = panState.panAnchor(for: translation, period: period, calendar: chartContext.calendar)
         dragTranslation = 0
         let margin = period.lookbackDays / 4
         guard
-            let earlyWarning = chartContext.calendar.date(byAdding: .day, value: margin, to: loadedRange.lowerBound),
-            let lateWarning = chartContext.calendar.date(byAdding: .day, value: -margin, to: loadedRange.upperBound),
+            let earlyWarning = chartContext.calendar.date(byAdding: .day, value: margin, to: panState.loadedRange.lowerBound),
+            let lateWarning = chartContext.calendar.date(byAdding: .day, value: -margin, to: panState.loadedRange.upperBound),
             periodRange.lowerBound < earlyWarning || periodRange.upperBound > lateWarning
         else { return }
-        reloadBuffer(around: anchorDate)
+        reloadBuffer(around: panState.anchorDate)
     }
 
     /// Cancels whatever buffer fetch is already in flight and starts a fresh one for `anchor` —
@@ -188,11 +149,11 @@ struct MetricDetailView: View {
     /// race, not just cancelling the `Task` (cancellation alone doesn't stop `metricsProvider` from
     /// running to completion and returning a result).
     private func loadBuffer(around anchor: Date) async {
-        let buffer = bufferRange(around: anchor)
+        let buffer = panState.bufferRange(around: anchor, period: period, calendar: chartContext.calendar)
         let metrics = await metricsProvider(buffer)
         guard !Task.isCancelled else { return }
         displayedMetrics = metrics
-        loadedRange = buffer
+        panState.loadedRange = buffer
     }
 
     /// `chartContext.touchedDay`'s own metrics point — `nil` if that day isn't in
@@ -264,7 +225,7 @@ struct MetricDetailView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         #endif
         .task(id: period) {
-            anchorDate = chartContext.touchedDay
+            panState.anchorDate = chartContext.touchedDay
             reloadBuffer(around: chartContext.touchedDay)
         }
     }
@@ -304,8 +265,8 @@ struct MetricDetailView: View {
             .background(
                 GeometryReader { geometry in
                     Color.clear
-                        .onAppear { chartWidth = geometry.size.width }
-                        .onChange(of: geometry.size.width) { _, newValue in chartWidth = newValue }
+                        .onAppear { panState.chartWidth = geometry.size.width }
+                        .onChange(of: geometry.size.width) { _, newValue in panState.chartWidth = newValue }
                 }
             )
             .gesture(
