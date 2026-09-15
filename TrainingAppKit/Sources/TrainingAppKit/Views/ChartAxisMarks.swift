@@ -60,7 +60,7 @@ enum ChartAxisMarks {
         return dates.sorted()
     }
 
-    /// Pinned rather than left to the device's own locale (unlike `MetricDetailView.touchedDayText`,
+    /// Pinned rather than left to the device's own locale (unlike `MetricDetailView.subjectDateText`,
     /// which does follow it): the "MMM d" vs. "d MMM" ordering (and even the bare month+year
     /// ordering `labelText` itself already works around below) turns out to depend not just on
     /// locale but on the `Calendar`'s own identifier/locale too, which made this label's exact

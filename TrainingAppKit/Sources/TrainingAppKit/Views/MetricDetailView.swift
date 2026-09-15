@@ -1,52 +1,50 @@
 import SwiftUI
 import TrainingCore
 
-/// What `MetricDetailView` needs to draw one metric's own chart and read its touched day's value
-/// (MVP1-45).
+/// What `MetricDetailView` needs to draw one metric's own chart and read its subject's value
+/// (MVP1-45/MVP1-60).
 struct MetricChartContext {
     /// The 3-week window `WeekViewModel.chartMetrics(for:)` returns for the week containing
-    /// `touchedDay` — the same data `FitnessChartView`/`DailyLoadChartView` plot for the main week
+    /// `subject` — the same data `FitnessChartView`/`DailyLoadChartView` plot for the main week
     /// graph, so the numbers agree between the two places they're shown. Used only to seed the
     /// screen's first paint before `metricsProvider` fetches its own, wider buffer.
     let metrics: [FitnessMetrics]
-    /// The specific day whose pill was tapped — marked in the chart, and whose own value the big
-    /// number header (and, for Form, the zone name/explanation) reads from.
-    let touchedDay: Date
-    /// The athlete's own calendar — matching `touchedDay` against `metrics` needs
+    /// A specific day (a day-list pill tap) or a whole displayed week (a graph-panel tap) — see
+    /// `MetricDetailSubject`'s own doc comment.
+    let subject: MetricDetailSubject
+    /// The athlete's own calendar — matching `subject` against `metrics` needs
     /// `calendar.isDate(_:inSameDayAs:)`, not `==`, the same reasoning `WeekViewModel.metrics(on:)`
-    /// already documents for the same comparison. Also supplies `calendar.timeZone` for formatting
-    /// `touchedDay`.
+    /// already documents for the same comparison. Also supplies `calendar.timeZone` for formatting.
     let calendar: Calendar
+
+    /// The single date `ChartPanState`/`ChartPeriod.range(around:)` anchor around — the tapped day
+    /// itself, or a week subject's own start (so `period.range(around:)`'s "+7 days forward" reach
+    /// lands close to that week's own end, the same way a day subject's does relative to the day
+    /// tapped).
+    var anchorDate: Date {
+        switch subject {
+        case .day(let day): return day
+        case .week(let range): return range.lowerBound
+        }
+    }
 }
 
-#if os(iOS)
-private let metricDetailBackground = Color(.systemGroupedBackground)
-private let metricDetailChartCardBackground = Color(.systemBackground)
-private let metricDetailAboutCardBackground = Color(.secondarySystemGroupedBackground)
-#else
-// This view only ever ships on iOS; the fallback exists purely so TrainingAppKit (built for both
-// iOS and macOS, per Package.swift) still compiles on macOS, e.g. for host-side tooling/tests.
-private let metricDetailBackground = Color(white: 0.93)
-private let metricDetailChartCardBackground = Color.white
-private let metricDetailAboutCardBackground = Color(white: 0.97)
-#endif
-
-/// One metric's own detail screen (MVP1-45), Apple Health-style: `WeekView` pushes this onto its
-/// own `NavigationStack` (`.navigationDestination(item:)`) when a day-list pill is tapped — a real
-/// back button and push transition, not a dismiss-by-swiping `.sheet`, since this is a full detail
-/// screen (chart + explanation + zone card) rather than a quick modal glance. `.navigationTitle`
-/// names the metric (e.g. "Form (TSB)") in the nav bar itself, so the scroll content below doesn't
-/// repeat it. Top to bottom: a period-picker segmented control first — reachable immediately,
-/// before scrolling past anything else — then the touched day's own value in a large bold number
-/// (and, for Form, that day's own TSB zone label at the same large size right next to the value —
-/// `abbreviation` in the nav title already covers what a unit would otherwise say, e.g. "TRIMP" for
-/// Load), the day's own date underneath, that metric's own trend
-/// chart in a plain white band stretching the full width (not a rounded card — the chart itself
-/// keeps its own inset), the touched day's own zone name+explanation card for Form only, and
-/// finally an "About `name`" card — each of those last two a title sitting above a rounded,
-/// grouped-list-style rectangle, not inside it. All in one `ScrollView`, no `List` — a `List`'s
-/// per-row insets and separators don't fit this full-bleed-chart layout, and a plain `ScrollView`
-/// is what a future dashboard screen embedding this same content will want anyway.
+/// One metric's own detail screen (MVP1-45/MVP1-60), Apple Health-style: `WeekView` pushes this
+/// onto its own `NavigationStack` (`.navigationDestination(item:)`) when a day-list pill or the
+/// graph panel itself is tapped — a real back button and push transition, not a dismiss-by-swiping
+/// `.sheet`, since this is a full detail screen (chart + explanation + zone card) rather than a
+/// quick modal glance. `.navigationTitle` names the metric (e.g. "Form (TSB)") in the nav bar
+/// itself, so the scroll content below doesn't repeat it. Top to bottom: a period-picker segmented
+/// control first — reachable immediately, before scrolling past anything else — then
+/// `chartContext.subject`'s own value in a large bold number (and, for Form, its own TSB zone
+/// label at the same large size right next to the value — `abbreviation` in the nav title already
+/// covers what a unit would otherwise say, e.g. "TRIMP" for Load) with its own date/date-range
+/// underneath, that metric's own trend chart in a plain white band stretching the full width (not a
+/// rounded card — the chart itself keeps its own inset), the subject's own zone name+explanation
+/// card for Form only, and finally an "About `name`" card — each of those last two a title sitting
+/// above a rounded, grouped-list-style rectangle, not inside it. All in one `ScrollView`, no `List`
+/// — a `List`'s per-row insets and separators don't fit this full-bleed-chart layout, and a plain
+/// `ScrollView` is what a future dashboard screen embedding this same content will want anyway.
 ///
 /// A later "Options" section (e.g. jumping to the athlete's own zone settings) would be a further
 /// sibling appended after `aboutSection` in `body`'s `VStack`, below this same scroll content.
@@ -96,7 +94,7 @@ struct MetricDetailView: View {
         self._displayedMetrics = State(initialValue: chartContext.metrics)
         self._panState = State(
             initialValue: ChartPanState(
-                anchorDate: chartContext.touchedDay,
+                anchorDate: chartContext.anchorDate,
                 loadedRange: ChartDayDomain.range(for: chartContext.metrics)
             )
         )
@@ -156,11 +154,19 @@ struct MetricDetailView: View {
         panState.loadedRange = buffer
     }
 
-    /// `chartContext.touchedDay`'s own metrics point — `nil` if that day isn't in
-    /// `displayedMetrics` yet (not loaded).
-    private var touchedMetrics: FitnessMetrics? {
-        displayedMetrics.first {
-            chartContext.calendar.isDate($0.day, inSameDayAs: chartContext.touchedDay)
+    /// `chartContext.subject`'s own metrics points — the single day's point for a `.day` subject
+    /// (`nil`/empty if that day isn't in `displayedMetrics` yet), or every point inside a `.week`
+    /// subject's own range (used to average, below).
+    private var subjectMetrics: [FitnessMetrics] {
+        switch chartContext.subject {
+        case .day(let day):
+            return displayedMetrics.filter { chartContext.calendar.isDate($0.day, inSameDayAs: day) }
+        case .week(let range):
+            // A half-open comparison, not `range.contains(_:)` -- `range` itself
+            // (`WeekViewModel.displayedWeekRange(for:)`) is `weekStart...weekStart+7days`, so a
+            // `ClosedRange`'s inclusive upper bound would wrongly pull in the *next* week's own
+            // point for whichever day happens to land exactly on that boundary.
+            return displayedMetrics.filter { $0.day >= range.lowerBound && $0.day < range.upperBound }
         }
     }
 
@@ -173,24 +179,53 @@ struct MetricDetailView: View {
         }
     }
 
-    private var touchedValueText: String {
-        guard let touchedMetrics else { return "–" }
+    /// `subjectMetrics`'s own value for `kind` — that single day's value for a `.day` subject, or
+    /// the plain mean across the week for a `.week` one. `nil` when nothing's loaded yet.
+    private var subjectValue: Double? {
+        let values = subjectMetrics.map { value(for: kind, in: $0) }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    /// "42" for a single day, "Avg 42" for a week -- the averaging itself needs no separate
+    /// disclosure (a week obviously isn't one day's own reading), but the label makes clear this
+    /// number isn't the same kind of reading as a day subject's own value.
+    private var subjectValueText: String {
+        guard let subjectValue else { return "–" }
         let format = kind == .form ? Self.signedValueFormat : Self.unsignedValueFormat
-        return value(for: kind, in: touchedMetrics).formatted(format)
+        let formatted = subjectValue.formatted(format)
+        switch chartContext.subject {
+        case .day: return formatted
+        case .week: return "Avg \(formatted)"
+        }
     }
 
-    private var touchedDayText: String {
-        var format = Date.FormatStyle.dateTime.weekday(.wide).month(.wide).day().year()
-        format.calendar = chartContext.calendar
-        format.timeZone = chartContext.calendar.timeZone
-        return chartContext.touchedDay.formatted(format)
+    private var subjectDateText: String {
+        switch chartContext.subject {
+        case .day(let day):
+            var format = Date.FormatStyle.dateTime.weekday(.wide).month(.wide).day().year()
+            format.calendar = chartContext.calendar
+            format.timeZone = chartContext.calendar.timeZone
+            return day.formatted(format)
+        case .week(let range):
+            // The week's own last actual day (`range.upperBound` is the *next* week's start -- see
+            // `subjectMetrics`'s own doc comment) through a full "weekday, month day, year" format
+            // would repeat the year twice for a week that doesn't cross one -- a plain "Sep 14 – Sep
+            // 20, 2026" range reads better here than either duplicating or omitting it conditionally.
+            var format = Date.FormatStyle.dateTime.month(.abbreviated).day()
+            format.calendar = chartContext.calendar
+            format.timeZone = chartContext.calendar.timeZone
+            let yearFormat = format.year()
+            let lastDay = chartContext.calendar.date(byAdding: .day, value: -1, to: range.upperBound) ?? range.lowerBound
+            return "\(range.lowerBound.formatted(format)) – \(lastDay.formatted(yearFormat))"
+        }
     }
 
-    /// `touchedMetrics`'s own TSB zone, for Form only — `nil` for every other kind, and for Form
-    /// itself when `touchedMetrics` isn't loaded yet.
-    private var touchedZone: TSBZone? {
-        guard kind == .form else { return nil }
-        return touchedMetrics?.tsbZone()
+    /// `subjectValue`'s own TSB zone, for Form only — `nil` for every other kind, and for Form
+    /// itself when `subjectValue` isn't loaded yet.
+    private var subjectZone: TSBZone? {
+        guard kind == .form, let subjectValue else { return nil }
+        return TSBZone(tsb: subjectValue)
     }
 
     var body: some View {
@@ -225,25 +260,25 @@ struct MetricDetailView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         #endif
         .task(id: period) {
-            panState.anchorDate = chartContext.touchedDay
-            reloadBuffer(around: chartContext.touchedDay)
+            panState.anchorDate = chartContext.anchorDate
+            reloadBuffer(around: chartContext.anchorDate)
         }
     }
 
     private var valueHeader: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(touchedValueText)
+                Text(subjectValueText)
                     .font(.system(size: 40, weight: .bold, design: .rounded))
-                // The touched day's own TSB zone, at the same size the Form value's own unit would
-                // be if it had one, but `.primary` -- naming the zone is as central to reading
-                // Form's value as the number itself, not a secondary annotation.
-                if let touchedZone {
-                    Text(touchedZone.label)
+                // The subject's own TSB zone, at the same size the Form value's own unit would be
+                // if it had one, but `.primary` -- naming the zone is as central to reading Form's
+                // value as the number itself, not a secondary annotation.
+                if let subjectZone {
+                    Text(subjectZone.label)
                         .font(.title3.weight(.semibold))
                 }
             }
-            Text(touchedDayText)
+            Text(subjectDateText)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -302,7 +337,7 @@ struct MetricDetailView: View {
                 metrics: displayedMetrics,
                 visibleRange: visibleRange,
                 period: period,
-                touchedDay: chartContext.touchedDay,
+                subject: chartContext.subject,
                 calendar: chartContext.calendar
             )
         case .fitness, .fatigue, .form:
@@ -311,19 +346,19 @@ struct MetricDetailView: View {
                 visibleRange: visibleRange,
                 period: period,
                 emphasized: kind,
-                touchedDay: chartContext.touchedDay,
+                subject: chartContext.subject,
                 calendar: chartContext.calendar
             )
         }
     }
 
-    /// The touched day's own TSB zone name+explanation, Form only — a plain title (the zone's own
+    /// The subject's own TSB zone name+explanation, Form only — a plain title (the zone's own
     /// name, e.g. "Training") above a rounded card, the same "title above, not inside" treatment
     /// `aboutSection` uses below it.
     @ViewBuilder
     private var formZoneSection: some View {
-        if kind == .form, let touchedZone {
-            infoCard(title: touchedZone.label, body: touchedZone.explanation)
+        if kind == .form, let subjectZone {
+            infoCard(title: subjectZone.label, body: subjectZone.explanation)
                 .padding(.horizontal)
         }
     }

@@ -18,6 +18,12 @@ struct GraphPanelPagerView: View {
     /// scroll-triggered recycle (see `selectedIndex`'s own doc comment for why this is a one-way
     /// callback rather than a `@Binding`).
     let onSelectedIndexChange: (Int) -> Void
+    /// Called with the currently-visible page's own index on a plain tap anywhere on the panel
+    /// (MVP1-60) — `WeekView` pushes that page's own info screen. A separate `.onTapGesture`, not
+    /// folded into the drag gesture above: `DragGesture(minimumDistance: 10)` never fires at all for
+    /// a touch that lifts before crossing that distance, so a tap and a page-changing drag are
+    /// already mutually exclusive gestures rather than needing to be disambiguated by hand.
+    let onTapPage: (Int) -> Void
 
     /// Local `@State`, seeded from `initialSelectedIndex` at init — not a `@Binding` to a value
     /// `WeekView` owns, even though the selection does need to survive this view being torn down
@@ -53,12 +59,14 @@ struct GraphPanelPagerView: View {
         displayedWeekRange: ClosedRange<Date>,
         heartRateHistogram: HeartRateHistogram,
         initialSelectedIndex: Int,
-        onSelectedIndexChange: @escaping (Int) -> Void
+        onSelectedIndexChange: @escaping (Int) -> Void,
+        onTapPage: @escaping (Int) -> Void
     ) {
         self.metrics = metrics
         self.displayedWeekRange = displayedWeekRange
         self.heartRateHistogram = heartRateHistogram
         self.onSelectedIndexChange = onSelectedIndexChange
+        self.onTapPage = onTapPage
         _selectedIndex = State(initialValue: initialSelectedIndex)
     }
 
@@ -85,6 +93,10 @@ struct GraphPanelPagerView: View {
                 // GeometryReader doesn't center its content by default.
                 .frame(maxHeight: .infinity, alignment: .center)
                 .offset(x: -CGFloat(selectedIndex) * pageWidth + dragOffset)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTapPage(selectedIndex)
+                }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 10)
                         .onChanged { value in

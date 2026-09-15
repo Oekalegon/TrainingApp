@@ -91,7 +91,18 @@ remember or restore which tab was last active.
   from `TrainingModel.metrics: [FitnessMetrics]`; "Time in zone" is scoped to just the displayed
   week and its own domain (zone 1's lower bound through zone 5's upper, each padded 15bpm), built
   on demand from that week's raw heart-rate samples (`WeekViewModel.heartRateHistogram(for:)`)
-  rather than pre-aggregated by `TrainingModel`.
+  rather than pre-aggregated by `TrainingModel`. Tapping anywhere on the panel (MVP1-60, not a
+  separate button) pushes that page's own info screen for the *displayed* week — a plain tap, not
+  a drag, so it doesn't compete with the panel's own swipe-to-page gesture. "Daily load" and "Form"
+  reuse `MetricDetailView` (MVP1-45's day-list-pill screen) with a `.week` subject rather than a
+  `.day` one: the big value reads "Avg `n`" (the mean across the displayed week, not one day's own
+  reading), the date line shows the week's own range ("Sep 14 – Sep 20, 2026") instead of one
+  weekday, and the chart highlights the whole week (`FitnessChartView`'s own week-band treatment)
+  rather than a single day. "Form" always emphasizes TSB (with CTL/ATL as its usual secondary
+  lines), matching what the graph panel's own "Form" page shows. "Time in zone" has no
+  single-metric equivalent to reuse, so it pushes its own `HeartRateZoneDetailView` instead: the
+  same `HeartRateHistogramChartView` the panel itself shows, just taller, followed by one card
+  listing all five heart-rate zones with a short explanation each.
 - **Below**: a vertical timeline, one row per day of the displayed week (MVP1-39) — a weekday pill
   ("Wed 9", highlighted for today) linked into the timeline by a connecting line (which continues
   past the last day down to the bottom of the week view, not just the last pill), with that day's
