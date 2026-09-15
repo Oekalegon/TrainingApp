@@ -122,16 +122,25 @@ remember or restore which tab was last active.
     loaded before calling `TrainingModel.load(in:)` — that call replaces `activities`/`plans`/
     `metrics` outright rather than merging into them, so requesting a shifted range on its own
     would silently drop data the day list still needs until the next natural navigation reload.
-  - The tapped day's own value in a large bold number, its unit if the metric has one
-    (`TrainingMetricKind.unit`; only Load's TRIMP does) — and, for Form only, that day's own TSB
+  - The tapped day's own value in a large bold number — and, for Form only, that day's own TSB
     zone label (`TSBZone.label`) at that same large size right next to the value, naming the zone
-    being as central to reading Form as the number itself. The day's own date sits underneath.
+    being as central to reading Form as the number itself. No separate unit is shown: TRIMP is
+    Load's abbreviation, not a unit, and the nav title already names it. The day's own date sits
+    underneath.
   - That metric's own chart, in a plain white band stretching the screen's full width — not a
     rounded card; only the chart's own content keeps an inset, not the white fill behind it. Marks
     the tapped *day* with a background band, the same `Color.primary.opacity(0.1)` treatment the
     main week graph's own week-highlight band uses, just narrowed to one day — never the whole
     week, and never just a thin rule line. Gridline spacing (`ChartAxisStride`) widens for a longer
-    period so a year of days doesn't draw a gridline every week:
+    period so a year of days doesn't draw a gridline every week. Swipable: a horizontal drag pans
+    the chart's own visible window at (approximately) the finger's own speed — dragging right
+    reveals the past, matching a plain scroll view's "content follows the finger" feel — without
+    moving the tapped day's own value/date/zone header, which stays put regardless of how far the
+    chart itself is panned. `MetricDetailView` always loads a buffer three times as wide as the
+    picked period around the tapped day (`bufferRange(around:)`) so a pan has real room to move
+    before it needs to await `WeekViewModel.metrics(in:asOf:)` again for more; panning clamps at
+    the edge of whatever's currently loaded rather than showing a blank chart beyond it, and
+    tops up the buffer in the background once a pan lands close to that edge:
     - **Load**: `LoadDetailChartView` — the same Daily Load bars `DailyLoadChartView` plots for the
       main graph, with the tapped day's own bar drawn in full `.primary` against every other day
       muted to `.secondary` — that bar's own fill is the day mark, so there's no separate highlight

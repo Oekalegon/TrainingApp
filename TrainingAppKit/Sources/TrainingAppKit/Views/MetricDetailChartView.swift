@@ -12,6 +12,11 @@ import TrainingCore
 /// band the way the main week graph draws one.
 struct LoadDetailChartView: View {
     let metrics: [FitnessMetrics]
+    /// The x-axis window to show -- `MetricDetailView`'s own `visibleRange`, which pans as the
+    /// athlete drags across the chart (MVP1-45 swipe-to-scrub). `metrics` itself is a wider buffer
+    /// than this, so panning can move the visible window without waiting on a refetch; anything
+    /// outside `visibleRange` is still loaded, just clipped by `.chartPlotStyle`.
+    let visibleRange: ClosedRange<Date>
     let touchedDay: Date
     let calendar: Calendar
 
@@ -20,9 +25,8 @@ struct LoadDetailChartView: View {
     }
 
     private var dayDomain: ClosedRange<Date> {
-        let range = ChartDayDomain.range(for: metrics)
         let oneDay: TimeInterval = 24 * 60 * 60
-        return range.lowerBound.addingTimeInterval(-oneDay)...range.upperBound.addingTimeInterval(oneDay)
+        return visibleRange.lowerBound.addingTimeInterval(-oneDay)...visibleRange.upperBound.addingTimeInterval(oneDay)
     }
 
     private func isTouched(_ day: Date) -> Bool {
@@ -78,6 +82,13 @@ enum ChartAxisStride {
 /// shading, it keeps that shading's own fixed domain instead (see `yDomain`'s own doc comment).
 struct FitnessTrendDetailChartView: View {
     let metrics: [FitnessMetrics]
+    /// The x-axis window to show -- `MetricDetailView`'s own `visibleRange`, which pans as the
+    /// athlete drags across the chart (MVP1-45 swipe-to-scrub). `metrics` itself is a wider buffer
+    /// than this, so panning can move the visible window without waiting on a refetch; anything
+    /// outside `visibleRange` is still loaded, just clipped by `.chartPlotStyle`. `yDomain` fits
+    /// only the values actually inside this window, not the whole buffer, so panning away from the
+    /// touched day re-fits the y-axis to whatever's now on screen.
+    let visibleRange: ClosedRange<Date>
     /// Which of `.fitness`/`.fatigue`/`.form` to emphasize — `.load` never reaches this view (see
     /// `MetricDetailView`'s own dispatch).
     let emphasized: TrainingMetricKind
@@ -100,8 +111,8 @@ struct FitnessTrendDetailChartView: View {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).future
     }
 
-    private var dayDomain: ClosedRange<Date> {
-        ChartDayDomain.range(for: metrics)
+    private var visibleMetrics: [FitnessMetrics] {
+        metrics.filter { visibleRange.contains($0.day) }
     }
 
     private func value(for kind: TrainingMetricKind, in point: FitnessMetrics) -> Double {
@@ -120,7 +131,7 @@ struct FitnessTrendDetailChartView: View {
     /// of clipping the outermost ones.
     private var yDomain: ClosedRange<Double> {
         guard emphasized != .form else { return TSBZoneBand.domain }
-        let values = metrics.map { value(for: emphasized, in: $0) }
+        let values = visibleMetrics.map { value(for: emphasized, in: $0) }
         guard let lower = values.min(), let upper = values.max(), lower < upper else {
             return TSBZoneBand.domain
         }
@@ -223,10 +234,10 @@ struct FitnessTrendDetailChartView: View {
             TrainingMetricKind.form.name: lineColor(for: .form),
             "\(TrainingMetricKind.form.name) (projected)": lineColor(for: .form),
         ])
-        .chartXScale(domain: dayDomain)
+        .chartXScale(domain: visibleRange)
         .chartYScale(domain: yDomain)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: ChartAxisStride.days(for: dayDomain))) { _ in
+            AxisMarks(values: .stride(by: .day, count: ChartAxisStride.days(for: visibleRange))) { _ in
                 AxisGridLine()
                 AxisTick()
                 AxisValueLabel(format: .dateTime.month(.abbreviated).day())
