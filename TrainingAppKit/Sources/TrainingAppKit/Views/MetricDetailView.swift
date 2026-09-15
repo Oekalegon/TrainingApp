@@ -85,6 +85,13 @@ struct MetricDetailView: View {
     /// (`commitPan(translation:)`). A plain `@State` (not `@GestureState`) so `onEnded` can read the
     /// final value after the gesture has already reset the `@GestureState` back to zero.
     @State private var dragTranslation: CGFloat = 0
+    /// The most recent background buffer fetch, if any — cancelled and replaced by each new one
+    /// (`.task(id: period)` or a pan landing near `loadedRange`'s own edge) so two overlapping
+    /// fetches can never race to overwrite `displayedMetrics`/`loadedRange` with a stale result:
+    /// whichever fetch starts last cancels every earlier one, and `loadBuffer(around:)` itself
+    /// checks `Task.isCancelled` before writing, so a cancelled fetch's result is simply dropped
+    /// even if `metricsProvider` still runs it to completion.
+    @State private var bufferTask: Task<Void, Never>?
 
     init(
         kind: TrainingMetricKind,
@@ -162,12 +169,28 @@ struct MetricDetailView: View {
             let lateWarning = chartContext.calendar.date(byAdding: .day, value: -margin, to: loadedRange.upperBound),
             periodRange.lowerBound < earlyWarning || periodRange.upperBound > lateWarning
         else { return }
-        Task { await loadBuffer(around: anchorDate) }
+        reloadBuffer(around: anchorDate)
     }
 
+    /// Cancels whatever buffer fetch is already in flight and starts a fresh one for `anchor` —
+    /// the single path both `.task(id: period)` and `commitPan(translation:)` go through, so a
+    /// period change and a pan can never race each other either (only whichever call happens last
+    /// survives; see `bufferTask`'s own doc comment).
+    private func reloadBuffer(around anchor: Date) {
+        bufferTask?.cancel()
+        bufferTask = Task { await loadBuffer(around: anchor) }
+    }
+
+    /// Fetches a fresh buffer around `anchor` and applies it — unless this particular fetch has
+    /// been cancelled (a newer one superseded it) by the time `metricsProvider` returns, in which
+    /// case its result is simply dropped rather than clobbering whatever the newer fetch already
+    /// applied. See `bufferTask`'s own doc comment for why this check is what actually prevents the
+    /// race, not just cancelling the `Task` (cancellation alone doesn't stop `metricsProvider` from
+    /// running to completion and returning a result).
     private func loadBuffer(around anchor: Date) async {
         let buffer = bufferRange(around: anchor)
         let metrics = await metricsProvider(buffer)
+        guard !Task.isCancelled else { return }
         displayedMetrics = metrics
         loadedRange = buffer
     }
@@ -242,7 +265,7 @@ struct MetricDetailView: View {
         #endif
         .task(id: period) {
             anchorDate = chartContext.touchedDay
-            await loadBuffer(around: chartContext.touchedDay)
+            reloadBuffer(around: chartContext.touchedDay)
         }
     }
 
