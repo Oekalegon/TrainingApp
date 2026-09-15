@@ -104,9 +104,11 @@ remember or restore which tab was last active.
   (MVP1-40). A day with no completed activities shows only the Form pill — Load/Fitness/Fatigue
   describe that day's training input, which has nothing to say on a day nothing happened, while
   Form is a trend that still moves whether or not the athlete trained that day. Tapping any pill
-  (MVP1-45) opens `FitnessMetricsInfoView` showing just that one metric's own explanation plus its
-  own chart, in a `.medium`/`.large`-detent sheet rather than the full-screen four-metric,
-  text-only sheet the toolbar's own entry point opens:
+  (MVP1-45) opens `FitnessMetricsInfoView` — a `.medium`/`.large`-detent sheet headed by that
+  metric's name and sports-science abbreviation together (`TrainingMetricKind.name`/
+  `.abbreviation`) plus its icon, deliberately plain/un-tinted rather than colored — matching the
+  day list's own pills (`MetricPillView`'s doc comment), not the chart legend's colored one — then
+  its own chart, and finally a plain-language paragraph (`TrainingMetricKind.explanation`):
   - **Load**: `LoadDetailChartView` — the same 3-week Daily Load bars `DailyLoadChartView` plots
     for the main graph, but with the tapped day's own bar drawn in full `.primary` against every
     other day muted to `.secondary`, rather than only distinguishing actual history from
@@ -161,14 +163,9 @@ remember or restore which tab was last active.
   reloads the day list). Both the chart and the day list scroll together — the displayed week is
   one piece of state, not two.
 - **Toolbar**: "Today" button resets the displayed week to the current calendar week; "Select
-  Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date;
-  "Fitness Metrics" (MVP1-45, `FitnessMetricsInfoView`) opens the same purely informational sheet
-  a day-list pill tap does (see above), but listing all four metrics rather than just one. Either
-  way, the sheet explains what Load (TRIMP), Fitness (CTL), Fatigue (ATL), and Form (TSB) each mean
-  and how they're computed — one `Section` per metric, headed by its name and sports-science
-  abbreviation together (`TrainingMetricKind.name`/`.abbreviation`) plus its icon, deliberately
-  plain/un-tinted rather than colored per metric — matching the day list's own pills
-  (`MetricPillView`'s doc comment), not the chart legend's colored one.
+  Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date. No
+  separate "explain the metrics" entry point — that's reachable only per-metric, by tapping its
+  own pill in the day list (see above).
 - **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
