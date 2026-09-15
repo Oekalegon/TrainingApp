@@ -180,7 +180,7 @@ struct MetricDetailView: View {
     }
 
     private var touchedDayText: String {
-        var format = Date.FormatStyle.dateTime.weekday(.wide).month(.abbreviated).day()
+        var format = Date.FormatStyle.dateTime.weekday(.wide).month(.wide).day()
         format.calendar = chartContext.calendar
         format.timeZone = chartContext.calendar.timeZone
         return chartContext.touchedDay.formatted(format)
@@ -301,6 +301,7 @@ struct MetricDetailView: View {
             LoadDetailChartView(
                 metrics: displayedMetrics,
                 visibleRange: visibleRange,
+                period: period,
                 touchedDay: chartContext.touchedDay,
                 calendar: chartContext.calendar
             )
@@ -308,6 +309,7 @@ struct MetricDetailView: View {
             FitnessTrendDetailChartView(
                 metrics: displayedMetrics,
                 visibleRange: visibleRange,
+                period: period,
                 emphasized: kind,
                 touchedDay: chartContext.touchedDay,
                 calendar: chartContext.calendar

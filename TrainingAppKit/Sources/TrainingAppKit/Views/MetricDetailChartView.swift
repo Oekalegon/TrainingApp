@@ -17,6 +17,9 @@ struct LoadDetailChartView: View {
     /// than this, so panning can move the visible window without waiting on a refetch; anything
     /// outside `visibleRange` is still loaded, just clipped by `.chartPlotStyle`.
     let visibleRange: ClosedRange<Date>
+    /// Which period is picked -- drives where `ChartAxisMarks` puts gridlines (week-start for
+    /// Week/Month, month-start for 3M/6M, a fixed quarterly set of months for Year).
+    let period: ChartPeriod
     let touchedDay: Date
     let calendar: Calendar
 
@@ -42,7 +45,7 @@ struct LoadDetailChartView: View {
         }
         .chartXScale(domain: dayDomain)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: ChartAxisStride.days(for: dayDomain))) { _ in
+            AxisMarks(values: ChartAxisMarks.dates(for: period, in: dayDomain, calendar: calendar)) { _ in
                 AxisGridLine()
                 AxisTick()
                 AxisValueLabel(format: .dateTime.month(.abbreviated).day())
@@ -52,19 +55,63 @@ struct LoadDetailChartView: View {
     }
 }
 
-/// A day-count gridline stride sized to a chart's own x-axis span (MVP1-45) — a week's worth of
-/// daily bars/points wants a gridline every 7 days, but a year's worth (once the metric detail
-/// screen's period picker selects one) would be unreadable at that same stride. Shared by
-/// `LoadDetailChartView` and `FitnessTrendDetailChartView` so the two don't pick this differently.
-enum ChartAxisStride {
-    static func days(for domain: ClosedRange<Date>) -> Int {
-        let spanDays = Int(domain.upperBound.timeIntervalSince(domain.lowerBound) / 86400)
-        switch spanDays {
-        case ..<35: return 7
-        case ..<120: return 14
-        case ..<220: return 30
-        default: return 60
+/// Explicit x-axis gridline dates for a metric detail chart (MVP1-45), aligned to a calendar
+/// boundary that matches how the athlete actually thinks about the picked period, rather than an
+/// arbitrary evenly-spaced day stride from the domain's own edge. Shared by `LoadDetailChartView`
+/// and `FitnessTrendDetailChartView` so the two never pick this differently.
+enum ChartAxisMarks {
+    /// - `.week`/`.month`: each visible week's own start (the athlete's own `calendar.firstWeekday`,
+    ///   Monday by default) -- daily bars/points read most naturally against week boundaries at
+    ///   this span.
+    /// - `.threeMonths`/`.sixMonths`: each visible month's own first day.
+    /// - `.year`: only January, April, July and September of each visible year -- a fixed set of
+    ///   four gridlines per year rather than one per month, which would be unreadable at this span.
+    static func dates(for period: ChartPeriod, in domain: ClosedRange<Date>, calendar: Calendar) -> [Date] {
+        switch period {
+        case .week, .month:
+            return boundaries(in: domain, calendar: calendar, component: .weekOfYear)
+        case .threeMonths, .sixMonths:
+            return boundaries(in: domain, calendar: calendar, component: .month)
+        case .year:
+            return yearMonthMarks(in: domain, calendar: calendar, months: [1, 4, 7, 9])
         }
+    }
+
+    /// Every `component`-start (week or month) that falls inside `domain`, found by stepping
+    /// forward one `component` at a time from `domain`'s own first boundary rather than guessing a
+    /// fixed day-count stride that would drift out of calendar alignment over a wide domain.
+    private static func boundaries(in domain: ClosedRange<Date>, calendar: Calendar, component: Calendar.Component) -> [Date] {
+        guard var current = calendar.dateInterval(of: component, for: domain.lowerBound)?.start else { return [] }
+        var dates: [Date] = []
+        while current <= domain.upperBound {
+            if current >= domain.lowerBound {
+                dates.append(current)
+            }
+            guard let next = calendar.date(byAdding: component, value: 1, to: current) else { break }
+            current = next
+        }
+        return dates
+    }
+
+    /// The first day of each `months` (1-based) in every year `domain` touches, restricted to
+    /// dates actually inside `domain`.
+    private static func yearMonthMarks(in domain: ClosedRange<Date>, calendar: Calendar, months: [Int]) -> [Date] {
+        let startYear = calendar.component(.year, from: domain.lowerBound)
+        let endYear = calendar.component(.year, from: domain.upperBound)
+        guard startYear <= endYear else { return [] }
+        var dates: [Date] = []
+        for year in startYear...endYear {
+            for month in months {
+                var components = DateComponents()
+                components.year = year
+                components.month = month
+                components.day = 1
+                if let date = calendar.date(from: components), domain.contains(date) {
+                    dates.append(date)
+                }
+            }
+        }
+        return dates.sorted()
     }
 }
 
@@ -89,6 +136,9 @@ struct FitnessTrendDetailChartView: View {
     /// only the values actually inside this window, not the whole buffer, so panning away from the
     /// touched day re-fits the y-axis to whatever's now on screen.
     let visibleRange: ClosedRange<Date>
+    /// Which period is picked -- drives where `ChartAxisMarks` puts gridlines (week-start for
+    /// Week/Month, month-start for 3M/6M, a fixed quarterly set of months for Year).
+    let period: ChartPeriod
     /// Which of `.fitness`/`.fatigue`/`.form` to emphasize — `.load` never reaches this view (see
     /// `MetricDetailView`'s own dispatch).
     let emphasized: TrainingMetricKind
@@ -237,7 +287,7 @@ struct FitnessTrendDetailChartView: View {
         .chartXScale(domain: visibleRange)
         .chartYScale(domain: yDomain)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: ChartAxisStride.days(for: visibleRange))) { _ in
+            AxisMarks(values: ChartAxisMarks.dates(for: period, in: visibleRange, calendar: calendar)) { _ in
                 AxisGridLine()
                 AxisTick()
                 AxisValueLabel(format: .dateTime.month(.abbreviated).day())

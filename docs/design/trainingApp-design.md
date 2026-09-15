@@ -125,14 +125,18 @@ remember or restore which tab was last active.
   - The tapped day's own value in a large bold number — and, for Form only, that day's own TSB
     zone label (`TSBZone.label`) at that same large size right next to the value, naming the zone
     being as central to reading Form as the number itself. No separate unit is shown: TRIMP is
-    Load's abbreviation, not a unit, and the nav title already names it. The day's own date sits
-    underneath.
+    Load's abbreviation, not a unit, and the nav title already names it. The day's own full date
+    (weekday and full month name, e.g. "Tuesday, September 15") sits underneath.
   - That metric's own chart, in a plain white band stretching the screen's full width — not a
     rounded card; only the chart's own content keeps an inset, not the white fill behind it. Marks
     the tapped *day* with a background band, the same `Color.primary.opacity(0.1)` treatment the
     main week graph's own week-highlight band uses, just narrowed to one day — never the whole
-    week, and never just a thin rule line. Gridline spacing (`ChartAxisStride`) widens for a longer
-    period so a year of days doesn't draw a gridline every week. Swipable: a horizontal drag pans
+    week, and never just a thin rule line. Gridlines (`ChartAxisMarks`) sit on a calendar boundary
+    that matches the picked period, not an arbitrary evenly-spaced day stride: each visible week's
+    own start (the athlete's own first weekday) for Week/Month, each visible month's own first day
+    for 3M/6M, and only January/April/July/September for Year (a fixed four gridlines a year,
+    rather than one per month, which would be unreadable at that span). Swipable: a horizontal drag
+    pans
     the chart's own visible window at (approximately) the finger's own speed — dragging right
     reveals the past, matching a plain scroll view's "content follows the finger" feel — without
     moving the tapped day's own value/date/zone header, which stays put regardless of how far the
