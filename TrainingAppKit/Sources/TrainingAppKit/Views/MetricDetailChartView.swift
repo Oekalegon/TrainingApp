@@ -7,10 +7,11 @@ import TrainingCore
 /// highlighted in full `.primary` against every other day muted to `.secondary`, rather than only
 /// distinguishing past (actual) from future (projected) bars. `touchedDay` renders from whichever
 /// half it actually falls in — including a still-projected day's own estimated TRIMP — so tapping
-/// a planned day's Load pill doesn't show a blank bar.
+/// a planned day's Load pill doesn't show a blank bar. Marks that one day only, not the week it
+/// falls in — the bar's own full-`.primary` fill already is that mark, so there's no separate week
+/// band the way the main week graph draws one.
 struct LoadDetailChartView: View {
     let metrics: [FitnessMetrics]
-    let displayedWeekRange: ClosedRange<Date>
     let touchedDay: Date
     let calendar: Calendar
 
@@ -30,12 +31,6 @@ struct LoadDetailChartView: View {
 
     var body: some View {
         Chart {
-            RectangleMark(
-                xStart: .value("Week start", displayedWeekRange.lowerBound),
-                xEnd: .value("Week end", displayedWeekRange.upperBound)
-            )
-            .foregroundStyle(Color.primary.opacity(0.1))
-
             ForEach(loads, id: \.day) { point in
                 BarMark(x: .value("Day", point.day, unit: .day), y: .value("TRIMP", point.load))
                     .foregroundStyle(isTouched(point.day) ? Color.primary : Color.secondary.opacity(0.4))
@@ -66,10 +61,13 @@ struct LoadDetailChartView: View {
 /// shading, it keeps that shading's own fixed domain instead (see `yDomain`'s own doc comment).
 struct FitnessTrendDetailChartView: View {
     let metrics: [FitnessMetrics]
-    let displayedWeekRange: ClosedRange<Date>
     /// Which of `.fitness`/`.fatigue`/`.form` to emphasize — `.load` never reaches this view (see
     /// `FitnessMetricsInfoView`'s own dispatch).
     let emphasized: TrainingMetricKind
+    /// The day whose pill was tapped — marked with a vertical rule, not the whole week it falls
+    /// in (unlike the main week graph, which shades a full week band).
+    let touchedDay: Date
+    let calendar: Calendar
     let today: Date = .now
 
     private static let emphasizedLineWidth: CGFloat = 3
@@ -123,13 +121,20 @@ struct FitnessTrendDetailChartView: View {
         }
     }
 
+    /// `touchedDay` itself when `metrics` actually has a point for it, otherwise `touchedDay`
+    /// as-is — snapping to the real data point's own `day` value keeps the rule pixel-aligned with
+    /// that day's line points rather than landing a hair off if `touchedDay` (built from
+    /// `WeekViewModel`'s own day list) and `FitnessMetrics.day` (built inside TrainingKit) don't
+    /// happen to be bit-identical `Date`s for the same calendar day.
+    private var markedDay: Date {
+        metrics.first { calendar.isDate($0.day, inSameDayAs: touchedDay) }?.day ?? touchedDay
+    }
+
     @ChartContentBuilder
-    private var weekHighlightMark: some ChartContent {
-        RectangleMark(
-            xStart: .value("Week start", displayedWeekRange.lowerBound),
-            xEnd: .value("Week end", displayedWeekRange.upperBound)
-        )
-        .foregroundStyle(Color.primary.opacity(0.1))
+    private var dayHighlightMark: some ChartContent {
+        RuleMark(x: .value("Day", markedDay))
+            .foregroundStyle(Color.primary.opacity(0.15))
+            .lineStyle(StrokeStyle(lineWidth: 1))
     }
 
     /// One metric's line, past (solid) and future (dashed) — a distinct series key per
@@ -164,7 +169,7 @@ struct FitnessTrendDetailChartView: View {
     private var chart: some View {
         Chart {
             zoneBandMarks
-            weekHighlightMark
+            dayHighlightMark
             lineMarks(for: .fitness)
             lineMarks(for: .fatigue)
             lineMarks(for: .form)

@@ -104,30 +104,40 @@ remember or restore which tab was last active.
   (MVP1-40). A day with no completed activities shows only the Form pill — Load/Fitness/Fatigue
   describe that day's training input, which has nothing to say on a day nothing happened, while
   Form is a trend that still moves whether or not the athlete trained that day. Tapping any pill
-  (MVP1-45) opens `FitnessMetricsInfoView` — a `.medium`/`.large`-detent sheet headed by that
-  metric's name and sports-science abbreviation together (`TrainingMetricKind.name`/
-  `.abbreviation`) plus its icon, deliberately plain/un-tinted rather than colored — matching the
-  day list's own pills (`MetricPillView`'s doc comment), not the chart legend's colored one — then
-  its own chart, and finally a plain-language paragraph (`TrainingMetricKind.explanation`):
-  - **Load**: `LoadDetailChartView` — the same 3-week Daily Load bars `DailyLoadChartView` plots
-    for the main graph, but with the tapped day's own bar drawn in full `.primary` against every
-    other day muted to `.secondary`, rather than only distinguishing actual history from
-    projected days. Still shows a still-projected day's own estimated TRIMP if that's the day
-    tapped, rather than a blank bar.
-  - **Fitness/Fatigue/Form**: `FitnessTrendDetailChartView` — the same 3-week CTL/ATL/TSB data
-    `FitnessChartView` plots, with the tapped metric drawn as a thick `.primary` line (matching
-    that main chart's own smoothed-line treatment) and the other two subdued to a thin
-    `.secondary` line, plus a manual legend naming all three (not `.chartLegend`, since two
-    subdued series sharing one muted color would render as indistinguishable swatches there). The
-    y-domain fits the *tapped* metric's own value range — the other two may run outside it and
-    simply clip. Form is the one exception: it keeps `TSBZoneBand`'s fixed domain instead (already
-    sized to a realistic TSB range) because it's also the only case that shades `TSBZoneBand`'s
-    zone bands behind the lines — CTL/ATL never show zone shading, since those thresholds are
-    specific to TSB. Tapping Form also adds a plain "Currently: `TSBZone.label`" line plus that
-    zone's own plain-language explanation (`TSBZone.explanation`, condensed from `TrainingCore`'s
-    own doc comments), read from the tapped day's own `FitnessMetrics.tsbZone()` — deliberately
-    un-tinted like this sheet's own headers, even though the chart above shades this same zone in
-    color.
+  (MVP1-45) opens `FitnessMetricsInfoView`, a `.medium`/`.large`-detent sheet wrapping
+  `MetricDetailView` — an Apple Health-style detail screen for that one metric, factored out as its
+  own reusable, sheet-chrome-free view since a later dashboard screen will likely embed the same
+  content directly. One `ScrollView` (not a `List` — a full-bleed chart and a card-style "About"
+  section don't fit `List`'s row insets/separators), top to bottom:
+  - The tapped day's own value in a large bold number, its unit if the metric has one
+    (`TrainingMetricKind.unit`; only Load's TRIMP does), and the day's own date underneath in a
+    smaller (but still larger-than-body) font.
+  - That metric's own chart, in a plain white band stretching the sheet's full width — not a
+    rounded card; only the chart's own content keeps an inset, not the white fill behind it. Marks
+    the tapped *day*, never the whole week the way the main week graph's own charts do:
+    - **Load**: `LoadDetailChartView` — the same 3-week Daily Load bars `DailyLoadChartView` plots
+      for the main graph, with the tapped day's own bar drawn in full `.primary` against every
+      other day muted to `.secondary` — that bar's own fill is the day mark, so there's no
+      separate highlight rectangle. Still shows a still-projected day's own estimated TRIMP if
+      that's the day tapped, rather than a blank bar.
+    - **Fitness/Fatigue/Form**: `FitnessTrendDetailChartView` — the same 3-week CTL/ATL/TSB data
+      `FitnessChartView` plots, with the tapped metric drawn as a thick `.primary` line (matching
+      that main chart's own smoothed-line treatment) and the other two subdued to a thin
+      `.secondary` line, a vertical rule marking the tapped day, plus a manual legend naming all
+      three (not `.chartLegend`, since two subdued series sharing one muted color would render as
+      indistinguishable swatches there). The y-domain fits the *tapped* metric's own value range —
+      the other two may run outside it and simply clip. Form is the one exception: it keeps
+      `TSBZoneBand`'s fixed domain instead (already sized to a realistic TSB range) because it's
+      also the only case that shades `TSBZoneBand`'s zone bands behind the lines — CTL/ATL never
+      show zone shading, since those thresholds are specific to TSB.
+  - An "About `name`" card — a rounded, grouped-list-style rectangle, matching the day list's own
+    pills' plain/un-tinted icon treatment (`MetricPillView`'s doc comment) rather than the chart
+    legend's colored one — containing a plain-language paragraph (`TrainingMetricKind.explanation`)
+    and, for Form only, a plain "Currently: `TSBZone.label`" line plus that zone's own
+    plain-language explanation (`TSBZone.explanation`, condensed from `TrainingCore`'s own doc
+    comments), read from the tapped day's own `FitnessMetrics.tsbZone()` — deliberately un-tinted,
+    even though the chart above shades this same zone in color. A later "Options" section (e.g.
+    jumping to the athlete's own zone settings) would be a further card appended below this one.
 - A pinned stats bar (MVP1-52) sits between the chart and the day list: a swipeable per-sport
   pager (main sport first) showing that sport's Distance/Time/Load for the displayed week, each
   with its percentage change vs. the previous week, plus "LIT" ("Low Intensity Training", MVP1-48)

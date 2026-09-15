@@ -255,12 +255,11 @@ public struct WeekView: View {
         }
     }
 
-    /// `FitnessMetricsInfoView`'s own chart data for `presentation`'s day (MVP1-45).
-    private func chartContext(for presentation: MetricsInfoPresentation) -> FitnessMetricsInfoView.ChartContext {
+    /// `MetricDetailView`'s own chart data for `presentation`'s day (MVP1-45).
+    private func chartContext(for presentation: MetricsInfoPresentation) -> MetricChartContext {
         let weekStart = WeekViewModel.weekStart(containing: presentation.day, calendar: viewModel.athleteCalendar)
-        return FitnessMetricsInfoView.ChartContext(
+        return MetricChartContext(
             metrics: viewModel.chartMetrics(for: weekStart),
-            displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
             touchedDay: presentation.day,
             calendar: viewModel.athleteCalendar
         )

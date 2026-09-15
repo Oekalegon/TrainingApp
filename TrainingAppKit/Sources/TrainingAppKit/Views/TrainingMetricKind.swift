@@ -2,7 +2,7 @@ import SwiftUI
 
 /// One of the four fitness metrics shown throughout the week view — as an icon+value pill beside
 /// each weekday row (`DayActivitiesSection`, MVP1-40), as an icon+name legend entry above the
-/// chart (`FitnessChartView`), and as an entry in the metrics info sheet (`FitnessMetricsInfoView`,
+/// chart (`FitnessChartView`), and as the metrics info sheet's own subject (`MetricDetailView`,
 /// MVP1-45). All three key off this single mapping, so the icon, its accessibility name, and (for
 /// the chart) its color can't drift between them.
 enum TrainingMetricKind: CaseIterable {
@@ -41,6 +41,16 @@ enum TrainingMetricKind: CaseIterable {
         case .fitness: "CTL"
         case .fatigue: "ATL"
         case .form: "TSB"
+        }
+    }
+
+    /// A short unit suffix for this metric's own value, shown next to the big number in the
+    /// metrics info sheet's header (MVP1-45) — e.g. "87 TRIMP" for Load. `nil` for the three
+    /// EWMA/derived scores (Fitness/Fatigue/Form), which have no unit of their own beyond "points".
+    var unit: String? {
+        switch self {
+        case .load: "TRIMP"
+        case .fitness, .fatigue, .form: nil
         }
     }
 
