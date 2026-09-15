@@ -30,17 +30,20 @@ private let metricDetailChartCardBackground = Color.white
 private let metricDetailAboutCardBackground = Color(white: 0.97)
 #endif
 
-/// One metric's own detail screen (MVP1-45), Apple Health-style: the touched day's own value in a
-/// large bold number (with unit, if the metric has one) and the day's own date underneath, then
-/// that metric's own trend chart in a plain white band stretching the full width (not a rounded
-/// card — the chart itself keeps its own inset), then an "About `name`" card in a rounded,
-/// grouped-list-style rectangle. All in one `ScrollView`, no `List` — a `List`'s per-row insets and
-/// separators don't fit this full-bleed-chart layout, and a plain `ScrollView` is what a future
-/// dashboard screen embedding this same content (this view takes no sheet-specific dependencies —
-/// no dismiss action, no navigation title) will want anyway.
+/// One metric's own detail screen (MVP1-45), Apple Health-style, top to bottom: the metric's own
+/// name+abbreviation as a small secondary title, the touched day's own value in a large bold
+/// number (with unit, if the metric has one — and, for Form, that day's own TSB zone label at the
+/// same large size right next to the value), the day's own date underneath, that metric's own
+/// trend chart in a plain white band stretching the full width (not a rounded card — the chart
+/// itself keeps its own inset), the touched day's own zone explanation immediately below the chart
+/// for Form only, and finally an "About `name`" card in a rounded, grouped-list-style rectangle
+/// headed by a plain title sitting above it (not inside it). All in one `ScrollView`, no `List` —
+/// a `List`'s per-row insets and separators don't fit this full-bleed-chart layout, and a plain
+/// `ScrollView` is what a future dashboard screen embedding this same content (this view takes no
+/// sheet-specific dependencies — no dismiss action, no navigation title) will want anyway.
 ///
 /// A later "Options" section (e.g. jumping to the athlete's own zone settings) would be a further
-/// sibling appended after `aboutCard` in `body`'s `VStack`, below this same scroll content.
+/// sibling appended after `aboutSection` in `body`'s `VStack`, below this same scroll content.
 struct MetricDetailView: View {
     let kind: TrainingMetricKind
     let chartContext: MetricChartContext
@@ -79,13 +82,28 @@ struct MetricDetailView: View {
         return chartContext.touchedDay.formatted(format)
     }
 
+    /// `touchedMetrics`'s own TSB zone, for Form only — `nil` for every other kind, and for Form
+    /// itself when `touchedMetrics` isn't loaded yet.
+    private var touchedZone: TSBZone? {
+        guard kind == .form else { return nil }
+        return touchedMetrics?.tsbZone()
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                valueHeader
-                    .padding(.horizontal)
+                VStack(alignment: .leading, spacing: 12) {
+                    kindTitle
+                    valueHeader
+                }
+                .padding(.horizontal)
                 chartCard
-                aboutCard
+                if kind == .form, let touchedZone {
+                    Text(touchedZone.explanation)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
+                aboutSection
                     .padding(.horizontal)
             }
             .padding(.vertical)
@@ -93,15 +111,34 @@ struct MetricDetailView: View {
         .background(metricDetailBackground)
     }
 
+    /// Replaces the sheet's own navigation title (MVP1-45 review: no toolbar/Done button on this
+    /// screen at all) — the same "Form (TSB)" text a `.navigationTitle` would have shown, just
+    /// inline above the value instead, secondary-colored and a step smaller than the value's own
+    /// `.title3` unit/date text so the hierarchy reads value > date > this title.
+    private var kindTitle: some View {
+        Text("\(kind.name) (\(kind.abbreviation))")
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.secondary)
+    }
+
     private var valueHeader: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(touchedValueText)
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                if let unit = kind.unit {
-                    Text(unit)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(touchedValueText)
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                    if let unit = kind.unit {
+                        Text(unit)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                // The touched day's own TSB zone, at the same size as Load's unit would be, but
+                // `.primary` -- naming the zone is as central to reading Form's value as the
+                // number itself, not a secondary annotation.
+                if let touchedZone {
+                    Text(touchedZone.label)
                         .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
                 }
             }
             Text(touchedDayText)
@@ -141,35 +178,20 @@ struct MetricDetailView: View {
         }
     }
 
-    private var aboutCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    /// "About `name`" as a plain title sitting above the rounded card, not inside it — matching
+    /// how a grouped `List` section's own header reads, without actually using a `List`.
+    private var aboutSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Text("About \(kind.name)")
                 .font(.headline)
             Text(kind.explanation)
                 .foregroundStyle(.secondary)
-            if kind == .form, let touchedMetrics {
-                Divider()
-                formZoneExplanation(for: touchedMetrics)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(metricDetailAboutCardBackground)
-        }
-    }
-
-    /// Deliberately plain (bold text, no zone color) — matching this view's own headers, which
-    /// stay un-tinted even though the chart above (and the main week graph) shade this same zone
-    /// in color; the color association lives in the chart, not repeated here in text.
-    private func formZoneExplanation(for metrics: FitnessMetrics) -> some View {
-        let zone = metrics.tsbZone()
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("Currently: \(zone.label)")
-                .font(.subheadline.bold())
-            Text(zone.explanation)
-                .foregroundStyle(.secondary)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(metricDetailAboutCardBackground)
+                }
         }
     }
 }

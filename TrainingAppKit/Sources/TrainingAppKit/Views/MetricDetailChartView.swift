@@ -51,13 +51,14 @@ struct LoadDetailChartView: View {
 /// The Fitness/Fatigue/Form metric info sheet's own trend chart (MVP1-45) — the same 3-week
 /// CTL/ATL/TSB data `FitnessChartView` plots, but with `emphasized` drawn as a thick `.primary`
 /// line (matching that main chart's own smoothed-line treatment) and the other two subdued to a
-/// thin `.secondary` line, plus a manual legend naming all three (`.chartLegend` isn't used here —
-/// two subdued series sharing the exact same muted color would otherwise render as two
-/// indistinguishable swatches).
+/// thin line in their own muted color (`TrainingMetricKind.color`, at reduced opacity) — plain
+/// `.secondary` for both would leave them indistinguishable from each other, since a legend text
+/// label is the only other thing telling them apart. Uses a manual legend, not `.chartLegend`, so
+/// that per-series color can be spelled out explicitly the same way.
 ///
-/// `emphasized`'s own value range drives the y-domain — the other two series may run outside it
-/// and simply clip, rather than a shared auto-fit range picked by whichever series happens to be
-/// widest. The one exception is `.form`: since that's also the only case that shows `TSBZoneBand`
+/// `emphasized`'s own value range drives the y-domain — the other two series may run outside it,
+/// and are clipped to the plot area (`.chartPlotStyle`) rather than bleeding into the surrounding
+/// frame. The one exception is `.form`: since that's also the only case that shows `TSBZoneBand`
 /// shading, it keeps that shading's own fixed domain instead (see `yDomain`'s own doc comment).
 struct FitnessTrendDetailChartView: View {
     let metrics: [FitnessMetrics]
@@ -122,7 +123,7 @@ struct FitnessTrendDetailChartView: View {
     }
 
     /// `touchedDay` itself when `metrics` actually has a point for it, otherwise `touchedDay`
-    /// as-is — snapping to the real data point's own `day` value keeps the rule pixel-aligned with
+    /// as-is — snapping to the real data point's own `day` value keeps the mark pixel-aligned with
     /// that day's line points rather than landing a hair off if `touchedDay` (built from
     /// `WeekViewModel`'s own day list) and `FitnessMetrics.day` (built inside TrainingKit) don't
     /// happen to be bit-identical `Date`s for the same calendar day.
@@ -130,11 +131,23 @@ struct FitnessTrendDetailChartView: View {
         metrics.first { calendar.isDate($0.day, inSameDayAs: touchedDay) }?.day ?? touchedDay
     }
 
+    /// `markedDay` ± 12 hours — a one-day-wide span centered on the day's own plotted point,
+    /// rather than the point sitting at the left edge of a `markedDay...(markedDay + 1 day)` band.
+    private var markedDayRange: ClosedRange<Date> {
+        let halfDay: TimeInterval = 12 * 60 * 60
+        return markedDay.addingTimeInterval(-halfDay)...markedDay.addingTimeInterval(halfDay)
+    }
+
+    /// A background band marking the tapped day, one day wide — the same treatment
+    /// (`Color.primary.opacity(0.1)`) `FitnessChartView`'s own week-highlight band uses, just
+    /// narrowed to a single day instead of a full week, rather than a thin rule line.
     @ChartContentBuilder
     private var dayHighlightMark: some ChartContent {
-        RuleMark(x: .value("Day", markedDay))
-            .foregroundStyle(Color.primary.opacity(0.15))
-            .lineStyle(StrokeStyle(lineWidth: 1))
+        RectangleMark(
+            xStart: .value("Day start", markedDayRange.lowerBound),
+            xEnd: .value("Day end", markedDayRange.upperBound)
+        )
+        .foregroundStyle(Color.primary.opacity(0.1))
     }
 
     /// One metric's line, past (solid) and future (dashed) — a distinct series key per
@@ -166,6 +179,13 @@ struct FitnessTrendDetailChartView: View {
         }
     }
 
+    /// The emphasized series draws full `.primary`; the other two draw in their own
+    /// `TrainingMetricKind.color`, muted, so two subdued series don't collapse into one
+    /// indistinguishable gray line — see this type's own doc comment.
+    private func lineColor(for kind: TrainingMetricKind) -> Color {
+        kind == emphasized ? .primary : kind.color.opacity(0.5)
+    }
+
     private var chart: some View {
         Chart {
             zoneBandMarks
@@ -180,12 +200,12 @@ struct FitnessTrendDetailChartView: View {
         // is still a live expression against `emphasized`, so this stays a single place to update
         // if a series' naming ever changes.
         .chartForegroundStyleScale([
-            TrainingMetricKind.fitness.name: emphasized == .fitness ? Color.primary : Color.secondary,
-            "\(TrainingMetricKind.fitness.name) (projected)": emphasized == .fitness ? Color.primary : Color.secondary,
-            TrainingMetricKind.fatigue.name: emphasized == .fatigue ? Color.primary : Color.secondary,
-            "\(TrainingMetricKind.fatigue.name) (projected)": emphasized == .fatigue ? Color.primary : Color.secondary,
-            TrainingMetricKind.form.name: emphasized == .form ? Color.primary : Color.secondary,
-            "\(TrainingMetricKind.form.name) (projected)": emphasized == .form ? Color.primary : Color.secondary,
+            TrainingMetricKind.fitness.name: lineColor(for: .fitness),
+            "\(TrainingMetricKind.fitness.name) (projected)": lineColor(for: .fitness),
+            TrainingMetricKind.fatigue.name: lineColor(for: .fatigue),
+            "\(TrainingMetricKind.fatigue.name) (projected)": lineColor(for: .fatigue),
+            TrainingMetricKind.form.name: lineColor(for: .form),
+            "\(TrainingMetricKind.form.name) (projected)": lineColor(for: .form),
         ])
         .chartXScale(domain: dayDomain)
         .chartYScale(domain: yDomain)
@@ -197,7 +217,13 @@ struct FitnessTrendDetailChartView: View {
             }
         }
         .chartLegend(.hidden)
-        .frame(height: 160)
+        // Without this, a subdued series running past `yDomain` (by design -- only `emphasized`'s
+        // own range fits it exactly) draws straight into the surrounding frame instead of stopping
+        // at the plot area's own edge.
+        .chartPlotStyle { plotContent in
+            plotContent.clipped()
+        }
+        .frame(height: 200)
     }
 
     /// A manual legend, not `.chartLegend` — see this type's own doc comment for why: with two
@@ -211,7 +237,7 @@ struct FitnessTrendDetailChartView: View {
                 let isEmphasized = kind == emphasized
                 HStack(spacing: 4) {
                     Rectangle()
-                        .fill(isEmphasized ? Color.primary : Color.secondary)
+                        .fill(lineColor(for: kind))
                         .frame(width: isEmphasized ? 16 : 10, height: isEmphasized ? 3 : 1)
                     Text(kind.name)
                         .font(.caption2)
