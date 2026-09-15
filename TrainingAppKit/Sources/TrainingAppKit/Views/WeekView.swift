@@ -30,16 +30,14 @@ public struct WeekView: View {
     #endif
     /// Whether the "Select Date" sheet is presented.
     @State private var isShowingDatePicker = false
-    /// Whether the fitness metrics info sheet (MVP1-45) is presented.
-    @State private var isShowingMetricsInfo = false
-    /// Which single metric the info sheet should explain — set when opened by tapping a specific
-    /// pill in the day list, so that sheet shows just that metric rather than all four; cleared
-    /// (`nil`) for the toolbar's general entry point, which always shows all four.
-    @State private var focusedMetricKind: TrainingMetricKind?
-    /// The day whose pill was tapped to open `focusedMetricKind`'s own chart (MVP1-45) — that
-    /// chart highlights this specific day/reads its value, rather than the chart just showing the
-    /// 3-week trend with nothing singled out. Meaningless while `focusedMetricKind` is `nil`.
-    @State private var focusedMetricDay = Date()
+    /// The fitness metrics info sheet's own presentation state (MVP1-45), or `nil` while it's
+    /// dismissed — a single `Identifiable` value driving both presentation and content together
+    /// (`.sheet(item:)`, same pattern as `selectedActivity` below), rather than a separate
+    /// `Bool`/`TrainingMetricKind?`/`Date` set together in one action: setting those three
+    /// separately let `.sheet(isPresented:)` build its content from a still-stale
+    /// `focusedMetricKind`/`focusedMetricDay` the first time it presented in a session, showing
+    /// the all-four sheet on the very first pill tap and only the tapped metric on every one after.
+    @State private var metricsInfoPresentation: MetricsInfoPresentation?
     /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
     /// the sheet opens, so the picker starts near whatever week is currently on screen.
     @State private var pickedDate = Date()
@@ -211,8 +209,7 @@ public struct WeekView: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Fitness Metrics", systemImage: "info.circle") {
-                        focusedMetricKind = nil
-                        isShowingMetricsInfo = true
+                        metricsInfoPresentation = MetricsInfoPresentation(kind: nil, day: nil)
                     }
                 }
             }
@@ -235,8 +232,11 @@ public struct WeekView: View {
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
             }
-            .sheet(isPresented: $isShowingMetricsInfo) {
-                FitnessMetricsInfoView(focusedKind: focusedMetricKind, chartContext: focusedMetricChartContext)
+            .sheet(item: $metricsInfoPresentation) { presentation in
+                FitnessMetricsInfoView(
+                    focusedKind: presentation.kind,
+                    chartContext: chartContext(for: presentation)
+                )
             }
             // Opens `pendingOverlapActivity`'s own detail sheet only once this one has actually
             // finished dismissing — see that property's own doc comment for why this two-step
@@ -264,16 +264,16 @@ public struct WeekView: View {
         }
     }
 
-    /// `FitnessMetricsInfoView`'s own chart data for `focusedMetricDay`'s week (MVP1-45) — `nil`
-    /// while `focusedMetricKind` is (the toolbar's all-four entry point never sets a day, so there's
-    /// nothing to build a chart around).
-    private var focusedMetricChartContext: FitnessMetricsInfoView.ChartContext? {
-        guard focusedMetricKind != nil else { return nil }
-        let weekStart = WeekViewModel.weekStart(containing: focusedMetricDay, calendar: viewModel.athleteCalendar)
+    /// `FitnessMetricsInfoView`'s own chart data for `presentation`'s day (MVP1-45) — `nil` when
+    /// `presentation.day` is (the toolbar's all-four entry point never sets one, so there's nothing
+    /// to build a chart around).
+    private func chartContext(for presentation: MetricsInfoPresentation) -> FitnessMetricsInfoView.ChartContext? {
+        guard let day = presentation.day else { return nil }
+        let weekStart = WeekViewModel.weekStart(containing: day, calendar: viewModel.athleteCalendar)
         return FitnessMetricsInfoView.ChartContext(
             metrics: viewModel.chartMetrics(for: weekStart),
             displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
-            touchedDay: focusedMetricDay,
+            touchedDay: day,
             calendar: viewModel.athleteCalendar
         )
     }
@@ -505,9 +505,7 @@ public struct WeekView: View {
                             timeZone: viewModel.athleteTimeZone,
                             onSelectActivity: { selectedActivity = $0 },
                             onSelectMetric: { kind in
-                                focusedMetricKind = kind
-                                focusedMetricDay = day
-                                isShowingMetricsInfo = true
+                                metricsInfoPresentation = MetricsInfoPresentation(kind: kind, day: day)
                             }
                         )
                     }
@@ -647,4 +645,14 @@ public struct WeekView: View {
     private func goToToday() {
         viewModel.goToToday()
     }
+}
+
+/// `WeekView.metricsInfoPresentation`'s value (MVP1-45) — `kind`/`day` both `nil` for the
+/// toolbar's all-four entry point, both set for a specific pill tap. `Identifiable` via a fresh
+/// `UUID` per instance (not `kind`/`day` themselves) so tapping the *same* metric/day twice in a
+/// row while the sheet is already showing something else still counts as a new presentation.
+private struct MetricsInfoPresentation: Identifiable {
+    let id = UUID()
+    let kind: TrainingMetricKind?
+    let day: Date?
 }
