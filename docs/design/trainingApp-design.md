@@ -107,14 +107,14 @@ remember or restore which tab was last active.
   (MVP1-45) pushes `MetricDetailView` onto the week view's own `NavigationStack`
   (`.navigationDestination(item:)`) — a real back button and push transition, not a
   dismiss-by-swiping `.sheet`, since this is a full detail screen (chart + explanation + zone
-  card) rather than a quick modal glance. No navigation title/toolbar of its own beyond the
-  automatic back button — `MetricDetailView` shows the metric's own name inline instead (see
-  below). Factored out as its own reusable view (no dependency on being presented any particular
-  way) since a later dashboard screen will likely embed the same content directly. One
-  `ScrollView` (not a `List` — a full-bleed chart and card-style sections don't fit `List`'s row
-  insets/separators), top to bottom:
+  card) rather than a quick modal glance. `.navigationTitle` names the metric (e.g. "Form (TSB)")
+  in the nav bar itself, so the scroll content below doesn't repeat it. Factored out as its own
+  reusable view (no dependency on being presented any particular way) since a later dashboard
+  screen will likely embed the same content directly. One `ScrollView` (not a `List` — a
+  full-bleed chart and card-style sections don't fit `List`'s row insets/separators), top to
+  bottom:
   - A period-picker segmented control (`ChartPeriod`: W/M/3M/6M/Y) first, above everything else —
-    reachable immediately, without scrolling past the title/value/chart first. Owned by `WeekView`
+    reachable immediately, without scrolling past the value/chart first. Owned by `WeekView`
     (`WeekViewModel`-adjacent `@State`), not this view, and passed down as a `Binding` — so it's
     retained across separate pushes: pick "Month" on Load, go back, tap Fitness, and it's
     still "Month". Picking anything past the default `.week` fetches a wider window via
@@ -122,10 +122,6 @@ remember or restore which tab was last active.
     loaded before calling `TrainingModel.load(in:)` — that call replaces `activities`/`plans`/
     `metrics` outright rather than merging into them, so requesting a shifted range on its own
     would silently drop data the day list still needs until the next natural navigation reload.
-  - The metric's own name+abbreviation (`"Form (TSB)"`) as a `.title3` secondary title — what a
-    `.navigationTitle` would otherwise have shown, sized bigger than the date line below it (a
-    `.subheadline`) even though both are secondary-colored, so the hierarchy reads value > title >
-    date.
   - The tapped day's own value in a large bold number, its unit if the metric has one
     (`TrainingMetricKind.unit`; only Load's TRIMP does) — and, for Form only, that day's own TSB
     zone label (`TSBZone.label`) at that same large size right next to the value, naming the zone

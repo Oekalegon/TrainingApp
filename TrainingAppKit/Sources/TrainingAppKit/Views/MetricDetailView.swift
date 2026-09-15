@@ -34,17 +34,18 @@ private let metricDetailAboutCardBackground = Color(white: 0.97)
 /// One metric's own detail screen (MVP1-45), Apple Health-style: `WeekView` pushes this onto its
 /// own `NavigationStack` (`.navigationDestination(item:)`) when a day-list pill is tapped — a real
 /// back button and push transition, not a dismiss-by-swiping `.sheet`, since this is a full detail
-/// screen (chart + explanation + zone card) rather than a quick modal glance. Top to bottom: a
-/// period-picker segmented control first — reachable immediately, before scrolling past anything
-/// else — then the metric's own name+abbreviation as a secondary title, the touched day's own
-/// value in a large bold number (with unit, if the metric has one — and, for Form, that day's own
-/// TSB zone label at the same large size right next to the value), the day's own date underneath,
-/// that metric's own trend chart in a plain white band stretching the full width (not a rounded
-/// card — the chart itself keeps its own inset), the touched day's own zone name+explanation card
-/// for Form only, and finally an "About `name`" card — each of those last two a title sitting above
-/// a rounded, grouped-list-style rectangle, not inside it. All in one `ScrollView`, no `List` — a
-/// `List`'s per-row insets and separators don't fit this full-bleed-chart layout, and a plain
-/// `ScrollView` is what a future dashboard screen embedding this same content will want anyway.
+/// screen (chart + explanation + zone card) rather than a quick modal glance. `.navigationTitle`
+/// names the metric (e.g. "Form (TSB)") in the nav bar itself, so the scroll content below doesn't
+/// repeat it. Top to bottom: a period-picker segmented control first — reachable immediately,
+/// before scrolling past anything else — then the touched day's own value in a large bold number
+/// (with unit, if the metric has one — and, for Form, that day's own TSB zone label at the same
+/// large size right next to the value), the day's own date underneath, that metric's own trend
+/// chart in a plain white band stretching the full width (not a rounded card — the chart itself
+/// keeps its own inset), the touched day's own zone name+explanation card for Form only, and
+/// finally an "About `name`" card — each of those last two a title sitting above a rounded,
+/// grouped-list-style rectangle, not inside it. All in one `ScrollView`, no `List` — a `List`'s
+/// per-row insets and separators don't fit this full-bleed-chart layout, and a plain `ScrollView`
+/// is what a future dashboard screen embedding this same content will want anyway.
 ///
 /// A later "Options" section (e.g. jumping to the athlete's own zone settings) would be a further
 /// sibling appended after `aboutSection` in `body`'s `VStack`, below this same scroll content.
@@ -127,11 +128,8 @@ struct MetricDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 periodPicker
                     .padding(.horizontal)
-                VStack(alignment: .leading, spacing: 12) {
-                    kindTitle
-                    valueHeader
-                }
-                .padding(.horizontal)
+                valueHeader
+                    .padding(.horizontal)
                 chartCard
                 formZoneSection
                 aboutSection
@@ -140,6 +138,10 @@ struct MetricDetailView: View {
             .padding(.vertical)
         }
         .background(metricDetailBackground)
+        .navigationTitle("\(kind.name) (\(kind.abbreviation))")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .task(id: period) {
             guard period != .week else {
                 displayedMetrics = chartContext.metrics
@@ -147,18 +149,6 @@ struct MetricDetailView: View {
             }
             displayedMetrics = await metricsProvider(periodRange)
         }
-    }
-
-    /// Replaces a `.navigationTitle` (MVP1-45 review: no title/toolbar on this screen at all,
-    /// just the automatic back button `.navigationDestination` gives it for free) — the same
-    /// "Form (TSB)" text a title would have shown, just inline above the value instead. Bigger
-    /// than `touchedDayText` below it (`.title3` vs. `.subheadline`) even though both are
-    /// secondary-colored, so the hierarchy reads value > title > date rather than the date
-    /// outweighing the title naming what's actually shown.
-    private var kindTitle: some View {
-        Text("\(kind.name) (\(kind.abbreviation))")
-            .font(.title3.weight(.semibold))
-            .foregroundStyle(.secondary)
     }
 
     private var valueHeader: some View {
