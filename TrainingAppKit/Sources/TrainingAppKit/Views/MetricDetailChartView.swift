@@ -38,13 +38,29 @@ struct LoadDetailChartView: View {
         }
         .chartXScale(domain: dayDomain)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+            AxisMarks(values: .stride(by: .day, count: ChartAxisStride.days(for: dayDomain))) { _ in
                 AxisGridLine()
                 AxisTick()
                 AxisValueLabel(format: .dateTime.month(.abbreviated).day())
             }
         }
         .frame(height: 160)
+    }
+}
+
+/// A day-count gridline stride sized to a chart's own x-axis span (MVP1-45) — a week's worth of
+/// daily bars/points wants a gridline every 7 days, but a year's worth (once the metrics info
+/// sheet's period picker can select one) would be unreadable at that same stride. Shared by
+/// `LoadDetailChartView` and `FitnessTrendDetailChartView` so the two don't pick this differently.
+enum ChartAxisStride {
+    static func days(for domain: ClosedRange<Date>) -> Int {
+        let spanDays = Int(domain.upperBound.timeIntervalSince(domain.lowerBound) / 86400)
+        switch spanDays {
+        case ..<35: return 7
+        case ..<120: return 14
+        case ..<220: return 30
+        default: return 60
+        }
     }
 }
 
@@ -210,10 +226,24 @@ struct FitnessTrendDetailChartView: View {
         .chartXScale(domain: dayDomain)
         .chartYScale(domain: yDomain)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+            AxisMarks(values: .stride(by: .day, count: ChartAxisStride.days(for: dayDomain))) { _ in
                 AxisGridLine()
                 AxisTick()
                 AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+            }
+        }
+        .chartYAxis {
+            // Form's gridlines/labels sit at the zone boundaries, not an arbitrary evenly-spaced
+            // stride -- matching `FitnessChartView`'s own Form chart, since the boundaries are the
+            // one thing worth reading off this axis when zone bands are shown at all. Fitness/
+            // Fatigue have no such reference, so they keep the default automatic axis.
+            if emphasized == .form {
+                AxisMarks(position: .trailing, values: TSBZoneBand.boundaries) { _ in
+                    AxisGridLine()
+                    AxisValueLabel()
+                }
+            } else {
+                AxisMarks(position: .trailing)
             }
         }
         .chartLegend(.hidden)

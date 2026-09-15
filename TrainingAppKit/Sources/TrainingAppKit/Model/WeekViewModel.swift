@@ -590,6 +590,22 @@ public final class WeekViewModel {
         await refreshWeekCachesIfNeeded()
     }
 
+    /// `model.metrics` restricted to `range`, in day order — for the metrics info sheet's period
+    /// picker (MVP1-45), which can ask for a window (e.g. a year) wider than the 3-week default
+    /// `chartMetrics(for:)` already has loaded. Loads the *union* of `range` and the currently
+    /// loaded window before reading, never just `range` alone — `TrainingModel.load(in:)` replaces
+    /// `model.activities`/`plans`/`metrics` outright rather than merging into them, so loading a
+    /// shifted range on its own would silently drop data `WeekView`'s own day list still needs
+    /// until the next natural navigation reloads it. The union is a strict superset of both, so
+    /// nothing the main view relies on is ever lost by calling this.
+    public func metrics(in range: ClosedRange<Date>, asOf today: Date = .now) async -> [FitnessMetrics] {
+        let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
+        let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
+        try? await model.load(in: unionRange, asOf: today)
+        await refreshWeekCachesIfNeeded()
+        return model.metrics.filter { range.contains($0.day) }.sorted { $0.day < $1.day }
+    }
+
     /// Runs a pull-to-refresh import via `refresher`. `TrainingModel.importActivities(from:)`
     /// already reloads `activities` and recomputes `metrics` for whatever range was last loaded
     /// (``chartRange``, assuming ``load(asOf:)`` already ran once for it), so nothing further is

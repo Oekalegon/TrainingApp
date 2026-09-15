@@ -37,6 +37,10 @@ public struct WeekView: View {
     /// set together in one action: setting those three separately let `.sheet(isPresented:)` build
     /// its content from a still-stale kind/day the first time it presented in a session.
     @State private var metricsInfoPresentation: MetricsInfoPresentation?
+    /// The metrics info sheet's own selected chart period (MVP1-45) — owned here, not by
+    /// `FitnessMetricsInfoView`/`MetricDetailView`, so it's retained across separate sheets: tap
+    /// Load, pick "Month", dismiss, tap Fitness, and it's still "Month" rather than resetting.
+    @State private var metricsChartPeriod: ChartPeriod = .week
     /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
     /// the sheet opens, so the picker starts near whatever week is currently on screen.
     @State private var pickedDate = Date()
@@ -227,7 +231,12 @@ public struct WeekView: View {
                 datePickerSheet
             }
             .sheet(item: $metricsInfoPresentation) { presentation in
-                FitnessMetricsInfoView(kind: presentation.kind, chartContext: chartContext(for: presentation))
+                FitnessMetricsInfoView(
+                    kind: presentation.kind,
+                    chartContext: chartContext(for: presentation),
+                    period: $metricsChartPeriod,
+                    metricsProvider: { range in await viewModel.metrics(in: range) }
+                )
             }
             // Opens `pendingOverlapActivity`'s own detail sheet only once this one has actually
             // finished dismissing — see that property's own doc comment for why this two-step
