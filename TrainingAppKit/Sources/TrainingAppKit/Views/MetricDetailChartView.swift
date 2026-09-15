@@ -2,7 +2,7 @@ import Charts
 import SwiftUI
 import TrainingCore
 
-/// The Load (TRIMP) metric info sheet's own daily-load chart (MVP1-45) — the same 3-week Daily
+/// The Load (TRIMP) metric detail screen's own daily-load chart (MVP1-45) — the same 3-week Daily
 /// Load data `DailyLoadChartView` plots (so paging between the two agrees), but with `touchedDay`
 /// highlighted in full `.primary` against every other day muted to `.secondary`, rather than only
 /// distinguishing past (actual) from future (projected) bars. `touchedDay` renders from whichever
@@ -49,8 +49,8 @@ struct LoadDetailChartView: View {
 }
 
 /// A day-count gridline stride sized to a chart's own x-axis span (MVP1-45) — a week's worth of
-/// daily bars/points wants a gridline every 7 days, but a year's worth (once the metrics info
-/// sheet's period picker can select one) would be unreadable at that same stride. Shared by
+/// daily bars/points wants a gridline every 7 days, but a year's worth (once the metric detail
+/// screen's period picker selects one) would be unreadable at that same stride. Shared by
 /// `LoadDetailChartView` and `FitnessTrendDetailChartView` so the two don't pick this differently.
 enum ChartAxisStride {
     static func days(for domain: ClosedRange<Date>) -> Int {
@@ -64,7 +64,7 @@ enum ChartAxisStride {
     }
 }
 
-/// The Fitness/Fatigue/Form metric info sheet's own trend chart (MVP1-45) — the same 3-week
+/// The Fitness/Fatigue/Form metric detail screen's own trend chart (MVP1-45) — the same 3-week
 /// CTL/ATL/TSB data `FitnessChartView` plots, but with `emphasized` drawn as a thick `.primary`
 /// line (matching that main chart's own smoothed-line treatment) and the other two subdued to a
 /// thin line in their own muted color (`TrainingMetricKind.color`, at reduced opacity) — plain
@@ -79,7 +79,7 @@ enum ChartAxisStride {
 struct FitnessTrendDetailChartView: View {
     let metrics: [FitnessMetrics]
     /// Which of `.fitness`/`.fatigue`/`.form` to emphasize — `.load` never reaches this view (see
-    /// `FitnessMetricsInfoView`'s own dispatch).
+    /// `MetricDetailView`'s own dispatch).
     let emphasized: TrainingMetricKind
     /// The day whose pill was tapped — marked with a vertical rule, not the whole week it falls
     /// in (unlike the main week graph, which shades a full week band).

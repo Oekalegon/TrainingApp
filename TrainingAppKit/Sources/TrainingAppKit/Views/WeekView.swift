@@ -30,16 +30,18 @@ public struct WeekView: View {
     #endif
     /// Whether the "Select Date" sheet is presented.
     @State private var isShowingDatePicker = false
-    /// The fitness metrics info sheet's own presentation state (MVP1-45), or `nil` while it's
-    /// dismissed — set by tapping a day-list pill (`onSelectMetric` below). A single `Identifiable`
-    /// value driving both presentation and content together (`.sheet(item:)`, same pattern as
-    /// `selectedActivity` below), rather than a separate `Bool` plus `TrainingMetricKind`/`Date`
-    /// set together in one action: setting those three separately let `.sheet(isPresented:)` build
-    /// its content from a still-stale kind/day the first time it presented in a session.
+    /// `MetricDetailView`'s own navigation-push state (MVP1-45), or `nil` while none is pushed —
+    /// set by tapping a day-list pill (`onSelectMetric` below). A single `Hashable`/`Identifiable`
+    /// value driving both the push and its content together (`.navigationDestination(item:)`, same
+    /// pattern `.sheet(item:)` uses for `selectedActivity` below), rather than a separate `Bool`
+    /// plus `TrainingMetricKind`/`Date` set together in one action: setting those three separately
+    /// let the destination builder see a still-stale kind/day the first time it presented in a
+    /// session (the same race `.sheet(isPresented:)` had before `selectedActivity` moved to this
+    /// pattern).
     @State private var metricsInfoPresentation: MetricsInfoPresentation?
-    /// The metrics info sheet's own selected chart period (MVP1-45) — owned here, not by
-    /// `FitnessMetricsInfoView`/`MetricDetailView`, so it's retained across separate sheets: tap
-    /// Load, pick "Month", dismiss, tap Fitness, and it's still "Month" rather than resetting.
+    /// `MetricDetailView`'s own selected chart period (MVP1-45) — owned here, not by
+    /// `MetricDetailView` itself, so it's retained across separate pushes: tap Load, pick "Month",
+    /// go back, tap Fitness, and it's still "Month" rather than resetting.
     @State private var metricsChartPeriod: ChartPeriod = .week
     /// The date picked in the "Select Date" sheet — seeded from `displayedWeekStart` each time
     /// the sheet opens, so the picker starts near whatever week is currently on screen.
@@ -230,8 +232,12 @@ public struct WeekView: View {
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
             }
-            .sheet(item: $metricsInfoPresentation) { presentation in
-                FitnessMetricsInfoView(
+            // A navigation push onto this same `NavigationStack`, not a `.sheet` -- these are
+            // full detail screens (chart + explanation + zone card), not a quick modal glance, so
+            // they get a real back button and push transition like `AthleteView`'s own navigation
+            // would, rather than a dismiss-by-swiping sheet.
+            .navigationDestination(item: $metricsInfoPresentation) { presentation in
+                MetricDetailView(
                     kind: presentation.kind,
                     chartContext: chartContext(for: presentation),
                     period: $metricsChartPeriod,
@@ -644,10 +650,10 @@ public struct WeekView: View {
 }
 
 /// `WeekView.metricsInfoPresentation`'s value (MVP1-45) — which pill was tapped and on which day.
-/// `Identifiable` via a fresh `UUID` per instance (not `kind`/`day` themselves) so tapping the
-/// *same* metric/day twice in a row while the sheet is already showing something else still
-/// counts as a new presentation.
-private struct MetricsInfoPresentation: Identifiable {
+/// `Identifiable`/`Hashable` (the latter for `.navigationDestination(item:)`, which needs it) via a
+/// fresh `UUID` per instance (not `kind`/`day` themselves) so tapping the *same* metric/day twice
+/// in a row while that push is already showing still counts as a new one.
+private struct MetricsInfoPresentation: Identifiable, Hashable {
     let id = UUID()
     let kind: TrainingMetricKind
     let day: Date

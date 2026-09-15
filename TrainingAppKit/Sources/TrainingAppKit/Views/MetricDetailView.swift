@@ -1,8 +1,8 @@
 import SwiftUI
 import TrainingCore
 
-/// What `MetricDetailView`/`FitnessMetricsInfoView` need to draw one metric's own chart and read
-/// its touched day's value (MVP1-45).
+/// What `MetricDetailView` needs to draw one metric's own chart and read its touched day's value
+/// (MVP1-45).
 struct MetricChartContext {
     /// The 3-week window `WeekViewModel.chartMetrics(for:)` returns for the week containing
     /// `touchedDay` — the same data `FitnessChartView`/`DailyLoadChartView` plot for the main week
@@ -31,18 +31,20 @@ private let metricDetailChartCardBackground = Color.white
 private let metricDetailAboutCardBackground = Color(white: 0.97)
 #endif
 
-/// One metric's own detail screen (MVP1-45), Apple Health-style, top to bottom: a period-picker
-/// segmented control first (this is still a sheet, typically opening at `.medium` height, so the
-/// range control needs to be reachable without scrolling past everything else first), then the
-/// metric's own name+abbreviation as a secondary title, the touched day's own value in a large
-/// bold number (with unit, if the metric has one — and, for Form, that day's own TSB zone label at
-/// the same large size right next to the value), the day's own date underneath, that metric's own
-/// trend chart in a plain white band stretching the full width (not a rounded card — the chart
-/// itself keeps its own inset), the touched day's own zone name+explanation card for Form only,
-/// and finally an "About `name`" card — each of those last two a title sitting above a rounded,
-/// grouped-list-style rectangle, not inside it. All in one `ScrollView`, no `List` — a `List`'s
-/// per-row insets and separators don't fit this full-bleed-chart layout, and a plain `ScrollView`
-/// is what a future dashboard screen embedding this same content will want anyway.
+/// One metric's own detail screen (MVP1-45), Apple Health-style: `WeekView` pushes this onto its
+/// own `NavigationStack` (`.navigationDestination(item:)`) when a day-list pill is tapped — a real
+/// back button and push transition, not a dismiss-by-swiping `.sheet`, since this is a full detail
+/// screen (chart + explanation + zone card) rather than a quick modal glance. Top to bottom: a
+/// period-picker segmented control first — reachable immediately, before scrolling past anything
+/// else — then the metric's own name+abbreviation as a secondary title, the touched day's own
+/// value in a large bold number (with unit, if the metric has one — and, for Form, that day's own
+/// TSB zone label at the same large size right next to the value), the day's own date underneath,
+/// that metric's own trend chart in a plain white band stretching the full width (not a rounded
+/// card — the chart itself keeps its own inset), the touched day's own zone name+explanation card
+/// for Form only, and finally an "About `name`" card — each of those last two a title sitting above
+/// a rounded, grouped-list-style rectangle, not inside it. All in one `ScrollView`, no `List` — a
+/// `List`'s per-row insets and separators don't fit this full-bleed-chart layout, and a plain
+/// `ScrollView` is what a future dashboard screen embedding this same content will want anyway.
 ///
 /// A later "Options" section (e.g. jumping to the athlete's own zone settings) would be a further
 /// sibling appended after `aboutSection` in `body`'s `VStack`, below this same scroll content.
@@ -50,8 +52,7 @@ struct MetricDetailView: View {
     let kind: TrainingMetricKind
     let chartContext: MetricChartContext
     /// The selected chart period — owned by `WeekView` (not this view), so it's retained across
-    /// separate metric sheets rather than resetting to `.week` every time a different pill is
-    /// tapped.
+    /// separate pushes rather than resetting to `.week` every time a different pill is tapped.
     @Binding var period: ChartPeriod
     /// Fetches (and, if needed, loads) metrics for an arbitrary range — `WeekViewModel.metrics(in:asOf:)`
     /// in practice. Not called for `.week`, which already has everything it needs in
@@ -148,11 +149,12 @@ struct MetricDetailView: View {
         }
     }
 
-    /// Replaces the sheet's own navigation title (MVP1-45 review: no toolbar/Done button on this
-    /// screen at all) — the same "Form (TSB)" text a `.navigationTitle` would have shown, just
-    /// inline above the value instead. Bigger than `touchedDayText` below it (`.title3` vs.
-    /// `.subheadline`) even though both are secondary-colored, so the hierarchy reads value >
-    /// title > date rather than the date outweighing the title naming what's actually shown.
+    /// Replaces a `.navigationTitle` (MVP1-45 review: no title/toolbar on this screen at all,
+    /// just the automatic back button `.navigationDestination` gives it for free) — the same
+    /// "Form (TSB)" text a title would have shown, just inline above the value instead. Bigger
+    /// than `touchedDayText` below it (`.title3` vs. `.subheadline`) even though both are
+    /// secondary-colored, so the hierarchy reads value > title > date rather than the date
+    /// outweighing the title naming what's actually shown.
     private var kindTitle: some View {
         Text("\(kind.name) (\(kind.abbreviation))")
             .font(.title3.weight(.semibold))
@@ -187,7 +189,7 @@ struct MetricDetailView: View {
     }
 
     /// Full-bleed white band, not a rounded card — see this type's own doc comment. The chart
-    /// keeps its own horizontal/vertical padding so it doesn't sit flush against the sheet's edges
+    /// keeps its own horizontal/vertical padding so it doesn't sit flush against the screen's edges
     /// even though the white fill behind it does.
     private var chartCard: some View {
         detailChart
