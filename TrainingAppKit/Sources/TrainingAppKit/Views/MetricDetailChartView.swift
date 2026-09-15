@@ -66,8 +66,9 @@ enum ChartAxisMarks {
     ///   Monday by default) -- daily bars/points read most naturally against week boundaries at
     ///   this span.
     /// - `.threeMonths`/`.sixMonths`: each visible month's own first day.
-    /// - `.year`: only January, April, July and September of each visible year -- a fixed set of
-    ///   four gridlines per year rather than one per month, which would be unreadable at this span.
+    /// - `.year`: only the four evenly-spaced calendar-quarter starts (January, April, July,
+    ///   October) of each visible year -- a fixed set of four gridlines per year rather than one
+    ///   per month, which would be unreadable at this span.
     static func dates(for period: ChartPeriod, in domain: ClosedRange<Date>, calendar: Calendar) -> [Date] {
         switch period {
         case .week, .month:
@@ -75,7 +76,7 @@ enum ChartAxisMarks {
         case .threeMonths, .sixMonths:
             return boundaries(in: domain, calendar: calendar, component: .month)
         case .year:
-            return yearMonthMarks(in: domain, calendar: calendar, months: [1, 4, 7, 9])
+            return yearMonthMarks(in: domain, calendar: calendar, months: [1, 4, 7, 10])
         }
     }
 

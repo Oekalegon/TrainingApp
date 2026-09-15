@@ -43,14 +43,14 @@ struct ChartAxisMarksTests {
         }
     }
 
-    @Test(".year only puts gridlines on January, April, July and September")
+    @Test(".year only puts gridlines on the four evenly-spaced calendar-quarter starts")
     func yearAlignsToFixedQuarterlyMonths() {
         let domain = date(2025, 11, 1)...date(2026, 12, 1)
 
         let marks = ChartAxisMarks.dates(for: .year, in: domain, calendar: calendar)
 
         #expect(marks == [
-            date(2026, 1, 1), date(2026, 4, 1), date(2026, 7, 1), date(2026, 9, 1),
+            date(2026, 1, 1), date(2026, 4, 1), date(2026, 7, 1), date(2026, 10, 1),
         ])
     }
 

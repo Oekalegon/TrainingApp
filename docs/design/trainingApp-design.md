@@ -134,7 +134,8 @@ remember or restore which tab was last active.
     week, and never just a thin rule line. Gridlines (`ChartAxisMarks`) sit on a calendar boundary
     that matches the picked period, not an arbitrary evenly-spaced day stride: each visible week's
     own start (the athlete's own first weekday) for Week/Month, each visible month's own first day
-    for 3M/6M, and only January/April/July/September for Year (a fixed four gridlines a year,
+    for 3M/6M, and only the four evenly-spaced calendar-quarter starts (January/April/July/October)
+    for Year (a fixed four gridlines a year,
     rather than one per month, which would be unreadable at that span). Past Week/Month, a
     gridline's own label drops the day number ("Sep" rather than "Sep 1", since every 3M/6M/Year
     gridline already lands on the 1st) and gains the year only on a January gridline, so a chart
