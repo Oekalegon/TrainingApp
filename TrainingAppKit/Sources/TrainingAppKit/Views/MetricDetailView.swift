@@ -31,17 +31,18 @@ private let metricDetailChartCardBackground = Color.white
 private let metricDetailAboutCardBackground = Color(white: 0.97)
 #endif
 
-/// One metric's own detail screen (MVP1-45), Apple Health-style, top to bottom: the metric's own
-/// name+abbreviation as a secondary title, the touched day's own value in a large bold number
-/// (with unit, if the metric has one — and, for Form, that day's own TSB zone label at the same
-/// large size right next to the value), the day's own date underneath, a period-picker segmented
-/// control and that metric's own trend chart together in a plain white band stretching the full
-/// width (not a rounded card — the chart itself keeps its own inset), the touched day's own zone
-/// name+explanation card for Form only, and finally an "About `name`" card — each of those last two
-/// a plain title sitting above a rounded, grouped-list-style rectangle, not inside it. All in one
-/// `ScrollView`, no `List` — a `List`'s per-row insets and separators don't fit this
-/// full-bleed-chart layout, and a plain `ScrollView` is what a future dashboard screen embedding
-/// this same content will want anyway.
+/// One metric's own detail screen (MVP1-45), Apple Health-style, top to bottom: a period-picker
+/// segmented control first (this is still a sheet, typically opening at `.medium` height, so the
+/// range control needs to be reachable without scrolling past everything else first), then the
+/// metric's own name+abbreviation as a secondary title, the touched day's own value in a large
+/// bold number (with unit, if the metric has one — and, for Form, that day's own TSB zone label at
+/// the same large size right next to the value), the day's own date underneath, that metric's own
+/// trend chart in a plain white band stretching the full width (not a rounded card — the chart
+/// itself keeps its own inset), the touched day's own zone name+explanation card for Form only,
+/// and finally an "About `name`" card — each of those last two a title sitting above a rounded,
+/// grouped-list-style rectangle, not inside it. All in one `ScrollView`, no `List` — a `List`'s
+/// per-row insets and separators don't fit this full-bleed-chart layout, and a plain `ScrollView`
+/// is what a future dashboard screen embedding this same content will want anyway.
 ///
 /// A later "Options" section (e.g. jumping to the athlete's own zone settings) would be a further
 /// sibling appended after `aboutSection` in `body`'s `VStack`, below this same scroll content.
@@ -123,6 +124,8 @@ struct MetricDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                periodPicker
+                    .padding(.horizontal)
                 VStack(alignment: .leading, spacing: 12) {
                     kindTitle
                     valueHeader
@@ -183,20 +186,15 @@ struct MetricDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Full-bleed white band, not a rounded card — see this type's own doc comment. The period
-    /// picker and chart share this one band, matching Apple Health's own metric detail screens
-    /// (the range control sits atop the chart, inside the same card). Both keep their own
-    /// horizontal/vertical padding so neither sits flush against the sheet's edges even though the
-    /// white fill behind them does.
+    /// Full-bleed white band, not a rounded card — see this type's own doc comment. The chart
+    /// keeps its own horizontal/vertical padding so it doesn't sit flush against the sheet's edges
+    /// even though the white fill behind it does.
     private var chartCard: some View {
-        VStack(spacing: 12) {
-            periodPicker
-            detailChart
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity)
-        .background(metricDetailChartCardBackground)
+        detailChart
+            .padding(.horizontal)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .background(metricDetailChartCardBackground)
     }
 
     private var periodPicker: some View {
@@ -246,7 +244,7 @@ struct MetricDetailView: View {
     private func infoCard(title: String, body: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.headline)
+                .font(.title3.weight(.bold))
             Text(body)
                 .foregroundStyle(.primary)
                 .padding()

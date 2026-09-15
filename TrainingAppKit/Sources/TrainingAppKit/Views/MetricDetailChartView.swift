@@ -253,6 +253,28 @@ struct FitnessTrendDetailChartView: View {
         .chartPlotStyle { plotContent in
             plotContent.clipped()
         }
+        .chartOverlay { proxy in
+            // The zone names, next to the boundary axis labels -- matching `FitnessChartView`'s
+            // own Form chart, so the same zone reads the same way in both places. Only for Form:
+            // Fitness/Fatigue show no zone bands, so there's nothing to name here for them.
+            if emphasized == .form {
+                GeometryReader { geometry in
+                    if let plotFrame = proxy.plotFrame {
+                        let plotArea = geometry[plotFrame]
+                        ForEach(TSBZoneBand.all, id: \.label) { band in
+                            let midValue = (band.lowerBound + band.upperBound) / 2
+                            if let y = proxy.position(forY: midValue) {
+                                Text(band.label)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 70, alignment: .trailing)
+                                    .position(x: plotArea.maxX - 38, y: plotArea.minY + y)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         .frame(height: 200)
     }
 

@@ -112,6 +112,16 @@ remember or restore which tab was last active.
   `NavigationStack` exists for a later "Options" section to push into. One `ScrollView` (not a
   `List` — a full-bleed chart and card-style sections don't fit `List`'s row insets/separators),
   top to bottom:
+  - A period-picker segmented control (`ChartPeriod`: W/M/3M/6M/Y) first, above everything else —
+    this is still a sheet, typically opening at `.medium` height, so the range control needs to be
+    reachable without scrolling past the title/value/chart first. Owned by `WeekView`
+    (`WeekViewModel`-adjacent `@State`), not this view, and passed down as a `Binding` — so it's
+    retained across separate metric sheets: pick "Month" on Load, dismiss, tap Fitness, and it's
+    still "Month". Picking anything past the default `.week` fetches a wider window via
+    `WeekViewModel.metrics(in:asOf:)`, which unions the requested range with whatever's already
+    loaded before calling `TrainingModel.load(in:)` — that call replaces `activities`/`plans`/
+    `metrics` outright rather than merging into them, so requesting a shifted range on its own
+    would silently drop data the day list still needs until the next natural navigation reload.
   - The metric's own name+abbreviation (`"Form (TSB)"`) as a `.title3` secondary title — what a
     `.navigationTitle` would otherwise have shown, sized bigger than the date line below it (a
     `.subheadline`) even though both are secondary-colored, so the hierarchy reads value > title >
@@ -120,22 +130,12 @@ remember or restore which tab was last active.
     (`TrainingMetricKind.unit`; only Load's TRIMP does) — and, for Form only, that day's own TSB
     zone label (`TSBZone.label`) at that same large size right next to the value, naming the zone
     being as central to reading Form as the number itself. The day's own date sits underneath.
-  - A period-picker segmented control (`ChartPeriod`: W/M/3M/6M/Y) and that metric's own chart,
-    together in a plain white band stretching the sheet's full width — not a rounded card; only the
-    picker/chart's own content keeps an inset, not the white fill behind them (matching Apple
-    Health's own metric screens, where the same range control sits atop the chart in one card). The
-    picker is owned by `WeekView` (`WeekViewModel`-adjacent `@State`), not this view, and passed
-    down as a `Binding` — so it's retained across separate metric sheets: pick "Month" on Load,
-    dismiss, tap Fitness, and it's still "Month". Picking anything past the default `.week` fetches
-    a wider window via `WeekViewModel.metrics(in:asOf:)`, which unions the requested range with
-    whatever's already loaded before calling `TrainingModel.load(in:)` — that call replaces
-    `activities`/`plans`/`metrics` outright rather than merging into them, so requesting a shifted
-    range on its own would silently drop data the day list still needs until the next natural
-    navigation reload. The chart marks the tapped *day* with a background band, the same
-    `Color.primary.opacity(0.1)` treatment the main week graph's own week-highlight band uses, just
-    narrowed to one day — never the whole week, and never just a thin rule line. Gridline spacing
-    (`ChartAxisStride`) widens for a longer period so a year of days doesn't draw a gridline every
-    week:
+  - That metric's own chart, in a plain white band stretching the sheet's full width — not a
+    rounded card; only the chart's own content keeps an inset, not the white fill behind it. Marks
+    the tapped *day* with a background band, the same `Color.primary.opacity(0.1)` treatment the
+    main week graph's own week-highlight band uses, just narrowed to one day — never the whole
+    week, and never just a thin rule line. Gridline spacing (`ChartAxisStride`) widens for a longer
+    period so a year of days doesn't draw a gridline every week:
     - **Load**: `LoadDetailChartView` — the same Daily Load bars `DailyLoadChartView` plots for the
       main graph, with the tapped day's own bar drawn in full `.primary` against every other day
       muted to `.secondary` — that bar's own fill is the day mark, so there's no separate highlight
@@ -151,20 +151,23 @@ remember or restore which tab was last active.
       rather than bleeding into the surrounding frame. Form is the one exception: it keeps
       `TSBZoneBand`'s fixed domain instead (already sized to a realistic TSB range, matching the
       main week graph's own) because it's also the only case that shades `TSBZoneBand`'s zone
-      bands behind the lines and gridlines/labels at their boundaries (`TSBZoneBand.boundaries`,
-      matching `FitnessChartView`'s own Form axis) — CTL/ATL never show zone shading or that axis
-      treatment, since those thresholds are specific to TSB.
+      bands behind the lines, names each zone directly on the chart (`.chartOverlay`) and shows
+      gridlines/labels at their boundaries (`TSBZoneBand.boundaries`) — all three matching
+      `FitnessChartView`'s own Form chart exactly, so the same zone reads the same way in both
+      places. CTL/ATL never show any of that, since those thresholds are specific to TSB.
   - For Form only: the tapped day's own TSB zone name+explanation (`TSBZone.label`/`.explanation`,
-    the latter condensed from `TrainingCore`'s own doc comments) — a plain title (the zone's own
-    name, e.g. "Training") sitting above a rounded, grouped-list-style card, the same "title above,
-    not inside" treatment the "About" section below it uses. No "Currently: …" label, since the
-    zone's name already sits next to the value above too.
-  - An "About `name`" title sitting above a rounded, grouped-list-style card (not inside it) —
-    matching how a grouped `List` section's own header reads, without actually using a `List` —
-    containing just a plain-language paragraph (`TrainingMetricKind.explanation`). Both this card's
-    and the zone card's own body text is `.primary`, not `.secondary` — this is the screen's actual
-    explanatory content, not a caption. A later "Options" section (e.g. jumping to the athlete's
-    own zone settings) would be a further card appended below this one.
+    the latter condensed from `TrainingCore`'s own doc comments) — a `.title3`-weight-`.bold` title
+    (the zone's own name, e.g. "Training", matching the "About" section's own title size below it)
+    sitting above a rounded, grouped-list-style card, the same "title above, not inside" treatment
+    the "About" section uses. No "Currently: …" label, since the zone's name already sits next to
+    the value above too.
+  - An "About `name`" title (same `.title3`-weight-`.bold` size as the zone card's own title above
+    it) sitting above a rounded, grouped-list-style card (not inside it) — matching how a grouped
+    `List` section's own header reads, without actually using a `List` — containing just a
+    plain-language paragraph (`TrainingMetricKind.explanation`). Both this card's and the zone
+    card's own body text is `.primary`, not `.secondary` — this is the screen's actual explanatory
+    content, not a caption. A later "Options" section (e.g. jumping to the athlete's own zone
+    settings) would be a further card appended below this one.
 - A pinned stats bar (MVP1-52) sits between the chart and the day list: a swipeable per-sport
   pager (main sport first) showing that sport's Distance/Time/Load for the displayed week, each
   with its percentage change vs. the previous week, plus "LIT" ("Low Intensity Training", MVP1-48)
