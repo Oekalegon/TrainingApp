@@ -937,6 +937,54 @@ struct WeekViewModelTests {
         #expect(viewModel.athleteViewModel.athlete.timeZone.identifier == "Europe/Amsterdam")
     }
 
+    @Test("metrics(in:asOf:) returns metrics restricted to the requested range, even far outside the default window")
+    func metricsInRangeFiltersToThatRange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let farPastDay = calendar.date(byAdding: .day, value: -200, to: viewModel.displayedWeekStart)!
+        // `perceivedExertion` so `DailyLoadSeries` can actually score this activity -- an
+        // unscorable one (no heart rate, no RPE) contributes no day to the series at all, which
+        // would make this test pass or fail for the wrong reason entirely.
+        let activity = Activity(
+            source: .manual, sport: .running, start: farPastDay, duration: 1800, perceivedExertion: 5
+        )
+        try await store.upsert([activity])
+
+        let rangeStart = calendar.date(byAdding: .day, value: -210, to: viewModel.displayedWeekStart)!
+        let metrics = await viewModel.metrics(in: rangeStart...viewModel.displayedWeekStart, asOf: day(0))
+
+        #expect(metrics.contains { calendar.isDate($0.day, inSameDayAs: farPastDay) })
+    }
+
+    @Test("metrics(in:asOf:) doesn't drop data the currently displayed week still needs")
+    func metricsInRangeDoesNotClobberCurrentWeek() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let currentWeekActivity = Activity(
+            source: .manual, sport: .running, start: viewModel.displayedWeekStart, duration: 1800
+        )
+        try await store.upsert([currentWeekActivity])
+        await viewModel.load(asOf: day(0))
+        #expect(viewModel.activities(on: viewModel.displayedWeekStart).map(\.id) == [currentWeekActivity.id])
+
+        // A far-past, unrelated range -- TrainingModel.load(in:) replaces activities/plans/metrics
+        // outright, so this must be unioned with the already-loaded window rather than requested
+        // on its own, or the current week's own activity would disappear from the model.
+        let farPastStart = calendar.date(byAdding: .day, value: -400, to: viewModel.displayedWeekStart)!
+        let farPastEnd = calendar.date(byAdding: .day, value: -370, to: viewModel.displayedWeekStart)!
+        _ = await viewModel.metrics(in: farPastStart...farPastEnd, asOf: day(0))
+
+        #expect(viewModel.activities(on: viewModel.displayedWeekStart).map(\.id) == [currentWeekActivity.id])
+    }
+
     @Test("load(asOf:) loads chartRange (3 weeks), not just the displayed week")
     func loadFetchesChartRangeIntoModel() async throws {
         let (store, stores) = makeStores()

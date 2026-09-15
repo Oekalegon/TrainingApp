@@ -103,7 +103,84 @@ remember or restore which tab was last active.
   compact icon+value pills, trailing-aligned, one icon per metric matching the chart legend above
   (MVP1-40). A day with no completed activities shows only the Form pill — Load/Fitness/Fatigue
   describe that day's training input, which has nothing to say on a day nothing happened, while
-  Form is a trend that still moves whether or not the athlete trained that day.
+  Form is a trend that still moves whether or not the athlete trained that day. Tapping any pill
+  (MVP1-45) pushes `MetricDetailView` onto the week view's own `NavigationStack`
+  (`.navigationDestination(item:)`) — a real back button and push transition, not a
+  dismiss-by-swiping `.sheet`, since this is a full detail screen (chart + explanation + zone
+  card) rather than a quick modal glance. `.navigationTitle` names the metric (e.g. "Form (TSB)")
+  in the nav bar itself, so the scroll content below doesn't repeat it. Factored out as its own
+  reusable view (no dependency on being presented any particular way) since a later dashboard
+  screen will likely embed the same content directly. One `ScrollView` (not a `List` — a
+  full-bleed chart and card-style sections don't fit `List`'s row insets/separators), top to
+  bottom:
+  - A period-picker segmented control (`ChartPeriod`: W/M/3M/6M/Y) first, above everything else —
+    reachable immediately, without scrolling past the value/chart first. Owned by `WeekView`
+    (`WeekViewModel`-adjacent `@State`), not this view, and passed down as a `Binding` — so it's
+    retained across separate pushes: pick "Month" on Load, go back, tap Fitness, and it's
+    still "Month". Picking anything past the default `.week` fetches a wider window via
+    `WeekViewModel.metrics(in:asOf:)`, which unions the requested range with whatever's already
+    loaded before calling `TrainingModel.load(in:)` — that call replaces `activities`/`plans`/
+    `metrics` outright rather than merging into them, so requesting a shifted range on its own
+    would silently drop data the day list still needs until the next natural navigation reload.
+  - The tapped day's own value in a large bold number — and, for Form only, that day's own TSB
+    zone label (`TSBZone.label`) at that same large size right next to the value, naming the zone
+    being as central to reading Form as the number itself. No separate unit is shown: TRIMP is
+    Load's abbreviation, not a unit, and the nav title already names it. The day's own full date
+    (weekday, full month name, and year, e.g. "Tuesday, September 15, 2026") sits underneath.
+  - That metric's own chart, in a plain white band stretching the screen's full width — not a
+    rounded card; only the chart's own content keeps an inset, not the white fill behind it. Marks
+    the tapped *day* with a background band, the same `Color.primary.opacity(0.1)` treatment the
+    main week graph's own week-highlight band uses, just narrowed to one day — never the whole
+    week, and never just a thin rule line. Gridlines (`ChartAxisMarks`) sit on a calendar boundary
+    that matches the picked period, not an arbitrary evenly-spaced day stride: each visible week's
+    own start (the athlete's own first weekday) for Week/Month, each visible month's own first day
+    for 3M/6M, and only the four evenly-spaced calendar-quarter starts (January/April/July/October)
+    for Year (a fixed four gridlines a year,
+    rather than one per month, which would be unreadable at that span). Past Week/Month, a
+    gridline's own label drops the day number ("Sep" rather than "Sep 1", since every 3M/6M/Year
+    gridline already lands on the 1st) and gains the year only on a January gridline, so a chart
+    spanning a year boundary shows the year exactly once, at the point it actually changes, instead
+    of on every label or not at all. Swipable: a horizontal drag pans
+    the chart's own visible window at (approximately) the finger's own speed — dragging right
+    reveals the past, matching a plain scroll view's "content follows the finger" feel — without
+    moving the tapped day's own value/date/zone header, which stays put regardless of how far the
+    chart itself is panned. `MetricDetailView` always loads a buffer three times as wide as the
+    picked period around the tapped day (`bufferRange(around:)`) so a pan has real room to move
+    before it needs to await `WeekViewModel.metrics(in:asOf:)` again for more; panning clamps at
+    the edge of whatever's currently loaded rather than showing a blank chart beyond it, and
+    tops up the buffer in the background once a pan lands close to that edge:
+    - **Load**: `LoadDetailChartView` — the same Daily Load bars `DailyLoadChartView` plots for the
+      main graph, with the tapped day's own bar drawn in full `.primary` against every other day
+      muted to `.secondary` — that bar's own fill is the day mark, so there's no separate highlight
+      band. Still shows a still-projected day's own estimated TRIMP if that's the day tapped,
+      rather than a blank bar.
+    - **Fitness/Fatigue/Form**: `FitnessTrendDetailChartView` — the same CTL/ATL/TSB data
+      `FitnessChartView` plots, with the tapped metric drawn as a thick `.primary` line (matching
+      that main chart's own smoothed-line treatment) and the other two subdued to a thin line in
+      their own muted color (`TrainingMetricKind.color`, reduced opacity — plain `.secondary` for
+      both left them indistinguishable from each other), plus a manual legend naming all three (not
+      `.chartLegend`, for the same reason). The y-domain fits the *tapped* metric's own value
+      range; the other two may run outside it and are clipped to the plot area (`.chartPlotStyle`)
+      rather than bleeding into the surrounding frame. Form is the one exception: it keeps
+      `TSBZoneBand`'s fixed domain instead (already sized to a realistic TSB range, matching the
+      main week graph's own) because it's also the only case that shades `TSBZoneBand`'s zone
+      bands behind the lines, names each zone directly on the chart (`.chartOverlay`) and shows
+      gridlines/labels at their boundaries (`TSBZoneBand.boundaries`) — all three matching
+      `FitnessChartView`'s own Form chart exactly, so the same zone reads the same way in both
+      places. CTL/ATL never show any of that, since those thresholds are specific to TSB.
+  - For Form only: the tapped day's own TSB zone name+explanation (`TSBZone.label`/`.explanation`,
+    the latter condensed from `TrainingCore`'s own doc comments) — a `.title3`-weight-`.bold` title
+    (the zone's own name, e.g. "Training", matching the "About" section's own title size below it)
+    sitting above a rounded, grouped-list-style card, the same "title above, not inside" treatment
+    the "About" section uses. No "Currently: …" label, since the zone's name already sits next to
+    the value above too.
+  - An "About `name`" title (same `.title3`-weight-`.bold` size as the zone card's own title above
+    it) sitting above a rounded, grouped-list-style card (not inside it) — matching how a grouped
+    `List` section's own header reads, without actually using a `List` — containing just a
+    plain-language paragraph (`TrainingMetricKind.explanation`). Both this card's and the zone
+    card's own body text is `.primary`, not `.secondary` — this is the screen's actual explanatory
+    content, not a caption. A later "Options" section (e.g. jumping to the athlete's own zone
+    settings) would be a further card appended below this one.
 - A pinned stats bar (MVP1-52) sits between the chart and the day list: a swipeable per-sport
   pager (main sport first) showing that sport's Distance/Time/Load for the displayed week, each
   with its percentage change vs. the previous week, plus "LIT" ("Low Intensity Training", MVP1-48)
@@ -139,7 +216,9 @@ remember or restore which tab was last active.
   reloads the day list). Both the chart and the day list scroll together — the displayed week is
   one piece of state, not two.
 - **Toolbar**: "Today" button resets the displayed week to the current calendar week; "Select
-  Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date.
+  Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date. No
+  separate "explain the metrics" entry point — that's reachable only per-metric, by tapping its
+  own pill in the day list (see above).
 - **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
