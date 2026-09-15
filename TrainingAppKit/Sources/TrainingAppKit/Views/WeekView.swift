@@ -301,22 +301,24 @@ public struct WeekView: View {
         )
     }
 
-    /// Opens the info screen for whichever graph-panel page (MVP1-60) was tapped: page 0 (Daily
-    /// load) and page 1 (Form) reuse `MetricDetailView` — the same screen a day-list pill tap opens
-    /// — with a `.week` subject covering the *displayed* week (`viewModel.displayedWeekStart`): the
-    /// graph panel is only ever tappable on the current page (`GraphPanelPagerView.onTapPage`,
-    /// wired only where `isCurrentPage` is true in `graphPanel(weekStart:isCurrentPage:)`), and the
-    /// current page's own `weekStart` always equals `displayedWeekStart` anyway. Page 2 (Time in
-    /// Zone) has no per-metric equivalent to reuse — `HeartRateZoneDetailView` is its own,
-    /// separately-pushed screen (see `isShowingHeartRateZoneInfo`'s own doc comment).
-    private func showGraphInfo(forPage pageIndex: Int) {
+    /// Opens the info screen for whichever graph-panel page (MVP1-60) was tapped: `.dailyLoad` and
+    /// `.form` reuse `MetricDetailView` — the same screen a day-list pill tap opens — with a
+    /// `.week` subject covering the *displayed* week (`viewModel.displayedWeekStart`): the graph
+    /// panel is only ever tappable on the current page (`GraphPanelPagerView.onTapPage`, wired only
+    /// where `isCurrentPage` is true in `graphPanel(weekStart:isCurrentPage:)`), and the current
+    /// page's own `weekStart` always equals `displayedWeekStart` anyway. `.timeInZone` has no
+    /// per-metric equivalent to reuse — `HeartRateZoneDetailView` is its own, separately-pushed
+    /// screen (see `isShowingHeartRateZoneInfo`'s own doc comment). Switches over `GraphPanelPage`
+    /// exhaustively, not a raw page index, so adding a fourth page is a compiler error here until
+    /// this is taught what it opens, rather than a silent fall-through to the wrong screen.
+    private func showGraphInfo(for page: GraphPanelPage) {
         let weekRange = viewModel.displayedWeekRange(for: viewModel.displayedWeekStart)
-        switch pageIndex {
-        case 0:
+        switch page {
+        case .dailyLoad:
             metricsInfoPresentation = MetricsInfoPresentation(kind: .load, subject: .week(weekRange))
-        case 1:
+        case .form:
             metricsInfoPresentation = MetricsInfoPresentation(kind: .form, subject: .week(weekRange))
-        default:
+        case .timeInZone:
             isShowingHeartRateZoneInfo = true
         }
     }
@@ -502,7 +504,7 @@ public struct WeekView: View {
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 },
-                onTapPage: { pageIndex in showGraphInfo(forPage: pageIndex) }
+                onTapPage: { page in showGraphInfo(for: page) }
             )
         } else {
             GraphPanelStaticPreview(

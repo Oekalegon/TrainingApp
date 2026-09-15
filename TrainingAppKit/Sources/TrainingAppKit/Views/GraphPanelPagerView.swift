@@ -18,12 +18,16 @@ struct GraphPanelPagerView: View {
     /// scroll-triggered recycle (see `selectedIndex`'s own doc comment for why this is a one-way
     /// callback rather than a `@Binding`).
     let onSelectedIndexChange: (Int) -> Void
-    /// Called with the currently-visible page's own index on a plain tap anywhere on the panel
-    /// (MVP1-60) — `WeekView` pushes that page's own info screen. A separate `.onTapGesture`, not
-    /// folded into the drag gesture above: `DragGesture(minimumDistance: 10)` never fires at all for
-    /// a touch that lifts before crossing that distance, so a tap and a page-changing drag are
-    /// already mutually exclusive gestures rather than needing to be disambiguated by hand.
-    let onTapPage: (Int) -> Void
+    /// Called with the currently-visible page on a plain tap anywhere on the panel (MVP1-60) — or
+    /// on VoiceOver's own default activation, see the explicit `.accessibilityAction` below —
+    /// `WeekView` pushes that page's own info screen. A separate `.onTapGesture`, not folded into
+    /// the drag gesture above: `DragGesture(minimumDistance: 10)` never fires at all for a touch
+    /// that lifts before crossing that distance, so a tap and a page-changing drag are already
+    /// mutually exclusive gestures rather than needing to be disambiguated by hand. Takes
+    /// `GraphPanelPage`, not a raw `Int`, so `WeekView`'s own mapping from page to metric can switch
+    /// over it exhaustively instead of matching a magic number that could silently drift from this
+    /// view's own page order.
+    let onTapPage: (GraphPanelPage) -> Void
 
     /// Local `@State`, seeded from `initialSelectedIndex` at init — not a `@Binding` to a value
     /// `WeekView` owns, even though the selection does need to survive this view being torn down
@@ -44,7 +48,7 @@ struct GraphPanelPagerView: View {
     @State private var dragOffset: CGFloat = 0
 
     /// Shared with `GraphPanelStaticPreview`'s own page dots, so the two stay in visual lockstep.
-    static let pageCount = 3
+    static let pageCount = GraphPanelPage.allCases.count
     private static let commitThreshold: CGFloat = 0.3
     private static let pageChangeAnimation: Animation = .easeInOut(duration: 0.25)
     /// Tall enough for the tallest page's chart (172pt) plus its legend row and spacing —
@@ -60,7 +64,7 @@ struct GraphPanelPagerView: View {
         heartRateHistogram: HeartRateHistogram,
         initialSelectedIndex: Int,
         onSelectedIndexChange: @escaping (Int) -> Void,
-        onTapPage: @escaping (Int) -> Void
+        onTapPage: @escaping (GraphPanelPage) -> Void
     ) {
         self.metrics = metrics
         self.displayedWeekRange = displayedWeekRange
@@ -95,7 +99,7 @@ struct GraphPanelPagerView: View {
                 .offset(x: -CGFloat(selectedIndex) * pageWidth + dragOffset)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    onTapPage(selectedIndex)
+                    tapCurrentPage()
                 }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 10)
@@ -152,6 +156,19 @@ struct GraphPanelPagerView: View {
                 break
             }
         }
+        // Explicit, not left to whatever default activation `.onTapGesture` above might otherwise
+        // synthesize for this element -- `.accessibilityAdjustableAction` above already gives this
+        // combined element the adjustable trait, and nothing here guarantees VoiceOver's own
+        // double-tap-to-activate still maps to `onTapPage` once that trait's in play. This makes
+        // "activate" do the same thing the plain tap does regardless.
+        .accessibilityAction(.default) {
+            tapCurrentPage()
+        }
+    }
+
+    private func tapCurrentPage() {
+        guard let page = GraphPanelPage(rawValue: selectedIndex) else { return }
+        onTapPage(page)
     }
 }
 

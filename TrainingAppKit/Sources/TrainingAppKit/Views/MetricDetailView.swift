@@ -156,18 +156,10 @@ struct MetricDetailView: View {
 
     /// `chartContext.subject`'s own metrics points — the single day's point for a `.day` subject
     /// (`nil`/empty if that day isn't in `displayedMetrics` yet), or every point inside a `.week`
-    /// subject's own range (used to average, below).
+    /// subject's own range (used to average, below). See `MetricDetailSubject.metrics(in:calendar:)`
+    /// for the actual day/week-matching logic (and why it's there, not here).
     private var subjectMetrics: [FitnessMetrics] {
-        switch chartContext.subject {
-        case .day(let day):
-            return displayedMetrics.filter { chartContext.calendar.isDate($0.day, inSameDayAs: day) }
-        case .week(let range):
-            // A half-open comparison, not `range.contains(_:)` -- `range` itself
-            // (`WeekViewModel.displayedWeekRange(for:)`) is `weekStart...weekStart+7days`, so a
-            // `ClosedRange`'s inclusive upper bound would wrongly pull in the *next* week's own
-            // point for whichever day happens to land exactly on that boundary.
-            return displayedMetrics.filter { $0.day >= range.lowerBound && $0.day < range.upperBound }
-        }
+        chartContext.subject.metrics(in: displayedMetrics, calendar: chartContext.calendar)
     }
 
     private func value(for kind: TrainingMetricKind, in metrics: FitnessMetrics) -> Double {
@@ -206,24 +198,7 @@ struct MetricDetailView: View {
     }
 
     private var subjectDateText: String {
-        switch chartContext.subject {
-        case .day(let day):
-            var format = Date.FormatStyle.dateTime.weekday(.wide).month(.wide).day().year()
-            format.calendar = chartContext.calendar
-            format.timeZone = chartContext.calendar.timeZone
-            return day.formatted(format)
-        case .week(let range):
-            // The week's own last actual day (`range.upperBound` is the *next* week's start -- see
-            // `subjectMetrics`'s own doc comment) through a full "weekday, month day, year" format
-            // would repeat the year twice for a week that doesn't cross one -- a plain "Sep 14 – Sep
-            // 20, 2026" range reads better here than either duplicating or omitting it conditionally.
-            var format = Date.FormatStyle.dateTime.month(.abbreviated).day()
-            format.calendar = chartContext.calendar
-            format.timeZone = chartContext.calendar.timeZone
-            let yearFormat = format.year()
-            let lastDay = chartContext.calendar.date(byAdding: .day, value: -1, to: range.upperBound) ?? range.lowerBound
-            return "\(range.lowerBound.formatted(format)) – \(lastDay.formatted(yearFormat))"
-        }
+        chartContext.subject.dateText(calendar: chartContext.calendar)
     }
 
     /// `subjectValue`'s own TSB zone, for Form only — `nil` for every other kind, and for Form
