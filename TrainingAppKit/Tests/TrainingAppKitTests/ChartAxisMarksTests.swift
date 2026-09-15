@@ -4,10 +4,13 @@ import Testing
 
 @Suite("ChartAxisMarks")
 struct ChartAxisMarksTests {
-    /// Monday-start ISO calendar, matching this app's typical athlete default.
+    /// Monday-start UTC calendar, matching this app's typical athlete default -- same construction
+    /// `WeekViewModelTests` uses elsewhere, so a reader doesn't have to reconcile two different ways
+    /// of building "the same" test calendar.
     private var calendar: Calendar {
-        var calendar = Calendar(identifier: .iso8601)
+        var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
+        calendar.firstWeekday = 2
         return calendar
     }
 
