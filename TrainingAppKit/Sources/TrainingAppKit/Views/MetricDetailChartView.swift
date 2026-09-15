@@ -45,10 +45,12 @@ struct LoadDetailChartView: View {
         }
         .chartXScale(domain: dayDomain)
         .chartXAxis {
-            AxisMarks(values: ChartAxisMarks.dates(for: period, in: dayDomain, calendar: calendar)) { _ in
+            AxisMarks(values: ChartAxisMarks.dates(for: period, in: dayDomain, calendar: calendar)) { value in
                 AxisGridLine()
                 AxisTick()
-                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                if let date = value.as(Date.self) {
+                    AxisValueLabel(ChartAxisMarks.labelText(for: date, period: period, calendar: calendar))
+                }
             }
         }
         .frame(height: 160)
@@ -112,6 +114,34 @@ enum ChartAxisMarks {
             }
         }
         return dates.sorted()
+    }
+
+    /// The text for one gridline's own label — `dates(for:in:calendar:)`'s own dates, formatted to
+    /// match what each period's gridlines actually mean:
+    /// - `.week`/`.month`: "Sep 14" — a week-start is a specific day, so the day number still
+    ///   matters.
+    /// - `.threeMonths`/`.sixMonths`/`.year`: "Sep" — every gridline here is already a month's own
+    ///   first day, so a day number would just repeat "1" on every label. The year is appended only
+    ///   for a gridline that's January (the first month of a year), so a chart spanning a year
+    ///   boundary shows it exactly once, at the point the year actually changes.
+    static func labelText(for date: Date, period: ChartPeriod, calendar: Calendar) -> String {
+        switch period {
+        case .week, .month:
+            var format = Date.FormatStyle.dateTime.month(.abbreviated).day()
+            format.calendar = calendar
+            format.timeZone = calendar.timeZone
+            return date.formatted(format)
+        case .threeMonths, .sixMonths, .year:
+            var monthFormat = Date.FormatStyle.dateTime.month(.abbreviated)
+            monthFormat.calendar = calendar
+            monthFormat.timeZone = calendar.timeZone
+            let monthText = date.formatted(monthFormat)
+            guard calendar.component(.month, from: date) == 1 else { return monthText }
+            // Appended as a plain number, not composed into one `Date.FormatStyle` alongside the
+            // month -- a bare month+year skeleton (no day) doesn't reliably order "MMM y" the way a
+            // full date does, so this pins "Jan 2026" rather than risking "2026 Jan".
+            return "\(monthText) \(calendar.component(.year, from: date))"
+        }
     }
 }
 
@@ -287,10 +317,12 @@ struct FitnessTrendDetailChartView: View {
         .chartXScale(domain: visibleRange)
         .chartYScale(domain: yDomain)
         .chartXAxis {
-            AxisMarks(values: ChartAxisMarks.dates(for: period, in: visibleRange, calendar: calendar)) { _ in
+            AxisMarks(values: ChartAxisMarks.dates(for: period, in: visibleRange, calendar: calendar)) { value in
                 AxisGridLine()
                 AxisTick()
-                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                if let date = value.as(Date.self) {
+                    AxisValueLabel(ChartAxisMarks.labelText(for: date, period: period, calendar: calendar))
+                }
             }
         }
         .chartYAxis {

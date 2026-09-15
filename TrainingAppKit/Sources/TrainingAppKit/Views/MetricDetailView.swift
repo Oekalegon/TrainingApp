@@ -180,7 +180,7 @@ struct MetricDetailView: View {
     }
 
     private var touchedDayText: String {
-        var format = Date.FormatStyle.dateTime.weekday(.wide).month(.wide).day()
+        var format = Date.FormatStyle.dateTime.weekday(.wide).month(.wide).day().year()
         format.calendar = chartContext.calendar
         format.timeZone = chartContext.calendar.timeZone
         return chartContext.touchedDay.formatted(format)

@@ -63,4 +63,25 @@ struct ChartAxisMarksTests {
         let yearDomain = date(2026, 2, 1)...date(2026, 3, 1)
         #expect(ChartAxisMarks.dates(for: .year, in: yearDomain, calendar: calendar).isEmpty)
     }
+
+    @Test("labelText(for:period:calendar:) includes the day number for .week/.month, not for 3M/6M/Year")
+    func labelTextOmitsDayNumberPastMonthGranularity() {
+        let weekStart = date(2026, 9, 14)
+
+        #expect(ChartAxisMarks.labelText(for: weekStart, period: .week, calendar: calendar) == "Sep 14")
+        #expect(ChartAxisMarks.labelText(for: weekStart, period: .month, calendar: calendar) == "Sep 14")
+        #expect(ChartAxisMarks.labelText(for: weekStart, period: .threeMonths, calendar: calendar) == "Sep")
+        #expect(ChartAxisMarks.labelText(for: weekStart, period: .sixMonths, calendar: calendar) == "Sep")
+        #expect(ChartAxisMarks.labelText(for: weekStart, period: .year, calendar: calendar) == "Sep")
+    }
+
+    @Test("labelText(for:period:calendar:) appends the year only for a January gridline, past .week/.month")
+    func labelTextAppendsYearOnlyForJanuary() {
+        for period: ChartPeriod in [.threeMonths, .sixMonths, .year] {
+            #expect(ChartAxisMarks.labelText(for: date(2026, 1, 1), period: period, calendar: calendar) == "Jan 2026")
+            #expect(ChartAxisMarks.labelText(for: date(2026, 4, 1), period: period, calendar: calendar) == "Apr")
+        }
+        // .week/.month always carry a day number, never the year, no matter the month.
+        #expect(ChartAxisMarks.labelText(for: date(2026, 1, 5), period: .week, calendar: calendar) == "Jan 5")
+    }
 }
