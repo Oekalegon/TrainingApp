@@ -13,8 +13,8 @@ struct AthleteView: View {
     let isDeduplicating: Bool
     let onDeduplicate: () -> Void
     /// Every activity currently worth reviewing for an overlap issue (MVP1-67), live from
-    /// `WeekViewModel.overlapReviewItems` — backs both ``OverlapWarningBanner`` at the top of this
-    /// screen and the review sheet it opens.
+    /// `WeekViewModel.overlapReviewItems` — backs both ``OverlapWarningBanner`` (shown just below
+    /// the avatar) and the review sheet it opens.
     let overlapReviewItems: [OverlapReviewItem]
     let athleteTimeZone: TimeZone
     let activityDetailViewModel: (Activity) -> ActivityDetailViewModel
@@ -36,6 +36,15 @@ struct AthleteView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    HStack {
+                        Spacer()
+                        AvatarView(initials: viewModel.initials)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
+
                 // Live, not dismissible (MVP1-67) — always visible while any overlap is
                 // outstanding, so it can never go stale the way the old post-import banner could.
                 if !overlapReviewItems.isEmpty {
@@ -45,15 +54,6 @@ struct AthleteView: View {
                         }
                     }
                     .listRowBackground(Color.orange.opacity(0.15))
-                }
-
-                Section {
-                    HStack {
-                        Spacer()
-                        AvatarView(initials: viewModel.initials)
-                        Spacer()
-                    }
-                    .listRowBackground(Color.clear)
                 }
 
                 Section {
