@@ -103,8 +103,13 @@ remember or restore which tab was last active.
   what the graph panel's own "Form" page shows. "Time in zone" has no single-metric equivalent to
   reuse, so it pushes its own `HeartRateZoneDetailView` instead, with the same caption-above-value
   header: "80% Percentile Heart Rate" and that value (Seiler's 80/20 threshold, the same one the
-  panel's own chart marks), the same `HeartRateHistogramChartView` the panel itself shows (just
-  taller) below it, and one card listing all five heart-rate zones with a short explanation each.
+  panel's own chart marks), the same `HeartRateHistogramChartView` the panel itself shows (same
+  172pt height as the panel's own) below it, then two cards (MVP1-77): "Time in Zone" — a second,
+  horizontal-bar-per-zone chart (`HeartRateZoneBarChartView`, one bar per zone showing that zone's
+  share of the week's in-zone time, a hairline for a zone with none) paired with a per-zone
+  description row for each of the five zones — and, below that, "About Heart Rate Zones", a short
+  general paragraph on what heart-rate zones are and why the 80/20 split matters, rather than
+  repeating the same five zones a third time.
 - **Below**: a vertical timeline, one row per day of the displayed week (MVP1-39) — a weekday pill
   ("Wed 9", highlighted for today) linked into the timeline by a connecting line (which continues
   past the last day down to the bottom of the week view, not just the last pill), with that day's

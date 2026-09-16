@@ -13,6 +13,12 @@ extension HeartRateZone {
         }
     }
 
+    /// Short "Z1"-style label — narrow band annotations (`HeartRateHistogramChartView.ZoneBand`)
+    /// and per-bar labels (`HeartRateZoneBarChartView`) both need this same short form rather than
+    /// `displayName`'s full word, and having it live here once keeps the two charts from drifting
+    /// if either changes how it's spelled.
+    var shortLabel: String { "Z\(rawValue)" }
+
     /// A cool-to-hot ramp from easy (blue) to maximal (red) effort, for shading this zone's band
     /// in charts (e.g. `HeartRateHistogramChartView`) — `TrainingCore` has no opinion on colors either.
     var color: Color {
