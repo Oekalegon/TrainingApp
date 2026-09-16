@@ -2,7 +2,7 @@ import SwiftUI
 import TrainingCore
 
 /// One `TSBZone`'s background band for a Form/TSB chart — shared by `FitnessChartView` (the main
-/// week graph's "Form" page) and `FitnessTrendDetailChartView` (the metrics info sheet's own Form
+/// week graph's "Form" page) and `FitnessTrendDetailChartView` (the metrics detail view's own Form
 /// chart, MVP1-45), so the boundaries/colors/labels can't drift between the two places TSB gets
 /// plotted with zone shading.
 struct TSBZoneBand {

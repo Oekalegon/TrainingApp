@@ -575,7 +575,7 @@ public final class WeekViewModel {
         await refreshWeekCachesIfNeeded()
     }
 
-    /// `model.metrics` restricted to `range`, in day order — for the metrics info sheet's period
+    /// `model.metrics` restricted to `range`, in day order — for the metrics detail view's period
     /// picker (MVP1-45), which can ask for a window (e.g. a year) wider than the 3-week default
     /// `chartMetrics(for:)` already has loaded. Loads the *union* of `range` and the currently
     /// loaded window before reading, never just `range` alone — `TrainingModel.load(in:)` replaces
