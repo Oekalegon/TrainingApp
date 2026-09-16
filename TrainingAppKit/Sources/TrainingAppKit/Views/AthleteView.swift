@@ -12,12 +12,41 @@ struct AthleteView: View {
     let onResync: () -> Void
     let isDeduplicating: Bool
     let onDeduplicate: () -> Void
+    /// Every activity currently worth reviewing for an overlap issue (MVP1-67), live from
+    /// `WeekViewModel.overlapReviewItems` — backs both ``OverlapWarningBanner`` at the top of this
+    /// screen and the review sheet it opens.
+    let overlapReviewItems: [OverlapReviewItem]
+    let athleteTimeZone: TimeZone
+    let activityDetailViewModel: (Activity) -> ActivityDetailViewModel
+    let onResolveOverlap: (UUID) async -> Void
+    let onDeleteActivity: (Activity) async -> Void
     @State private var isConfirmingResync = false
     @State private var isConfirmingDeduplicate = false
+    /// Whether the overlap-review sheet (MVP1-67), opened by tapping ``OverlapWarningBanner``, is
+    /// presented.
+    @State private var isShowingOverlapReview = false
+    /// Set by a row tap in the overlap-review sheet, then consumed by that sheet's `onDismiss` to
+    /// open `selectedActivity`'s own detail sheet — chained this way (rather than presenting the
+    /// detail sheet directly from on top of the review sheet) since SwiftUI only reliably supports
+    /// one sheet on a view at a time. Same pattern `WeekView` used before this moved here.
+    @State private var pendingOverlapActivity: Activity?
+    /// The activity currently shown in the detail sheet, or `nil` when none is presented.
+    @State private var selectedActivity: Activity?
 
     var body: some View {
         NavigationStack {
             List {
+                // Live, not dismissible (MVP1-67) — always visible while any overlap is
+                // outstanding, so it can never go stale the way the old post-import banner could.
+                if !overlapReviewItems.isEmpty {
+                    Section {
+                        OverlapWarningBanner(count: overlapReviewItems.count) {
+                            isShowingOverlapReview = true
+                        }
+                    }
+                    .listRowBackground(Color.orange.opacity(0.15))
+                }
+
                 Section {
                     HStack {
                         Spacer()
@@ -133,6 +162,40 @@ struct AthleteView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Permanently removes duplicate activities left over from an older version of the app. This can't be undone.")
+            }
+            .sheet(item: $selectedActivity) { activity in
+                // Its own NavigationStack: a sheet doesn't inherit the presenting view's
+                // navigation bar. Same pattern as WeekView's own activity detail sheet.
+                NavigationStack {
+                    ActivityDetailView(
+                        viewModel: activityDetailViewModel(activity),
+                        onResolveOverlap: { id in await onResolveOverlap(id) },
+                        onDelete: { await onDeleteActivity(activity) }
+                    )
+                }
+            }
+            // Opens `pendingOverlapActivity`'s own detail sheet only once this one has actually
+            // finished dismissing — see that property's own doc comment for why this two-step
+            // handoff, rather than presenting straight from on top of this sheet.
+            .sheet(
+                isPresented: $isShowingOverlapReview,
+                onDismiss: {
+                    if let pendingOverlapActivity {
+                        selectedActivity = pendingOverlapActivity
+                        self.pendingOverlapActivity = nil
+                    }
+                }
+            ) {
+                NavigationStack {
+                    OverlapReviewView(
+                        items: overlapReviewItems,
+                        timeZone: athleteTimeZone,
+                        onSelect: { activity in
+                            pendingOverlapActivity = activity
+                            isShowingOverlapReview = false
+                        }
+                    )
+                }
             }
         }
     }

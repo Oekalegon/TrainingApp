@@ -1,22 +1,22 @@
 import SwiftUI
 import TrainingCore
 
-/// A dismissible banner reporting how many activities an import just found overlap issues among
-/// (MVP1-63) — `WeekView` shows this in a `.safeAreaInset(edge: .bottom)` right after
-/// `refresh(asOf:)`/`connectHealthData(asOf:)`/`resyncActivities(asOf:)` populates
-/// `WeekViewModel.overlapImportSummary`. Deliberately the only overlap surfacing that happens
-/// automatically — the day list's own per-card badge is passive (`DayActivitiesSection`'s
-/// `ActivityCard`), and everything past "here's how many" (which pair, what to do about it) lives
+/// A live count of how many activities currently have an overlap issue worth reviewing (MVP1-67)
+/// — `AthleteView` shows this as the first row of its list, with a warning-color background,
+/// whenever `WeekViewModel.overlapWarningCount` is non-zero. Unlike the one-time post-import
+/// banner this replaced (MVP1-63), there's no dismiss action: the count is always current (it's
+/// backed by the same live `overlapReviewItems`/`overlapWarningsByActivityID` set
+/// `DayActivitiesSection`'s per-card badge reads), so it simply disappears on its own once every
+/// overlap is resolved. Everything past "here's how many" (which pair, what to do about it) lives
 /// behind `onReview`, in the activity detail sheet.
-struct OverlapImportSummaryBanner: View {
-    let summary: OverlapImportSummary
+struct OverlapWarningBanner: View {
+    let count: Int
     let onReview: () -> Void
-    let onDismiss: () -> Void
 
     private var message: String {
-        summary.activityCount == 1
+        count == 1
             ? "1 activity has an overlap to review"
-            : "\(summary.activityCount) activities have overlaps to review"
+            : "\(count) activities have overlaps to review"
     }
 
     var body: some View {
@@ -28,30 +28,16 @@ struct OverlapImportSummaryBanner: View {
                     .font(.subheadline)
                     .foregroundStyle(.primary)
                 Spacer()
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                // Otherwise this inner button's tap is swallowed by the outer one (both would fire
-                // `onReview` instead of just `onDismiss`) — plain `Button`s don't nest their tap
-                // targets like this on their own.
-                .buttonStyle(.plain)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.regularMaterial)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
         }
         .buttonStyle(.plain)
     }
 }
 
-/// The sheet `OverlapImportSummaryBanner`'s tap opens (MVP1-63): every activity worth reviewing
+/// The sheet `OverlapWarningBanner`'s tap opens (MVP1-63): every activity worth reviewing
 /// for an overlap issue, each row tappable to open that activity's own detail sheet — where
 /// `ActivityDetailView`'s "Overlap" section offers the actual resolution actions.
 struct OverlapReviewView: View {

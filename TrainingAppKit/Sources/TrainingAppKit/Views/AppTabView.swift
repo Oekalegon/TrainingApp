@@ -27,11 +27,21 @@ public struct AppTabView: View {
                 isResyncing: viewModel.isResyncing,
                 onResync: { Task { await viewModel.resyncActivities() } },
                 isDeduplicating: viewModel.isDeduplicating,
-                onDeduplicate: { Task { await viewModel.deduplicateActivities() } }
+                onDeduplicate: { Task { await viewModel.deduplicateActivities() } },
+                overlapReviewItems: viewModel.overlapReviewItems,
+                athleteTimeZone: viewModel.athleteTimeZone,
+                activityDetailViewModel: { viewModel.activityDetailViewModel(for: $0) },
+                onResolveOverlap: { await viewModel.resolveOverlap(deleting: $0) },
+                onDeleteActivity: { await viewModel.deleteActivity($0) }
             )
             .tabItem {
                 Label("Athlete", systemImage: "person.circle")
             }
+            // Same live count `OverlapWarningBanner` shows on the Athlete screen itself (MVP1-67)
+            // — both update together whenever an overlap is resolved, since they read the same
+            // `WeekViewModel.overlapReviewItems`. `.badge(0)` hides the badge on its own, so no
+            // extra `nil`-vs-count branch is needed here.
+            .badge(viewModel.overlapReviewItems.count)
         }
     }
 }

@@ -476,15 +476,13 @@ struct WeekViewModelTests {
         #expect(try await store.activity(id: solo.id) == nil)
     }
 
-    @Test(
-        "refresh(asOf:) sets overlapImportSummary from any real overlap, cleared by dismissOverlapImportSummary() (MVP1-63)"
-    )
-    func refreshSetsOverlapImportSummary() async throws {
+    @Test("overlapWarningCount is live: reflects model.overlapAdvice right away, and updates once an overlap is resolved (MVP1-67)")
+    func overlapWarningCountIsLive() async throws {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let a = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
         let b = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
-        // A possibleMultisport pairing -- doesn't count toward the summary.
+        // A possibleMultisport pairing -- doesn't count toward the total.
         let contained = Activity(source: .manual, sport: .swimming, start: day(3), duration: 3600)
         let leg = Activity(source: .manual, sport: .cycling, start: day(3).addingTimeInterval(60), duration: 60)
         try await store.upsert([a, b, contained, leg])
@@ -492,39 +490,21 @@ struct WeekViewModelTests {
         let model = TrainingModel(stores: stores, athlete: athlete)
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
-        #expect(viewModel.overlapImportSummary == nil)
 
+        // No separate "import finished" step needed -- unlike the old `overlapImportSummary`
+        // snapshot, the count reflects `model.overlapAdvice` the moment the data is loaded.
+        #expect(viewModel.overlapWarningCount == 2)
+
+        // ...and stays live across an unrelated refresh (proving it isn't a one-time snapshot
+        // `refresh(asOf:)` alone populates).
         await viewModel.refresh(asOf: day(0))
+        #expect(viewModel.overlapWarningCount == 2)
 
-        #expect(viewModel.overlapImportSummary?.activityCount == 2)
-
-        viewModel.dismissOverlapImportSummary()
-        #expect(viewModel.overlapImportSummary == nil)
-    }
-
-    @Test("connectHealthData(asOf:) and resyncActivities(asOf:) also set overlapImportSummary (MVP1-63)")
-    func connectHealthDataAndResyncAlsoSetOverlapImportSummary() async throws {
-        let (store, stores) = makeStores()
-        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
-        let a = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
-        let b = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
-        try await store.upsert([a, b])
-
-        let connectModel = TrainingModel(stores: stores, athlete: athlete)
-        let connectViewModel = WeekViewModel(model: connectModel, refresher: FakeRefresher(), today: day(0))
-        await connectViewModel.load(asOf: day(0))
-        #expect(connectViewModel.overlapImportSummary == nil)
-        await connectViewModel.connectHealthData(asOf: day(0))
-        #expect(connectViewModel.overlapImportSummary?.activityCount == 2)
-
-        let (resyncStore, resyncStores) = makeStores()
-        try await resyncStore.upsert([a, b])
-        let resyncModel = TrainingModel(stores: resyncStores, athlete: athlete)
-        let resyncViewModel = WeekViewModel(model: resyncModel, refresher: FakeRefresher(), today: day(0))
-        await resyncViewModel.load(asOf: day(0))
-        #expect(resyncViewModel.overlapImportSummary == nil)
-        await resyncViewModel.resyncActivities(asOf: day(0))
-        #expect(resyncViewModel.overlapImportSummary?.activityCount == 2)
+        // Resolving one side of the overlap updates the live count immediately, with no separate
+        // refresh step -- the bug MVP1-67 fixes: the old `overlapImportSummary` snapshot stayed
+        // frozen at 2 here even after this delete.
+        await viewModel.resolveOverlap(deleting: a.id, asOf: day(0))
+        #expect(viewModel.overlapWarningCount == 0)
     }
 
     @Test("sportStatsPages(asOf:) has exactly one, zero-filled page for the main sport when nothing was tracked")
