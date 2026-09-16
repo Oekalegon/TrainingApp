@@ -507,6 +507,32 @@ struct WeekViewModelTests {
         #expect(viewModel.overlapWarningCount == 0)
     }
 
+    @Test("connectHealthData(asOf:) and resyncActivities(asOf:) also surface a live overlapWarningCount (MVP1-67)")
+    func connectHealthDataAndResyncSurfaceLiveOverlapWarningCount() async throws {
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let a = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        let b = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
+        let importer = OverlapProducingImporter(activities: [a, b])
+
+        let (_, connectStores) = makeStores()
+        let connectModel = TrainingModel(stores: connectStores, athlete: athlete)
+        let connectRefresher = ModelBackedFakeRefresher(model: connectModel, importer: importer)
+        let connectViewModel = WeekViewModel(model: connectModel, refresher: connectRefresher, today: day(0))
+        await connectViewModel.load(asOf: day(0))
+        #expect(connectViewModel.overlapWarningCount == 0)
+        await connectViewModel.connectHealthData(asOf: day(0))
+        #expect(connectViewModel.overlapWarningCount == 2)
+
+        let (_, resyncStores) = makeStores()
+        let resyncModel = TrainingModel(stores: resyncStores, athlete: athlete)
+        let resyncRefresher = ModelBackedFakeRefresher(model: resyncModel, importer: importer)
+        let resyncViewModel = WeekViewModel(model: resyncModel, refresher: resyncRefresher, today: day(0))
+        await resyncViewModel.load(asOf: day(0))
+        #expect(resyncViewModel.overlapWarningCount == 0)
+        await resyncViewModel.resyncActivities(asOf: day(0))
+        #expect(resyncViewModel.overlapWarningCount == 2)
+    }
+
     @Test("sportStatsPages(asOf:) has exactly one, zero-filled page for the main sport when nothing was tracked")
     func sportStatsPagesZeroFillsWhenNoActivity() async {
         let model = makeModel()
@@ -1196,17 +1222,19 @@ private final class FakeRefresher: ActivityRefreshing {
 @MainActor
 private final class ModelBackedFakeRefresher: ActivityRefreshing {
     private let model: TrainingModel
+    private let importer: any ActivityImporting
 
-    init(model: TrainingModel) {
+    init(model: TrainingModel, importer: any ActivityImporting = StubImporter()) {
         self.model = model
+        self.importer = importer
     }
 
     func refreshActivities(asOf today: Date) async throws {
-        try await model.importActivities(from: StubImporter(), asOf: today)
+        try await model.importActivities(from: importer, asOf: today)
     }
 
     func resyncActivities(asOf today: Date) async throws {
-        try await model.resyncActivities(from: StubImporter(), asOf: today)
+        try await model.resyncActivities(from: importer, asOf: today)
     }
 
     func requestAuthorization() async throws {}
@@ -1215,5 +1243,16 @@ private final class ModelBackedFakeRefresher: ActivityRefreshing {
 private struct StubImporter: ActivityImporting {
     func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
         ImportResult(upserted: [], deletedSources: [], anchor: ImportAnchor(data: Data([1])))
+    }
+}
+
+/// Unlike `StubImporter`, actually hands back `activities` as freshly "imported" -- lets a test
+/// assert `WeekViewModel.overlapWarningCount` (MVP1-67) is live through `connectHealthData(asOf:)`/
+/// `resyncActivities(asOf:)` specifically, not just `refresh(asOf:)`.
+private struct OverlapProducingImporter: ActivityImporting {
+    let activities: [Activity]
+
+    func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
+        ImportResult(upserted: activities, deletedSources: [], anchor: ImportAnchor(data: Data([1])))
     }
 }

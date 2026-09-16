@@ -16,6 +16,12 @@ public struct AppTabView: View {
     }
 
     public var body: some View {
+        // Read once per render, not once for the badge and again for AthleteView's own copy:
+        // `TrainingModel.overlapAdvice` reruns `ActivityOverlapChecker.findOverlaps(in:)` on every
+        // access (its own doc comment asks SwiftUI `body` callers to cache it), and
+        // `overlapReviewItems` derives from exactly that.
+        let overlapReviewItems = viewModel.overlapReviewItems
+
         TabView {
             WeekView(viewModel: viewModel)
                 .tabItem {
@@ -28,7 +34,7 @@ public struct AppTabView: View {
                 onResync: { Task { await viewModel.resyncActivities() } },
                 isDeduplicating: viewModel.isDeduplicating,
                 onDeduplicate: { Task { await viewModel.deduplicateActivities() } },
-                overlapReviewItems: viewModel.overlapReviewItems,
+                overlapReviewItems: overlapReviewItems,
                 athleteTimeZone: viewModel.athleteTimeZone,
                 activityDetailViewModel: { viewModel.activityDetailViewModel(for: $0) },
                 onResolveOverlap: { await viewModel.resolveOverlap(deleting: $0) },
@@ -41,7 +47,7 @@ public struct AppTabView: View {
             // — both update together whenever an overlap is resolved, since they read the same
             // `WeekViewModel.overlapReviewItems`. `.badge(0)` hides the badge on its own, so no
             // extra `nil`-vs-count branch is needed here.
-            .badge(viewModel.overlapReviewItems.count)
+            .badge(overlapReviewItems.count)
         }
     }
 }

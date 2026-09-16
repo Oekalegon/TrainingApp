@@ -2,7 +2,7 @@ import SwiftUI
 import TrainingCore
 
 /// A live count of how many activities currently have an overlap issue worth reviewing (MVP1-67)
-/// — `AthleteView` shows this as the first row of its list, with a warning-color background,
+/// — `AthleteView` shows this as the row just below the avatar, with a warning-color background,
 /// whenever `WeekViewModel.overlapWarningCount` is non-zero. Unlike the one-time post-import
 /// banner this replaced (MVP1-63), there's no dismiss action: the count is always current (it's
 /// backed by the same live `overlapReviewItems`/`overlapWarningsByActivityID` set
