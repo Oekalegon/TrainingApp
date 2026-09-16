@@ -54,14 +54,6 @@ public final class WeekViewModel {
     /// separate from ``isRefreshing``/``isResyncing`` for the same reason those two are kept
     /// separate from each other.
     public private(set) var isDeduplicating = false
-    /// Set once, right after ``refresh(asOf:)``/``connectHealthData(asOf:)``/``resyncActivities(asOf:)``
-    /// finds any real overlap issue (MVP1-63) — never recomputed on every access the way
-    /// ``overlapWarning(for:)``/``overlapReviewItems`` are, so it reflects "did the import that
-    /// just ran surface anything new to look at", not just "is `model.overlapAdvice` currently
-    /// non-empty". Per Don's refinement on MVP1-63: don't pop a warning per activity as overlaps
-    /// are found during import — aggregate into this one summary instead, shown once and cleared
-    /// by ``dismissOverlapImportSummary()``.
-    public private(set) var overlapImportSummary: OverlapImportSummary?
 
     /// Creates a week view model showing the week containing `today`.
     public init(model: TrainingModel, refresher: any ActivityRefreshing, today: Date = .now) {
@@ -409,21 +401,14 @@ public final class WeekViewModel {
         return items.sorted { $0.activity.start < $1.activity.start }
     }
 
-    /// Dismisses ``overlapImportSummary`` — the banner's own close button, or after the athlete
-    /// opens it to review.
-    public func dismissOverlapImportSummary() {
-        overlapImportSummary = nil
-    }
-
-    /// Recomputes ``overlapImportSummary`` from `model.overlapAdvice` right now — called once at
-    /// the end of an import-shaped action (``refresh(asOf:)``/``connectHealthData(asOf:)``/
-    /// ``resyncActivities(asOf:)``), not on every access, per Don's MVP1-63 refinement: surface one
-    /// aggregate count after the import completes rather than a warning per activity as each is
-    /// found. Counts distinct activities named by a non-``OverlapRecommendation/possibleMultisport``
-    /// pair — the same set ``overlapReviewItems`` lists.
-    private func updateOverlapImportSummary() {
-        let activityCount = overlapReviewItems.count
-        overlapImportSummary = activityCount > 0 ? OverlapImportSummary(activityCount: activityCount) : nil
+    /// How many activities currently have an overlap issue worth reviewing (MVP1-67) — the same
+    /// live count ``overlapReviewItems`` lists, surfaced as a plain `Int` for the Athlete tab's
+    /// warning banner and its tab-bar badge. Always current: unlike the one-time
+    /// `overlapImportSummary` snapshot this replaced, it reflects whatever `model.overlapAdvice`
+    /// says right now, so resolving an overlap (``resolveOverlap(deleting:)``) updates both
+    /// surfaces the moment the delete lands, with no separate "refresh the summary" step needed.
+    public var overlapWarningCount: Int {
+        overlapReviewItems.count
     }
 
     /// Resolves one side of an overlap by deleting it (MVP1-63) — the activity detail sheet's
@@ -615,7 +600,6 @@ public final class WeekViewModel {
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
-        updateOverlapImportSummary()
     }
 
     /// The empty-state "Connect Health data" action (design doc §2.1): requests authorization,
@@ -631,7 +615,6 @@ public final class WeekViewModel {
             return
         }
         await refreshWeekCachesIfNeeded()
-        updateOverlapImportSummary()
     }
 
     /// The athlete screen's "Force Full Resync" action (design doc §2.3): re-imports every
@@ -645,7 +628,6 @@ public final class WeekViewModel {
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
-        updateOverlapImportSummary()
     }
 
     /// The athlete screen's "Deduplicate Activities" action (MVP1-44): removes duplicate

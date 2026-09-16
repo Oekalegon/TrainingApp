@@ -248,13 +248,8 @@ remember or restore which tab was last active.
   when `WeekViewModel.overlapWarning(for:)` finds a real issue (`.duplicate`/`.merge`/`.conflict`
   from `TrainingModel.overlapAdvice`) — `.possibleMultisport` (e.g. a triathlon's separately-logged
   legs) is deliberately not treated as a warning here, since it isn't a problem. Purely passive;
-  resolving it happens in the activity detail sheet (§2.2).
-- **Overlap import summary banner** (MVP1-63): the app's first transient banner/toast — after
-  `refresh`/`connectHealthData`/`resyncActivities` finds any real overlap, a dismissible banner
-  ("N activities have overlaps to review") appears once, docked above the tab bar
-  (`.safeAreaInset(edge: .bottom)`). Deliberately aggregated rather than surfaced per activity as
-  each is found during import. Tapping it opens a review sheet (`OverlapReviewView`) listing every
-  affected activity; tapping a row opens that activity's own detail sheet (§2.2).
+  resolving it happens in the activity detail sheet (§2.2). The aggregate count across every
+  outstanding overlap lives on the Athlete tab instead (§2.3), not here.
 
 ### 2.2 Activity detail
 
@@ -306,6 +301,15 @@ imported biometric data looks right, not to be a settings screen:
   `CNContactStore.unifiedMeContact(withKeys:)`, needs a Contacts permission prompt for something
   that's often unset anyway, and isn't worth that cost in a read-only MVP 1. Revisit only if a
   manual avatar picker gets added alongside real editing later.
+- **Overlap warning** (MVP1-67): a non-dismissible row just below the avatar, with a warning-color
+  background, showing "N activities have overlaps to review" whenever
+  `WeekViewModel.overlapWarningCount` (`overlapReviewItems.count`, the same non-`.possibleMultisport`
+  set §2.1's per-card badge and the summary below both derive from) is non-zero — always current,
+  not a one-time post-import snapshot, so it updates the moment an overlap is resolved from the
+  activity detail sheet (§2.2) just as readily as after a fresh import. Tapping it opens the same
+  review sheet (`OverlapReviewView`) §2.1 used to open from its old banner; tapping a row opens
+  that activity's own detail sheet (§2.2). The same live count is mirrored as a `.badge(_:)` on the
+  Athlete tab's own tab-bar icon (§2.0), so it's visible without switching tabs.
 - Name, biological sex.
 - Current heart-rate zone settings (`athlete.currentHeartRateZoneSettings`): resting HR, max HR,
   lactate threshold HR (if set), zone method — plus a "Zones" table (MVP1-71,
