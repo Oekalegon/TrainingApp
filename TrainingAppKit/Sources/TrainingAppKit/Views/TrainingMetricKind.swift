@@ -78,9 +78,10 @@ enum TrainingMetricKind: CaseIterable {
                 """
         case .fitness:
             return """
-                A slow, 42-day rolling average of Load. It builds gradually with consistent \
-                training and fades just as gradually when training drops off, tracking your \
-                underlying aerobic fitness.
+                A slow-moving average of Load, tracking your underlying aerobic fitness, think \
+                of it as your battery's capacity, while Fatigue is more like how drained it is. \
+                Fitness builds gradually with consistent training and fades much more slowly \
+                than Fatigue, about six times slower, so a single easy week barely dents it.
                 """
         case .fatigue:
             return """
