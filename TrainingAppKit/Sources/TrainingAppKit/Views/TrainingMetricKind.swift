@@ -67,8 +67,13 @@ enum TrainingMetricKind: CaseIterable {
         case .load:
             return """
                 Training Impulse for a single day, computed from your heart-rate data using a \
-                Banister-style formula. Duration and intensity both count, so a short hard session \
-                and a long easy one can land on a similar number.
+                Banister-style formula. At each heart rate, your heart rate reserve (how far \
+                above resting your heart rate is, as a fraction of your full resting-to-maximum heart rate \
+                range) gets weighted more heavily the higher it climbs, then multiplied by how \
+                long you spend there. Load is the sum of that across the whole session, so both \
+                duration and intensity count, but because the weighting grows exponentially, time \
+                spent near your maximum heart rate adds far more than the same duration at an \
+                easy, recovery pace.
                 """
         case .fitness:
             return """
