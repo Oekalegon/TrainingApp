@@ -127,6 +127,28 @@ public struct HeartRateHistogram: Sendable {
             .map { HeartRateHistogramPoint(bpm: $0, minutes: (secondsByBin[$0] ?? 0) / 60) }
     }
 
+    /// Time spent in each of zones 1 through 5, summed from `bins` using `zoneBoundariesBPM` — the
+    /// same zone assignment `HeartRateHistogramChartView`'s zone bands use, and the same "above
+    /// zone 5's upper bound still counts as zone 5" rule `percentileBPM(_:)` documents. Every zone
+    /// appears in the result, in zone order, with 0 minutes if untouched — matching the "list
+    /// every zone, not just the ones reached" convention `ActivityDetailView`'s own time-in-zone
+    /// breakdown uses (MVP1-70). `nil` when the athlete has no resolvable zone boundaries at all
+    /// (nothing to assign bins to), same condition `HeartRateHistogramChartView`'s zone bands
+    /// check.
+    public func minutesByZone() -> [(zone: HeartRateZone, minutes: Double)]? {
+        guard let boundaries = zoneBoundariesBPM, boundaries.count == 6, let lowerBound = boundaries.first
+        else { return nil }
+        var minutesByZone: [HeartRateZone: Double] = [:]
+        for bin in bins {
+            let bpm = Double(bin.bpm)
+            guard bpm >= lowerBound,
+                let zone = HeartRateZone.allCases.last(where: { boundaries[$0.rawValue - 1] <= bpm })
+            else { continue }
+            minutesByZone[zone, default: 0] += bin.seconds / 60
+        }
+        return HeartRateZone.allCases.map { ($0, minutesByZone[$0] ?? 0) }
+    }
+
     /// Re-derives zone boundaries in bpm from the athlete's current `HeartRateZoneModel`, using
     /// only its public `zoneRatioRange(_:)` and the documented inverse of `deltaHRRatio(for:)` —
     /// `TimeInZoneBuilder.zoneBoundaries(_:)` computes the same thing but is internal to

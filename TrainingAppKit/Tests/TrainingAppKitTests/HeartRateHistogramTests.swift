@@ -162,6 +162,76 @@ struct HeartRateHistogramTests {
         #expect(points.isEmpty)
     }
 
+    @Test("minutesByZone() is nil when the athlete has no resolvable zone boundaries")
+    func minutesByZoneNilWithoutBoundaries() {
+        let histogram = HeartRateHistogram(
+            bins: [HeartRateHistogramBin(bpm: 140, seconds: 60)], binWidth: 5, zoneBoundariesBPM: nil
+        )
+        #expect(histogram.minutesByZone() == nil)
+    }
+
+    @Test("minutesByZone() lists every zone, 0 minutes for zones with no recorded time")
+    func minutesByZoneListsEveryZone() throws {
+        let histogram = HeartRateHistogram(
+            bins: [HeartRateHistogramBin(bpm: 100, seconds: 120)],
+            binWidth: 5,
+            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
+        )
+        let byZone = try #require(histogram.minutesByZone())
+        #expect(byZone.map(\.zone) == HeartRateZone.allCases)
+        #expect(byZone.first { $0.zone == .recovery }?.minutes == 2)
+        #expect(byZone.filter { $0.zone != .recovery }.allSatisfy { $0.minutes == 0 })
+    }
+
+    @Test("minutesByZone() excludes time below zone 1, but folds time above zone 5's upper bound into zone 5")
+    func minutesByZoneFoldsAboveZone5IntoZone5() throws {
+        let histogram = HeartRateHistogram(
+            bins: [
+                // Below zone 1 -- excluded entirely, same as `percentileBPM(_:)`.
+                HeartRateHistogramBin(bpm: 80, seconds: 600),
+                HeartRateHistogramBin(bpm: 195, seconds: 120),
+            ],
+            binWidth: 5,
+            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
+        )
+        let byZone = try #require(histogram.minutesByZone())
+        #expect(byZone.reduce(0) { $0 + $1.minutes } == 2)
+        #expect(byZone.first { $0.zone == .anaerobic }?.minutes == 2)
+    }
+
+    @Test("minutesByZone() sums multiple bins landing in the same zone")
+    func minutesByZoneSumsBinsInSameZone() throws {
+        let histogram = HeartRateHistogram(
+            bins: [
+                HeartRateHistogramBin(bpm: 100, seconds: 60),
+                HeartRateHistogramBin(bpm: 115, seconds: 120),
+            ],
+            binWidth: 5,
+            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
+        )
+        let byZone = try #require(histogram.minutesByZone())
+        #expect(byZone.first { $0.zone == .recovery }?.minutes == 3)
+    }
+
+    @Test("minutesByZone() attributes a bin straddling an off-grid zone boundary to its own lower edge's zone")
+    func minutesByZoneAttributesStraddlingBinToLowerEdgeZone() throws {
+        // A zone boundary at 122 doesn't fall on the 5bpm bin grid -- this bin's own range (120..<125)
+        // straddles it, with a real mix of zone-1 and zone-2 samples inside. `minutesByZone()`
+        // doesn't split a bin's time proportionally across the boundary; it assigns the whole bin
+        // to whichever zone contains its own lower edge (120), same approximation `zoneBands` and
+        // `percentileBPM(_:)`'s bin-level assignment already make elsewhere in this type. This test
+        // pins that choice down so a future change to the assignment rule is a visible diff here,
+        // not a silent behavior change.
+        let histogram = HeartRateHistogram(
+            bins: [HeartRateHistogramBin(bpm: 120, seconds: 300)],
+            binWidth: 5,
+            zoneBoundariesBPM: [100, 122, 140, 160, 175, 190]
+        )
+        let byZone = try #require(histogram.minutesByZone())
+        #expect(byZone.first { $0.zone == .recovery }?.minutes == 5)
+        #expect(byZone.first { $0.zone == .aerobic }?.minutes == 0)
+    }
+
     @Test("aggregating(_:athlete:) reports zone boundaries in bpm when the athlete has zone settings")
     func aggregatingResolvesZoneBoundaries() throws {
         let athlete = AthleteProfile.fixture(

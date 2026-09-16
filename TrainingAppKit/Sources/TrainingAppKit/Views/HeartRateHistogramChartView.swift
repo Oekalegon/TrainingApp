@@ -23,6 +23,14 @@ import TrainingCore
 /// week-change slide wasn't enough to fix that on its own.
 struct HeartRateHistogramChartView: View {
     let histogram: HeartRateHistogram
+    /// Whether to show the "Heart Rate Histogram" caption above the chart — needed in the graph
+    /// panel (`GraphPanelPagerView`), which has no other label naming this page, but redundant on
+    /// `HeartRateZoneDetailView` (MVP1-77), whose own `navigationTitle` already says "Time in
+    /// Zone" and whose `valueHeader` already names the value above this same chart — matching how
+    /// `MetricDetailView`'s own detail charts (`LoadDetailChartView`/`FitnessTrendDetailChartView`)
+    /// carry no such caption either. Defaults to `true` so the graph panel's own call site doesn't
+    /// need to opt in.
+    var showsCaption: Bool = true
 
     private static let smoothedLineWidth: CGFloat = 3
     /// Thinner than `smoothedLineWidth` and drawn before it in `chart` (so it sits behind), per
@@ -64,9 +72,9 @@ struct HeartRateHistogramChartView: View {
                 lowerBound: boundaries[index],
                 upperBound: boundaries[index + 1],
                 color: zone.color,
-                // Short "Z1"-style label, not `zone.displayName` — this annotates a narrow band
+                // `zone.shortLabel`, not `zone.displayName` — this annotates a narrow band
                 // directly on the chart, where a full name like "Threshold" wouldn't fit.
-                label: "Z\(zone.rawValue)"
+                label: zone.shortLabel
             )
         }
     }
@@ -97,10 +105,12 @@ struct HeartRateHistogramChartView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Heart Rate Histogram")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+            if showsCaption {
+                Text("Heart Rate Histogram")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+            }
 
             Group {
                 if hasAnyTime {
