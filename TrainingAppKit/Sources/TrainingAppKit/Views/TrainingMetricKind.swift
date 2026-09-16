@@ -2,7 +2,7 @@ import SwiftUI
 
 /// One of the four fitness metrics shown throughout the week view — as an icon+value pill beside
 /// each weekday row (`DayActivitiesSection`, MVP1-40), as an icon+name legend entry above the
-/// chart (`FitnessChartView`), and as the metrics info sheet's own subject (`MetricDetailView`,
+/// chart (`FitnessChartView`), and as the metrics detail view's own subject (`MetricDetailView`,
 /// MVP1-45). All three key off this single mapping, so the icon, its accessibility name, and (for
 /// the chart) its color can't drift between them.
 enum TrainingMetricKind: CaseIterable {
@@ -33,7 +33,7 @@ enum TrainingMetricKind: CaseIterable {
     }
 
     /// The underlying sports-science term's own abbreviation — shown alongside `name` in the
-    /// metrics info sheet (MVP1-45), since that's the term this app's day-to-day numbers actually
+    /// metrics detail view (MVP1-45), since that's the term this app's day-to-day numbers actually
     /// come from (a search for "TRIMP"/"CTL"/"ATL"/"TSB" should land here, not just "Load").
     var abbreviation: String {
         switch self {
@@ -55,32 +55,40 @@ enum TrainingMetricKind: CaseIterable {
         }
     }
 
-    /// Plain-language explanation for the metrics info sheet (MVP1-45) — what the number actually
+    /// Plain-language explanation for the metrics detail view (MVP1-45) — what the number actually
     /// measures and, for the three trend metrics, the rolling window/formula behind it (TrainingKit
     /// design doc §5: CTL is a 42-day EWMA of Load, ATL a 7-day EWMA, TSB the day-before difference
     /// between them), so the numbers on screen aren't a mystery. Doesn't repeat `abbreviation`
-    /// inline (e.g. spelling out "Chronic Training Load" for CTL) -- the sheet's header already
+    /// inline (e.g. spelling out "Chronic Training Load" for CTL) -- the view's header already
     /// shows `name` and `abbreviation` side by side, so restating the full term here would just be
     /// the same information twice in the same section.
     var explanation: String {
         switch self {
         case .load:
-            return "Training Impulse for a single day, computed from your heart-rate data using a "
-                + "Banister-style formula. Duration and intensity both count, so a short hard session "
-                + "and a long easy one can land on a similar number."
+            return """
+                Training Impulse for a single day, computed from your heart-rate data using a \
+                Banister-style formula. Duration and intensity both count, so a short hard session \
+                and a long easy one can land on a similar number.
+                """
         case .fitness:
-            return "A slow, 42-day rolling average of Load. It builds gradually with consistent "
-                + "training and fades just as gradually when training drops off, tracking your "
-                + "underlying aerobic fitness."
+            return """
+                A slow, 42-day rolling average of Load. It builds gradually with consistent \
+                training and fades just as gradually when training drops off, tracking your \
+                underlying aerobic fitness.
+                """
         case .fatigue:
-            return "A fast, 7-day rolling average of Load. It rises quickly after a hard week and "
-                + "falls quickly once you ease off, tracking how tired your recent training has left "
-                + "you."
+            return """
+                A fast, 7-day rolling average of Load. It rises quickly after a hard week and \
+                falls quickly once you ease off, tracking how tired your recent training has left \
+                you.
+                """
         case .form:
-            return "Yesterday's Fitness minus yesterday's Fatigue. Positive means you're fresher than "
-                + "your fitness would suggest — good timing for a big effort. Negative means fatigue "
-                + "currently outweighs fitness — normal during a hard training block, but worth "
-                + "watching if it stays low for a long time."
+            return """
+                Yesterday's Fitness minus yesterday's Fatigue. Positive means you're fresher than \
+                your fitness would suggest — good timing for a big effort. Negative means fatigue \
+                currently outweighs fitness — normal during a hard training block, but worth \
+                watching if it stays low for a long time.
+                """
         }
     }
 }

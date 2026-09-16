@@ -14,7 +14,7 @@ extension TSBZone {
         }
     }
 
-    /// Band color for `FitnessChartView`'s chart and the metrics info sheet's own Form chart
+    /// Band color for `FitnessChartView`'s chart and the metrics detail view's own Form chart
     /// (MVP1-45) — a red-to-blue ramp from `injuryRisk` (most fatigued) to `detraining` (most
     /// rested), the opposite direction from `HeartRateZone.color`'s "harder is redder" ramp, since
     /// TSB's own "high" end is rest, not effort.
