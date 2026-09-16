@@ -56,9 +56,10 @@ enum TrainingMetricKind: CaseIterable {
     }
 
     /// Plain-language explanation for the metrics detail view (MVP1-45) — what the number actually
-    /// measures and, for the three trend metrics, the rolling window/formula behind it (TrainingKit
-    /// design doc §5: CTL is a 42-day EWMA of Load, ATL a 7-day EWMA, TSB the day-before difference
-    /// between them), so the numbers on screen aren't a mystery. Doesn't repeat `abbreviation`
+    /// measures and, where useful, the mechanism behind it (e.g. HRR-weighted TRIMP for Load; the
+    /// rolling window/formula for the three trend metrics, per TrainingKit design doc §5: CTL is a
+    /// 42-day EWMA of Load, ATL a 7-day EWMA, TSB the day-before difference between them), so the
+    /// numbers on screen aren't a mystery. Doesn't repeat `abbreviation`
     /// inline (e.g. spelling out "Chronic Training Load" for CTL) -- the view's header already
     /// shows `name` and `abbreviation` side by side, so restating the full term here would just be
     /// the same information twice in the same section.
