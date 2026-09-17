@@ -85,9 +85,10 @@ enum TrainingMetricKind: CaseIterable {
                 """
         case .fatigue:
             return """
-                A fast, 7-day rolling average of Load. It rises quickly after a hard week and \
-                falls quickly once you ease off, tracking how tired your recent training has left \
-                you.
+                A fast-moving average of Load, tracking how tired your recent training has left \
+                you. Think of it as how drained your battery currently is, while Fitness is more \
+                like the battery's capacity. Fatigue rises quickly after a hard week. It falls \
+                quickly once you ease off, about six times faster than Fitness fades.
                 """
         case .form:
             return """
