@@ -16,7 +16,7 @@ struct HeartRateZoneBarChartView: View {
 
     /// The chart's own *plot* width in points — its bars' actual drawable span, narrower than the
     /// view's own width by whatever `Chart` reserves for each bar's trailing annotation text — so
-    /// ``barLength(_:maxMinutes:chartWidth:)`` can turn ``zeroBarPixelWidth`` into a plotted value
+    /// ``barLength(_:domainUpperBound:chartWidth:)`` can turn ``zeroBarPixelWidth`` into a plotted value
     /// that renders as close to that many points wide as this two-pass (`chartOverlay` reports the
     /// real size one frame after the first render, same lag `MetricDetailView.panState.chartWidth`
     /// already has) measurement allows. The `300` default is only ever visible for that first

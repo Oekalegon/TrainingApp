@@ -28,7 +28,7 @@ public struct HeartRateHistogram: Sendable {
     /// `nil` if the athlete's zone method can't resolve every zone (e.g. `.lactateThreshold` with
     /// no threshold heart rate recorded, or no heart-rate zone settings at all) — see
     /// `HeartRateZoneModel.zoneRatioRange(_:)`. Resolved as of the *displayed week's own end date*
-    /// (``aggregating(_:athlete:statisticsCalculator:asOf:binWidth:gapThresholdSeconds:)``'s `asOf`),
+    /// (``aggregating(_:athlete:asOf:statisticsCalculator:binWidth:gapThresholdSeconds:)``'s `asOf`),
     /// not the athlete's current settings — a week long in the past should shade against the zones
     /// that were actually in effect back then, not whatever the athlete's zones happen to be today
     /// (MVP1-78 follow-up). Shades `HeartRateHistogramChartView`'s bpm chart and gates
