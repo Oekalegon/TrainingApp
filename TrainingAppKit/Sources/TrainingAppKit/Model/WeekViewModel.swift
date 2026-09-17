@@ -547,6 +547,12 @@ public final class WeekViewModel {
         ActivityDetailViewModel(activity: activity, athlete: model.athlete, overlapContext: overlapContext(for: activity))
     }
 
+    /// The view model for the "Create Planned Workout" sheet (MVP2-15), opened from a day row's
+    /// add affordance — `date` defaults the sheet to that day, still editable inside it.
+    public func plannedWorkoutSheetViewModel(date: Date) -> PlannedWorkoutSheetViewModel {
+        PlannedWorkoutSheetViewModel(model: model, date: date)
+    }
+
     /// The view model for the athlete account screen, presented from the week view's toolbar.
     public var athleteViewModel: AthleteViewModel {
         AthleteViewModel(athlete: model.athlete)

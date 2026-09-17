@@ -87,6 +87,9 @@ struct DayActivitiesSection: View {
     /// Called when one of this row's Load/Fitness/Fatigue/Form pills is tapped (MVP1-45) —
     /// `WeekView` opens the fitness metrics detail view showing just that metric's explanation.
     let onSelectMetric: (TrainingMetricKind) -> Void
+    /// Called when this day's "add planned workout" button is tapped (MVP2-15) — `WeekView`
+    /// presents the create-workout sheet defaulted to `date`.
+    let onAddWorkout: () -> Void
 
     /// Hour + minute only — shown beside each activity card on the timeline, in the same column
     /// the weekday pill sits in above it (MVP1-41; the pill itself already carries the day).
@@ -104,7 +107,15 @@ struct DayActivitiesSection: View {
                 if let metrics {
                     DayMetricsPillRow(metrics: metrics, showsOnlyForm: activities.isEmpty, onSelectMetric: onSelectMetric)
                         .frame(maxWidth: .infinity, alignment: .trailing)
+                } else {
+                    Spacer()
                 }
+                Button(action: onAddWorkout) {
+                    Image(systemName: "plus.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add planned workout")
             }
 
             ForEach(activities) { activity in

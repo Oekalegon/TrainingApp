@@ -18,7 +18,9 @@ let package = Package(
             dependencies: [
                 .product(name: "TrainingCore", package: "TrainingKit"),
                 .product(name: "TrainingHealthKit", package: "TrainingKit"),
-                .product(name: "TrainingPersistence", package: "TrainingKit")
+                .product(name: "TrainingPersistence", package: "TrainingKit"),
+                .product(name: "TrainingWorkoutKit", package: "TrainingKit"),
+                .product(name: "TrainingTools", package: "TrainingKit")
             ]
         ),
         .testTarget(

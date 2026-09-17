@@ -56,6 +56,10 @@ public struct WeekView: View {
     /// The activity currently shown in the detail sheet, or `nil` when none is presented.
     /// `Activity` is `Identifiable`, so `.sheet(item:)` handles show/dismiss from this alone.
     @State private var selectedActivity: Activity?
+    /// The day the "Create Planned Workout" sheet (MVP2-15) was opened for, or `nil` when it isn't
+    /// presented — wrapped in `PlannedWorkoutDate` (`Date` alone isn't `Identifiable`) so
+    /// `.sheet(item:)` can drive it the same way `selectedActivity` drives the activity sheet.
+    @State private var addingWorkoutDate: PlannedWorkoutDate?
     /// Horizontal offset applied to the previous/current/next page `HStack`, on top of its base
     /// "current page centered" position — 0 while idle, tracking the finger during a drag, then
     /// animated to a full page width (commit) or back to 0 (cancel) once the drag ends. Nothing
@@ -218,6 +222,9 @@ public struct WeekView: View {
             }
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
+            }
+            .sheet(item: $addingWorkoutDate) { workoutDate in
+                PlannedWorkoutSheet(viewModel: viewModel.plannedWorkoutSheetViewModel(date: workoutDate.date))
             }
             // A navigation push onto this same `NavigationStack`, not a `.sheet` -- these are
             // full detail screens (chart + explanation + zone card), not a quick modal glance, so
@@ -509,7 +516,8 @@ public struct WeekView: View {
                             onSelectActivity: { selectedActivity = $0 },
                             onSelectMetric: { kind in
                                 metricsInfoPresentation = MetricsInfoPresentation(kind: kind, subject: .day(day))
-                            }
+                            },
+                            onAddWorkout: { addingWorkoutDate = PlannedWorkoutDate(date: day) }
                         )
                     }
                     // Continues the timeline past the last day's own connector (which stops at
@@ -659,4 +667,11 @@ private struct MetricsInfoPresentation: Identifiable, Hashable {
     let id = UUID()
     let kind: TrainingMetricKind
     let subject: MetricDetailSubject
+}
+
+/// `WeekView.addingWorkoutDate`'s value (MVP2-15) — just wraps a `Date` so `.sheet(item:)` can
+/// drive presentation the way it does for `selectedActivity`/`metricsInfoPresentation`.
+private struct PlannedWorkoutDate: Identifiable, Hashable {
+    let id = UUID()
+    let date: Date
 }
