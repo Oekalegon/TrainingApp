@@ -60,6 +60,24 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(model.workouts.isEmpty)
     }
 
+    @Test("guardrail findings for a history-thin athlete stay scoped to the window around date, not the whole ~1.5-year sandbox range")
+    func guardrailFindingsAreScopedNearDate() async {
+        let (_, model) = makeModel()
+        let plannedDate = day(400)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: plannedDate)
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+        await viewModel.waitForGuardrailRecompute()
+
+        // A history-thin athlete's near-zero CTL/ATL can breach the ATL/CTL guardrail for hundreds
+        // of consecutive days in the unscoped range -- this is the regression this test guards.
+        #expect(viewModel.guardrailFindings.count <= 15)
+        for finding in viewModel.guardrailFindings {
+            #expect(finding.day >= plannedDate)
+            #expect(finding.day <= plannedDate.addingTimeInterval(14 * 86400))
+        }
+    }
+
     @Test("save() persists a library workout and a matching planned activity")
     func saveAddsWorkoutAndPlan() async {
         let (_, model) = makeModel()

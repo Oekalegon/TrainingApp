@@ -131,9 +131,27 @@ public final class PlannedWorkoutSheetViewModel {
         )
     }
 
+    /// How far back ``scheduleGuardrailRecompute()`` snapshots real history before `date` — enough
+    /// for CTL/ATL to clear `FitnessMetricsCalculator`'s ~42-day warmup and settle into a real
+    /// (if the athlete has little training, near-zero but no longer transient) trend by the time
+    /// the simulation reaches `date`.
+    private static let guardrailLookbackDays = 90
+    /// How far past `date` a finding is still shown as caused by this addition — a finding further
+    /// out than this is either unrelated day-to-day noise or a pre-existing condition this single
+    /// workout can't meaningfully be blamed for.
+    private static let guardrailLookaheadDays = 14
+
     /// Runs the hypothetical addition through ``PlanSandbox``/``PlanEvaluator`` — never persisted,
     /// discarded as soon as the findings are read. Cancels and replaces any still-running
     /// simulation rather than letting two overlapping ones race to set ``guardrailFindings`` last.
+    ///
+    /// Scoped to a window around `date` rather than ``PlanSandbox``'s full ~1.5-year default
+    /// snapshot range, in both the simulation itself (`range:`) and the findings shown
+    /// (`displayRange`): `PlanEvaluator` emits one `PlanFinding` per breaching day, and a
+    /// history-thin athlete's near-zero CTL/ATL can sit in guardrail-breaching territory for
+    /// hundreds of days at a stretch — unscoped, a single degenerate condition floods the sheet
+    /// with what reads as dozens of unrelated warnings instead of the handful that actually bear
+    /// on adding *this* workout on *this* day.
     private func scheduleGuardrailRecompute() {
         guardrailTask?.cancel()
         guard let selectedTemplate, let workout = try? selectedTemplate.instantiate(
@@ -146,16 +164,33 @@ public final class PlannedWorkoutSheetViewModel {
         let stores = model.stores
         let today = date
         let estimator = self.estimator
+        let calendar = athleteCalendar
+        let evaluationRange = Self.evaluationRange(around: date, calendar: calendar)
+        let displayRange = Self.displayRange(around: date, calendar: calendar)
         guardrailTask = Task { [weak self] in
-            guard let sandbox = try? await PlanSandbox(snapshotOf: stores) else { return }
+            guard let sandbox = try? await PlanSandbox(snapshotOf: stores, range: evaluationRange) else { return }
             await sandbox.setWorkouts(await sandbox.workouts + [workout])
             await sandbox.setPlans(await sandbox.plans + [plan])
             let result = await sandbox.simulate(
                 engine: DefaultSeriesEngine(estimator: estimator), evaluator: PlanEvaluator(), today: today
             )
             guard !Task.isCancelled, let self else { return }
-            self.guardrailFindings = result.evaluation.findings
+            self.guardrailFindings = result.evaluation.findings.filter { displayRange.contains($0.day) }
         }
+    }
+
+    private static func evaluationRange(around date: Date, calendar: Calendar) -> ClosedRange<Date> {
+        let start = calendar.date(byAdding: .day, value: -guardrailLookbackDays, to: date) ?? date
+        let end = calendar.date(byAdding: .day, value: guardrailLookaheadDays, to: date) ?? date
+        return start...end
+    }
+
+    /// Just `date` through `date` + ``guardrailLookaheadDays`` — deliberately excludes days before
+    /// `date`: a finding there reflects the athlete's pre-existing history, not something adding
+    /// this workout caused.
+    private static func displayRange(around date: Date, calendar: Calendar) -> ClosedRange<Date> {
+        let end = calendar.date(byAdding: .day, value: guardrailLookaheadDays, to: date) ?? date
+        return date...end
     }
 
     /// Waits for any in-flight guardrail recompute (from the most recent template/parameter/date
