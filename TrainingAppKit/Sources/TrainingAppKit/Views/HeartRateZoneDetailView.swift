@@ -134,10 +134,9 @@ struct HeartRateZoneDetailView: View {
     /// same content in 88pt of dead space, which is what actually needed fixing.) `showsCaption:
     /// false` drops the histogram's own "Heart Rate Histogram" caption — redundant here, with
     /// `valueHeader` right above it and "Time in Zone" already the nav title — matching how
-    /// `MetricDetailView`'s own detail charts carry no such caption either. Page dots use the same
-    /// 5pt/`.primary`-vs-25%-opacity styling `GraphPanelPagerView`'s own page dots do, so paging
-    /// reads the same way in both places (`.tabViewStyle`'s own dots are hidden in favor of these,
-    /// for that same visual-consistency reason).
+    /// `MetricDetailView`'s own detail charts carry no such caption either. `PageDotsView` below is
+    /// the same shared dot row `GraphPanelPagerView`/`SportStatsPagerView` use, so paging reads the
+    /// same way everywhere in the app (`.tabViewStyle`'s own dots are hidden in favor of it).
     private var chartCard: some View {
         VStack(spacing: 8) {
             TabView(selection: $selectedChartIndex) {
@@ -154,15 +153,8 @@ struct HeartRateZoneDetailView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             #endif
             .frame(height: 172)
-            HStack(spacing: 4) {
-                ForEach(0..<Self.chartPageCount, id: \.self) { index in
-                    Circle()
-                        .fill(index == selectedChartIndex ? Color.primary : Color.primary.opacity(0.25))
-                        .frame(width: 5, height: 5)
-                }
-            }
-            .accessibilityHidden(true)
-            .padding(.bottom, 12)
+            PageDotsView(count: Self.chartPageCount, selectedIndex: selectedChartIndex)
+                .padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity)
         .background(metricDetailChartCardBackground)

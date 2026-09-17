@@ -44,19 +44,7 @@ struct SportStatsPagerView: View {
                     .accessibilityLabel(selectedSport.displayName)
 
                 if pages.count > 1 {
-                    HStack(spacing: 4) {
-                        ForEach(Array(pages.enumerated()), id: \.element.id) { index, _ in
-                            Circle()
-                                // `unhighlightedPillBackground` (6% opacity) is tuned for a large
-                                // fill behind contrasting text elsewhere in the day list — at this
-                                // dot's tiny 5pt size that reads as nearly invisible, leaving what
-                                // looks like a single dot rather than a page indicator. 25% is
-                                // still clearly "unselected" next to the solid `.primary` dot.
-                                .fill(index == selectedIndex ? Color.primary : Color.primary.opacity(0.25))
-                                .frame(width: 5, height: 5)
-                        }
-                    }
-                    .accessibilityHidden(true)
+                    PageDotsView(count: pages.count, selectedIndex: selectedIndex)
                 }
             }
 

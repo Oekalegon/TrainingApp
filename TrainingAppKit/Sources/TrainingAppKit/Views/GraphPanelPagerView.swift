@@ -123,20 +123,7 @@ struct GraphPanelPagerView: View {
             .frame(height: Self.panelHeight)
             .clipped()
 
-            HStack(spacing: 4) {
-                ForEach(0..<Self.pageCount, id: \.self) { index in
-                    Circle()
-                        // `unhighlightedPillBackground` (6% opacity) is tuned for a large fill
-                        // behind contrasting text elsewhere in the day list — at this dot's tiny
-                        // 5pt size that reads as nearly invisible, leaving what looks like a
-                        // single dot rather than a page indicator. 25% is still clearly
-                        // "unselected" next to the solid `.primary` dot — same choice
-                        // `SportStatsPagerView`'s own page dots make.
-                        .fill(index == selectedIndex ? Color.primary : Color.primary.opacity(0.25))
-                        .frame(width: 5, height: 5)
-                }
-            }
-            .accessibilityHidden(true)
+            PageDotsView(count: Self.pageCount, selectedIndex: selectedIndex)
         }
         // The drag gesture above has no VoiceOver/Switch Control equivalent on its own -- this
         // lets an adjustable-control swipe (up/down) move between pages the same way the drag
@@ -207,13 +194,7 @@ struct GraphPanelStaticPreview: View {
             }
             .frame(height: GraphPanelPagerView.panelHeight)
 
-            HStack(spacing: 4) {
-                ForEach(0..<GraphPanelPagerView.pageCount, id: \.self) { index in
-                    Circle()
-                        .fill(index == selectedIndex ? Color.primary : Color.primary.opacity(0.25))
-                        .frame(width: 5, height: 5)
-                }
-            }
+            PageDotsView(count: GraphPanelPagerView.pageCount, selectedIndex: selectedIndex)
         }
         // Never the one VoiceOver should land on: it's a same-frame preview of a page the user
         // hasn't swiped to yet, not real, independent content — the interactive `GraphPanelPagerView`

@@ -247,6 +247,39 @@ struct HeartRateHistogramTests {
         #expect(byZone.first { $0.zone == .tempo }?.minutes == 20)
     }
 
+    @Test("lowIntensityFraction is nil when the athlete has no resolvable zone boundaries")
+    func lowIntensityFractionNilWithoutBoundaries() {
+        let histogram = HeartRateHistogram(
+            bins: [HeartRateHistogramBin(bpm: 140, seconds: 60)], binWidth: 5, zoneBoundariesBPM: nil
+        )
+        #expect(histogram.lowIntensityFraction == nil)
+    }
+
+    @Test("lowIntensityFraction is nil when no in-zone time was recorded")
+    func lowIntensityFractionNilWhenEmpty() {
+        let histogram = HeartRateHistogram(
+            bins: [], binWidth: 5, zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
+        )
+        #expect(histogram.lowIntensityFraction == nil)
+    }
+
+    @Test("lowIntensityFraction is zones 1-2's share of zones 1-5's total, excluding zone 0 minutes")
+    func lowIntensityFractionExcludesZoneZero() {
+        // Zone 0 (below zone 1) gets 10 minutes -- deliberately the largest bucket here, so a
+        // regression that folds it into either the numerator or denominator (the MVP1-76 bug this
+        // property replaced `timeInZone.polarizedSplit.lowFraction` to fix) would visibly change
+        // the expected 0.6 below.
+        let histogram = HeartRateHistogram(
+            bins: [],
+            binWidth: 5,
+            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190],
+            timeInZone: TimeInZone(seconds: [0: 600, 1: 180, 3: 120])
+        )
+        // Zone 1 (recovery): 3 minutes. Zone 3 (tempo): 2 minutes. Zones 2/4/5: 0. Low (zone 1-2)
+        // is 3 of the zone-1-through-5 total of 5, i.e. 0.6 -- zone 0's 10 minutes count nowhere.
+        #expect(histogram.lowIntensityFraction == 0.6)
+    }
+
     @Test("aggregating(_:athlete:asOf:) reports zone boundaries in bpm when the athlete has zone settings")
     func aggregatingResolvesZoneBoundaries() throws {
         let athlete = AthleteProfile.fixture(
