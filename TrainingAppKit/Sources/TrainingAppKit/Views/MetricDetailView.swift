@@ -332,20 +332,50 @@ struct MetricDetailView: View {
                 period: period,
                 emphasized: kind,
                 subject: chartContext.subject,
-                calendar: chartContext.calendar
+                calendar: chartContext.calendar,
+                highlightedZone: subjectZone
             )
         }
     }
 
-    /// The subject's own TSB zone name+explanation, Form only — a plain title (the zone's own
-    /// name, e.g. "Training") above a rounded card, the same "title above, not inside" treatment
-    /// `aboutSection` uses below it.
+    /// All five TSB zones, Form only (MVP1-75) — a plain "Form Zones" title above a rounded card
+    /// listing every zone in ascending `tsb` order, the subject's own one picked out with its own
+    /// `TSBZone.color` as a row background so an athlete can see where today's reading sits
+    /// relative to the others, not just read that one zone's name and explanation in isolation
+    /// (this section's older form, before this rewrite).
     @ViewBuilder
     private var formZoneSection: some View {
-        if kind == .form, let subjectZone {
-            infoCard(title: subjectZone.label, body: subjectZone.explanation)
-                .padding(.horizontal)
+        if kind == .form {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Form Zones")
+                    .font(.title3.weight(.bold))
+                    .padding(.horizontal)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(TSBZone.allCases, id: \.self) { zone in
+                        if zone != TSBZone.allCases.first {
+                            Divider()
+                        }
+                        formZoneRow(zone)
+                    }
+                }
+                .background(metricDetailAboutCardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .padding(.horizontal)
         }
+    }
+
+    /// One `TSBZone`'s row in ``formZoneSection`` — `ZoneListRow`, with the subject's own zone
+    /// additionally tinted by its own `TSBZone.color` at low opacity so the highlight reads as
+    /// "this one" without needing a separate label.
+    private func formZoneRow(_ zone: TSBZone) -> some View {
+        let isCurrent = zone == subjectZone
+        return ZoneListRow(
+            color: zone.color,
+            title: zone.label,
+            explanation: zone.explanation,
+            highlightTint: isCurrent ? zone.color.opacity(0.18) : nil
+        )
     }
 
     /// "About `name`" as a plain title sitting above the rounded card, not inside it — matching

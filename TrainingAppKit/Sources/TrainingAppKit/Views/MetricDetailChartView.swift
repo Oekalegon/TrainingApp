@@ -92,12 +92,19 @@ struct FitnessTrendDetailChartView: View {
     /// `MetricDetailSubject`'s own doc comment.
     let subject: MetricDetailSubject
     let calendar: Calendar
+    /// The subject's own TSB zone (MVP1-75), Form only — drawn at `highlightedZoneOpacity` in
+    /// `zoneBandMarks` instead of the other zones' `baseZoneOpacity`, so the band the subject is
+    /// actually in reads as more saturated than the rest. `nil` for Fitness/Fatigue (`zoneBandMarks`
+    /// draws nothing for either) and for Form before `subjectValue` has loaded.
+    let highlightedZone: TSBZone?
     let today: Date = .now
 
     private static let emphasizedLineWidth: CGFloat = 3
     private static let subduedLineWidth: CGFloat = 1
     private static let futureLineStyle = StrokeStyle(dash: [5, 4])
     private static let seriesOrder: [TrainingMetricKind] = [.fitness, .fatigue, .form]
+    private static let baseZoneOpacity = 0.12
+    private static let highlightedZoneOpacity = 0.35
 
     private var pastPoints: [FitnessMetrics] {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).past
@@ -139,8 +146,9 @@ struct FitnessTrendDetailChartView: View {
     private var zoneBandMarks: some ChartContent {
         if emphasized == .form {
             ForEach(TSBZoneBand.all, id: \.label) { band in
+                let opacity = band.zone == highlightedZone ? Self.highlightedZoneOpacity : Self.baseZoneOpacity
                 RectangleMark(yStart: .value("Lower", band.lowerBound), yEnd: .value("Upper", band.upperBound))
-                    .foregroundStyle(band.color.opacity(0.12))
+                    .foregroundStyle(band.color.opacity(opacity))
             }
         }
     }

@@ -34,18 +34,28 @@ extension TSBZone {
     var explanation: String {
         switch self {
         case .injuryRisk:
-            return "Fatigue is badly outpacing fitness — the classic overreaching zone, with "
-                + "elevated injury/illness risk if sustained."
+            return """
+                Fatigue is badly outpacing fitness. This is the classic overreaching zone, with \
+                elevated injury/illness risk if sustained.
+                """
         case .training:
-            return "Sustained hard training, building fitness at a normal, tolerable cost."
+            return """
+                Sustained hard training, building fitness at a normal, tolerable cost.
+                """
         case .recovery:
-            return "Roughly balanced — fatigue has largely cleared without meaningful fitness "
-                + "loss, a sustainable zone for maintaining."
+            return """
+                Roughly balanced. Fatigue has largely cleared without meaningful fitness loss, \
+                a sustainable zone for maintaining.
+                """
         case .race:
-            return "Fresh with fitness still largely intact — the same taper/race-ready window "
-                + "a plan's own race-day check looks for."
+            return """
+                Fresh with fitness still largely intact. This is the same taper/race-ready \
+                window a plan's own race-day check looks for.
+                """
         case .detraining:
-            return "Rest sustained long enough to start losing fitness, not just fatigue."
+            return """
+                Rest sustained long enough to start losing fitness, not just fatigue.
+                """
         }
     }
 }
