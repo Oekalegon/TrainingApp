@@ -512,9 +512,17 @@ public final class WeekViewModel {
         let activityCount = model.activities.count
         let weekActivities = activities(forWeekStarting: weekStart)
         let athlete = model.athlete
+        let statisticsCalculator = self.statisticsCalculator
+        // The week's own end (not `.now`/today), so `HeartRateHistogram.aggregating`'s zone
+        // boundaries reflect the zones actually in effect that week -- a week long in the past must
+        // not shade against the athlete's *current* zones, which could be way off by then
+        // (MVP1-78 follow-up).
+        let asOf = displayedWeekRange(for: weekStart).upperBound
 
         let histogram = await Task.detached(priority: priority) {
-            HeartRateHistogram.aggregating(weekActivities, athlete: athlete)
+            HeartRateHistogram.aggregating(
+                weekActivities, athlete: athlete, asOf: asOf, statisticsCalculator: statisticsCalculator
+            )
         }.value
         guard isStillCacheable(weekStart, activityCount: activityCount) else { return }
         weekGraphCaches[weekStart] = histogram

@@ -79,7 +79,7 @@ struct HeartRateHistogramTests {
             ]
         )
 
-        let histogram = HeartRateHistogram.aggregating([activity], athlete: athlete)
+        let histogram = HeartRateHistogram.aggregating([activity], athlete: athlete, asOf: date(0))
 
         #expect(histogram.bins.reduce(0) { $0 + $1.seconds } == 30)
         #expect(histogram.bins.allSatisfy { $0.bpm < 150 })
@@ -99,7 +99,7 @@ struct HeartRateHistogramTests {
             ]
         )
 
-        let histogram = HeartRateHistogram.aggregating([activity], athlete: athlete, binWidth: 5)
+        let histogram = HeartRateHistogram.aggregating([activity], athlete: athlete, asOf: date(0), binWidth: 5)
 
         // Average bpm 145 falls in the 145..<150 bin.
         let bin = try #require(histogram.bins.first { $0.bpm == 145 })
@@ -173,9 +173,10 @@ struct HeartRateHistogramTests {
     @Test("minutesByZone() lists every zone, 0 minutes for zones with no recorded time")
     func minutesByZoneListsEveryZone() throws {
         let histogram = HeartRateHistogram(
-            bins: [HeartRateHistogramBin(bpm: 100, seconds: 120)],
+            bins: [],
             binWidth: 5,
-            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
+            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190],
+            timeInZone: TimeInZone(seconds: [1: 120])
         )
         let byZone = try #require(histogram.minutesByZone())
         #expect(byZone.map(\.zone) == HeartRateZone.allCases)
@@ -183,62 +184,76 @@ struct HeartRateHistogramTests {
         #expect(byZone.filter { $0.zone != .recovery }.allSatisfy { $0.minutes == 0 })
     }
 
-    @Test("minutesByZone() excludes time below zone 1, but folds time above zone 5's upper bound into zone 5")
-    func minutesByZoneFoldsAboveZone5IntoZone5() throws {
+    @Test("minutesByZone() sums seconds from every zone recorded in timeInZone")
+    func minutesByZoneSumsAllZones() throws {
         let histogram = HeartRateHistogram(
-            bins: [
-                // Below zone 1 -- excluded entirely, same as `percentileBPM(_:)`.
-                HeartRateHistogramBin(bpm: 80, seconds: 600),
-                HeartRateHistogramBin(bpm: 195, seconds: 120),
-            ],
+            bins: [],
             binWidth: 5,
-            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
-        )
-        let byZone = try #require(histogram.minutesByZone())
-        #expect(byZone.reduce(0) { $0 + $1.minutes } == 2)
-        #expect(byZone.first { $0.zone == .anaerobic }?.minutes == 2)
-    }
-
-    @Test("minutesByZone() sums multiple bins landing in the same zone")
-    func minutesByZoneSumsBinsInSameZone() throws {
-        let histogram = HeartRateHistogram(
-            bins: [
-                HeartRateHistogramBin(bpm: 100, seconds: 60),
-                HeartRateHistogramBin(bpm: 115, seconds: 120),
-            ],
-            binWidth: 5,
-            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190]
+            zoneBoundariesBPM: [100, 120, 140, 160, 175, 190],
+            timeInZone: TimeInZone(seconds: [1: 180, 3: 120])
         )
         let byZone = try #require(histogram.minutesByZone())
         #expect(byZone.first { $0.zone == .recovery }?.minutes == 3)
+        #expect(byZone.first { $0.zone == .tempo }?.minutes == 2)
+        #expect(byZone.filter { $0.zone != .recovery && $0.zone != .tempo }.allSatisfy { $0.minutes == 0 })
     }
 
-    @Test("minutesByZone() attributes a bin straddling an off-grid zone boundary to its own lower edge's zone")
-    func minutesByZoneAttributesStraddlingBinToLowerEdgeZone() throws {
-        // A zone boundary at 122 doesn't fall on the 5bpm bin grid -- this bin's own range (120..<125)
-        // straddles it, with a real mix of zone-1 and zone-2 samples inside. `minutesByZone()`
-        // doesn't split a bin's time proportionally across the boundary; it assigns the whole bin
-        // to whichever zone contains its own lower edge (120), same approximation `zoneBands` and
-        // `percentileBPM(_:)`'s bin-level assignment already make elsewhere in this type. This test
-        // pins that choice down so a future change to the assignment rule is a visible diff here,
-        // not a silent behavior change.
-        let histogram = HeartRateHistogram(
-            bins: [HeartRateHistogramBin(bpm: 120, seconds: 300)],
-            binWidth: 5,
-            zoneBoundariesBPM: [100, 122, 140, 160, 175, 190]
+    @Test(
+        """
+        minutesByZone() credits each activity's own date-effective zone settings separately, \
+        not one shared boundary for the whole week (MVP1-78 regression)
+        """
+    )
+    func minutesByZoneUsesEachActivitysOwnDateEffectiveZones() throws {
+        // Two 20-minute activities both held steady at 136bpm -- but (at a fixed 50bpm resting
+        // heart rate) the athlete's zone2/zone3 boundary sits at ~137bpm on day 1 (136bpm still
+        // zone 2) and ~135bpm on day 2 (136bpm now zone 3). The correct weekly total is 20 minutes
+        // in zone 2 and 20 in zone 3, not 40 minutes bucketed under whichever boundary happens to
+        // be the athlete's *current* one.
+        let athlete = AthleteProfile(
+            sex: .unspecified,
+            paceModel: PaceModel(thresholdPaceSecondsPerKilometer: 300),
+            timeZone: TimeZone(identifier: "UTC")!,
+            weekStartsOn: .monday,
+            heartRateZoneHistory: [
+                HeartRateZoneSettings(effectiveDate: date(0), restingHeartRateBPM: 50, maxHeartRateBPM: 174),
+                HeartRateZoneSettings(effectiveDate: date(86400), restingHeartRateBPM: 50, maxHeartRateBPM: 171),
+            ]
         )
+        func steadyActivity(start: Date) -> Activity {
+            // Sampled every 30s (well under the 60s default gap threshold) so the full 20 minutes
+            // integrates into one zone rather than being dropped as a gap.
+            let sampleCount = 41
+            let sampleInterval: TimeInterval = 30
+            return Activity(
+                source: .manual,
+                sport: .running,
+                start: start,
+                duration: TimeInterval(sampleCount - 1) * sampleInterval,
+                heartRate: (0..<sampleCount).map {
+                    HeartRateSample(time: start.addingTimeInterval(Double($0) * sampleInterval), bpm: 136)
+                }
+            )
+        }
+        let day1Activity = steadyActivity(start: date(0))
+        let day2Activity = steadyActivity(start: date(86400))
+
+        let histogram = HeartRateHistogram.aggregating(
+            [day1Activity, day2Activity], athlete: athlete, asOf: date(2 * 86400)
+        )
+
         let byZone = try #require(histogram.minutesByZone())
-        #expect(byZone.first { $0.zone == .recovery }?.minutes == 5)
-        #expect(byZone.first { $0.zone == .aerobic }?.minutes == 0)
+        #expect(byZone.first { $0.zone == .aerobic }?.minutes == 20)
+        #expect(byZone.first { $0.zone == .tempo }?.minutes == 20)
     }
 
-    @Test("aggregating(_:athlete:) reports zone boundaries in bpm when the athlete has zone settings")
+    @Test("aggregating(_:athlete:asOf:) reports zone boundaries in bpm when the athlete has zone settings")
     func aggregatingResolvesZoneBoundaries() throws {
         let athlete = AthleteProfile.fixture(
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 200
         )
 
-        let histogram = HeartRateHistogram.aggregating([], athlete: athlete)
+        let histogram = HeartRateHistogram.aggregating([], athlete: athlete, asOf: date(0))
 
         let boundaries = try #require(histogram.zoneBoundariesBPM)
         #expect(boundaries.count == 6)
@@ -246,5 +261,41 @@ struct HeartRateHistogramTests {
         #expect(boundaries.first == 125)
         // Zone 5's upper bound is 100% heart-rate reserve, i.e. max heart rate itself.
         #expect(boundaries.last == 200)
+    }
+
+    @Test(
+        """
+        aggregating(_:athlete:asOf:) resolves zone boundaries for the date passed in, not the \
+        athlete's latest settings -- a week long in the past must shade against the zones actually \
+        in effect that week, not whatever the athlete's zones are today (MVP1-78 follow-up)
+        """
+    )
+    func aggregatingResolvesZoneBoundariesAsOfTheGivenDateNotTheLatest() throws {
+        let athlete = AthleteProfile(
+            sex: .unspecified,
+            paceModel: PaceModel(thresholdPaceSecondsPerKilometer: 300),
+            timeZone: TimeZone(identifier: "UTC")!,
+            weekStartsOn: .monday,
+            heartRateZoneHistory: [
+                HeartRateZoneSettings(effectiveDate: date(0), restingHeartRateBPM: 50, maxHeartRateBPM: 200),
+                // A much later "current" update -- well after the past week this test cares about.
+                HeartRateZoneSettings(
+                    effectiveDate: date(30 * 86400), restingHeartRateBPM: 55, maxHeartRateBPM: 210
+                ),
+            ]
+        )
+
+        let pastWeekHistogram = HeartRateHistogram.aggregating([], athlete: athlete, asOf: date(86400))
+        let currentWeekHistogram = HeartRateHistogram.aggregating(
+            [], athlete: athlete, asOf: date(31 * 86400)
+        )
+
+        let pastBoundaries = try #require(pastWeekHistogram.zoneBoundariesBPM)
+        let currentBoundaries = try #require(currentWeekHistogram.zoneBoundariesBPM)
+        // Karvonen 50% HRR point for the older settings: 50 + 0.5*(200-50).
+        #expect(pastBoundaries.first == 125)
+        // ...vs. 55 + 0.5*(210-55) for the newer ones -- proving `asOf`, not "always the athlete's
+        // latest settings", drives which entry resolves.
+        #expect(currentBoundaries.first == 132.5)
     }
 }

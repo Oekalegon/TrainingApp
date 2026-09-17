@@ -91,7 +91,14 @@ remember or restore which tab was last active.
   from `TrainingModel.metrics: [FitnessMetrics]`; "Time in zone" is scoped to just the displayed
   week and its own domain (zone 1's lower bound through zone 5's upper, each padded 15bpm), built
   on demand from that week's raw heart-rate samples (`WeekViewModel.heartRateHistogram(for:)`)
-  rather than pre-aggregated by `TrainingModel`. Tapping anywhere on the panel (MVP1-60, not a
+  rather than pre-aggregated by `TrainingModel`. The bpm line itself, its zone-band shading, and the
+  80th-percentile marker all resolve zone boundaries as of the *displayed week's own end date*, not
+  the athlete's current settings (MVP1-78) — a week long in the past shades against the zones
+  actually in effect that week. The "Time in Zone" card's own bars/percentages (below, MVP1-77) are
+  a different computation still: each activity's own date-effective `TimeInZoneBuilder` result,
+  summed — the same numbers the LIT% stat tile is built from — rather than re-derived from the raw
+  bpm histogram, since one shared boundary set for the whole week can't correctly represent two
+  activities whose own zone settings differed (MVP1-78). Tapping anywhere on the panel (MVP1-60, not a
   separate button) pushes that page's own info screen for the *displayed* week — a plain tap, not
   a drag, so it doesn't compete with the panel's own swipe-to-page gesture. "Daily load" and "Form"
   reuse `MetricDetailView` (MVP1-45's day-list-pill screen) with a `.week` subject rather than a
