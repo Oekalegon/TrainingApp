@@ -512,9 +512,12 @@ public final class WeekViewModel {
         let activityCount = model.activities.count
         let weekActivities = activities(forWeekStarting: weekStart)
         let athlete = model.athlete
+        let statisticsCalculator = self.statisticsCalculator
 
         let histogram = await Task.detached(priority: priority) {
-            HeartRateHistogram.aggregating(weekActivities, athlete: athlete)
+            HeartRateHistogram.aggregating(
+                weekActivities, athlete: athlete, statisticsCalculator: statisticsCalculator
+            )
         }.value
         guard isStillCacheable(weekStart, activityCount: activityCount) else { return }
         weekGraphCaches[weekStart] = histogram

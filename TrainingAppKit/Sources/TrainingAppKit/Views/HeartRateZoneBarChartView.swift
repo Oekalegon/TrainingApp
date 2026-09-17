@@ -50,9 +50,20 @@ struct HeartRateZoneBarChartView: View {
     private func chart(_ minutesByZone: [(zone: HeartRateZone, minutes: Double)]) -> some View {
         let total = minutesByZone.reduce(0) { $0 + $1.minutes }
         let maxMinutes = minutesByZone.map(\.minutes).max() ?? 0
+        // Padded past the longest bar's own value (not the automatic 0...(padded max) domain,
+        // which pads by an unpredictable, content-dependent amount): without headroom here, the
+        // longest bar's value maps exactly to the plot's own right edge, leaving its own trailing
+        // annotation nowhere to draw and rendering it clipped/outside the chart entirely. The
+        // padding factor is fixed, so `barLength(_:domainUpperBound:chartWidth:)`'s width-to-value
+        // conversion (which assumes the domain's own upper bound maps exactly to `chartWidth`)
+        // stays exact.
+        let domainUpperBound = max(maxMinutes, 1) * Self.annotationHeadroomMultiplier
         return Chart(minutesByZone, id: \.zone) { entry in
             BarMark(
-                x: .value("Minutes", Self.barLength(entry.minutes, maxMinutes: maxMinutes, chartWidth: chartWidth)),
+                x: .value(
+                    "Minutes",
+                    Self.barLength(entry.minutes, domainUpperBound: domainUpperBound, chartWidth: chartWidth)
+                ),
                 y: .value("Zone", entry.zone.shortLabel)
             )
             .foregroundStyle(entry.zone.color)
@@ -62,11 +73,7 @@ struct HeartRateZoneBarChartView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        // Explicit, not the automatic 0...(padded max) domain: that padding would otherwise make
-        // even the longest real bar fall short of the plot's own right edge, throwing off
-        // `barLength(_:maxMinutes:chartWidth:)`'s width-to-value conversion, which assumes the
-        // domain's own upper bound maps exactly to `chartWidth`.
-        .chartXScale(domain: 0...max(maxMinutes, 1))
+        .chartXScale(domain: 0...domainUpperBound)
         // Z1 top, Z5 bottom -- the first domain entry renders at the top of a horizontal bar
         // chart's categorical axis, so this needs the reverse of `HeartRateZone.allCases`' own
         // (ascending) order.
@@ -93,15 +100,20 @@ struct HeartRateZoneBarChartView: View {
     /// How wide a zero-minute zone's bar renders, regardless of the data's own scale.
     private static let zeroBarPixelWidth: CGFloat = 1
 
+    /// Extra domain headroom past the longest bar's own value, as a multiple of that value --
+    /// reserves room for that bar's own trailing annotation (a short "Z2 · 63%"-style label) so it
+    /// never has to draw past the chart's plot bounds (MVP1-78 follow-up).
+    private static let annotationHeadroomMultiplier: Double = 1.3
+
     /// `entry.minutes`, unless that's 0 -- then whatever value plots as exactly
-    /// ``zeroBarPixelWidth`` points wide given `chartXScale`'s `0...maxMinutes` domain mapped
-    /// across `chartWidth` points, so every zone still draws a colored mark rather than vanishing
-    /// entirely. Purely visual: `percentageText(_:of:)` still reports the real (0%) share,
-    /// computed from `entry.minutes` itself, not this padded value.
-    private static func barLength(_ minutes: Double, maxMinutes: Double, chartWidth: CGFloat) -> Double {
+    /// ``zeroBarPixelWidth`` points wide given `chartXScale`'s `0...domainUpperBound` domain
+    /// mapped across `chartWidth` points, so every zone still draws a colored mark rather than
+    /// vanishing entirely. Purely visual: `percentageText(_:of:)` still reports the real (0%)
+    /// share, computed from `entry.minutes` itself, not this padded value.
+    private static func barLength(_ minutes: Double, domainUpperBound: Double, chartWidth: CGFloat) -> Double {
         guard minutes <= 0 else { return minutes }
         guard chartWidth > 0 else { return 0 }
-        return maxMinutes * Double(zeroBarPixelWidth / chartWidth)
+        return domainUpperBound * Double(zeroBarPixelWidth / chartWidth)
     }
 
     private static func percentageText(_ minutes: Double, of total: Double) -> String {
