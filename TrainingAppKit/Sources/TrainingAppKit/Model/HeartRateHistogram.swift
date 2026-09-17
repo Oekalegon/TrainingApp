@@ -206,6 +206,26 @@ public struct HeartRateHistogram: Sendable {
         }
     }
 
+    /// This week's Low-Intensity-Training fraction — zones 1–2's combined share of zones 1–5's
+    /// total (`minutesByZone()`'s own scope), the same "recovery+aerobic" grouping
+    /// `PolarizedIntensitySplit.lowFraction` uses for "low". Deliberately *not*
+    /// `timeInZone.polarizedSplit.lowFraction`: that also folds "zone 0" (below zone 1) minutes
+    /// into both its numerator and denominator, which pushed this fraction visibly higher than
+    /// `HeartRateZoneBarChartView`'s own Z1+Z2 bars summed to, since zone 0 never appears there as
+    /// a bar of its own (MVP1-76 follow-up). Matching `minutesByZone()`'s scope keeps this
+    /// screen's headline number consistent with the chart shown right below it. `nil` when
+    /// `minutesByZone()` itself is (`zoneBoundariesBPM` unresolved), or when the week has no
+    /// in-zone time recorded at all.
+    public var lowIntensityFraction: Double? {
+        guard let minutesByZone = minutesByZone() else { return nil }
+        let total = minutesByZone.reduce(0) { $0 + $1.minutes }
+        guard total > 0 else { return nil }
+        let low = minutesByZone
+            .filter { $0.zone == .recovery || $0.zone == .aerobic }
+            .reduce(0) { $0 + $1.minutes }
+        return low / total
+    }
+
     /// Re-derives zone boundaries in bpm from the `HeartRateZoneModel` effective on `asOf`, using
     /// only `HeartRateZoneModel`'s public `zoneRatioRange(_:)` and the documented inverse of
     /// `deltaHRRatio(for:)` — `TimeInZoneBuilder.zoneBoundaries(_:)` computes the same thing but is

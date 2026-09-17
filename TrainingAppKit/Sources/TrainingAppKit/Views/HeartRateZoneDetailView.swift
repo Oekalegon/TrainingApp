@@ -6,18 +6,29 @@ import TrainingCore
 /// Health-style visual language (a caption/value/date header, white band with the chart, grouped
 /// cards below) even though a heart-rate histogram doesn't fit `MetricDetailView` itself: it's a
 /// distribution across the displayed week, not one metric with a single day's or week's own value.
-/// The one number worth surfacing as this screen's own "value" is the 80th-percentile heart rate
-/// (Seiler's 80/20 polarized-training threshold, the same one `HeartRateHistogramChartView` marks
-/// on the chart itself). Below the white band: `timeInZoneSection` (MVP1-77) — the bar-per-zone
-/// breakdown alongside each zone's own description, in one card — then `aboutSection`'s general
-/// explanation of what zones are, in that order (the specific "what happened this week" reading
-/// before the general "what zones are" background).
+/// The white band's own chart is a two-page carousel (MVP1-76 follow-up): the continuous bpm
+/// histogram, then `HeartRateZoneBarChartView`'s bar-per-zone breakdown — the same "one card, page
+/// between related charts" treatment `GraphPanelPagerView` uses for the week view's own graph
+/// panel. `valueHeader` follows whichever page is showing (`selectedChartIndex`): the histogram's
+/// own 80th-percentile heart rate for page 0, or the week's overall Low-Intensity-Training fraction
+/// (Seiler's 80/20 model) for page 1 — each page's headline number is the one that page's own
+/// chart is actually about, rather than one fixed value regardless of which chart is on screen.
+/// Below that: `timeInZoneSection` — each zone's own name+explanation, in one card — then
+/// `aboutSection`'s general explanation of what zones are, in that order (the specific "what
+/// happened this week" reading before the general "what zones are" background).
 struct HeartRateZoneDetailView: View {
     let histogram: HeartRateHistogram
     /// `WeekViewModel.displayedWeekDateRangeDescription` — this panel is only ever reachable by
     /// tapping the *current* page, so it's always the displayed week already, not the page's own
     /// (possibly different) week the way `MetricChartContext` has to account for.
     let weekDateRangeText: String
+    /// Which of `chartCard`'s two pages (histogram, then the zone bar chart) is showing — a plain
+    /// `@State` rather than `GraphPanelPagerView`'s hand-rolled drag gesture, since this screen has
+    /// no competing horizontal gesture to avoid (it sits in a vertical-only `ScrollView`, not
+    /// alongside `WeekView`'s own week-swipe), so `TabView(.page)` works here without the gesture
+    /// conflict that ruled it out there.
+    @State private var selectedChartIndex: Int = 0
+    private static let chartPageCount = 2
 
     /// The 80th-percentile heart rate, `nil` when the week has no in-zone time recorded at all
     /// (the same condition `HeartRateHistogramChartView.hasAnyTime` checks, via the same call).
@@ -28,6 +39,11 @@ struct HeartRateZoneDetailView: View {
     private var percentileValueText: String {
         guard let eightyPercentileBPM else { return "–" }
         return "\(Int(eightyPercentileBPM.rounded()))"
+    }
+
+    private var lowIntensityValueText: String {
+        guard let fraction = histogram.lowIntensityFraction else { return "–" }
+        return fraction.formatted(.percent.precision(.fractionLength(0)))
     }
 
     /// The gap between the value header and the chart, right above it in the same white band —
@@ -73,21 +89,36 @@ struct HeartRateZoneDetailView: View {
 
     /// Same layout as `MetricDetailView.valueHeader`: a caption above the value (here always shown,
     /// not conditional on a `.week`-vs-`.day` subject the way that one is, since this screen only
-    /// ever has one "kind" of value), the value itself with its own "bpm" unit, then the week's own
-    /// date range underneath.
+    /// ever has one "kind" of value at a time), the value itself, then the week's own date range
+    /// underneath. Follows `selectedChartIndex` (MVP1-76 follow-up) rather than showing one fixed
+    /// value regardless of which chart page is on screen: the percentile/bpm reading belongs to
+    /// the histogram page, and the LIT fraction belongs to the zone-bar page, so showing either
+    /// one while the other chart is visible would read as unrelated to what's actually on screen.
+    /// The LIT caption spells out "Low Intensity Training" rather than just "LIT" so the
+    /// abbreviation used everywhere else it's shown (`SportStatsPagerView`'s own per-sport tile,
+    /// `ActivityDetailView`) has a place in the app where a reader can see what it stands for.
+    @ViewBuilder
     private var valueHeader: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("80% Percentile Heart Rate")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(percentileValueText)
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                if eightyPercentileBPM != nil {
-                    Text("bpm")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
+            if selectedChartIndex == 0 {
+                Text("80th Percentile Heart Rate")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(percentileValueText)
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                    if eightyPercentileBPM != nil {
+                        Text("bpm")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
+            } else {
+                Text("Low Intensity Training (LIT)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(lowIntensityValueText)
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
             }
             Text(weekDateRangeText)
                 .font(.subheadline)
@@ -96,26 +127,52 @@ struct HeartRateZoneDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Same 172pt plot height as the graph panel's own (MVP1-55) — the user asked not to grow this
-    /// further, just to tighten the space around it. (A previous `.frame(height: 260)` here didn't
-    /// actually enlarge the plot, which is fixed at 172pt inside `HeartRateHistogramChartView`
-    /// itself — it just centered that same content in 88pt of dead space, which is what actually
-    /// needed fixing.) `showsCaption: false` drops that view's own "Heart Rate Histogram" caption —
-    /// redundant here, with `valueHeader` right above it and "Time in Zone" already the nav title —
-    /// matching how `MetricDetailView`'s own detail charts carry no such caption either.
+    /// Same 172pt plot height both pages already share (MVP1-55/MVP1-77) — the user asked not to
+    /// grow this further, just to tighten the space around it. (A previous `.frame(height: 260)`
+    /// here didn't actually enlarge the plot, which is fixed at 172pt inside
+    /// `HeartRateHistogramChartView`/`HeartRateZoneBarChartView` themselves — it just centered that
+    /// same content in 88pt of dead space, which is what actually needed fixing.) `showsCaption:
+    /// false` drops the histogram's own "Heart Rate Histogram" caption — redundant here, with
+    /// `valueHeader` right above it and "Time in Zone" already the nav title — matching how
+    /// `MetricDetailView`'s own detail charts carry no such caption either. Page dots use the same
+    /// 5pt/`.primary`-vs-25%-opacity styling `GraphPanelPagerView`'s own page dots do, so paging
+    /// reads the same way in both places (`.tabViewStyle`'s own dots are hidden in favor of these,
+    /// for that same visual-consistency reason).
     private var chartCard: some View {
-        HeartRateHistogramChartView(histogram: histogram, showsCaption: false)
-            .frame(maxWidth: .infinity)
-            .background(metricDetailChartCardBackground)
+        VStack(spacing: 8) {
+            TabView(selection: $selectedChartIndex) {
+                HeartRateHistogramChartView(histogram: histogram, showsCaption: false)
+                    .tag(0)
+                HeartRateZoneBarChartView(histogram: histogram)
+                    .tag(1)
+            }
+            // `.page` (with its own dots hidden, in favor of the matching row built below) isn't
+            // available in the macOS build `swift test` runs this package under -- only the app
+            // target itself is iOS-only. macOS keeps `TabView`'s own default style; the `$selectedChartIndex`
+            // binding still pages correctly there, just without swipe gestures.
+            #if os(iOS)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            #endif
+            .frame(height: 172)
+            HStack(spacing: 4) {
+                ForEach(0..<Self.chartPageCount, id: \.self) { index in
+                    Circle()
+                        .fill(index == selectedChartIndex ? Color.primary : Color.primary.opacity(0.25))
+                        .frame(width: 5, height: 5)
+                }
+            }
+            .accessibilityHidden(true)
+            .padding(.bottom, 12)
+        }
+        .frame(maxWidth: .infinity)
+        .background(metricDetailChartCardBackground)
     }
 
-    /// A second chart (MVP1-77) below `chartCard`'s bpm line: a horizontal bar per zone, its
-    /// share of the displayed week's in-zone time — paired here with per-zone description rows
-    /// (moved down from `aboutSection`, which used to be just this list) in one card, so the bars
-    /// and the zone they each belong to read as one explained thing rather than two disconnected
-    /// sections. `HeartRateZoneBarChartView`'s own doc comment explains why this chart exists
-    /// alongside the histogram rather than replacing it. Row layout/dividers match
-    /// `MetricDetailView.formZoneSection` (MVP1-75/MVP1-79), minus that section's own "current
+    /// Each zone's own name+explanation (MVP1-77) — the bar chart that used to live inside this
+    /// same card now pages alongside the histogram in `chartCard` instead (MVP1-76 follow-up), so
+    /// this section is just the row list, matching `MetricDetailView.formZoneSection`'s own shape
+    /// (a title above a rounded card of rows, no embedded chart) rather than carrying a chart of
+    /// its own. Row layout/dividers match that same section (MVP1-75/MVP1-79), minus its "current
     /// zone" row highlight — unlike Form, there's no single zone a whole week's worth of heart-rate
     /// data is "currently in", so `zoneRow` doesn't try to pick one out.
     private var timeInZoneSection: some View {
@@ -124,10 +181,10 @@ struct HeartRateZoneDetailView: View {
                 .font(.title3.weight(.bold))
                 .padding(.horizontal)
             VStack(alignment: .leading, spacing: 0) {
-                HeartRateZoneBarChartView(histogram: histogram)
-                    .padding()
                 ForEach(HeartRateZone.allCases, id: \.self) { zone in
-                    Divider()
+                    if zone != HeartRateZone.allCases.first {
+                        Divider()
+                    }
                     zoneRow(zone)
                 }
             }
