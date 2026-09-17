@@ -9,7 +9,7 @@ import TrainingCore
 /// the zone rows listed alongside it. Deliberately axis/grid-free: each bar carries its own
 /// "Z1 · 5%"-style label as a trailing annotation, so the plain bar lengths are the whole point
 /// rather than something to cross-reference against a scale. A zone with no recorded time still
-/// draws a hairline in its own color (``barLength(_:maxMinutes:chartWidth:)``) rather than
+/// draws a hairline in its own color (``barLength(_:domainUpperBound:chartWidth:)``) rather than
 /// disappearing, so all five zones stay visible even in a week that never reached one.
 struct HeartRateZoneBarChartView: View {
     let histogram: HeartRateHistogram
@@ -50,14 +50,7 @@ struct HeartRateZoneBarChartView: View {
     private func chart(_ minutesByZone: [(zone: HeartRateZone, minutes: Double)]) -> some View {
         let total = minutesByZone.reduce(0) { $0 + $1.minutes }
         let maxMinutes = minutesByZone.map(\.minutes).max() ?? 0
-        // Padded past the longest bar's own value (not the automatic 0...(padded max) domain,
-        // which pads by an unpredictable, content-dependent amount): without headroom here, the
-        // longest bar's value maps exactly to the plot's own right edge, leaving its own trailing
-        // annotation nowhere to draw and rendering it clipped/outside the chart entirely. The
-        // padding factor is fixed, so `barLength(_:domainUpperBound:chartWidth:)`'s width-to-value
-        // conversion (which assumes the domain's own upper bound maps exactly to `chartWidth`)
-        // stays exact.
-        let domainUpperBound = max(maxMinutes, 1) * Self.annotationHeadroomMultiplier
+        let domainUpperBound = Self.domainUpperBound(forMaxMinutes: maxMinutes)
         return Chart(minutesByZone, id: \.zone) { entry in
             BarMark(
                 x: .value(
@@ -82,8 +75,9 @@ struct HeartRateZoneBarChartView: View {
         .chartYAxis(.hidden)
         .chartLegend(.hidden)
         // Measures the plot area itself (not this view's own outer width, which would also count
-        // the space `Chart` reserves for each bar's trailing annotation) so `barLength(_:maxMinutes:
-        // chartWidth:)`'s width-to-value conversion is accurate rather than an overestimate — same
+        // the space `Chart` reserves for each bar's trailing annotation) so
+        // `barLength(_:domainUpperBound:chartWidth:)`'s width-to-value conversion is accurate
+        // rather than an overestimate — same
         // `proxy.plotFrame` idiom `HeartRateHistogramChartView`'s own overlay uses to place its
         // zone-band labels.
         .chartOverlay { proxy in
@@ -105,12 +99,21 @@ struct HeartRateZoneBarChartView: View {
     /// never has to draw past the chart's plot bounds (MVP1-78 follow-up).
     private static let annotationHeadroomMultiplier: Double = 1.3
 
+    /// `chartXScale`'s domain upper bound, padded past `maxMinutes` (the longest bar's own value —
+    /// `0` if every zone is empty) by ``annotationHeadroomMultiplier`` — see that constant's own
+    /// doc comment for why the padding exists. `internal`, not `private`, so it's directly
+    /// unit-testable via `@testable import` rather than only indirectly through rendered output.
+    static func domainUpperBound(forMaxMinutes maxMinutes: Double) -> Double {
+        max(maxMinutes, 1) * annotationHeadroomMultiplier
+    }
+
     /// `entry.minutes`, unless that's 0 -- then whatever value plots as exactly
     /// ``zeroBarPixelWidth`` points wide given `chartXScale`'s `0...domainUpperBound` domain
     /// mapped across `chartWidth` points, so every zone still draws a colored mark rather than
     /// vanishing entirely. Purely visual: `percentageText(_:of:)` still reports the real (0%)
-    /// share, computed from `entry.minutes` itself, not this padded value.
-    private static func barLength(_ minutes: Double, domainUpperBound: Double, chartWidth: CGFloat) -> Double {
+    /// share, computed from `entry.minutes` itself, not this padded value. `internal`, not
+    /// `private`, so it's directly unit-testable via `@testable import`.
+    static func barLength(_ minutes: Double, domainUpperBound: Double, chartWidth: CGFloat) -> Double {
         guard minutes <= 0 else { return minutes }
         guard chartWidth > 0 else { return 0 }
         return domainUpperBound * Double(zeroBarPixelWidth / chartWidth)

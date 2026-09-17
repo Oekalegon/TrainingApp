@@ -79,7 +79,7 @@ struct HeartRateHistogramTests {
             ]
         )
 
-        let histogram = HeartRateHistogram.aggregating([activity], athlete: athlete)
+        let histogram = HeartRateHistogram.aggregating([activity], athlete: athlete, asOf: date(0))
 
         #expect(histogram.bins.reduce(0) { $0 + $1.seconds } == 30)
         #expect(histogram.bins.allSatisfy { $0.bpm < 150 })
@@ -99,7 +99,7 @@ struct HeartRateHistogramTests {
             ]
         )
 
-        let histogram = HeartRateHistogram.aggregating([activity], athlete: athlete, binWidth: 5)
+        let histogram = HeartRateHistogram.aggregating([activity], athlete: athlete, asOf: date(0), binWidth: 5)
 
         // Average bpm 145 falls in the 145..<150 bin.
         let bin = try #require(histogram.bins.first { $0.bpm == 145 })
@@ -238,20 +238,22 @@ struct HeartRateHistogramTests {
         let day1Activity = steadyActivity(start: date(0))
         let day2Activity = steadyActivity(start: date(86400))
 
-        let histogram = HeartRateHistogram.aggregating([day1Activity, day2Activity], athlete: athlete)
+        let histogram = HeartRateHistogram.aggregating(
+            [day1Activity, day2Activity], athlete: athlete, asOf: date(2 * 86400)
+        )
 
         let byZone = try #require(histogram.minutesByZone())
         #expect(byZone.first { $0.zone == .aerobic }?.minutes == 20)
         #expect(byZone.first { $0.zone == .tempo }?.minutes == 20)
     }
 
-    @Test("aggregating(_:athlete:) reports zone boundaries in bpm when the athlete has zone settings")
+    @Test("aggregating(_:athlete:asOf:) reports zone boundaries in bpm when the athlete has zone settings")
     func aggregatingResolvesZoneBoundaries() throws {
         let athlete = AthleteProfile.fixture(
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 200
         )
 
-        let histogram = HeartRateHistogram.aggregating([], athlete: athlete)
+        let histogram = HeartRateHistogram.aggregating([], athlete: athlete, asOf: date(0))
 
         let boundaries = try #require(histogram.zoneBoundariesBPM)
         #expect(boundaries.count == 6)
@@ -259,5 +261,41 @@ struct HeartRateHistogramTests {
         #expect(boundaries.first == 125)
         // Zone 5's upper bound is 100% heart-rate reserve, i.e. max heart rate itself.
         #expect(boundaries.last == 200)
+    }
+
+    @Test(
+        """
+        aggregating(_:athlete:asOf:) resolves zone boundaries for the date passed in, not the \
+        athlete's latest settings -- a week long in the past must shade against the zones actually \
+        in effect that week, not whatever the athlete's zones are today (MVP1-78 follow-up)
+        """
+    )
+    func aggregatingResolvesZoneBoundariesAsOfTheGivenDateNotTheLatest() throws {
+        let athlete = AthleteProfile(
+            sex: .unspecified,
+            paceModel: PaceModel(thresholdPaceSecondsPerKilometer: 300),
+            timeZone: TimeZone(identifier: "UTC")!,
+            weekStartsOn: .monday,
+            heartRateZoneHistory: [
+                HeartRateZoneSettings(effectiveDate: date(0), restingHeartRateBPM: 50, maxHeartRateBPM: 200),
+                // A much later "current" update -- well after the past week this test cares about.
+                HeartRateZoneSettings(
+                    effectiveDate: date(30 * 86400), restingHeartRateBPM: 55, maxHeartRateBPM: 210
+                ),
+            ]
+        )
+
+        let pastWeekHistogram = HeartRateHistogram.aggregating([], athlete: athlete, asOf: date(86400))
+        let currentWeekHistogram = HeartRateHistogram.aggregating(
+            [], athlete: athlete, asOf: date(31 * 86400)
+        )
+
+        let pastBoundaries = try #require(pastWeekHistogram.zoneBoundariesBPM)
+        let currentBoundaries = try #require(currentWeekHistogram.zoneBoundariesBPM)
+        // Karvonen 50% HRR point for the older settings: 50 + 0.5*(200-50).
+        #expect(pastBoundaries.first == 125)
+        // ...vs. 55 + 0.5*(210-55) for the newer ones -- proving `asOf`, not "always the athlete's
+        // latest settings", drives which entry resolves.
+        #expect(currentBoundaries.first == 132.5)
     }
 }

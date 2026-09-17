@@ -16,9 +16,9 @@ public struct HeartRateHistogramPoint: Hashable, Sendable {
     public let minutes: Double
 }
 
-/// A displayed week's heart-rate histogram, plus the athlete's current zone boundaries in bpm so
-/// the chart can shade the same bands the old zone-by-day bars used to color, now against a
-/// continuous bpm axis instead of discrete per-zone bars.
+/// A displayed week's heart-rate histogram, plus the zone boundaries (in bpm) effective by the end
+/// of that week, so the chart can shade the same bands the old zone-by-day bars used to color, now
+/// against a continuous bpm axis instead of discrete per-zone bars.
 public struct HeartRateHistogram: Sendable {
     public let bins: [HeartRateHistogramBin]
     /// The bin width (in bpm) `bins` was built with — `HeartRateHistogramChartView` needs this to fill in
@@ -27,9 +27,14 @@ public struct HeartRateHistogram: Sendable {
     /// `[zone1.lower, zone1.upper, zone2.upper, zone3.upper, zone4.upper, zone5.upper]` in bpm, or
     /// `nil` if the athlete's zone method can't resolve every zone (e.g. `.lactateThreshold` with
     /// no threshold heart rate recorded, or no heart-rate zone settings at all) — see
-    /// `HeartRateZoneModel.zoneRatioRange(_:)`. Display-only: shades `HeartRateHistogramChartView`'s
-    /// bpm chart, and *not* used by ``minutesByZone()`` (see that property's own doc comment for
-    /// why the two must stay separate — MVP1-78).
+    /// `HeartRateZoneModel.zoneRatioRange(_:)`. Resolved as of the *displayed week's own end date*
+    /// (``aggregating(_:athlete:statisticsCalculator:asOf:binWidth:gapThresholdSeconds:)``'s `asOf`),
+    /// not the athlete's current settings — a week long in the past should shade against the zones
+    /// that were actually in effect back then, not whatever the athlete's zones happen to be today
+    /// (MVP1-78 follow-up). Shades `HeartRateHistogramChartView`'s bpm chart and gates
+    /// ``percentileBPM(_:)``/``minutesByZone()``'s `nil` case; the zone *minutes* themselves come
+    /// from `timeInZone` below, not from these boundaries (see ``minutesByZone()``'s own doc
+    /// comment for why the two must stay separate — MVP1-78).
     public let zoneBoundariesBPM: [Double]?
     /// Each activity's own ``StatisticsCalculator/summary(for:athlete:)`` time-in-zone, summed —
     /// the same per-activity, date-effective-zone-settings computation the week's LIT% stat tile
@@ -64,13 +69,29 @@ public struct HeartRateHistogram: Sendable {
     /// want. This reimplements just its gap rule — a segment whose samples are `gapThresholdSeconds`
     /// or more apart is skipped as a pause — not its zone/TRIMP math, and bins each segment's
     /// average bpm directly.
+    ///
+    /// - Parameters:
+    ///   - asOf: The date `zoneBoundariesBPM` resolves zone settings as of — callers should pass
+    ///     the *displayed week's own end date*, not `.now`/today, so a week long in the past shades
+    ///     against the zones that were actually in effect that week rather than the athlete's
+    ///     current ones (MVP1-78 follow-up). Using the week's end (rather than, say, its start or
+    ///     an average across it) picks up the latest zone-settings change that happened *during*
+    ///     the week, matching how `heartRateZoneSettings(asOf:)` is already used per-activity below.
+    ///   - gapThresholdSeconds: Defaults to `statisticsCalculator`'s own `gapThresholdSeconds`
+    ///     rather than an independent literal, so the raw-bpm `bins` this builds and the `timeInZone`
+    ///     `statisticsCalculator` computes always agree on which segments count as "in the
+    ///     activity" — passing a different value here than `statisticsCalculator` uses would let
+    ///     the bpm chart and the zone-minutes breakdown silently disagree again, the same class of
+    ///     bug MVP1-78 fixed for zone *settings*.
     public static func aggregating(
         _ activities: [Activity],
         athlete: AthleteProfile,
+        asOf: Date,
         statisticsCalculator: StatisticsCalculator = StatisticsCalculator(),
         binWidth: Int = 5,
-        gapThresholdSeconds: TimeInterval = 60
+        gapThresholdSeconds: TimeInterval? = nil
     ) -> HeartRateHistogram {
+        let gapThresholdSeconds = gapThresholdSeconds ?? statisticsCalculator.gapThresholdSeconds
         var totals: [Int: TimeInterval] = [:]
         for activity in activities {
             let sorted = activity.heartRate.sorted { $0.time < $1.time }
@@ -94,7 +115,7 @@ public struct HeartRateHistogram: Sendable {
         return HeartRateHistogram(
             bins: bins,
             binWidth: binWidth,
-            zoneBoundariesBPM: zoneBoundariesBPM(for: athlete),
+            zoneBoundariesBPM: zoneBoundariesBPM(for: athlete, asOf: asOf),
             timeInZone: timeInZone
         )
     }
@@ -171,10 +192,13 @@ public struct HeartRateHistogram: Sendable {
     ///
     /// Every zone appears in the result, in zone order, with 0 minutes if untouched — matching the
     /// "list every zone, not just the ones reached" convention `ActivityDetailView`'s own
-    /// time-in-zone breakdown uses (MVP1-70). `nil` when the athlete has no resolvable zone
-    /// boundaries at all (`heartRateZoneHistory` empty, or the zone method can't resolve — same
-    /// condition `zoneBoundariesBPM` itself is `nil` for, since a non-empty history always resolves
-    /// both `currentHeartRateZoneSettings` and any activity's `heartRateZoneSettings(asOf:)`).
+    /// time-in-zone breakdown uses (MVP1-70). `nil` when `zoneBoundariesBPM` itself couldn't
+    /// resolve (`heartRateZoneHistory` empty, or the zone method can't resolve as of the week's own
+    /// end date) — note this guard and `timeInZone`'s own data can, in a narrow edge case, disagree:
+    /// an athlete using `.lactateThreshold` zoning whose settings changed *during* the displayed
+    /// week could have the week-end `asOf` resolve fully while one specific activity's own,
+    /// earlier-in-the-week settings don't (e.g. no LTHR recorded yet that day), silently
+    /// contributing 0 seconds for that activity rather than `nil` for the whole week.
     public func minutesByZone() -> [(zone: HeartRateZone, minutes: Double)]? {
         guard zoneBoundariesBPM != nil else { return nil }
         return HeartRateZone.allCases.map { zone in
@@ -182,13 +206,14 @@ public struct HeartRateHistogram: Sendable {
         }
     }
 
-    /// Re-derives zone boundaries in bpm from the athlete's current `HeartRateZoneModel`, using
-    /// only its public `zoneRatioRange(_:)` and the documented inverse of `deltaHRRatio(for:)` —
-    /// `TimeInZoneBuilder.zoneBoundaries(_:)` computes the same thing but is internal to
-    /// `TrainingCore`, so this is a small, display-only re-derivation rather than a reimplemented
-    /// zone model.
-    private static func zoneBoundariesBPM(for athlete: AthleteProfile) -> [Double]? {
-        guard let settings = athlete.currentHeartRateZoneSettings else { return nil }
+    /// Re-derives zone boundaries in bpm from the `HeartRateZoneModel` effective on `asOf`, using
+    /// only `HeartRateZoneModel`'s public `zoneRatioRange(_:)` and the documented inverse of
+    /// `deltaHRRatio(for:)` — `TimeInZoneBuilder.zoneBoundaries(_:)` computes the same thing but is
+    /// internal to `TrainingCore`, so this is a small, display-only re-derivation rather than a
+    /// reimplemented zone model. Uses `heartRateZoneSettings(asOf:)`, not
+    /// `currentHeartRateZoneSettings` — see `zoneBoundariesBPM`'s own doc comment for why.
+    private static func zoneBoundariesBPM(for athlete: AthleteProfile, asOf: Date) -> [Double]? {
+        guard let settings = athlete.heartRateZoneSettings(asOf: asOf) else { return nil }
         let zoneModel = HeartRateZoneModel(settings: settings)
         guard let z1 = zoneModel.zoneRatioRange(1),
             let z2 = zoneModel.zoneRatioRange(2),
