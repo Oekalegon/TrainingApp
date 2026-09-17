@@ -92,10 +92,12 @@ enum TrainingMetricKind: CaseIterable {
                 """
         case .form:
             return """
-                Yesterday's Fitness minus yesterday's Fatigue. Positive means you're fresher than \
-                your fitness would suggest — good timing for a big effort. Negative means fatigue \
-                currently outweighs fitness — normal during a hard training block, but worth \
-                watching if it stays low for a long time.
+                Yesterday's Fitness minus yesterday's Fatigue. A negative Form means you're \
+                carrying real fatigue. That's when training has the most effect, since your \
+                body needs to be tired to adapt. A Form near zero means you've mostly recovered, \
+                with little fatigue left to train against. A positive Form means you're fresh, \
+                with fitness intact and little fatigue weighing it down. That's the state you \
+                want on race day, not during training.
                 """
         }
     }

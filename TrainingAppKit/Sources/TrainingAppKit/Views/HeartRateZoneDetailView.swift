@@ -114,29 +114,30 @@ struct HeartRateZoneDetailView: View {
     /// (moved down from `aboutSection`, which used to be just this list) in one card, so the bars
     /// and the zone they each belong to read as one explained thing rather than two disconnected
     /// sections. `HeartRateZoneBarChartView`'s own doc comment explains why this chart exists
-    /// alongside the histogram rather than replacing it.
+    /// alongside the histogram rather than replacing it. Row layout/dividers match
+    /// `MetricDetailView.formZoneSection` (MVP1-75/MVP1-79), minus that section's own "current
+    /// zone" row highlight — unlike Form, there's no single zone a whole week's worth of heart-rate
+    /// data is "currently in", so `zoneRow` doesn't try to pick one out.
     private var timeInZoneSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Time in Zone")
                 .font(.title3.weight(.bold))
                 .padding(.horizontal)
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 0) {
                 HeartRateZoneBarChartView(histogram: histogram)
+                    .padding()
                 ForEach(HeartRateZone.allCases, id: \.self) { zone in
+                    Divider()
                     zoneRow(zone)
                 }
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(metricDetailAboutCardBackground)
-            }
+            .background(metricDetailAboutCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
     /// General "About Heart Rate Zones" text (MVP1-77) — unlike `timeInZoneSection`'s own per-zone
-    /// rows (this week's actual zones, each already named and dotted), this is just what zones
+    /// rows (this week's actual zones, each already named and colored), this is just what zones
     /// *are* and why the split across them matters, once, in prose rather than a fifth repetition
     /// of the same five names/colors already shown twice above.
     private var aboutSection: some View {
@@ -162,20 +163,10 @@ struct HeartRateZoneDetailView: View {
             + "the easier zones, with only a small share spent hard — Seiler's 80/20 polarized "
             + "approach, the split the histogram above marks at its 80th-percentile line."
 
+    /// One `HeartRateZone`'s row in `timeInZoneSection` — `ZoneListRow`, with no `highlightTint`
+    /// (leaves it `nil`): see `timeInZoneSection`'s own doc comment for why there's no "current
+    /// zone" here the way there is for Form.
     private func zoneRow(_ zone: HeartRateZone) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Circle()
-                .fill(zone.color)
-                .frame(width: 10, height: 10)
-                // Nudges the dot to align with the first line's cap-height, not the row's own top.
-                .padding(.top, 5)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Zone \(zone.rawValue) · \(zone.displayName)")
-                    .font(.subheadline.weight(.semibold))
-                Text(zone.explanation)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-            }
-        }
+        ZoneListRow(color: zone.color, title: "Zone \(zone.rawValue) · \(zone.displayName)", explanation: zone.explanation)
     }
 }
