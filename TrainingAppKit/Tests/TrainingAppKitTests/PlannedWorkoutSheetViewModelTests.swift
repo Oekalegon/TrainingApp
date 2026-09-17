@@ -10,7 +10,7 @@ struct PlannedWorkoutSheetViewModelTests {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
-    private func makeModel() -> (InMemoryStore, TrainingModel) {
+    private func makeModel() async -> (InMemoryStore, TrainingModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
@@ -19,12 +19,18 @@ struct PlannedWorkoutSheetViewModelTests {
         let athlete = AthleteProfile.fixture(
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
         )
+        // `TrainingModel.athlete` is a plain, caller-managed property -- it's never persisted to
+        // `athleteStore` on its own. `PlanSandbox.init` reads the athlete from the *store*, not
+        // from `model.athlete`, so without this save it throws `missingAthleteProfile` on every
+        // guardrail recompute -- silently, since `scheduleGuardrailRecompute()` swallows that error
+        // with `try?`, which is exactly how this test setup bug first surfaced as "no guardrails".
+        try? await store.save(athlete)
         return (store, TrainingModel(stores: stores, athlete: athlete))
     }
 
     @Test("selecting a template seeds parameter values and computes expectedLoad")
-    func selectingTemplateSeedsDefaultsAndLoad() {
-        let (_, model) = makeModel()
+    func selectingTemplateSeedsDefaultsAndLoad() async {
+        let (_, model) = await makeModel()
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
 
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
@@ -35,8 +41,8 @@ struct PlannedWorkoutSheetViewModelTests {
     }
 
     @Test("setParameterValue(_:forKey:) recomputes expectedLoad, larger duration means more load")
-    func settingParameterRecomputesLoad() {
-        let (_, model) = makeModel()
+    func settingParameterRecomputesLoad() async {
+        let (_, model) = await makeModel()
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
         let shortLoad = viewModel.expectedLoad?.value
@@ -49,7 +55,7 @@ struct PlannedWorkoutSheetViewModelTests {
 
     @Test("guardrail simulation never mutates the real stores")
     func guardrailSimulationDoesNotMutateRealStores() async {
-        let (_, model) = makeModel()
+        let (_, model) = await makeModel()
         try? await model.load(in: day(-7)...day(7))
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
 
@@ -62,7 +68,7 @@ struct PlannedWorkoutSheetViewModelTests {
 
     @Test("guardrail findings for a history-thin athlete stay scoped to the window around date, not the whole ~1.5-year sandbox range")
     func guardrailFindingsAreScopedNearDate() async {
-        let (_, model) = makeModel()
+        let (_, model) = await makeModel()
         let plannedDate = day(400)
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: plannedDate)
 
@@ -78,9 +84,39 @@ struct PlannedWorkoutSheetViewModelTests {
         }
     }
 
+    @Test("a big addition on top of an established training history still produces a guardrail finding despite date carrying a non-midnight time-of-day")
+    func largeAdditionStillProducesFindingsDespiteTimeOfDay() async {
+        let (store, model) = await makeModel()
+        // `day(_:)` itself is already not midnight-aligned (epoch 1_700_000_000 is 22:13:20 UTC) --
+        // exactly the regression this guards: a finding on `plannedDate`'s own calendar day must
+        // not be dropped just because `plannedDate` carries a later time-of-day than that day's
+        // PlanFinding/FitnessMetrics entries (which are always midnight-aligned).
+        let plannedDate = day(400)
+        // 60 days of a modest, steady easy run: enough real history for CTL/ATL to clear the
+        // ~42-day warmup and settle into an established (low, steady) trend by `plannedDate`, so
+        // a 35km long run on top of it reads as a genuine ATL spike rather than the warmup-day
+        // guard skipping everything (an empty-history athlete's plan is a single-day series that
+        // never leaves warmup, which is why this seeds real activities rather than testing bare).
+        let history = (1...60).map { offset in
+            Activity(
+                source: .manual, sport: .running, start: plannedDate.addingTimeInterval(Double(-offset) * 86400),
+                duration: 1800, perceivedExertion: 4
+            )
+        }
+        try? await store.upsert(history)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: plannedDate)
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.longRun
+        viewModel.setParameterValue(35_000, forKey: "distance")
+        await viewModel.waitForGuardrailRecompute()
+
+        #expect(!viewModel.guardrailFindings.isEmpty)
+        #expect(viewModel.guardrailFindings.contains { $0.rule == .atlToCTLRatio && $0.severity == .risk })
+    }
+
     @Test("save() persists a library workout and a matching planned activity")
     func saveAddsWorkoutAndPlan() async {
-        let (_, model) = makeModel()
+        let (_, model) = await makeModel()
         // `scheduler: nil` -- the real WorkoutKitBridge's `schedule` requires a genuine app bundle
         // context and crashes when called from this test executable.
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(2), scheduler: nil)
@@ -97,7 +133,7 @@ struct PlannedWorkoutSheetViewModelTests {
 
     @Test("save() fails without a selected template")
     func saveFailsWithoutTemplate() async {
-        let (_, model) = makeModel()
+        let (_, model) = await makeModel()
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0), scheduler: nil)
 
         let didSave = await viewModel.save()
@@ -108,7 +144,7 @@ struct PlannedWorkoutSheetViewModelTests {
 
     @Test("save() syncs through the injected scheduler and persists its workoutKitID")
     func saveSyncsThroughScheduler() async {
-        let (_, model) = makeModel()
+        let (_, model) = await makeModel()
         let scheduler = FakeScheduler()
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: scheduler)
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun

@@ -168,7 +168,16 @@ public final class PlannedWorkoutSheetViewModel {
         let evaluationRange = Self.evaluationRange(around: date, calendar: calendar)
         let displayRange = Self.displayRange(around: date, calendar: calendar)
         guardrailTask = Task { [weak self] in
-            guard let sandbox = try? await PlanSandbox(snapshotOf: stores, range: evaluationRange) else { return }
+            guard let sandbox = try? await PlanSandbox(snapshotOf: stores, range: evaluationRange) else {
+                // Most commonly `PlanSandboxError.missingAthleteProfile` -- `TrainingModel.athlete`
+                // is a plain, caller-managed property that isn't necessarily saved to the store
+                // yet. Clears rather than leaving a stale value from a previous (successful)
+                // recompute in place, which would otherwise silently keep showing findings for
+                // whatever the template/parameters used to be.
+                guard !Task.isCancelled, let self else { return }
+                self.guardrailFindings = []
+                return
+            }
             await sandbox.setWorkouts(await sandbox.workouts + [workout])
             await sandbox.setPlans(await sandbox.plans + [plan])
             let result = await sandbox.simulate(
@@ -179,18 +188,26 @@ public final class PlannedWorkoutSheetViewModel {
         }
     }
 
+    /// `date` is typically a "day" only in intent — the sheet's default is `.now` and a
+    /// `DatePicker` binding can carry whatever time-of-day it started with — but every `PlanFinding`/
+    /// `FitnessMetrics` entry's `day` is midnight-aligned. Comparing `date` against those raw would
+    /// exclude a finding on `date`'s own calendar day whenever `date`'s time-of-day is later than
+    /// midnight, which is effectively always — this normalizes first so the addition's own day is
+    /// never silently dropped from either range.
     private static func evaluationRange(around date: Date, calendar: Calendar) -> ClosedRange<Date> {
-        let start = calendar.date(byAdding: .day, value: -guardrailLookbackDays, to: date) ?? date
-        let end = calendar.date(byAdding: .day, value: guardrailLookaheadDays, to: date) ?? date
+        let startOfDay = calendar.startOfDay(for: date)
+        let start = calendar.date(byAdding: .day, value: -guardrailLookbackDays, to: startOfDay) ?? startOfDay
+        let end = calendar.date(byAdding: .day, value: guardrailLookaheadDays, to: startOfDay) ?? startOfDay
         return start...end
     }
 
-    /// Just `date` through `date` + ``guardrailLookaheadDays`` — deliberately excludes days before
-    /// `date`: a finding there reflects the athlete's pre-existing history, not something adding
-    /// this workout caused.
+    /// `date`'s own calendar day through `date` + ``guardrailLookaheadDays`` — deliberately
+    /// excludes days before `date`: a finding there reflects the athlete's pre-existing history,
+    /// not something adding this workout caused.
     private static func displayRange(around date: Date, calendar: Calendar) -> ClosedRange<Date> {
-        let end = calendar.date(byAdding: .day, value: guardrailLookaheadDays, to: date) ?? date
-        return date...end
+        let startOfDay = calendar.startOfDay(for: date)
+        let end = calendar.date(byAdding: .day, value: guardrailLookaheadDays, to: startOfDay) ?? startOfDay
+        return startOfDay...end
     }
 
     /// Waits for any in-flight guardrail recompute (from the most recent template/parameter/date
