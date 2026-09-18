@@ -73,6 +73,16 @@ struct WeekViewModelTests {
         #expect(!viewModel.isToday(day(2), asOf: startOfDay2.addingTimeInterval(-1)))
     }
 
+    @Test("isPast(_:) is true only for a calendar day strictly before today's")
+    func isPastMatchesOnlyDaysBeforeToday() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.isPast(day(1), asOf: day(2)))
+        #expect(!viewModel.isPast(day(2), asOf: day(2)))
+        #expect(!viewModel.isPast(day(3), asOf: day(2)))
+    }
+
     @Test("chartRange spans the week before, the displayed week, and the week after")
     func chartRangeIsThreeWeeksCenteredOnDisplayedWeek() {
         let model = makeModel()

@@ -1,5 +1,5 @@
 {
-  "originHash" : "b8d7cf8a16abd4748164b116ff327f4fbd1fc2f37ab971d6076a6736687d2ea3",
+  "originHash" : "809b45c647975ec90b399c3a1e1c124520a5d1f9e93ee9399e84141fac02a6a4",
   "pins" : [
     {
       "identity" : "trainingkit",
@@ -7,7 +7,7 @@
       "location" : "https://github.com/Oekalegon/TrainingKit.git",
       "state" : {
         "branch" : "develop",
-        "revision" : "b723c1ab960984ff011951de3f66724173be9f72"
+        "revision" : "28ff83e06e3bdbae6b12243b7d480bce77d73832"
       }
     }
   ],

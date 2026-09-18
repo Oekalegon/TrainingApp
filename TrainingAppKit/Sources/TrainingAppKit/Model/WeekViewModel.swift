@@ -542,9 +542,23 @@ public final class WeekViewModel {
         calendar.isDate(day, inSameDayAs: today)
     }
 
+    /// `true` if `day` is strictly before `today`'s calendar day, in the athlete's timezone — a
+    /// planned workout only makes sense for today or later, so `WeekView`'s "add planned workout"
+    /// affordance disables itself (MVP2-15) on a day this returns `true` for, rather than opening
+    /// a sheet for a day that's already happened.
+    public func isPast(_ day: Date, asOf today: Date = .now) -> Bool {
+        calendar.startOfDay(for: day) < calendar.startOfDay(for: today)
+    }
+
     /// The detail view model for `activity`, pushed when it's tapped in the day list.
     public func activityDetailViewModel(for activity: Activity) -> ActivityDetailViewModel {
         ActivityDetailViewModel(activity: activity, athlete: model.athlete, overlapContext: overlapContext(for: activity))
+    }
+
+    /// The view model for the "Create Planned Workout" sheet (MVP2-15), opened from a day row's
+    /// add affordance — `date` defaults the sheet to that day, still editable inside it.
+    public func plannedWorkoutSheetViewModel(date: Date) -> PlannedWorkoutSheetViewModel {
+        PlannedWorkoutSheetViewModel(model: model, date: date)
     }
 
     /// The view model for the athlete account screen, presented from the week view's toolbar.
