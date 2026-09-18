@@ -87,6 +87,11 @@ struct DayActivitiesSection: View {
     /// Called when one of this row's Load/Fitness/Fatigue/Form pills is tapped (MVP1-45) —
     /// `WeekView` opens the fitness metrics detail view showing just that metric's explanation.
     let onSelectMetric: (TrainingMetricKind) -> Void
+    /// Whether the "add planned workout" button below is enabled — `false` for a day in the past
+    /// (MVP2-15): planning a workout for a day that's already happened doesn't make sense, but the
+    /// button itself still shows (rather than disappearing) since a past day is also where a
+    /// future "log an activity that wasn't auto-imported" entry point would belong.
+    let canAddWorkout: Bool
     /// Called when this day's "add planned workout" button is tapped (MVP2-15) — `WeekView`
     /// presents the create-workout sheet defaulted to `date`.
     let onAddWorkout: () -> Void
@@ -115,6 +120,8 @@ struct DayActivitiesSection: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .disabled(!canAddWorkout)
+                .opacity(canAddWorkout ? 1 : 0.35)
                 .accessibilityLabel("Add planned workout")
             }
 

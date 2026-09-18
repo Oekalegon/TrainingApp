@@ -54,6 +54,14 @@ public final class PlannedWorkoutSheetViewModel {
     /// ``PlanSandbox``/``PlanEvaluator`` without ever committing it. Empty (not an error state)
     /// whenever nothing has been evaluated yet or the sandbox couldn't be built.
     public private(set) var guardrailFindings: [PlanFinding] = []
+    /// Explains an empty ``guardrailFindings`` when that's plausibly *not* "nothing to flag" —
+    /// distinguishes the sandbox failing to build at all (most commonly: `TrainingModel.athlete`
+    /// hasn't been saved to the store yet) from the simulation running but every day in the
+    /// display window still being ``FitnessMetrics/isWarmingUp`` (not enough real training history
+    /// in the lookback window for CTL/ATL to mean anything yet, which silently suppresses every
+    /// cycle-free `PlanEvaluator` rule). `nil` once at least one finding exists, or before the
+    /// sheet's first recompute.
+    public private(set) var guardrailDiagnostic: String?
     /// Set when ``save()`` fails — a WorkoutKit mapping error (unsupported activity/goal/alert) or
     /// a store failure. The sheet shows this as a blocking alert, distinct from the non-blocking
     /// ``guardrailFindings``.
@@ -111,6 +119,7 @@ public final class PlannedWorkoutSheetViewModel {
             workoutName = ""
             expectedLoad = nil
             guardrailFindings = []
+            guardrailDiagnostic = nil
             return
         }
         parameterValues = Dictionary(
@@ -176,6 +185,7 @@ public final class PlannedWorkoutSheetViewModel {
                 // whatever the template/parameters used to be.
                 guard !Task.isCancelled, let self else { return }
                 self.guardrailFindings = []
+                self.guardrailDiagnostic = "Guardrail check unavailable right now."
                 return
             }
             await sandbox.setWorkouts(await sandbox.workouts + [workout])
@@ -184,7 +194,13 @@ public final class PlannedWorkoutSheetViewModel {
                 engine: DefaultSeriesEngine(estimator: estimator), evaluator: PlanEvaluator(), today: today
             )
             guard !Task.isCancelled, let self else { return }
+            let displayedMetrics = result.metrics.filter { displayRange.contains($0.day) }
             self.guardrailFindings = result.evaluation.findings.filter { displayRange.contains($0.day) }
+            if self.guardrailFindings.isEmpty, !displayedMetrics.isEmpty, displayedMetrics.allSatisfy(\.isWarmingUp) {
+                self.guardrailDiagnostic = "Not enough recent training history yet to check guardrails for this addition."
+            } else {
+                self.guardrailDiagnostic = nil
+            }
         }
     }
 

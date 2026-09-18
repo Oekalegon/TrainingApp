@@ -82,6 +82,10 @@ struct PlannedWorkoutSheetViewModelTests {
             #expect(finding.day >= plannedDate)
             #expect(finding.day <= plannedDate.addingTimeInterval(14 * 86400))
         }
+        // With zero real activity history, every day in the display window is still
+        // `FitnessMetrics.isWarmingUp` -- the diagnostic should say so rather than silently
+        // reading as "nothing to flag".
+        #expect(viewModel.guardrailDiagnostic != nil)
     }
 
     @Test("a big addition on top of an established training history still produces a guardrail finding despite date carrying a non-midnight time-of-day")
@@ -112,6 +116,7 @@ struct PlannedWorkoutSheetViewModelTests {
 
         #expect(!viewModel.guardrailFindings.isEmpty)
         #expect(viewModel.guardrailFindings.contains { $0.rule == .atlToCTLRatio && $0.severity == .risk })
+        #expect(viewModel.guardrailDiagnostic == nil)
     }
 
     @Test("save() persists a library workout and a matching planned activity")

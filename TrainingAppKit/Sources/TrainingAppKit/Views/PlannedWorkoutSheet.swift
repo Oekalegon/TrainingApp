@@ -89,6 +89,11 @@ struct PlannedWorkoutSheet: View {
                                     .foregroundStyle(finding.severity.tintColor)
                             }
                         }
+                    } else if let guardrailDiagnostic = viewModel.guardrailDiagnostic {
+                        Section("Guardrail Warnings") {
+                            Text(guardrailDiagnostic)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }

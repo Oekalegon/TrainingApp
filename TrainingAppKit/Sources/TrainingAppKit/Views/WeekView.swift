@@ -517,6 +517,7 @@ public struct WeekView: View {
                             onSelectMetric: { kind in
                                 metricsInfoPresentation = MetricsInfoPresentation(kind: kind, subject: .day(day))
                             },
+                            canAddWorkout: !viewModel.isPast(day),
                             onAddWorkout: { addingWorkoutDate = PlannedWorkoutDate(date: day) }
                         )
                     }
