@@ -126,7 +126,8 @@ struct SportStatsPagerView: View {
     }
 }
 
-/// One page's Distance/Time/Load(/LIT) figures, each followed by its percentage change — the
+/// One page's Distance/Time/Load(/LIT) figures, each followed by its percentage change, with the
+/// week's still-open plan for that same figure folded into the label line below it (MVP2-31) — the
 /// swipeable content `SportStatsPagerView`'s carousel pages between.
 private struct StatsPageView: View {
     let page: SportStatsPage
@@ -143,11 +144,17 @@ private struct StatsPageView: View {
             Spacer(minLength: 0)
 
             if page.sport.isEndurance {
-                statItem(value: distanceString, changeFraction: page.distanceChangeFraction, label: "Distance")
-                statItem(value: durationString, changeFraction: page.timeChangeFraction, label: "Time")
+                statItem(
+                    value: distanceString, changeFraction: page.distanceChangeFraction, label: "Distance",
+                    plannedText: plannedDistanceString
+                )
+                statItem(
+                    value: durationString, changeFraction: page.timeChangeFraction, label: "Time",
+                    plannedText: plannedDurationString
+                )
             }
-            statItem(value: loadString, changeFraction: page.loadChangeFraction, label: "Load")
-            if page.sport.supportsLowIntensityTrainingSplit, page.polarizedSplit.total > 0 {
+            statItem(value: loadString, changeFraction: page.loadChangeFraction, label: "Load", plannedText: plannedLoadString)
+            if page.sport.supportsLowIntensityTrainingSplit, page.polarizedSplit.total > 0 || page.plannedPolarizedSplit.total > 0 {
                 litItem
             }
         }
@@ -166,8 +173,30 @@ private struct StatsPageView: View {
         page.load.formatted(Self.loadFormat)
     }
 
+    /// `nil` when nothing's still planned for this figure, so `statItem` falls back to its plain
+    /// label instead of a "0 planned" that would read as a real, deliberately-zero plan.
+    private var plannedDistanceString: String? {
+        guard page.plannedDistanceMeters > 0 else { return nil }
+        return Measurement(value: page.plannedDistanceMeters, unit: UnitLength.meters).formatted(Self.distanceFormat)
+    }
+
+    private var plannedDurationString: String? {
+        guard page.plannedTime > 0 else { return nil }
+        return Duration.seconds(page.plannedTime).formatted(.time(pattern: .hourMinuteSecond))
+    }
+
+    private var plannedLoadString: String? {
+        guard page.plannedLoad > 0 else { return nil }
+        return page.plannedLoad.formatted(Self.loadFormat)
+    }
+
     private var lowIntensityFractionString: String {
         page.polarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private var plannedLowIntensityFractionString: String? {
+        guard page.plannedPolarizedSplit.total > 0 else { return nil }
+        return page.plannedPolarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
     }
 
     /// "LIT" ("Low Intensity Training", MVP1-48) — the fraction of this sport's own zone-classified
@@ -176,26 +205,37 @@ private struct StatsPageView: View {
     /// to week, so a relative "+N%" on top would misleadingly suggest another running total (same
     /// reasoning this view used before it moved back inline). One step smaller than the other
     /// items' `.footnote` — a deliberately quieter, secondary figure next to Distance/Time/Load
-    /// rather than a fourth equally-weighted headline number.
+    /// rather than a fourth equally-weighted headline number. The still-planned fraction (MVP2-31)
+    /// replaces the plain "LIT" label the same way `statItem`'s other items do, when there's any
+    /// planned zone time to show.
     private var litItem: some View {
         VStack(alignment: .trailing, spacing: 0) {
-            Text(lowIntensityFractionString)
+            Text(page.polarizedSplit.total > 0 ? lowIntensityFractionString : "–")
                 .font(.caption)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text("LIT")
+            Text(plannedLowIntensityFractionString.map { "\($0) planned" } ?? "LIT")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         // Without this, VoiceOver reads the bare abbreviation as the literal word "lit" instead of
         // what it stands for — same problem `DayActivitiesSection`'s `MetricPillView` solves for
         // CTL/ATL/TSB by spelling out "Fitness"/"Fatigue"/"Form" rather than the raw abbreviation.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Low Intensity Training, \(lowIntensityFractionString)")
+        .accessibilityLabel(accessibilityLITLabel)
     }
 
-    private func statItem(value: String, changeFraction: Double, label: String) -> some View {
+    private var accessibilityLITLabel: String {
+        let performed = page.polarizedSplit.total > 0
+            ? "Low Intensity Training, \(lowIntensityFractionString)" : "Low Intensity Training, no data yet"
+        guard let plannedLowIntensityFractionString else { return performed }
+        return "\(performed), \(plannedLowIntensityFractionString) planned"
+    }
+
+    private func statItem(value: String, changeFraction: Double, label: String, plannedText: String?) -> some View {
         let percentText = Text(percentString(changeFraction))
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -221,9 +261,16 @@ private struct StatsPageView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(label)
+            // Folds the still-planned figure (MVP2-31) into this same secondary line rather than
+            // adding a third line -- this row is a fixed 44pt-tall pinned bar (see
+            // `SportStatsPagerView`'s own doc comment), which a genuine three-line stack (performed/
+            // planned/label) wouldn't comfortably fit without growing every page's height, sport or
+            // not. Falls back to the plain label when there's nothing planned for this figure.
+            Text(plannedText.map { "\(label) · \($0) planned" } ?? label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 
