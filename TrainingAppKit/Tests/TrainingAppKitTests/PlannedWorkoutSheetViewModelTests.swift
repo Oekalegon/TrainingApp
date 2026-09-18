@@ -111,10 +111,14 @@ struct PlannedWorkoutSheetViewModelTests {
         await viewModel.waitForGuardrailRecompute()
 
         #expect(!viewModel.guardrailFindings.isEmpty)
-        #expect(viewModel.guardrailFindings.contains { $0.rule == .atlToCTLRatio && $0.severity == .risk })
-        // TSB is the direct freshness signal (not a ratio proxy) -- the day after the addition
-        // should read as a genuine risk-level dip, independent of atlToCTLRatio firing too.
+        // TSB is the direct freshness signal -- the day after the addition should read as a
+        // genuine risk-level dip.
         #expect(viewModel.guardrailFindings.contains { $0.rule == .tsbBand && $0.severity == .risk })
+        // atlToCTLRatio is deliberately excluded from what the sheet surfaces: it normalizes
+        // fatigue against fitness as a ratio, which is hypersensitive at a low CTL baseline (a
+        // real report: CTL=9, ATL=14, TSB=-6 -- unremarkable per tsbBand -- already reads as
+        // ratio=1.56, over the risk threshold, from pre-existing state alone).
+        #expect(!viewModel.guardrailFindings.contains { $0.rule == .atlToCTLRatio })
         // Always populated now (not just when there are no findings), so "what would tomorrow's
         // TSB/ratio be" is directly checkable from the sheet.
         #expect(viewModel.guardrailDiagnostic != nil)

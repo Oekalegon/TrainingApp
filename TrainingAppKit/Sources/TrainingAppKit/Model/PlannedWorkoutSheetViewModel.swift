@@ -244,7 +244,15 @@ public final class PlannedWorkoutSheetViewModel {
 
         let evaluation = PlanEvaluator().evaluate(projectedMetrics, races: [], cycles: model.cycles)
         let displayedMetrics = projectedMetrics.filter { displayRange.contains($0.day) }
-        guardrailFindings = evaluation.findings.filter { displayRange.contains($0.day) }
+        // `atlToCTLRatio` excluded: it normalizes fatigue (ATL) against fitness (CTL) as a ratio,
+        // which is hypersensitive exactly when CTL is low -- a real report: CTL=9, ATL=14 (TSB=-6,
+        // an unremarkable, mild fatigue level `tsbBand` correctly stays silent on) already reads as
+        // ratio=1.56, over the 1.4 risk threshold, from the athlete's pre-existing state alone,
+        // before this addition contributes anything. `tsbBand` reads the same freshness signal
+        // directly (CTL-ATL) without that low-baseline distortion, so it's the one shown here.
+        guardrailFindings = evaluation.findings
+            .filter { displayRange.contains($0.day) }
+            .filter { $0.rule != .atlToCTLRatio }
         guardrailDiagnostic = Self.diagnosticDescription(seeded: seed != nil, displayedMetrics: displayedMetrics)
     }
 
