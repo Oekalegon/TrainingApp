@@ -100,7 +100,7 @@ struct SportStatsPagerView: View {
             .clipped()
         }
         .padding(.horizontal)
-        .frame(height: 44)
+        .frame(height: 64)
         // Without this, paging to a non-main-sport index and then navigating to a week with fewer
         // pages could leave `selectedIndex` pointing past the end of the new `pages`, or simply on
         // whatever sport happens to now sit at that same index rather than back on the main sport.
@@ -126,9 +126,9 @@ struct SportStatsPagerView: View {
     }
 }
 
-/// One page's Distance/Time/Load(/LIT) figures, each followed by its percentage change, with the
-/// week's still-open plan for that same figure folded into the label line below it (MVP2-31) — the
-/// swipeable content `SportStatsPagerView`'s carousel pages between.
+/// One page's Distance/Time/Load(/LIT) figures — three stacked rows per item (MVP2-31): the
+/// performed value (with its percentage change), the still-planned value below it, then the
+/// metric's own label — the swipeable content `SportStatsPagerView`'s carousel pages between.
 private struct StatsPageView: View {
     let page: SportStatsPage
 
@@ -205,21 +205,22 @@ private struct StatsPageView: View {
     /// to week, so a relative "+N%" on top would misleadingly suggest another running total (same
     /// reasoning this view used before it moved back inline). One step smaller than the other
     /// items' `.footnote` — a deliberately quieter, secondary figure next to Distance/Time/Load
-    /// rather than a fourth equally-weighted headline number. The still-planned fraction (MVP2-31)
-    /// replaces the plain "LIT" label the same way `statItem`'s other items do, when there's any
-    /// planned zone time to show.
+    /// rather than a fourth equally-weighted headline number.
     private var litItem: some View {
         VStack(alignment: .trailing, spacing: 0) {
             Text(page.polarizedSplit.total > 0 ? lowIntensityFractionString : "–")
-                .font(.caption)
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(plannedLowIntensityFractionString.map { "\($0) planned" } ?? "LIT")
-                .font(.caption2)
+            Text(plannedLowIntensityFractionString ?? "–")
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+            Text("LIT")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         // Without this, VoiceOver reads the bare abbreviation as the literal word "lit" instead of
         // what it stands for — same problem `DayActivitiesSection`'s `MetricPillView` solves for
@@ -257,20 +258,25 @@ private struct StatsPageView: View {
             // of each independently deciding its own; `.minimumScaleFactor` stays only as a safety
             // net for the rare value that's still too wide even at this smaller base.
             Text("\(value) \(percentText)")
-                .font(.footnote)
+                .font(.footnote.monospacedDigit())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            // Folds the still-planned figure (MVP2-31) into this same secondary line rather than
-            // adding a third line -- this row is a fixed 44pt-tall pinned bar (see
-            // `SportStatsPagerView`'s own doc comment), which a genuine three-line stack (performed/
-            // planned/label) wouldn't comfortably fit without growing every page's height, sport or
-            // not. Falls back to the plain label when there's nothing planned for this figure.
-            Text(plannedText.map { "\(label) · \($0) planned" } ?? label)
-                .font(.caption2)
+            // The still-planned value (MVP2-31), bare (no "planned" suffix -- its position below
+            // the performed row and above the metric label already reads as "the plan" without
+            // spelling it out) — "–" rather than blank when nothing's planned, so this row's height
+            // stays reserved and the label below doesn't visibly jump up a row depending on
+            // whether a plan exists. Same size and monospaced-digit font as the performed value
+            // above, so the two numbers line up as a column instead of the planned one reading as
+            // an afterthought.
+            Text(plannedText ?? "–")
+                .font(.footnote.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
