@@ -127,8 +127,17 @@ struct SportStatsPagerView: View {
 }
 
 /// One page's Distance/Time/Load(/LIT) figures — three stacked rows per item (MVP2-31): the
-/// performed value (with its percentage change), the still-planned value below it, then the
-/// metric's own label — the swipeable content `SportStatsPagerView`'s carousel pages between.
+/// performed value so far (with its percentage change), the *expected* end-of-week value below it
+/// (performed + still-planned), then the metric's own label — the swipeable content
+/// `SportStatsPagerView`'s carousel pages between.
+///
+/// Expected, not the plan's own remaining-only figure: for a week that straddles today, "what's
+/// still planned" alone can't be read at a glance against "what's been done" the way "where this
+/// week is headed in total" can — the two numbers would need mental addition to answer the more
+/// useful question. This also means the two rows only diverge for a week containing `today`: a
+/// fully past week has nothing planned left (expected == performed), and a fully future week has
+/// nothing performed yet (expected == planned) — both fall back to `statItem`'s "–" placeholder
+/// rather than showing the same number twice.
 private struct StatsPageView: View {
     let page: SportStatsPage
 
@@ -146,14 +155,14 @@ private struct StatsPageView: View {
             if page.sport.isEndurance {
                 statItem(
                     value: distanceString, changeFraction: page.distanceChangeFraction, label: "Distance",
-                    plannedText: plannedDistanceString
+                    expectedText: expectedDistanceString
                 )
                 statItem(
                     value: durationString, changeFraction: page.timeChangeFraction, label: "Time",
-                    plannedText: plannedDurationString
+                    expectedText: expectedDurationString
                 )
             }
-            statItem(value: loadString, changeFraction: page.loadChangeFraction, label: "Load", plannedText: plannedLoadString)
+            statItem(value: loadString, changeFraction: page.loadChangeFraction, label: "Load", expectedText: expectedLoadString)
             if page.sport.supportsLowIntensityTrainingSplit, page.polarizedSplit.total > 0 || page.plannedPolarizedSplit.total > 0 {
                 litItem
             }
@@ -173,30 +182,33 @@ private struct StatsPageView: View {
         page.load.formatted(Self.loadFormat)
     }
 
-    /// `nil` when nothing's still planned for this figure, so `statItem` falls back to its plain
-    /// label instead of a "0 planned" that would read as a real, deliberately-zero plan.
-    private var plannedDistanceString: String? {
+    /// `nil` when nothing's still planned for this figure (expected == performed already), so
+    /// `statItem` falls back to its plain "–" placeholder instead of showing the same number twice.
+    private var expectedDistanceString: String? {
         guard page.plannedDistanceMeters > 0 else { return nil }
-        return Measurement(value: page.plannedDistanceMeters, unit: UnitLength.meters).formatted(Self.distanceFormat)
+        let expected = page.distanceMeters + page.plannedDistanceMeters
+        return Measurement(value: expected, unit: UnitLength.meters).formatted(Self.distanceFormat)
     }
 
-    private var plannedDurationString: String? {
+    private var expectedDurationString: String? {
         guard page.plannedTime > 0 else { return nil }
-        return Duration.seconds(page.plannedTime).formatted(.time(pattern: .hourMinuteSecond))
+        return Duration.seconds(page.time + page.plannedTime).formatted(.time(pattern: .hourMinuteSecond))
     }
 
-    private var plannedLoadString: String? {
+    private var expectedLoadString: String? {
         guard page.plannedLoad > 0 else { return nil }
-        return page.plannedLoad.formatted(Self.loadFormat)
+        return (page.load + page.plannedLoad).formatted(Self.loadFormat)
     }
 
     private var lowIntensityFractionString: String {
         page.polarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
     }
 
-    private var plannedLowIntensityFractionString: String? {
+    /// `nil` when nothing's still planned (expected == performed already) — same reasoning as
+    /// `expectedDistanceString`.
+    private var expectedLowIntensityFractionString: String? {
         guard page.plannedPolarizedSplit.total > 0 else { return nil }
-        return page.plannedPolarizedSplit.lowFraction.formatted(.percent.precision(.fractionLength(0)))
+        return (page.polarizedSplit + page.plannedPolarizedSplit).lowFraction.formatted(.percent.precision(.fractionLength(0)))
     }
 
     /// "LIT" ("Low Intensity Training", MVP1-48) — the fraction of this sport's own zone-classified
@@ -213,7 +225,7 @@ private struct StatsPageView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(plannedLowIntensityFractionString ?? "–")
+            Text(expectedLowIntensityFractionString ?? "–")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -232,11 +244,11 @@ private struct StatsPageView: View {
     private var accessibilityLITLabel: String {
         let performed = page.polarizedSplit.total > 0
             ? "Low Intensity Training, \(lowIntensityFractionString)" : "Low Intensity Training, no data yet"
-        guard let plannedLowIntensityFractionString else { return performed }
-        return "\(performed), \(plannedLowIntensityFractionString) planned"
+        guard let expectedLowIntensityFractionString else { return performed }
+        return "\(performed), \(expectedLowIntensityFractionString) expected by end of week"
     }
 
-    private func statItem(value: String, changeFraction: Double, label: String, plannedText: String?) -> some View {
+    private func statItem(value: String, changeFraction: Double, label: String, expectedText: String?) -> some View {
         let percentText = Text(percentString(changeFraction))
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -262,14 +274,15 @@ private struct StatsPageView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            // The still-planned value (MVP2-31), bare (no "planned" suffix -- its position below
-            // the performed row and above the metric label already reads as "the plan" without
-            // spelling it out) — "–" rather than blank when nothing's planned, so this row's height
+            // The expected end-of-week value (performed + still-planned, MVP2-31), bare (no
+            // "expected" suffix -- its position below the performed row and above the metric label
+            // already reads as a forecast without spelling it out) — "–" rather than blank when
+            // there's nothing still planned (expected == performed already), so this row's height
             // stays reserved and the label below doesn't visibly jump up a row depending on
             // whether a plan exists. Same size and monospaced-digit font as the performed value
-            // above, so the two numbers line up as a column instead of the planned one reading as
+            // above, so the two numbers line up as a column instead of the second one reading as
             // an afterthought.
-            Text(plannedText ?? "–")
+            Text(expectedText ?? "–")
                 .font(.footnote.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
