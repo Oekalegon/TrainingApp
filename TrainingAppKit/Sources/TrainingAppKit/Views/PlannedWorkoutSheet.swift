@@ -41,6 +41,7 @@ struct PlannedWorkoutSheet: View {
     @State private var isShowingSaveError = false
 
     private static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
+    private static let dayRangeFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
 
     var body: some View {
         NavigationStack {
@@ -83,11 +84,26 @@ struct PlannedWorkoutSheet: View {
                         }
                     }
 
-                    if !viewModel.guardrailFindings.isEmpty {
+                    if !viewModel.guardrailSummaries.isEmpty {
                         Section("Guardrail Warnings") {
-                            ForEach(Array(viewModel.guardrailFindings.enumerated()), id: \.offset) { _, finding in
-                                Label(finding.rule.displayName, systemImage: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(finding.severity.tintColor)
+                            ForEach(viewModel.guardrailSummaries) { summary in
+                                Label {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(summary.rule.displayName)
+                                        if summary.dayCount > 1 {
+                                            Text("\(summary.firstDay.formatted(Self.dayRangeFormat)) – \(summary.lastDay.formatted(Self.dayRangeFormat)) · \(summary.dayCount) days")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        } else {
+                                            Text(summary.firstDay.formatted(Self.dayRangeFormat))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                } icon: {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                }
+                                .foregroundStyle(summary.severity.tintColor)
                             }
                         }
                     } else if let guardrailDiagnostic = viewModel.guardrailDiagnostic {

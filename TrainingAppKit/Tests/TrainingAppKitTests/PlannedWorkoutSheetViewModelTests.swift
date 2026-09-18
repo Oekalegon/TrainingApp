@@ -116,6 +116,45 @@ struct PlannedWorkoutSheetViewModelTests {
         // should read as a genuine risk-level dip, independent of atlToCTLRatio firing too.
         #expect(viewModel.guardrailFindings.contains { $0.rule == .tsbBand && $0.severity == .risk })
         #expect(viewModel.guardrailDiagnostic == nil)
+
+        // The recovery from a single big addition spans several consecutive days per rule --
+        // guardrailSummaries should collapse each rule's run(s) into far fewer rows than one per
+        // day, though not necessarily exactly one per rule: a rule can dip out of band, briefly
+        // recover, then dip again, which is genuinely two separate runs (contiguity is checked
+        // precisely by the dedicated grouping test below).
+        #expect(viewModel.guardrailSummaries.count < viewModel.guardrailFindings.count)
+        let distinctRules = Set(viewModel.guardrailFindings.map(\.rule))
+        #expect(Set(viewModel.guardrailSummaries.map(\.rule)) == distinctRules)
+    }
+
+    @Test("guardrailSummaries collapses a contiguous run of the same rule into one entry with a day range")
+    func guardrailSummariesCollapseContiguousRuns() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        // Synthesize three consecutive days of the same rule plus one separate day, bypassing the
+        // real projection (already covered by other tests) to test the grouping logic in isolation.
+        let findings = [
+            PlanFinding(day: day(0), rule: .tsbBand, severity: .warning, value: 30, threshold: 25),
+            PlanFinding(day: day(1), rule: .tsbBand, severity: .risk, value: -40, threshold: -30),
+            PlanFinding(day: day(2), rule: .tsbBand, severity: .warning, value: 28, threshold: 25),
+            PlanFinding(day: day(5), rule: .atlToCTLRatio, severity: .risk, value: 1.6, threshold: 1.4),
+        ]
+        viewModel.setGuardrailFindingsForTesting(findings)
+
+        let summaries = viewModel.guardrailSummaries
+        #expect(summaries.count == 2)
+        let tsbSummary = summaries.first { $0.rule == .tsbBand }
+        #expect(tsbSummary?.dayCount == 3)
+        #expect(tsbSummary?.firstDay == day(0))
+        #expect(tsbSummary?.lastDay == day(2))
+        // Worst severity across the run, not the first/last day's own.
+        #expect(tsbSummary?.severity == .risk)
+        let ratioSummary = summaries.first { $0.rule == .atlToCTLRatio }
+        #expect(ratioSummary?.dayCount == 1)
+        // Sorted worst-severity first; both runs here are .risk, so earliest day breaks the tie.
+        #expect(summaries.first?.rule == .tsbBand)
     }
 
     @Test("save() persists a library workout and a matching planned activity")

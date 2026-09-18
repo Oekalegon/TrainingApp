@@ -66,6 +66,41 @@ public final class PlannedWorkoutSheetViewModel {
     public private(set) var saveError: String?
     public private(set) var isSaving = false
 
+    /// ``guardrailFindings`` collapsed into one row per contiguous run of the same rule, for
+    /// display. `PlanEvaluator` emits a separate finding for every day a rule stays in breach, so a
+    /// single sustained excursion (e.g. TSB taking 6 days to recover after a big addition) would
+    /// otherwise read as 6 near-identical rows saying the same thing. Sorted worst-severity first,
+    /// then by earliest day.
+    public var guardrailSummaries: [GuardrailSummary] {
+        let calendar = athleteCalendar
+        var summaries: [GuardrailSummary] = []
+        for (rule, findings) in Dictionary(grouping: guardrailFindings, by: \.rule) {
+            let sorted = findings.sorted { $0.day < $1.day }
+            var runStart = sorted.startIndex
+            for index in sorted.indices {
+                let nextDayInRun = calendar.date(byAdding: .day, value: 1, to: sorted[index].day)
+                let isRunBoundary = index == sorted.index(before: sorted.endIndex)
+                    || nextDayInRun != sorted[index + 1].day
+                guard isRunBoundary else { continue }
+                let run = sorted[runStart...index]
+                summaries.append(
+                    GuardrailSummary(
+                        rule: rule,
+                        severity: run.contains { $0.severity == .risk } ? .risk
+                            : run.contains { $0.severity == .warning } ? .warning : .info,
+                        firstDay: run.first!.day,
+                        lastDay: run.last!.day,
+                        dayCount: run.count
+                    )
+                )
+                runStart = index + 1
+            }
+        }
+        return summaries.sorted {
+            $0.severity != $1.severity ? $0.severity.isMoreSevere(than: $1.severity) : $0.firstDay < $1.firstDay
+        }
+    }
+
     /// Creates a planned-workout sheet view model.
     ///
     /// - Parameters:
@@ -243,6 +278,13 @@ public final class PlannedWorkoutSheetViewModel {
     /// (tests, mainly) that await a recompute settling don't need to change.
     public func waitForGuardrailRecompute() async {}
 
+    /// Test seam for ``guardrailSummaries``' grouping logic in isolation, without needing a real
+    /// projection to produce a specific set of findings. Internal (not `public`), reachable from
+    /// `TrainingAppKitTests` via `@testable import` only.
+    func setGuardrailFindingsForTesting(_ findings: [PlanFinding]) {
+        guardrailFindings = findings
+    }
+
     private var athleteCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = model.athlete.timeZone
@@ -275,5 +317,36 @@ public final class PlannedWorkoutSheetViewModel {
             saveError = "Couldn't save this workout: \(error.localizedDescription)"
             return false
         }
+    }
+}
+
+/// One contiguous run of the same ``PlanRule`` across consecutive days, as grouped by
+/// ``PlannedWorkoutSheetViewModel/guardrailSummaries``.
+public struct GuardrailSummary: Sendable, Hashable, Identifiable {
+    public let rule: PlanRule
+    /// The worst (most severe) severity among the findings in this run.
+    public let severity: Severity
+    public let firstDay: Date
+    public let lastDay: Date
+    /// How many consecutive days this run spans — always `>= 1`.
+    public let dayCount: Int
+
+    public var id: [AnyHashable] { [AnyHashable(rule), AnyHashable(firstDay)] }
+}
+
+extension Severity {
+    /// `true` if `self` should be treated as worse than `other` — `.risk` > `.warning` > `.info`.
+    /// `TrainingCore` doesn't make `Severity` itself `Comparable` (its declaration order already
+    /// happens to match this, but that's an implementation detail this makes explicit instead of
+    /// relying on).
+    func isMoreSevere(than other: Severity) -> Bool {
+        func rank(_ severity: Severity) -> Int {
+            switch severity {
+            case .risk: 0
+            case .warning: 1
+            case .info: 2
+            }
+        }
+        return rank(self) < rank(other)
     }
 }
