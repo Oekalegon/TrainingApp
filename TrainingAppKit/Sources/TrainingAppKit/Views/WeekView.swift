@@ -563,7 +563,7 @@ public struct WeekView: View {
         VStack(spacing: 0) {
             Divider()
             SportStatsPagerView(pages: viewModel.sportStatsPages(for: weekStart))
-                .padding(.vertical, 12)
+                .padding(.vertical, 4)
             Divider()
         }
         .background(.thinMaterial)
