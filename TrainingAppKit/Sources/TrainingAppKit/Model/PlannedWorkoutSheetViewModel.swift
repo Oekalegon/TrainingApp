@@ -177,15 +177,21 @@ public final class PlannedWorkoutSheetViewModel {
         let evaluationRange = Self.evaluationRange(around: date, calendar: calendar)
         let displayRange = Self.displayRange(around: date, calendar: calendar)
         guardrailTask = Task { [weak self] in
-            guard let sandbox = try? await PlanSandbox(snapshotOf: stores, range: evaluationRange) else {
-                // Most commonly `PlanSandboxError.missingAthleteProfile` -- `TrainingModel.athlete`
-                // is a plain, caller-managed property that isn't necessarily saved to the store
-                // yet. Clears rather than leaving a stale value from a previous (successful)
-                // recompute in place, which would otherwise silently keep showing findings for
-                // whatever the template/parameters used to be.
+            let sandbox: PlanSandbox
+            do {
+                sandbox = try await PlanSandbox(snapshotOf: stores, range: evaluationRange)
+            } catch {
+                // `PlanSandbox.init` throws for more than just a missing athlete profile: the
+                // `athleteStore` check is a `guard`, but the plans/workouts/cycles/activities
+                // fetches right after it are all `try await`'d too, so any store fetch failure
+                // (e.g. a real SwiftData decode error) throws the exact same way. Surfacing
+                // `error` itself rather than guessing which one it was -- clears rather than
+                // leaving a stale value from a previous (successful) recompute in place, which
+                // would otherwise silently keep showing findings for whatever the
+                // template/parameters used to be.
                 guard !Task.isCancelled, let self else { return }
                 self.guardrailFindings = []
-                self.guardrailDiagnostic = "Guardrail check unavailable right now."
+                self.guardrailDiagnostic = "Guardrail check unavailable: \(error)"
                 return
             }
             await sandbox.setWorkouts(await sandbox.workouts + [workout])
