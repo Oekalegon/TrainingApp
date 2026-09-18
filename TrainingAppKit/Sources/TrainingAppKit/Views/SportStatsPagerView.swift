@@ -244,9 +244,11 @@ private struct StatsPageView: View {
                         .minimumScaleFactor(0.7)
                 }
             } else if let expectedLowIntensityFractionString {
+                // Still only a plan, not something that happened yet -- `.secondary`, matching
+                // `statItem`'s own future-week-alone treatment.
                 Text(expectedLowIntensityFractionString)
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -330,12 +332,13 @@ private struct StatsPageView: View {
                 }
             } else if let expectedText {
                 // Nothing performed yet this week (a fully future week, or today's own plan not
-                // yet done) -- the expected figure *is* the plan in full, so it stands alone as
-                // this item's one value, styled the same as a normal performed row rather than
-                // reading as a lesser, secondary figure.
+                // yet done) -- the expected figure *is* the plan in full, but it's still only a
+                // plan, not something that actually happened, so it stays in `.secondary` the same
+                // as it would be if a performed row were also present above it, rather than
+                // reading as equivalent to a real performed figure.
                 valueWithPercent(expectedText, changeFraction: expectedChangeFraction)
                     .font(.footnote.monospacedDigit())
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             } else {
