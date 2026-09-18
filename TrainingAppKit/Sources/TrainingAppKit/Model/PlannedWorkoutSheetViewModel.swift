@@ -307,8 +307,12 @@ public final class PlannedWorkoutSheetViewModel {
     /// The earliest day the sheet's `DatePicker` may select — today, in the athlete's calendar.
     /// Matches `WeekViewModel.isPast`'s day-boundary semantics so the in-sheet picker can't be
     /// used to route around the same past-date rule the "+" entry point enforces.
-    public var minimumDate: Date {
-        athleteCalendar.startOfDay(for: .now)
+    ///
+    /// - Parameter today: Injected rather than read from `.now` internally, matching
+    ///   `WeekViewModel.isPast(_:asOf:)`'s own convention (and `TrainingModel.recompute(asOf:)`'s,
+    ///   further up the stack) — lets a test pin an exact boundary instead of racing `.now`.
+    public func minimumDate(asOf today: Date = .now) -> Date {
+        athleteCalendar.startOfDay(for: today)
     }
 
     /// Instantiates the selected template, syncs it to WorkoutKit, and schedules it — `true` on
@@ -321,6 +325,17 @@ public final class PlannedWorkoutSheetViewModel {
     /// iCloud unavailable), the workout was already permanently in the library with no
     /// `PlannedActivity` referencing it, and retrying minted a second, equally orphaned workout
     /// (`instantiate` assigns a fresh id every call).
+    ///
+    /// Not fully airtight the other way, deliberately: if `schedule` succeeds and then
+    /// `model.add(workout)`/`model.add(plan)` throws (a local store write failing, e.g. a
+    /// transient CloudKit error), WorkoutKit now has a real scheduled workout with nothing in
+    /// TrainingApp's own store referencing it — worse than the orphan above, since it's visible to
+    /// the athlete on their Watch with no way to manage it from the app. This ordering accepts
+    /// that residual risk rather than eliminating it, on the bet that a local write failing right
+    /// after a successful WorkoutKit call is far rarer than WorkoutKit itself failing; genuinely
+    /// closing it would need real reconciliation (a "pending schedule" outbox, or reading
+    /// `WorkoutScheduler`'s own state back on next launch), which is more machinery than this MVP
+    /// feature justifies today.
     @discardableResult
     public func save() async -> Bool {
         // Guards against a double-tap landing before the `Task` wrapping this call has actually

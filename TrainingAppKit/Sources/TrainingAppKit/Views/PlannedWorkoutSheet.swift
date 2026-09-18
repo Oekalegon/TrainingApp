@@ -57,7 +57,7 @@ struct PlannedWorkoutSheet: View {
                     // Lower-bounded so this can't be used to route around the same past-date rule
                     // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
                     // sheet opened for today could still be scrolled back to yesterday from here.
-                    DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate..., displayedComponents: .date)
+                    DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate()..., displayedComponents: .date)
                 }
 
                 if let selectedTemplate = viewModel.selectedTemplate {

@@ -242,14 +242,16 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(model.plans.count == 1)
     }
 
-    @Test("minimumDate is today's calendar day in the athlete's timezone")
-    func minimumDateIsStartOfTodayInAthleteTimeZone() async {
+    @Test("minimumDate(asOf:) is the given day's calendar start in the athlete's timezone")
+    func minimumDateIsStartOfGivenDayInAthleteTimeZone() async {
         let (_, model) = await makeModel()
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = model.athlete.timeZone
-        #expect(viewModel.minimumDate == calendar.startOfDay(for: .now))
+        // Pinned to day(5) rather than .now -- matches WeekViewModel.isPast(_:asOf:)'s own
+        // injectable-`today` convention, so this doesn't race a real midnight boundary.
+        #expect(viewModel.minimumDate(asOf: day(5)) == calendar.startOfDay(for: day(5)))
     }
 }
 
