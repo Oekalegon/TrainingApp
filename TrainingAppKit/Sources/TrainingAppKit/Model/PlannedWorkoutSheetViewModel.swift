@@ -53,12 +53,14 @@ public final class PlannedWorkoutSheetViewModel {
     /// ``PlanEvaluator`` without ever touching the store. Empty (not an error state) whenever
     /// nothing has been evaluated yet or there's genuinely nothing to flag.
     public private(set) var guardrailFindings: [PlanFinding] = []
-    /// Shown alongside an empty ``guardrailFindings`` — the raw per-day CTL/ATL/TSB/warmup values
-    /// the projection actually produced, rather than an interpretation of them: this view model has
-    /// twice guessed wrong at *why* nothing was flagged (missing-athlete-profile, then "not enough
-    /// history" — see git history), so it now surfaces the numbers themselves and leaves reading
-    /// them to whoever's looking. `nil` once at least one finding exists, or before the sheet's
-    /// first recompute.
+    /// The raw per-day CTL/ATL/TSB/ATL-CTL-ratio/warmup values the projection actually produced,
+    /// rather than an interpretation of them: this view model has repeatedly guessed wrong at *why*
+    /// a particular finding did or didn't fire (missing-athlete-profile, then "not enough history",
+    /// then a specific risk/warning pair that didn't reproduce with assumed numbers — see git
+    /// history), so it surfaces the numbers themselves and leaves reading them to whoever's looking.
+    /// Always populated once a template is selected (not just when ``guardrailFindings`` is empty)
+    /// so "what would tomorrow's TSB/ratio be" is directly checkable rather than asked about. `nil`
+    /// before the sheet's first recompute.
     public private(set) var guardrailDiagnostic: String?
     /// Set when ``save()`` fails — a WorkoutKit mapping error (unsupported activity/goal/alert) or
     /// a store failure. The sheet shows this as a blocking alert, distinct from the non-blocking
@@ -243,23 +245,26 @@ public final class PlannedWorkoutSheetViewModel {
         let evaluation = PlanEvaluator().evaluate(projectedMetrics, races: [], cycles: model.cycles)
         let displayedMetrics = projectedMetrics.filter { displayRange.contains($0.day) }
         guardrailFindings = evaluation.findings.filter { displayRange.contains($0.day) }
-        guardrailDiagnostic = guardrailFindings.isEmpty
-            ? Self.diagnosticDescription(seeded: seed != nil, displayedMetrics: displayedMetrics)
-            : nil
+        guardrailDiagnostic = Self.diagnosticDescription(seeded: seed != nil, displayedMetrics: displayedMetrics)
     }
 
-    /// One line per day in `displayedMetrics` with its raw CTL/ATL/TSB/``FitnessMetrics/isWarmingUp``
-    /// values, plus whether the projection found a real day to seed from at all — rather than an
-    /// interpretation of them (see ``recomputeGuardrails()``'s own doc comment for why this view
-    /// model stopped trying to explain that in English).
+    /// One line per day in `displayedMetrics` with its raw CTL/ATL/TSB/ATL-CTL-ratio/
+    /// ``FitnessMetrics/isWarmingUp`` values, plus whether the projection found a real day to seed
+    /// from at all — rather than an interpretation of them (see ``recomputeGuardrails()``'s own doc
+    /// comment for why this view model stopped trying to explain that in English). The ratio is
+    /// computed here the same way ``PlanEvaluator``'s `atlToCTLRatioFindings` does (`atl/ctl`, `n/a`
+    /// for a zero-CTL day) so this always matches whatever that rule actually compared against its
+    /// thresholds.
     private static func diagnosticDescription(seeded: Bool, displayedMetrics: [FitnessMetrics]) -> String {
         guard !displayedMetrics.isEmpty else {
             return "No projected days landed in the display window."
         }
         let dateFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
-        let lines = displayedMetrics.map { entry in
-            "\(entry.day.formatted(dateFormat)): CTL=\(entry.ctl.rounded()) ATL=\(entry.atl.rounded()) "
-                + "TSB=\(entry.tsb.rounded()) warmingUp=\(entry.isWarmingUp)"
+        let lines = displayedMetrics.map { entry -> String in
+            let ratio = entry.ctl > 0 ? entry.atl / entry.ctl : nil
+            let ratioText = ratio.map { String(format: "%.2f", $0) } ?? "n/a"
+            return "\(entry.day.formatted(dateFormat)): CTL=\(entry.ctl.rounded()) ATL=\(entry.atl.rounded()) "
+                + "TSB=\(entry.tsb.rounded()) ratio=\(ratioText) warmingUp=\(entry.isWarmingUp)"
         }
         let header = seeded ? "Seeded from real history." : "No real prior day found to seed from."
         return ([header] + lines).joined(separator: "\n")

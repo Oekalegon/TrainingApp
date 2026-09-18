@@ -115,7 +115,10 @@ struct PlannedWorkoutSheetViewModelTests {
         // TSB is the direct freshness signal (not a ratio proxy) -- the day after the addition
         // should read as a genuine risk-level dip, independent of atlToCTLRatio firing too.
         #expect(viewModel.guardrailFindings.contains { $0.rule == .tsbBand && $0.severity == .risk })
-        #expect(viewModel.guardrailDiagnostic == nil)
+        // Always populated now (not just when there are no findings), so "what would tomorrow's
+        // TSB/ratio be" is directly checkable from the sheet.
+        #expect(viewModel.guardrailDiagnostic != nil)
+        #expect(viewModel.guardrailDiagnostic?.contains("ratio=") == true)
 
         // The recovery from a single big addition spans several consecutive days per rule --
         // guardrailSummaries should collapse each rule's run(s) into far fewer rows than one per

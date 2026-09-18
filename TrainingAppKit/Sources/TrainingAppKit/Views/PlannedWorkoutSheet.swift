@@ -106,11 +106,15 @@ struct PlannedWorkoutSheet: View {
                                 .foregroundStyle(summary.severity.tintColor)
                             }
                         }
-                    } else if let guardrailDiagnostic = viewModel.guardrailDiagnostic {
-                        Section("Guardrail Warnings") {
-                            Text(guardrailDiagnostic)
-                                .font(.caption.monospaced())
-                                .foregroundStyle(.secondary)
+                    }
+
+                    if let guardrailDiagnostic = viewModel.guardrailDiagnostic {
+                        Section {
+                            DisclosureGroup("Projected CTL/ATL/TSB/ratio by day") {
+                                Text(guardrailDiagnostic)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
