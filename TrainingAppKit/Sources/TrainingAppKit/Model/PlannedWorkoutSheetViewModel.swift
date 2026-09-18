@@ -54,13 +54,12 @@ public final class PlannedWorkoutSheetViewModel {
     /// ``PlanSandbox``/``PlanEvaluator`` without ever committing it. Empty (not an error state)
     /// whenever nothing has been evaluated yet or the sandbox couldn't be built.
     public private(set) var guardrailFindings: [PlanFinding] = []
-    /// Explains an empty ``guardrailFindings`` when that's plausibly *not* "nothing to flag" —
-    /// distinguishes the sandbox failing to build at all (most commonly: `TrainingModel.athlete`
-    /// hasn't been saved to the store yet) from the simulation running but every day in the
-    /// display window still being ``FitnessMetrics/isWarmingUp`` (not enough real training history
-    /// in the lookback window for CTL/ATL to mean anything yet, which silently suppresses every
-    /// cycle-free `PlanEvaluator` rule). `nil` once at least one finding exists, or before the
-    /// sheet's first recompute.
+    /// Shown alongside an empty ``guardrailFindings`` — the raw per-day CTL/ATL/ratio/warmup values
+    /// the simulation actually produced, rather than an interpretation of them: this view model has
+    /// twice guessed wrong at *why* nothing was flagged (missing-athlete-profile, then "not enough
+    /// history" — see git history), so it now surfaces the numbers themselves and leaves reading
+    /// them to whoever's looking. `nil` once at least one finding exists, or before the sheet's
+    /// first recompute.
     public private(set) var guardrailDiagnostic: String?
     /// Set when ``save()`` fails — a WorkoutKit mapping error (unsupported activity/goal/alert) or
     /// a store failure. The sheet shows this as a blocking alert, distinct from the non-blocking
@@ -202,12 +201,27 @@ public final class PlannedWorkoutSheetViewModel {
             guard !Task.isCancelled, let self else { return }
             let displayedMetrics = result.metrics.filter { displayRange.contains($0.day) }
             self.guardrailFindings = result.evaluation.findings.filter { displayRange.contains($0.day) }
-            if self.guardrailFindings.isEmpty, !displayedMetrics.isEmpty, displayedMetrics.allSatisfy(\.isWarmingUp) {
-                self.guardrailDiagnostic = "Not enough recent training history yet to check guardrails for this addition."
-            } else {
-                self.guardrailDiagnostic = nil
-            }
+            self.guardrailDiagnostic = self.guardrailFindings.isEmpty
+                ? Self.diagnosticDescription(simulatedDayCount: result.metrics.count, displayedMetrics: displayedMetrics)
+                : nil
         }
+    }
+
+    /// One line per day in `displayedMetrics` with its raw CTL/ATL/ratio/``FitnessMetrics/isWarmingUp``
+    /// values, plus how many days the sandbox actually simulated in total (`simulatedDayCount`) --
+    /// e.g. a suspiciously small count is itself evidence the ``evaluationRange(around:calendar:)``
+    /// fetch isn't finding the real history it should.
+    private static func diagnosticDescription(simulatedDayCount: Int, displayedMetrics: [FitnessMetrics]) -> String {
+        guard !displayedMetrics.isEmpty else {
+            return "No projected days landed in the display window (\(simulatedDayCount) total days simulated)."
+        }
+        let dateFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
+        let lines = displayedMetrics.map { entry in
+            let ratio = entry.ctl > 0 ? entry.atl / entry.ctl : Double.nan
+            return "\(entry.day.formatted(dateFormat)): CTL=\(entry.ctl.rounded()) ATL=\(entry.atl.rounded()) "
+                + "ratio=\(ratio.isNaN ? "n/a" : String(format: "%.2f", ratio)) warmingUp=\(entry.isWarmingUp)"
+        }
+        return (["\(simulatedDayCount) days simulated total"] + lines).joined(separator: "\n")
     }
 
     /// `date` is typically a "day" only in intent — the sheet's default is `.now` and a

@@ -92,6 +92,7 @@ struct PlannedWorkoutSheet: View {
                     } else if let guardrailDiagnostic = viewModel.guardrailDiagnostic {
                         Section("Guardrail Warnings") {
                             Text(guardrailDiagnostic)
+                                .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
                         }
                     }

@@ -82,9 +82,8 @@ struct PlannedWorkoutSheetViewModelTests {
             #expect(finding.day >= plannedDate)
             #expect(finding.day <= plannedDate.addingTimeInterval(14 * 86400))
         }
-        // With zero real activity history, every day in the display window is still
-        // `FitnessMetrics.isWarmingUp` -- the diagnostic should say so rather than silently
-        // reading as "nothing to flag".
+        // Empty findings get a raw-numbers diagnostic instead of reading as silent "nothing to
+        // flag" -- doesn't assert the exact text, just that one is present.
         #expect(viewModel.guardrailDiagnostic != nil)
     }
 
