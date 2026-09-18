@@ -112,6 +112,9 @@ struct PlannedWorkoutSheetViewModelTests {
 
         #expect(!viewModel.guardrailFindings.isEmpty)
         #expect(viewModel.guardrailFindings.contains { $0.rule == .atlToCTLRatio && $0.severity == .risk })
+        // TSB is the direct freshness signal (not a ratio proxy) -- the day after the addition
+        // should read as a genuine risk-level dip, independent of atlToCTLRatio firing too.
+        #expect(viewModel.guardrailFindings.contains { $0.rule == .tsbBand && $0.severity == .risk })
         #expect(viewModel.guardrailDiagnostic == nil)
     }
 

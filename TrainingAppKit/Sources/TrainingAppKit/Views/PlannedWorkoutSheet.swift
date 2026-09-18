@@ -8,6 +8,7 @@ private extension PlanRule {
         switch self {
         case .ctlRamp: "Fitness ramping up fast"
         case .atlToCTLRatio: "Fatigue-to-fitness ratio"
+        case .tsbBand: "Form (TSB) out of range"
         case .monotony: "Monotony"
         case .strain: "Strain"
         case .raceDayTSB: "Form on race day"
