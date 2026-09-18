@@ -304,12 +304,29 @@ public final class PlannedWorkoutSheetViewModel {
         return calendar
     }
 
+    /// The earliest day the sheet's `DatePicker` may select — today, in the athlete's calendar.
+    /// Matches `WeekViewModel.isPast`'s day-boundary semantics so the in-sheet picker can't be
+    /// used to route around the same past-date rule the "+" entry point enforces.
+    public var minimumDate: Date {
+        athleteCalendar.startOfDay(for: .now)
+    }
+
     /// Instantiates the selected template, syncs it to WorkoutKit, and schedules it — `true` on
     /// success, in which case the sheet dismisses; `false` leaves ``saveError`` set for the sheet
     /// to show.
+    ///
+    /// Nothing is persisted to `model` until sync *and* schedule have both already succeeded: an
+    /// earlier version called `model.add(workout)` right after `sync`, before `schedule` — if
+    /// `schedule` then failed (a real possibility on-device: no Watch paired, permission revoked,
+    /// iCloud unavailable), the workout was already permanently in the library with no
+    /// `PlannedActivity` referencing it, and retrying minted a second, equally orphaned workout
+    /// (`instantiate` assigns a fresh id every call).
     @discardableResult
     public func save() async -> Bool {
-        guard let selectedTemplate else { return false }
+        // Guards against a double-tap landing before the `Task` wrapping this call has actually
+        // started running (and so before `isSaving` below would otherwise have caught it), which
+        // would otherwise instantiate and persist two separate workouts for one tap.
+        guard !isSaving, let selectedTemplate else { return false }
         isSaving = true
         defer { isSaving = false }
         do {
@@ -319,11 +336,11 @@ public final class PlannedWorkoutSheetViewModel {
             if let scheduler {
                 workout.workoutKitID = try await scheduler.sync(workout)
             }
-            try await model.add(workout)
             let plan = PlannedActivity(workoutID: workout.id, date: date)
             if let scheduler {
                 try await scheduler.schedule(plan, workout: workout, calendar: athleteCalendar)
             }
+            try await model.add(workout)
             try await model.add(plan)
             return true
         } catch {

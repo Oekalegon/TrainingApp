@@ -54,7 +54,10 @@ struct PlannedWorkoutSheet: View {
                         }
                     }
                     TextField("Name", text: $viewModel.workoutName)
-                    DatePicker("Date", selection: $viewModel.date, displayedComponents: .date)
+                    // Lower-bounded so this can't be used to route around the same past-date rule
+                    // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
+                    // sheet opened for today could still be scrolled back to yesterday from here.
+                    DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate..., displayedComponents: .date)
                 }
 
                 if let selectedTemplate = viewModel.selectedTemplate {
@@ -84,9 +87,10 @@ struct PlannedWorkoutSheet: View {
                         }
                     }
 
-                    if !viewModel.guardrailSummaries.isEmpty {
+                    let guardrailSummaries = viewModel.guardrailSummaries
+                    if !guardrailSummaries.isEmpty {
                         Section("Guardrail Warnings") {
-                            ForEach(viewModel.guardrailSummaries) { summary in
+                            ForEach(guardrailSummaries) { summary in
                                 Label {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(summary.rule.displayName)
@@ -155,8 +159,16 @@ private struct ParameterRow: View {
     let parameter: WorkoutTemplateParameter
     @Binding var value: Double
 
+    /// Falls back to half/double `defaultValue` when the template declares no explicit range —
+    /// floored to a minimum 1-wide band so a future template with `defaultValue == 0` (none of
+    /// `BuiltInWorkoutTemplates` today do) doesn't produce a degenerate `0...0` Slider.
     private var range: ClosedRange<Double> {
-        parameter.range ?? (parameter.defaultValue / 2)...(parameter.defaultValue * 2)
+        guard let declaredRange = parameter.range else {
+            let lower = parameter.defaultValue / 2
+            let upper = max(parameter.defaultValue * 2, lower + 1)
+            return lower...upper
+        }
+        return declaredRange
     }
 
     private var formattedValue: String {

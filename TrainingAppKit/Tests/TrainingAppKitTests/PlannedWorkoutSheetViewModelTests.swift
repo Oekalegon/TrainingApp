@@ -205,17 +205,72 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(model.workouts.first?.workoutKitID == scheduler.mintedID)
         #expect(await scheduler.scheduledPlans.count == 1)
     }
+
+    @Test("save() persists nothing when schedule() fails, rather than leaving an orphaned library workout")
+    func saveLeavesNoOrphanWhenScheduleFails() async {
+        let (_, model) = await makeModel()
+        let scheduler = FakeScheduler(scheduleShouldFail: true)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: scheduler)
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        let didSave = await viewModel.save()
+
+        #expect(!didSave)
+        #expect(viewModel.saveError != nil)
+        // sync() succeeded (that's what schedule() draws its CustomWorkout mapping from too), but
+        // schedule() failing must not leave the workout it already validated sitting in the
+        // library with nothing referencing it.
+        #expect(model.workouts.isEmpty)
+        #expect(model.plans.isEmpty)
+    }
+
+    @Test("a second concurrent save() call is a no-op while the first is still in flight")
+    func concurrentSaveCallsDoNotDoubleSave() async {
+        let (_, model) = await makeModel()
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: scheduler)
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        async let first = viewModel.save()
+        async let second = viewModel.save()
+        let (firstResult, secondResult) = await (first, second)
+
+        // Exactly one of the two actually saved -- both racing to `true` (or both silently
+        // dropping to `false`) would either double-persist or silently lose the save.
+        #expect(firstResult != secondResult)
+        #expect(model.workouts.count == 1)
+        #expect(model.plans.count == 1)
+    }
+
+    @Test("minimumDate is today's calendar day in the athlete's timezone")
+    func minimumDateIsStartOfTodayInAthleteTimeZone() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = model.athlete.timeZone
+        #expect(viewModel.minimumDate == calendar.startOfDay(for: .now))
+    }
 }
 
 private final actor FakeScheduler: PlannedWorkoutScheduling {
     nonisolated let mintedID = UUID()
+    private let scheduleShouldFail: Bool
     private(set) var scheduledPlans: [PlannedActivity] = []
+
+    init(scheduleShouldFail: Bool = false) {
+        self.scheduleShouldFail = scheduleShouldFail
+    }
 
     func sync(_ workout: StructuredWorkout) async throws -> UUID {
         mintedID
     }
 
     func schedule(_ plan: PlannedActivity, workout: StructuredWorkout, calendar: Calendar) async throws {
+        if scheduleShouldFail {
+            struct SchedulingFailed: Error {}
+            throw SchedulingFailed()
+        }
         scheduledPlans.append(plan)
     }
 }
