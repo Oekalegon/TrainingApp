@@ -1193,6 +1193,87 @@ struct WeekViewModelTests {
 
         #expect(!viewModel.hasNoActivities)
     }
+
+    @Test("dailyLoadSplit(for:) reports only a planned bar for a planned-but-not-yet-performed day (MVP2-30)")
+    func dailyLoadSplitPlannedOnlyWhenNotYetPerformed() async throws {
+        let (store, stores) = makeStores()
+        // Zone settings needed for `TRIMPPlanEstimator` to project a non-zero load for the
+        // `.heartRateZone(2)` workout below -- same fixture precedent
+        // `sportStatsPagesPolarizedSplitIncludesPlannedWorkoutProjection` uses.
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: day(0))
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: day(0))
+
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart)
+
+        #expect(split.planned.contains { $0.load > 0 })
+        #expect(split.actual.isEmpty)
+    }
+
+    @Test("dailyLoadSplit(for:) reports both bars, independently, once a planned day is also performed (MVP2-30)")
+    func dailyLoadSplitReportsBothOnceAlsoPerformed() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: day(0))
+        // A bit more load than the plan's own estimate -- the concrete "performed more than
+        // predicted" case from the MVP2-30 report this split exists to show correctly.
+        let activity = Activity(
+            source: .manual, sport: .running, start: day(0), duration: 2400, perceivedExertion: 5
+        )
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart)
+
+        #expect(split.planned.contains { $0.load > 0 })
+        #expect(split.actual.contains { $0.load > 0 })
+        // Both computed independently -- unlike `FitnessMetrics.load`'s either/or merge rule,
+        // the plan's own original estimate must still be there, not replaced by the actual figure.
+        let plannedDay = split.planned.first { calendar(for: athlete).isDate($0.day, inSameDayAs: day(0)) }
+        let actualDay = split.actual.first { calendar(for: athlete).isDate($0.day, inSameDayAs: day(0)) }
+        #expect(plannedDay?.load != actualDay?.load)
+    }
+
+    @Test("dailyLoadSplit(for:) reports only an actual bar for a completed activity with no matching plan (MVP2-30)")
+    func dailyLoadSplitActualOnlyWithNoPlan() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activity = Activity(
+            source: .manual, sport: .running, start: day(0), duration: 1800, perceivedExertion: 4
+        )
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart)
+
+        #expect(split.actual.contains { $0.load > 0 })
+        #expect(split.planned.isEmpty)
+    }
+
+    private func calendar(for athlete: AthleteProfile) -> Calendar {
+        WeekViewModel.calendar(for: athlete)
+    }
 }
 
 @MainActor

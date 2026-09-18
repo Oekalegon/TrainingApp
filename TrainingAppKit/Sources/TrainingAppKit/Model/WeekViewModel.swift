@@ -170,6 +170,50 @@ public final class WeekViewModel {
             .sorted { $0.day < $1.day }
     }
 
+    /// ``chartRange(for:)``'s own range for `weekStart`'s daily load, split into what was actually
+    /// performed vs. what's planned (MVP2-30) — for `DailyLoadChartView`'s bars.
+    ///
+    /// Deliberately *not* `chartMetrics(for:)`'s merged `FitnessMetrics.load`: that figure follows
+    /// `DailyLoadSeries`'s either/or merge rule (today/future use whichever of actual-or-planned
+    /// applies, never both), which is right for CTL/ATL but wrong for this chart — a planned
+    /// workout the athlete hasn't done yet should show only its planned bar, but once performed
+    /// (possibly at a different load than predicted), both the original planned estimate and the
+    /// real performed figure should stay visible together. Both halves here are computed
+    /// independently and unconditionally from `model.activities`/`model.plans`, at the day level:
+    /// `PlanReconciler` (MVP2-19, matching a specific plan to its specific completed activity)
+    /// doesn't exist yet, so "a day has both" is the closest available signal, the same granularity
+    /// `StatisticsCalculator.periodStats` already merges at.
+    func dailyLoadSplit(for weekStart: Date) -> DailyLoadSplit {
+        let range = chartRange(for: weekStart)
+        let athlete = model.athlete
+
+        let activitiesByDay = Dictionary(grouping: model.activities.filter { range.contains(calendar.startOfDay(for: $0.start)) }) {
+            calendar.startOfDay(for: $0.start)
+        }
+        let actual = activitiesByDay.map { day, activities in
+            DailyLoad(day: day, load: activities.reduce(0) { $0 + statisticsCalculator.summary(for: $1, athlete: athlete).load.value })
+        }
+
+        let workoutsByID = Dictionary(uniqueKeysWithValues: model.workouts.map { ($0.id, $0) })
+        let plansByDay = Dictionary(grouping: model.plans.filter { range.contains(calendar.startOfDay(for: $0.date)) }) {
+            calendar.startOfDay(for: $0.date)
+        }
+        let planned = plansByDay.map { day, plans -> DailyLoad in
+            let load = plans.reduce(0.0) { total, plan in
+                guard let workout = workoutsByID[plan.workoutID] else { return total }
+                let estimate = plan.expectedLoadOverride
+                    ?? statisticsCalculator.estimator.estimatedLoad(for: workout, athlete: athlete).value
+                return total + estimate
+            }
+            return DailyLoad(day: day, load: load)
+        }
+
+        return DailyLoadSplit(
+            actual: actual.filter { $0.load > 0 }.sorted { $0.day < $1.day },
+            planned: planned.filter { $0.load > 0 }.sorted { $0.day < $1.day }
+        )
+    }
+
     /// The date range of ``displayedWeekStart`` — the week currently visible in the day list, not
     /// necessarily today's. Used to highlight that week's background on the fitness chart, so the
     /// 3-week trend stays visually anchored to whichever week the athlete has scrolled to.
