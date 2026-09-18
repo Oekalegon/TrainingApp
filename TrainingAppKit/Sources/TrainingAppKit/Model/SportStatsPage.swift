@@ -3,35 +3,65 @@ import TrainingCore
 
 /// One sport's page in the week view's stats pager — see ``WeekViewModel/sportStatsPages(asOf:)``.
 ///
-/// `distanceMeters`/`time` (and their change fractions) are this sport's own totals, but `load`/
-/// `loadChangeFraction` are always the *whole week's* total load across every sport, identical on
-/// every page: training load (TRIMP) isn't meaningfully attributable to one sport the way distance
-/// and time are — it's a systemic measure that feeds one CTL/ATL/TSB series regardless of which
-/// sport produced it — so slicing it per sport here would suggest a distinction the underlying
-/// model doesn't make.
+/// `distanceMeters`/`time` (and their change fractions) are this sport's own *performed* totals,
+/// but `load`/`loadChangeFraction` are always the whole week's *performed* total across every
+/// sport, identical on every page: training load (TRIMP) isn't meaningfully attributable to one
+/// sport the way distance and time are — it's a systemic measure that feeds one CTL/ATL/TSB series
+/// regardless of which sport produced it — so slicing it per sport here would suggest a
+/// distinction the underlying model doesn't make. `plannedLoad` follows the same
+/// whole-week-not-per-sport convention as `load`.
+///
+/// Performed and planned are independent figures (MVP2-31), not blended into one running total the
+/// way `TrainingModel`'s own CTL/ATL feed does for a still-open week — see
+/// `StatisticsCalculator.periodStatsSplit(activities:plans:workouts:athlete:range:asOf:)`'s own
+/// doc comment for why. The `expected*ChangeFraction` fields compare *performed + planned*
+/// (i.e. where the week is headed in total) against the previous week's performed total, matching
+/// `distanceChangeFraction`/`timeChangeFraction`/`loadChangeFraction`'s own "vs. last week" framing
+/// — not `plannedDistanceMeters`/`plannedTime`/`plannedLoad` alone, which is a remaining-only
+/// figure with no natural previous-week counterpart to compare against.
 public struct SportStatsPage: Identifiable, Hashable {
     public var id: Sport { sport }
     public let sport: Sport
-    /// This sport's total distance for the displayed week.
+    /// This sport's total performed distance for the displayed week.
     public let distanceMeters: Double
-    /// This sport's total time for the displayed week.
+    /// This sport's total performed time for the displayed week.
     public let time: TimeInterval
-    /// Relative change in this sport's distance vs. the previous week, e.g. `0.12` for +12%.
+    /// Relative change in this sport's performed distance vs. the previous week, e.g. `0.12` for
+    /// +12%.
     public let distanceChangeFraction: Double
-    /// Relative change in this sport's time vs. the previous week.
+    /// Relative change in this sport's performed time vs. the previous week.
     public let timeChangeFraction: Double
-    /// The whole week's total load across every sport — the same value on every page.
+    /// The whole week's total performed load across every sport — the same value on every page.
     public let load: Double
-    /// Relative change in the whole week's total load vs. the previous week — the same value on
-    /// every page.
+    /// Relative change in the whole week's total performed load vs. the previous week — the same
+    /// value on every page.
     public let loadChangeFraction: Double
-    /// This sport's own low vs. moderate-to-high intensity time split for the displayed week (the
-    /// 80/20 polarized-training guideline, MVP1-48) — unlike `load`, this *is* scoped per sport:
-    /// the guideline is about how a given training discipline's own sessions are distributed
-    /// across intensity (Fitzgerald's "80% of your running", not "80% of everything you did this
-    /// week"), so blending in an incidental low-intensity sport like walking would make the figure
-    /// trivially easy to hit without actually controlling a training sport's own hard/easy mix.
-    /// Blends in that sport's planned/structured workouts' projected zone time for a
-    /// still-projected week, the same way `distanceMeters`/`time` already do.
+    /// This sport's own low vs. moderate-to-high intensity time split for the displayed week's
+    /// *performed* activity (the 80/20 polarized-training guideline, MVP1-48) — unlike `load`,
+    /// this *is* scoped per sport: the guideline is about how a given training discipline's own
+    /// sessions are distributed across intensity (Fitzgerald's "80% of your running", not "80% of
+    /// everything you did this week"), so blending in an incidental low-intensity sport like
+    /// walking would make the figure trivially easy to hit without actually controlling a
+    /// training sport's own hard/easy mix.
     public let polarizedSplit: PolarizedIntensitySplit
+    /// This sport's total planned distance for the displayed week, from `today` onward.
+    public let plannedDistanceMeters: Double
+    /// This sport's total planned time for the displayed week, from `today` onward.
+    public let plannedTime: TimeInterval
+    /// The whole week's total planned load across every sport, from `today` onward — the same
+    /// value on every page, matching `load`'s own whole-week convention.
+    public let plannedLoad: Double
+    /// This sport's own low vs. moderate-to-high intensity time split for the displayed week's
+    /// *planned* activity, from `today` onward.
+    public let plannedPolarizedSplit: PolarizedIntensitySplit
+    /// Relative change in this sport's *expected* distance (performed + planned) vs. the previous
+    /// week's performed total.
+    public let expectedDistanceChangeFraction: Double
+    /// Relative change in this sport's *expected* time (performed + planned) vs. the previous
+    /// week's performed total.
+    public let expectedTimeChangeFraction: Double
+    /// Relative change in the whole week's *expected* load (performed + planned) vs. the previous
+    /// week's performed total — the same value on every page, matching `load`'s own whole-week
+    /// convention.
+    public let expectedLoadChangeFraction: Double
 }
