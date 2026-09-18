@@ -408,6 +408,9 @@ public final class WeekViewModel {
         let previousTotalLoad = previous.actual.values.reduce(0) { $0 + $1.load }
         let plannedTotalLoad = current.planned.values.reduce(0) { $0 + $1.load }
         let loadChangeFraction = Self.changeFraction(currentTotalLoad - previousTotalLoad, of: previousTotalLoad)
+        let expectedLoadChangeFraction = Self.changeFraction(
+            (currentTotalLoad + plannedTotalLoad) - previousTotalLoad, of: previousTotalLoad
+        )
 
         return ([mainSport] + otherSports).map { sport in
             let currentActual = current.actual[sport] ?? Self.zeroSportStats(sport)
@@ -427,7 +430,15 @@ public final class WeekViewModel {
                 plannedDistanceMeters: currentPlanned.distanceMeters,
                 plannedTime: currentPlanned.time,
                 plannedLoad: plannedTotalLoad,
-                plannedPolarizedSplit: currentPlanned.timeInZone.polarizedSplit
+                plannedPolarizedSplit: currentPlanned.timeInZone.polarizedSplit,
+                expectedDistanceChangeFraction: Self.changeFraction(
+                    (currentActual.distanceMeters + currentPlanned.distanceMeters) - previousActual.distanceMeters,
+                    of: previousActual.distanceMeters
+                ),
+                expectedTimeChangeFraction: Self.changeFraction(
+                    (currentActual.time + currentPlanned.time) - previousActual.time, of: previousActual.time
+                ),
+                expectedLoadChangeFraction: expectedLoadChangeFraction
             )
         }
     }

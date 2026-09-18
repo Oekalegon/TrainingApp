@@ -158,16 +158,19 @@ private struct StatsPageView: View {
             if page.sport.isEndurance {
                 statItem(
                     actualValue: page.distanceMeters, actualText: distanceString,
-                    changeFraction: page.distanceChangeFraction, label: "Distance", expectedText: expectedDistanceString
+                    changeFraction: page.distanceChangeFraction, label: "Distance", expectedText: expectedDistanceString,
+                    expectedChangeFraction: page.expectedDistanceChangeFraction
                 )
                 statItem(
                     actualValue: page.time, actualText: durationString,
-                    changeFraction: page.timeChangeFraction, label: "Time", expectedText: expectedDurationString
+                    changeFraction: page.timeChangeFraction, label: "Time", expectedText: expectedDurationString,
+                    expectedChangeFraction: page.expectedTimeChangeFraction
                 )
             }
             statItem(
                 actualValue: page.load, actualText: loadString,
-                changeFraction: page.loadChangeFraction, label: "Load", expectedText: expectedLoadString
+                changeFraction: page.loadChangeFraction, label: "Load", expectedText: expectedLoadString,
+                expectedChangeFraction: page.expectedLoadChangeFraction
             )
             if page.sport.supportsLowIntensityTrainingSplit, page.polarizedSplit.total > 0 || page.plannedPolarizedSplit.total > 0 {
                 litItem
@@ -270,7 +273,9 @@ private struct StatsPageView: View {
     /// full size (e.g. a multi-digit-hour duration like "2:00:00" beside its "+33%") —
     /// `.minimumScaleFactor` only has that effect within a single `Text`, and without it the value
     /// can end up truncated ("3:00:…") or wrapped instead of both segments shrinking uniformly.
-    private func performedText(_ value: String, changeFraction: Double) -> Text {
+    /// Shared by both the performed and the expected row -- each carries its own percentage change
+    /// vs. the previous week.
+    private func valueWithPercent(_ value: String, changeFraction: Double) -> Text {
         let percentText = Text(percentString(changeFraction))
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -283,7 +288,14 @@ private struct StatsPageView: View {
     ///     real performed figure to show at all (MVP2-31's adaptive row count; see this view's own
     ///     doc comment).
     ///   - expectedText: The performed+still-planned figure, or `nil` when nothing's still planned.
-    private func statItem(actualValue: Double, actualText: String, changeFraction: Double, label: String, expectedText: String?) -> some View {
+    ///   - expectedChangeFraction: `expectedText`'s own percentage change vs. the previous week's
+    ///     performed total (`SportStatsPage.expected*ChangeFraction`) — shown next to it exactly
+    ///     like the performed row's own change, rather than leaving the expected figure as a bare
+    ///     number with no year-over-year-style context.
+    private func statItem(
+        actualValue: Double, actualText: String, changeFraction: Double, label: String,
+        expectedText: String?, expectedChangeFraction: Double
+    ) -> some View {
         VStack(alignment: .trailing, spacing: 0) {
             // `.footnote`, not `.subheadline`, for whichever value row(s) end up shown: a fixed,
             // shared base size across every stat item is deliberate here, not just a smaller
@@ -296,21 +308,21 @@ private struct StatsPageView: View {
             // `.minimumScaleFactor` stays only as a safety net for the rare value that's still too
             // wide even at this smaller base.
             if actualValue > 0 {
-                performedText(actualText, changeFraction: changeFraction)
+                valueWithPercent(actualText, changeFraction: changeFraction)
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                // The expected end-of-week value (performed + still-planned) — only shown once
-                // there's already a real performed figure above it (see this view's own doc
-                // comment for why a fully future week, with nothing performed yet, shows just the
-                // expected/planned figure alone instead of a redundant "0" performed row here).
-                // Bare, no "expected" suffix -- its position below the performed row and above the
-                // metric label already reads as a forecast without spelling it out. Same size and
-                // monospaced-digit font as the performed value above, so the two numbers line up as
-                // a column instead of the second one reading as an afterthought.
+                // The expected end-of-week value (performed + still-planned), with its own
+                // percentage change vs. last week (MVP2-31 report: this should read the same way
+                // the performed row above it does) — only shown once there's already a real
+                // performed figure above it (see this view's own doc comment for why a fully future
+                // week, with nothing performed yet, shows just the expected/planned figure alone
+                // instead of a redundant "0" performed row here). Same size and monospaced-digit
+                // font as the performed value above, so the two numbers line up as a column instead
+                // of the second one reading as an afterthought.
                 if let expectedText {
-                    Text(expectedText)
+                    valueWithPercent(expectedText, changeFraction: expectedChangeFraction)
                         .font(.footnote.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -321,7 +333,7 @@ private struct StatsPageView: View {
                 // yet done) -- the expected figure *is* the plan in full, so it stands alone as
                 // this item's one value, styled the same as a normal performed row rather than
                 // reading as a lesser, secondary figure.
-                Text(expectedText)
+                valueWithPercent(expectedText, changeFraction: expectedChangeFraction)
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.primary)
                     .lineLimit(1)
@@ -329,7 +341,7 @@ private struct StatsPageView: View {
             } else {
                 // Nothing performed and nothing planned -- the zero-filled fallback this view had
                 // before MVP2-31 (e.g. the main sport's page in a week with no activity at all).
-                performedText(actualText, changeFraction: changeFraction)
+                valueWithPercent(actualText, changeFraction: changeFraction)
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.primary)
                     .lineLimit(1)

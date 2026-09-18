@@ -719,6 +719,42 @@ struct WeekViewModelTests {
         #expect(runningPage.time == 1800)
     }
 
+    @Test("sportStatsPages(asOf:) computes expected*ChangeFraction against the previous week's performed total, not the plan alone (MVP2-31)")
+    func sportStatsPagesExpectedChangeFractionComparesAgainstPreviousPerformed() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let today = viewModel.displayedWeekStart
+        let previousWeekDay = calendar.date(byAdding: .day, value: -7, to: today)!
+        let previousWeekActivity = Activity(
+            source: .manual, sport: .running, start: previousWeekDay, duration: 1500, distanceMeters: 4000, perceivedExertion: 5
+        )
+        let thisWeekActivity = Activity(
+            source: .manual, sport: .running, start: today, duration: 1800, distanceMeters: 5000, perceivedExertion: 5
+        )
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .distance(5000), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: today.addingTimeInterval(86400))
+        try await store.upsert([previousWeekActivity, thisWeekActivity])
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: today)
+
+        let pages = viewModel.sportStatsPages(asOf: today)
+        let runningPage = try #require(pages.first { $0.sport == .running })
+
+        // Expected distance = 5000 (performed) + the plan's own projected distance, compared
+        // against last week's 4000 performed -- a strictly larger relative increase than
+        // performed-alone's own change fraction, since the plan adds on top of it.
+        #expect(runningPage.distanceChangeFraction == (5000.0 - 4000.0) / 4000.0)
+        #expect(runningPage.expectedDistanceChangeFraction > runningPage.distanceChangeFraction)
+    }
+
     @Test("sportStatsPages(asOf:) scopes the 80/20 intensity split to each page's own sport, not blended across sports")
     func sportStatsPagesPolarizedSplitIsScopedPerSport() async throws {
         let (store, stores) = makeStores()

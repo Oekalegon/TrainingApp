@@ -14,8 +14,11 @@ import TrainingCore
 /// Performed and planned are independent figures (MVP2-31), not blended into one running total the
 /// way `TrainingModel`'s own CTL/ATL feed does for a still-open week — see
 /// `StatisticsCalculator.periodStatsSplit(activities:plans:workouts:athlete:range:asOf:)`'s own
-/// doc comment for why. Planned has no change-fraction counterpart: it isn't a running total to
-/// compare week over week, just what's still on the plan.
+/// doc comment for why. The `expected*ChangeFraction` fields compare *performed + planned*
+/// (i.e. where the week is headed in total) against the previous week's performed total, matching
+/// `distanceChangeFraction`/`timeChangeFraction`/`loadChangeFraction`'s own "vs. last week" framing
+/// — not `plannedDistanceMeters`/`plannedTime`/`plannedLoad` alone, which is a remaining-only
+/// figure with no natural previous-week counterpart to compare against.
 public struct SportStatsPage: Identifiable, Hashable {
     public var id: Sport { sport }
     public let sport: Sport
@@ -51,4 +54,14 @@ public struct SportStatsPage: Identifiable, Hashable {
     /// This sport's own low vs. moderate-to-high intensity time split for the displayed week's
     /// *planned* activity, from `today` onward.
     public let plannedPolarizedSplit: PolarizedIntensitySplit
+    /// Relative change in this sport's *expected* distance (performed + planned) vs. the previous
+    /// week's performed total.
+    public let expectedDistanceChangeFraction: Double
+    /// Relative change in this sport's *expected* time (performed + planned) vs. the previous
+    /// week's performed total.
+    public let expectedTimeChangeFraction: Double
+    /// Relative change in the whole week's *expected* load (performed + planned) vs. the previous
+    /// week's performed total — the same value on every page, matching `load`'s own whole-week
+    /// convention.
+    public let expectedLoadChangeFraction: Double
 }
