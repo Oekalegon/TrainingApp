@@ -1213,7 +1213,7 @@ struct WeekViewModelTests {
         try await store.upsert([plan])
         await viewModel.load(asOf: day(0))
 
-        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart)
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
 
         #expect(split.planned.contains { $0.load > 0 })
         #expect(split.actual.isEmpty)
@@ -1241,7 +1241,7 @@ struct WeekViewModelTests {
         try await store.upsert([activity])
         await viewModel.load(asOf: day(0))
 
-        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart)
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
 
         #expect(split.planned.contains { $0.load > 0 })
         #expect(split.actual.contains { $0.load > 0 })
@@ -1265,10 +1265,59 @@ struct WeekViewModelTests {
         try await store.upsert([activity])
         await viewModel.load(asOf: day(0))
 
-        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart)
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
 
         #expect(split.actual.contains { $0.load > 0 })
         #expect(split.planned.isEmpty)
+    }
+
+    @Test("dailyLoadSplit(for:asOf:) doesn't show a planned bar for a day before today that was never performed (MVP2-30)")
+    func dailyLoadSplitExcludesPastNeverPerformedPlans() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(5))
+
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        // Dated before `today` and never performed -- unlike a still-upcoming plan, this should
+        // read as genuinely missed, not as a bar the chart keeps showing indefinitely (matching
+        // DailyLoadSeries/StatisticsCalculator.periodStats's own today-or-later merge rule for a
+        // plan's contribution).
+        let pastPlan = PlannedActivity(workoutID: workout.id, date: day(2))
+        try await store.upsert([workout])
+        try await store.upsert([pastPlan])
+        await viewModel.load(asOf: day(5))
+
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(5))
+
+        #expect(split.planned.isEmpty)
+    }
+
+    @Test("dailyLoadSplit(for:asOf:) reuses its cached result until the underlying data actually changes (MVP2-30)")
+    func dailyLoadSplitCachesUntilDataChanges() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+
+        let first = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
+        #expect(first.actual.isEmpty)
+
+        // Added directly through the store, bypassing `viewModel`/`model` entirely -- a stale
+        // cache that only invalidates on navigation (rather than on the activity/plan/workout
+        // counts this cache is actually keyed on) would still report the old, empty split here.
+        let activity = Activity(
+            source: .manual, sport: .running, start: day(0), duration: 1800, perceivedExertion: 4
+        )
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let second = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
+        #expect(second.actual.contains { $0.load > 0 })
     }
 
     private func calendar(for athlete: AthleteProfile) -> Calendar {

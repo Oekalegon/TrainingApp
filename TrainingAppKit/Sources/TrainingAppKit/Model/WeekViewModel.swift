@@ -40,6 +40,21 @@ public final class WeekViewModel {
     @ObservationIgnored
     private var weekGraphCachesActivityCount: Int?
 
+    /// ``dailyLoadSplit(for:)`` results, cached per week (keyed by that week's `weekStart`) — same
+    /// reasoning as ``sportStatsPagesCaches``: `WeekView.graphPanel(weekStart:isCurrentPage:)` calls
+    /// this for all three carousel pages (current plus both static previews) on every touch-move
+    /// frame of the week-swipe drag, and unlike ``chartMetrics(for:)`` (a cheap filter over
+    /// already-computed `model.metrics`), this does real per-activity TRIMP work
+    /// (`StatisticsCalculator.summary(for:athlete:)`) — exactly the MVP1-19 freeze class this
+    /// codebase already built ``sportStatsPagesCaches``/``weekGraphCaches`` to keep out of that path.
+    private var dailyLoadSplitCaches: [Date: DailyLoadSplit] = [:]
+    /// `(model.activities.count, model.plans.count, model.workouts.count)` as of the last time
+    /// ``dailyLoadSplitCaches`` was populated — three counts, not just `activityCount` the way
+    /// ``sportStatsPagesCachesKey`` does, since a plan or its workout can change independently of
+    /// `model.activities` (e.g. saving a new planned workout via `PlannedWorkoutSheet`).
+    @ObservationIgnored
+    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, today: Date)?
+
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
     public private(set) var displayedWeekStart: Date
@@ -178,14 +193,42 @@ public final class WeekViewModel {
     /// applies, never both), which is right for CTL/ATL but wrong for this chart — a planned
     /// workout the athlete hasn't done yet should show only its planned bar, but once performed
     /// (possibly at a different load than predicted), both the original planned estimate and the
-    /// real performed figure should stay visible together. Both halves here are computed
-    /// independently and unconditionally from `model.activities`/`model.plans`, at the day level:
-    /// `PlanReconciler` (MVP2-19, matching a specific plan to its specific completed activity)
-    /// doesn't exist yet, so "a day has both" is the closest available signal, the same granularity
-    /// `StatisticsCalculator.periodStats` already merges at.
-    func dailyLoadSplit(for weekStart: Date) -> DailyLoadSplit {
+    /// real performed figure should stay visible together. Both halves are computed independently
+    /// at the day level, not per-workout: `PlanReconciler` (MVP2-19, matching a specific plan to its
+    /// specific completed activity) doesn't exist yet, so "a day has both" is the closest available
+    /// signal, the same granularity `StatisticsCalculator.periodStats` already merges at. The
+    /// planned side only covers `today` or later, matching that same merge rule (and
+    /// `DailyLoadSeries`'s) — a plan from before `today` that was never performed reads as
+    /// genuinely missed, not as a bar this chart keeps showing indefinitely.
+    ///
+    /// Cached per week: unlike `chartMetrics(for:)` (a cheap filter over already-computed
+    /// `model.metrics`), this does real per-activity TRIMP work
+    /// (`StatisticsCalculator.summary(for:athlete:)`), and `WeekView.graphPanel(weekStart:isCurrentPage:)`
+    /// calls it for all three carousel pages on every touch-move frame of the week-swipe drag — see
+    /// ``dailyLoadSplitCaches``'s own doc comment for why this needs the same per-week caching
+    /// ``sportStatsPages(for:asOf:)``/``heartRateHistogram(for:)`` already have.
+    func dailyLoadSplit(for weekStart: Date, asOf today: Date = .now) -> DailyLoadSplit {
+        let key = (model.activities.count, model.plans.count, model.workouts.count)
+        let keyIsCurrent = dailyLoadSplitCachesKey.map {
+            $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
+                && calendar.isDate($0.today, inSameDayAs: today)
+        } ?? false
+        if !keyIsCurrent {
+            dailyLoadSplitCaches.removeAll()
+            dailyLoadSplitCachesKey = (key.0, key.1, key.2, today)
+        }
+        if let cached = dailyLoadSplitCaches[weekStart] {
+            return cached
+        }
+        let split = computeDailyLoadSplit(for: weekStart, asOf: today)
+        dailyLoadSplitCaches[weekStart] = split
+        return split
+    }
+
+    private func computeDailyLoadSplit(for weekStart: Date, asOf today: Date) -> DailyLoadSplit {
         let range = chartRange(for: weekStart)
         let athlete = model.athlete
+        let todayStart = calendar.startOfDay(for: today)
 
         let activitiesByDay = Dictionary(grouping: model.activities.filter { range.contains(calendar.startOfDay(for: $0.start)) }) {
             calendar.startOfDay(for: $0.start)
@@ -195,7 +238,10 @@ public final class WeekViewModel {
         }
 
         let workoutsByID = Dictionary(uniqueKeysWithValues: model.workouts.map { ($0.id, $0) })
-        let plansByDay = Dictionary(grouping: model.plans.filter { range.contains(calendar.startOfDay(for: $0.date)) }) {
+        let plansByDay = Dictionary(grouping: model.plans.filter { plan in
+            let day = calendar.startOfDay(for: plan.date)
+            return range.contains(day) && day >= todayStart
+        }) {
             calendar.startOfDay(for: $0.date)
         }
         let planned = plansByDay.map { day, plans -> DailyLoad in
