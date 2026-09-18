@@ -126,18 +126,21 @@ struct SportStatsPagerView: View {
     }
 }
 
-/// One page's Distance/Time/Load(/LIT) figures — three stacked rows per item (MVP2-31): the
-/// performed value so far (with its percentage change), the *expected* end-of-week value below it
-/// (performed + still-planned), then the metric's own label — the swipeable content
+/// One page's Distance/Time/Load(/LIT) figures (MVP2-31) — the swipeable content
 /// `SportStatsPagerView`'s carousel pages between.
 ///
-/// Expected, not the plan's own remaining-only figure: for a week that straddles today, "what's
-/// still planned" alone can't be read at a glance against "what's been done" the way "where this
-/// week is headed in total" can — the two numbers would need mental addition to answer the more
-/// useful question. This also means the two rows only diverge for a week containing `today`: a
-/// fully past week has nothing planned left (expected == performed), and a fully future week has
-/// nothing performed yet (expected == planned) — both fall back to `statItem`'s "–" placeholder
-/// rather than showing the same number twice.
+/// Row count adapts to what a week actually has, rather than a fixed three-row template with
+/// placeholders: a fully past week has nothing left planned, so `statItem` shows only the
+/// performed value (with its percentage change) and the label — two rows, exactly like before this
+/// feature existed. A fully future week has nothing performed yet, so it shows only the *expected*
+/// value (see below) and the label — also two rows, not a literal "0" performed row above it. Only
+/// a week straddling `today` — where both a real performed figure and a still-open plan exist —
+/// gets all three: performed, expected, label.
+///
+/// "Expected" (performed + still-planned), not the plan's own remaining-only figure: "what's still
+/// planned" alone can't be read at a glance against "what's been done" the way "where this week is
+/// headed in total" can — the two numbers would need mental addition to answer the more useful
+/// question.
 private struct StatsPageView: View {
     let page: SportStatsPage
 
@@ -154,15 +157,18 @@ private struct StatsPageView: View {
 
             if page.sport.isEndurance {
                 statItem(
-                    value: distanceString, changeFraction: page.distanceChangeFraction, label: "Distance",
-                    expectedText: expectedDistanceString
+                    actualValue: page.distanceMeters, actualText: distanceString,
+                    changeFraction: page.distanceChangeFraction, label: "Distance", expectedText: expectedDistanceString
                 )
                 statItem(
-                    value: durationString, changeFraction: page.timeChangeFraction, label: "Time",
-                    expectedText: expectedDurationString
+                    actualValue: page.time, actualText: durationString,
+                    changeFraction: page.timeChangeFraction, label: "Time", expectedText: expectedDurationString
                 )
             }
-            statItem(value: loadString, changeFraction: page.loadChangeFraction, label: "Load", expectedText: expectedLoadString)
+            statItem(
+                actualValue: page.load, actualText: loadString,
+                changeFraction: page.loadChangeFraction, label: "Load", expectedText: expectedLoadString
+            )
             if page.sport.supportsLowIntensityTrainingSplit, page.polarizedSplit.total > 0 || page.plannedPolarizedSplit.total > 0 {
                 litItem
             }
@@ -217,19 +223,30 @@ private struct StatsPageView: View {
     /// to week, so a relative "+N%" on top would misleadingly suggest another running total (same
     /// reasoning this view used before it moved back inline). One step smaller than the other
     /// items' `.footnote` — a deliberately quieter, secondary figure next to Distance/Time/Load
-    /// rather than a fourth equally-weighted headline number.
+    /// rather than a fourth equally-weighted headline number. Row count adapts the same way
+    /// `statItem`'s does (see this view's own doc comment).
     private var litItem: some View {
         VStack(alignment: .trailing, spacing: 0) {
-            Text(page.polarizedSplit.total > 0 ? lowIntensityFractionString : "–")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(expectedLowIntensityFractionString ?? "–")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            if page.polarizedSplit.total > 0 {
+                Text(lowIntensityFractionString)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let expectedLowIntensityFractionString {
+                    Text(expectedLowIntensityFractionString)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            } else if let expectedLowIntensityFractionString {
+                Text(expectedLowIntensityFractionString)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
             Text("LIT")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -248,45 +265,76 @@ private struct StatsPageView: View {
         return "\(performed), \(expectedLowIntensityFractionString) expected by end of week"
     }
 
-    private func statItem(value: String, changeFraction: Double, label: String, expectedText: String?) -> some View {
+    /// One `Text` built via interpolation, not two `Text`s in an `HStack`: value and percentage
+    /// need to scale down *together* when three stat items plus the sport icon don't all fit at
+    /// full size (e.g. a multi-digit-hour duration like "2:00:00" beside its "+33%") —
+    /// `.minimumScaleFactor` only has that effect within a single `Text`, and without it the value
+    /// can end up truncated ("3:00:…") or wrapped instead of both segments shrinking uniformly.
+    private func performedText(_ value: String, changeFraction: Double) -> Text {
         let percentText = Text(percentString(changeFraction))
             .font(.caption2)
             .foregroundStyle(.secondary)
-        return VStack(alignment: .trailing, spacing: 0) {
-            // One `Text` built via interpolation, not two `Text`s in an `HStack`: value and
-            // percentage need to scale down *together* when three stat items plus the sport icon
-            // don't all fit at full size (e.g. a multi-digit-hour duration like "2:00:00" beside
-            // its "+33%") — `.minimumScaleFactor` only has that effect within a single `Text`, and
-            // without it the value can end up truncated ("3:00:…") or wrapped instead of both
-            // segments shrinking uniformly.
-            //
-            // `.footnote`, not `.subheadline`: a fixed, shared base size across every stat item is
-            // deliberate here, not just a smaller default. `.minimumScaleFactor` only shrinks a
-            // `Text` that doesn't fit its *own* allotted space, independently of its siblings — a
-            // short value like Load's "48" never needs to shrink, while a longer one like
-            // Distance's "12.3 km +8%" does, so at `.subheadline` the two ended up visibly
-            // different sizes in the same row. `.footnote` comfortably fits realistic values
-            // without shrinking in the common case, so every item renders at the same size instead
-            // of each independently deciding its own; `.minimumScaleFactor` stays only as a safety
-            // net for the rare value that's still too wide even at this smaller base.
-            Text("\(value) \(percentText)")
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            // The expected end-of-week value (performed + still-planned, MVP2-31), bare (no
-            // "expected" suffix -- its position below the performed row and above the metric label
-            // already reads as a forecast without spelling it out) — "–" rather than blank when
-            // there's nothing still planned (expected == performed already), so this row's height
-            // stays reserved and the label below doesn't visibly jump up a row depending on
-            // whether a plan exists. Same size and monospaced-digit font as the performed value
-            // above, so the two numbers line up as a column instead of the second one reading as
-            // an afterthought.
-            Text(expectedText ?? "–")
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+        return Text("\(value) \(percentText)")
+    }
+
+    /// - Parameters:
+    ///   - actualValue: The metric's raw performed number (`page.distanceMeters`/`time`/`load`),
+    ///     not the already-formatted `actualText` — used only to decide whether this week has any
+    ///     real performed figure to show at all (MVP2-31's adaptive row count; see this view's own
+    ///     doc comment).
+    ///   - expectedText: The performed+still-planned figure, or `nil` when nothing's still planned.
+    private func statItem(actualValue: Double, actualText: String, changeFraction: Double, label: String, expectedText: String?) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            // `.footnote`, not `.subheadline`, for whichever value row(s) end up shown: a fixed,
+            // shared base size across every stat item is deliberate here, not just a smaller
+            // default. `.minimumScaleFactor` only shrinks a `Text` that doesn't fit its *own*
+            // allotted space, independently of its siblings — a short value like Load's "48" never
+            // needs to shrink, while a longer one like Distance's "12.3 km +8%" does, so at
+            // `.subheadline` the two ended up visibly different sizes in the same row. `.footnote`
+            // comfortably fits realistic values without shrinking in the common case, so every item
+            // renders at the same size instead of each independently deciding its own;
+            // `.minimumScaleFactor` stays only as a safety net for the rare value that's still too
+            // wide even at this smaller base.
+            if actualValue > 0 {
+                performedText(actualText, changeFraction: changeFraction)
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                // The expected end-of-week value (performed + still-planned) — only shown once
+                // there's already a real performed figure above it (see this view's own doc
+                // comment for why a fully future week, with nothing performed yet, shows just the
+                // expected/planned figure alone instead of a redundant "0" performed row here).
+                // Bare, no "expected" suffix -- its position below the performed row and above the
+                // metric label already reads as a forecast without spelling it out. Same size and
+                // monospaced-digit font as the performed value above, so the two numbers line up as
+                // a column instead of the second one reading as an afterthought.
+                if let expectedText {
+                    Text(expectedText)
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            } else if let expectedText {
+                // Nothing performed yet this week (a fully future week, or today's own plan not
+                // yet done) -- the expected figure *is* the plan in full, so it stands alone as
+                // this item's one value, styled the same as a normal performed row rather than
+                // reading as a lesser, secondary figure.
+                Text(expectedText)
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            } else {
+                // Nothing performed and nothing planned -- the zero-filled fallback this view had
+                // before MVP2-31 (e.g. the main sport's page in a week with no activity at all).
+                performedText(actualText, changeFraction: changeFraction)
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
