@@ -755,6 +755,50 @@ struct WeekViewModelTests {
         #expect(runningPage.expectedDistanceChangeFraction > runningPage.distanceChangeFraction)
     }
 
+    @Test("sportStatsPages(for:asOf:) compares a fully future week against the previous week's own expected (not performed-only) total (MVP2-31)")
+    func sportStatsPagesFutureWeekComparesAgainstPreviousExpected() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let today = viewModel.displayedWeekStart
+        let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: today)!
+        let twoWeeksOutStart = calendar.date(byAdding: .day, value: 14, to: today)!
+
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .distance(5000), target: .heartRateZone(2))])]
+        )
+        // Nothing performed at all -- `today`'s own week needs its own real plan too, so nextWeek
+        // has a genuine (non-zero) baseline to compare against; without one, `today`'s week's own
+        // expected total would itself be 0, and this test would just be exercising the same "+∞%"
+        // bug from a different angle instead of proving the fix.
+        let plans = [
+            PlannedActivity(workoutID: workout.id, date: today),
+            PlannedActivity(workoutID: workout.id, date: nextWeekStart),
+            PlannedActivity(workoutID: workout.id, date: twoWeeksOutStart),
+        ]
+        try await store.upsert([workout])
+        try await store.upsert(plans)
+        await viewModel.load(asOf: today)
+
+        // Before this fix, nextWeek's change fraction compared against `today`'s own week's
+        // performed-only total (0, since nothing's been performed yet) and twoWeeksOut's compared
+        // against nextWeek's performed-only total (also 0) -- both read as a meaningless "+∞%".
+        let nextWeekPage = try #require(viewModel.sportStatsPages(for: nextWeekStart, asOf: today).first { $0.sport == .running })
+        #expect(nextWeekPage.expectedDistanceChangeFraction.isFinite)
+
+        let twoWeeksOutPage = try #require(viewModel.sportStatsPages(for: twoWeeksOutStart, asOf: today).first { $0.sport == .running })
+        #expect(twoWeeksOutPage.expectedDistanceChangeFraction.isFinite)
+        // twoWeeksOut's own plan (5000m) is identical to nextWeek's own plan (5000m) -- comparing
+        // against nextWeek's planned total (the correct baseline, since nextWeek's performed total
+        // is itself 0) should read as "no change", not the same "+∞%" a performed-only baseline
+        // would still report.
+        #expect(twoWeeksOutPage.expectedDistanceChangeFraction == 0)
+    }
+
     @Test("sportStatsPages(asOf:) scopes the 80/20 intensity split to each page's own sport, not blended across sports")
     func sportStatsPagesPolarizedSplitIsScopedPerSport() async throws {
         let (store, stores) = makeStores()

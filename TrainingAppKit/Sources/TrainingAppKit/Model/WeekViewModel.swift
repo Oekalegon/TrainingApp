@@ -407,23 +407,39 @@ public final class WeekViewModel {
         let currentTotalLoad = current.actual.values.reduce(0) { $0 + $1.load }
         let previousTotalLoad = previous.actual.values.reduce(0) { $0 + $1.load }
         let plannedTotalLoad = current.planned.values.reduce(0) { $0 + $1.load }
-        let loadChangeFraction = Self.changeFraction(currentTotalLoad - previousTotalLoad, of: previousTotalLoad)
+        let previousPlannedTotalLoad = previous.planned.values.reduce(0) { $0 + $1.load }
+        // The previous week's own *expected* total (performed + still-planned as of `today`), not
+        // its performed-only total — for a week fully in the past this is the same number (nothing
+        // of that week is still "planned" relative to `today`), but for two still-future weeks
+        // shown back to back, the earlier one's performed total is always 0 (it hasn't happened
+        // yet), which would make every later week's own change read as a meaningless "+∞%". Using
+        // the previous week's expected total instead gives a real baseline in both cases: the
+        // week right after the one containing `today` compares against that week's own
+        // performed-so-far-plus-still-planned total, and a week further out compares against the
+        // week before it's own still-fully-planned total.
+        let previousExpectedTotalLoad = previousTotalLoad + previousPlannedTotalLoad
+        let loadChangeFraction = Self.changeFraction(currentTotalLoad - previousExpectedTotalLoad, of: previousExpectedTotalLoad)
         let expectedLoadChangeFraction = Self.changeFraction(
-            (currentTotalLoad + plannedTotalLoad) - previousTotalLoad, of: previousTotalLoad
+            (currentTotalLoad + plannedTotalLoad) - previousExpectedTotalLoad, of: previousExpectedTotalLoad
         )
 
         return ([mainSport] + otherSports).map { sport in
             let currentActual = current.actual[sport] ?? Self.zeroSportStats(sport)
             let previousActual = previous.actual[sport] ?? Self.zeroSportStats(sport)
             let currentPlanned = current.planned[sport] ?? Self.zeroSportStats(sport)
+            let previousPlanned = previous.planned[sport] ?? Self.zeroSportStats(sport)
+            // See `previousExpectedTotalLoad`'s own doc comment for why this is performed+planned,
+            // not performed-only.
+            let previousExpectedDistance = previousActual.distanceMeters + previousPlanned.distanceMeters
+            let previousExpectedTime = previousActual.time + previousPlanned.time
             return SportStatsPage(
                 sport: sport,
                 distanceMeters: currentActual.distanceMeters,
                 time: currentActual.time,
                 distanceChangeFraction: Self.changeFraction(
-                    currentActual.distanceMeters - previousActual.distanceMeters, of: previousActual.distanceMeters
+                    currentActual.distanceMeters - previousExpectedDistance, of: previousExpectedDistance
                 ),
-                timeChangeFraction: Self.changeFraction(currentActual.time - previousActual.time, of: previousActual.time),
+                timeChangeFraction: Self.changeFraction(currentActual.time - previousExpectedTime, of: previousExpectedTime),
                 load: currentTotalLoad,
                 loadChangeFraction: loadChangeFraction,
                 polarizedSplit: currentActual.timeInZone.polarizedSplit,
@@ -432,11 +448,11 @@ public final class WeekViewModel {
                 plannedLoad: plannedTotalLoad,
                 plannedPolarizedSplit: currentPlanned.timeInZone.polarizedSplit,
                 expectedDistanceChangeFraction: Self.changeFraction(
-                    (currentActual.distanceMeters + currentPlanned.distanceMeters) - previousActual.distanceMeters,
-                    of: previousActual.distanceMeters
+                    (currentActual.distanceMeters + currentPlanned.distanceMeters) - previousExpectedDistance,
+                    of: previousExpectedDistance
                 ),
                 expectedTimeChangeFraction: Self.changeFraction(
-                    (currentActual.time + currentPlanned.time) - previousActual.time, of: previousActual.time
+                    (currentActual.time + currentPlanned.time) - previousExpectedTime, of: previousExpectedTime
                 ),
                 expectedLoadChangeFraction: expectedLoadChangeFraction
             )
