@@ -1048,6 +1048,48 @@ struct WeekViewModelTests {
         #expect(viewModel.activities(on: viewModel.displayedWeekStart).map(\.id) == [currentWeekActivity.id])
     }
 
+    @Test("dailyLoadSplit(in:asOf:) returns the actual/planned split restricted to the requested range, even far outside the default window (MVP2-31)")
+    func dailyLoadSplitInRangeFiltersToThatRange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let farPastDay = calendar.date(byAdding: .day, value: -200, to: viewModel.displayedWeekStart)!
+        let activity = Activity(
+            source: .manual, sport: .running, start: farPastDay, duration: 1800, perceivedExertion: 5
+        )
+        try await store.upsert([activity])
+
+        let rangeStart = calendar.date(byAdding: .day, value: -210, to: viewModel.displayedWeekStart)!
+        let split = await viewModel.dailyLoadSplit(in: rangeStart...viewModel.displayedWeekStart, asOf: day(0))
+
+        #expect(split.actual.contains { calendar.isDate($0.day, inSameDayAs: farPastDay) })
+    }
+
+    @Test("dailyLoadSplit(in:asOf:) doesn't drop data the currently displayed week still needs (MVP2-31)")
+    func dailyLoadSplitInRangeDoesNotClobberCurrentWeek() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let currentWeekActivity = Activity(
+            source: .manual, sport: .running, start: viewModel.displayedWeekStart, duration: 1800, perceivedExertion: 5
+        )
+        try await store.upsert([currentWeekActivity])
+        await viewModel.load(asOf: day(0))
+        #expect(viewModel.activities(on: viewModel.displayedWeekStart).map(\.id) == [currentWeekActivity.id])
+
+        let farPastStart = calendar.date(byAdding: .day, value: -400, to: viewModel.displayedWeekStart)!
+        let farPastEnd = calendar.date(byAdding: .day, value: -370, to: viewModel.displayedWeekStart)!
+        _ = await viewModel.dailyLoadSplit(in: farPastStart...farPastEnd, asOf: day(0))
+
+        #expect(viewModel.activities(on: viewModel.displayedWeekStart).map(\.id) == [currentWeekActivity.id])
+    }
+
     @Test("load(asOf:) loads chartRange (3 weeks), not just the displayed week")
     func loadFetchesChartRangeIntoModel() async throws {
         let (store, stores) = makeStores()

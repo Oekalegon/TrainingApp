@@ -222,13 +222,32 @@ public final class WeekViewModel {
         if let cached = dailyLoadSplitCaches[weekStart] {
             return cached
         }
-        let split = computeDailyLoadSplit(for: weekStart, asOf: today)
+        let split = computeDailyLoadSplit(in: chartRange(for: weekStart), asOf: today)
         dailyLoadSplitCaches[weekStart] = split
         return split
     }
 
-    private func computeDailyLoadSplit(for weekStart: Date, asOf today: Date) -> DailyLoadSplit {
-        let range = chartRange(for: weekStart)
+    /// `dailyLoadSplit(for:asOf:)`'s own actual/planned split, but over an arbitrary `range` rather
+    /// than a week's fixed ``chartRange(for:)`` — for `MetricDetailView`'s Load chart, which pans
+    /// across a caller-chosen window (MVP1-45's Week/Month/3M/6M/Year periods) instead of the fixed
+    /// 3-week carousel `DailyLoadChartView` shows. Not cached, matching ``metrics(in:asOf:)``'s own
+    /// precedent for the same reason: this is only ever called from a pan/period-change buffer
+    /// reload, never from the per-frame swipe-drag hot path ``dailyLoadSplit(for:asOf:)`` itself
+    /// has to guard against.
+    ///
+    /// Loads the *union* of `range` and the currently loaded window first, same reasoning
+    /// ``metrics(in:asOf:)`` documents: `TrainingModel.load(in:)` replaces `model.activities`/
+    /// `plans`/`workouts` outright rather than merging into them, so loading a shifted range on its
+    /// own would silently drop data the main week view's own carousel still needs.
+    func dailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date = .now) async -> DailyLoadSplit {
+        let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
+        let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
+        try? await model.load(in: unionRange, asOf: today)
+        await refreshWeekCachesIfNeeded()
+        return computeDailyLoadSplit(in: range, asOf: today)
+    }
+
+    private func computeDailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date) -> DailyLoadSplit {
         let athlete = model.athlete
         let todayStart = calendar.startOfDay(for: today)
 
