@@ -2,32 +2,32 @@ import Charts
 import SwiftUI
 import TrainingCore
 
-/// The week view's graph panel "Daily load" page (MVP1-55, design doc §2.1) — each day's total
-/// training load (TRIMP) over the same 3-week window `FitnessChartView`'s "Form" page plots, so
-/// the same day lines up between pages when paging back and forth.
+/// The week view's graph panel "Daily load" page (MVP1-55, design doc §2.1) — each day's training
+/// load (TRIMP) over the same 3-week window `FitnessChartView`'s "Form" page plots, so the same
+/// day lines up between pages when paging back and forth.
+///
+/// Planned and performed are drawn as two independent bars (MVP2-30), not one bar colored by
+/// past-vs-future: a full-width, muted `planned` bar (what the day's `PlannedActivity`s project),
+/// with a narrower `actual` bar (what really happened, from completed `Activity`s) layered on top
+/// of it. A day with only a plan not yet performed shows just the muted bar; a day with only a
+/// completed activity and no plan shows just the narrow one; a day with both shows both, even if
+/// they disagree — see `WeekViewModel.dailyLoadSplit(for:)`'s own doc comment for why these two
+/// figures are computed independently rather than merged the way `FitnessMetrics.load` is.
 struct DailyLoadChartView: View {
+    let actualLoads: [DailyLoad]
+    let plannedLoads: [DailyLoad]
+    /// Only used for ``dayDomain``'s shared x-axis range (`ChartDayDomain.range(for:)`) — every day
+    /// in the displayed window has a `FitnessMetrics` entry regardless of whether it has any
+    /// load, which `actualLoads`/`plannedLoads` alone (sparse: zero-load days are dropped) can't
+    /// reliably provide the window's true first/last day from.
     let metrics: [FitnessMetrics]
     /// Date range of the week currently visible in the day list, shaded behind the bars — same
     /// role as `FitnessChartView.displayedWeekRange`.
     let displayedWeekRange: ClosedRange<Date>
-    let today: Date = .now
 
-    /// Actual (completed) days' load, up to and including `today`.
-    ///
-    /// Deliberately not `FitnessMetricsSplit.pastAndFuture` — that helper includes `today` in
-    /// *both* halves on purpose, so `FitnessChartView`'s solid and dashed line segments connect
-    /// with no gap. Bars have no such continuity to preserve, and reusing it here silently drew
-    /// two overlapping `BarMark`s (stacked, since Charts groups same-x bars by default) for
-    /// today's own day — visibly a too-tall bar overshooting the y-axis.
-    private var pastLoads: [DailyLoad] {
-        DailyLoad.aggregating(metrics.filter { $0.day <= today })
-    }
-
-    /// Projected/planned days' load, strictly after `today` (see `pastLoads`'s own doc comment for
-    /// why not `today` too), rendered as muted bars distinct from actual history.
-    private var futureLoads: [DailyLoad] {
-        DailyLoad.aggregating(metrics.filter { $0.day > today })
-    }
+    /// The planned bar is full width; the actual bar is narrower so it visibly nests inside it
+    /// rather than the two reading as unrelated, same-width bars sitting side by side.
+    private static let actualBarWidth: MarkDimension = .ratio(0.45)
 
     /// `ChartDayDomain.range(for:)` widened by a full day on each end.
     ///
@@ -59,13 +59,24 @@ struct DailyLoadChartView: View {
                 )
                 .foregroundStyle(Color.primary.opacity(0.1))
 
-                ForEach(pastLoads, id: \.day) { point in
-                    BarMark(x: .value("Day", point.day, unit: .day), y: .value("TRIMP", point.load))
-                        .foregroundStyle(Color.primary)
+                // Planned drawn first (full width, muted), so the narrower actual bar layers
+                // visibly on top of it. `stacking: .unstacked` on both is required -- without it,
+                // Charts sums same-x-day BarMarks (adding their heights) rather than overlaying
+                // them, the same behavior this view's old past/future split had to work around by
+                // keeping its two bar series on mutually exclusive days.
+                ForEach(plannedLoads, id: \.day) { point in
+                    BarMark(
+                        x: .value("Day", point.day, unit: .day), y: .value("Planned TRIMP", point.load),
+                        stacking: .unstacked
+                    )
+                    .foregroundStyle(Color.secondary)
                 }
-                ForEach(futureLoads, id: \.day) { point in
-                    BarMark(x: .value("Day", point.day, unit: .day), y: .value("TRIMP", point.load))
-                        .foregroundStyle(Color.secondary)
+                ForEach(actualLoads, id: \.day) { point in
+                    BarMark(
+                        x: .value("Day", point.day, unit: .day), y: .value("Performed TRIMP", point.load),
+                        width: Self.actualBarWidth, stacking: .unstacked
+                    )
+                    .foregroundStyle(Color.primary)
                 }
             }
             .chartXScale(domain: dayDomain)

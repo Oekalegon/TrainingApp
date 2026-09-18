@@ -464,6 +464,7 @@ public struct WeekView: View {
         if isCurrentPage {
             GraphPanelPagerView(
                 metrics: viewModel.chartMetrics(for: weekStart),
+                dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
                 displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
                 initialSelectedIndex: graphPanelSelectedIndex,
@@ -473,6 +474,7 @@ public struct WeekView: View {
         } else {
             GraphPanelStaticPreview(
                 metrics: viewModel.chartMetrics(for: weekStart),
+                dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
                 displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
                 selectedIndex: graphPanelSelectedIndex
