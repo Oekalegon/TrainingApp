@@ -128,11 +128,18 @@ struct PlannedWorkoutSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
+                // Symbol-only, matching Apple Health's own sheet toolbars, rather than "Cancel"/
+                // "Save" text buttons.
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button {
                         Task {
                             if await viewModel.save() {
                                 dismiss()
@@ -140,7 +147,10 @@ struct PlannedWorkoutSheet: View {
                                 isShowingSaveError = true
                             }
                         }
+                    } label: {
+                        Image(systemName: "checkmark")
                     }
+                    .accessibilityLabel("Save")
                     .disabled(viewModel.selectedTemplate == nil || viewModel.isSaving)
                 }
             }
