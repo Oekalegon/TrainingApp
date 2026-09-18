@@ -1,6 +1,5 @@
 import Foundation
 import TrainingCore
-import TrainingTools
 #if canImport(WorkoutKit)
 import TrainingWorkoutKit
 #endif
@@ -30,7 +29,7 @@ public final class PlannedWorkoutSheetViewModel {
     public var date: Date {
         didSet {
             guard date != oldValue else { return }
-            scheduleGuardrailRecompute()
+            recomputeGuardrails()
         }
     }
     public var selectedTemplate: WorkoutTemplate? {
@@ -51,11 +50,11 @@ public final class PlannedWorkoutSheetViewModel {
     /// handled defensively rather than crashing.
     public private(set) var expectedLoad: TrainingLoad?
     /// Non-blocking guardrail findings for the hypothetical addition, from running it through
-    /// ``PlanSandbox``/``PlanEvaluator`` without ever committing it. Empty (not an error state)
-    /// whenever nothing has been evaluated yet or the sandbox couldn't be built.
+    /// ``PlanEvaluator`` without ever touching the store. Empty (not an error state) whenever
+    /// nothing has been evaluated yet or there's genuinely nothing to flag.
     public private(set) var guardrailFindings: [PlanFinding] = []
-    /// Shown alongside an empty ``guardrailFindings`` — the raw per-day CTL/ATL/ratio/warmup values
-    /// the simulation actually produced, rather than an interpretation of them: this view model has
+    /// Shown alongside an empty ``guardrailFindings`` — the raw per-day CTL/ATL/TSB/warmup values
+    /// the projection actually produced, rather than an interpretation of them: this view model has
     /// twice guessed wrong at *why* nothing was flagged (missing-athlete-profile, then "not enough
     /// history" — see git history), so it now surfaces the numbers themselves and leaves reading
     /// them to whoever's looking. `nil` once at least one finding exists, or before the sheet's
@@ -66,9 +65,6 @@ public final class PlannedWorkoutSheetViewModel {
     /// ``guardrailFindings``.
     public private(set) var saveError: String?
     public private(set) var isSaving = false
-
-    @ObservationIgnored
-    private var guardrailTask: Task<Void, Never>?
 
     /// Creates a planned-workout sheet view model.
     ///
@@ -109,7 +105,7 @@ public final class PlannedWorkoutSheetViewModel {
     public func setParameterValue(_ value: Double, forKey key: String) {
         parameterValues[key] = value
         recomputeExpectedLoad()
-        scheduleGuardrailRecompute()
+        recomputeGuardrails()
     }
 
     private func seedFromSelectedTemplate() {
@@ -126,7 +122,7 @@ public final class PlannedWorkoutSheetViewModel {
         )
         workoutName = selectedTemplate.name
         recomputeExpectedLoad()
-        scheduleGuardrailRecompute()
+        recomputeGuardrails()
     }
 
     private func recomputeExpectedLoad() {
@@ -139,102 +135,99 @@ public final class PlannedWorkoutSheetViewModel {
         )
     }
 
-    /// How far back ``scheduleGuardrailRecompute()`` snapshots real history before `date` — enough
-    /// for CTL/ATL to clear `FitnessMetricsCalculator`'s ~42-day warmup and settle into a real
-    /// (if the athlete has little training, near-zero but no longer transient) trend by the time
-    /// the simulation reaches `date`.
-    private static let guardrailLookbackDays = 90
     /// How far past `date` a finding is still shown as caused by this addition — a finding further
     /// out than this is either unrelated day-to-day noise or a pre-existing condition this single
     /// workout can't meaningfully be blamed for.
     private static let guardrailLookaheadDays = 14
 
-    /// Runs the hypothetical addition through ``PlanSandbox``/``PlanEvaluator`` — never persisted,
-    /// discarded as soon as the findings are read. Cancels and replaces any still-running
-    /// simulation rather than letting two overlapping ones race to set ``guardrailFindings`` last.
+    /// Projects the hypothetical addition forward and checks it with ``PlanEvaluator`` — never
+    /// touches the store, purely in-memory over data already loaded on `model`.
     ///
-    /// Scoped to a window around `date` rather than ``PlanSandbox``'s full ~1.5-year default
-    /// snapshot range, in both the simulation itself (`range:`) and the findings shown
-    /// (`displayRange`): `PlanEvaluator` emits one `PlanFinding` per breaching day, and a
-    /// history-thin athlete's near-zero CTL/ATL can sit in guardrail-breaching territory for
-    /// hundreds of days at a stretch — unscoped, a single degenerate condition floods the sheet
-    /// with what reads as dozens of unrelated warnings instead of the handful that actually bear
-    /// on adding *this* workout on *this* day.
-    private func scheduleGuardrailRecompute() {
-        guardrailTask?.cancel()
+    /// Seeded from ``TrainingModel/metrics``'s own entry for the most recent real day before
+    /// `date`, rather than recomputing CTL/ATL from scratch over some fetched window: an earlier
+    /// version built a from-scratch `PlanSandbox` simulation over the last ~90 days, but that
+    /// engine always calls `FitnessMetricsCalculator.metrics(seed: nil)` — meaning "warming up"
+    /// was just "fewer than 42 days into *that particular snapshot*", completely disconnected from
+    /// the athlete's actual training history and from the size of the addition being tested (an
+    /// entry's warmup status never depended on its own load, only its position in the array) — so
+    /// every projected day kept reading as warming up regardless of how large a workout was added,
+    /// permanently suppressing every cycle-free guardrail rule. `model.metrics` is already
+    /// seeded/cache-backed from the athlete's true history, so continuing from its last real day
+    /// carries genuine CTL/ATL forward instead of restarting cold.
+    private func recomputeGuardrails() {
         guard let selectedTemplate, let workout = try? selectedTemplate.instantiate(
             name: workoutName.isEmpty ? nil : workoutName, values: parameterValues
         ) else {
             guardrailFindings = []
+            guardrailDiagnostic = nil
             return
         }
         let plan = PlannedActivity(workoutID: workout.id, date: date)
-        let stores = model.stores
-        let today = date
-        let estimator = self.estimator
         let calendar = athleteCalendar
-        let evaluationRange = Self.evaluationRange(around: date, calendar: calendar)
+        let startOfDay = calendar.startOfDay(for: date)
         let displayRange = Self.displayRange(around: date, calendar: calendar)
-        guardrailTask = Task { [weak self] in
-            let sandbox: PlanSandbox
-            do {
-                sandbox = try await PlanSandbox(snapshotOf: stores, range: evaluationRange)
-            } catch {
-                // `PlanSandbox.init` throws for more than just a missing athlete profile: the
-                // `athleteStore` check is a `guard`, but the plans/workouts/cycles/activities
-                // fetches right after it are all `try await`'d too, so any store fetch failure
-                // (e.g. a real SwiftData decode error) throws the exact same way. Surfacing
-                // `error` itself rather than guessing which one it was -- clears rather than
-                // leaving a stale value from a previous (successful) recompute in place, which
-                // would otherwise silently keep showing findings for whatever the
-                // template/parameters used to be.
-                guard !Task.isCancelled, let self else { return }
-                self.guardrailFindings = []
-                self.guardrailDiagnostic = "Guardrail check unavailable: \(error)"
-                return
-            }
-            await sandbox.setWorkouts(await sandbox.workouts + [workout])
-            await sandbox.setPlans(await sandbox.plans + [plan])
-            let result = await sandbox.simulate(
-                engine: DefaultSeriesEngine(estimator: estimator), evaluator: PlanEvaluator(), today: today
-            )
-            guard !Task.isCancelled, let self else { return }
-            let displayedMetrics = result.metrics.filter { displayRange.contains($0.day) }
-            self.guardrailFindings = result.evaluation.findings.filter { displayRange.contains($0.day) }
-            self.guardrailDiagnostic = self.guardrailFindings.isEmpty
-                ? Self.diagnosticDescription(simulatedDayCount: result.metrics.count, displayedMetrics: displayedMetrics)
-                : nil
+
+        let seedEntry = model.metrics.last { $0.day < startOfDay }
+        let seed: (ctl: Double, atl: Double)? = seedEntry.map { ($0.ctl, $0.atl) }
+        let seriesStart = seedEntry.flatMap { calendar.date(byAdding: .day, value: 1, to: $0.day) } ?? startOfDay
+
+        // Every other already-planned activity in the projected window too, so the projection
+        // reflects the whole plan this addition is joining rather than just this one workout in
+        // isolation -- `model.plans`/`model.workouts` are whatever's already loaded, no store hit.
+        let otherPlans = model.plans.filter { $0.date >= seriesStart && $0.date <= displayRange.upperBound }
+        // Built by hand rather than via `DailyLoadSeries.days(today:)`: that method's `today` is
+        // simultaneously "how far the series extends" *and* the actual/planned boundary ("before
+        // today, only logged activities count -- a plan with nothing logged contributes 0"). Every
+        // day in this projection is, by construction, still in the future (past dates are disabled
+        // from opening this sheet at all), so there's no "boundary" to speak of -- passing either
+        // `date` or `displayRange.upperBound` for `today` gets one of the two roles wrong: the
+        // former truncates the series the moment nothing else is scheduled past `date`, the latter
+        // (an earlier version of this method) silently zeroed the new workout's own load on every
+        // day except the last, since everything before it read as "already happened, nothing
+        // logged". A plain day-by-day loop over resolved plan loads has neither problem.
+        let workoutsByID = Dictionary(uniqueKeysWithValues: (model.workouts + [workout]).map { ($0.id, $0) })
+        var loadByDay: [Date: Double] = [:]
+        for scheduledPlan in otherPlans + [plan] {
+            guard let scheduledWorkout = workoutsByID[scheduledPlan.workoutID] else { continue }
+            let load = scheduledPlan.expectedLoadOverride
+                ?? estimator.estimatedLoad(for: scheduledWorkout, athlete: model.athlete).value
+            let day = calendar.startOfDay(for: scheduledPlan.date)
+            loadByDay[day, default: 0] += load
         }
+        var projectedDays: [DayLoad] = []
+        var cursor = seriesStart
+        while cursor <= displayRange.upperBound {
+            projectedDays.append(DayLoad(day: cursor, load: loadByDay[cursor] ?? 0, isProjected: true))
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor), next > cursor else { break }
+            cursor = next
+        }
+        let projectedMetrics = FitnessMetricsCalculator().metrics(
+            for: projectedDays, parameters: model.parameters, seed: seed
+        )
+
+        let evaluation = PlanEvaluator().evaluate(projectedMetrics, races: [], cycles: model.cycles)
+        let displayedMetrics = projectedMetrics.filter { displayRange.contains($0.day) }
+        guardrailFindings = evaluation.findings.filter { displayRange.contains($0.day) }
+        guardrailDiagnostic = guardrailFindings.isEmpty
+            ? Self.diagnosticDescription(seeded: seed != nil, displayedMetrics: displayedMetrics)
+            : nil
     }
 
-    /// One line per day in `displayedMetrics` with its raw CTL/ATL/ratio/``FitnessMetrics/isWarmingUp``
-    /// values, plus how many days the sandbox actually simulated in total (`simulatedDayCount`) --
-    /// e.g. a suspiciously small count is itself evidence the ``evaluationRange(around:calendar:)``
-    /// fetch isn't finding the real history it should.
-    private static func diagnosticDescription(simulatedDayCount: Int, displayedMetrics: [FitnessMetrics]) -> String {
+    /// One line per day in `displayedMetrics` with its raw CTL/ATL/TSB/``FitnessMetrics/isWarmingUp``
+    /// values, plus whether the projection found a real day to seed from at all — rather than an
+    /// interpretation of them (see ``recomputeGuardrails()``'s own doc comment for why this view
+    /// model stopped trying to explain that in English).
+    private static func diagnosticDescription(seeded: Bool, displayedMetrics: [FitnessMetrics]) -> String {
         guard !displayedMetrics.isEmpty else {
-            return "No projected days landed in the display window (\(simulatedDayCount) total days simulated)."
+            return "No projected days landed in the display window."
         }
         let dateFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
         let lines = displayedMetrics.map { entry in
-            let ratio = entry.ctl > 0 ? entry.atl / entry.ctl : Double.nan
-            return "\(entry.day.formatted(dateFormat)): CTL=\(entry.ctl.rounded()) ATL=\(entry.atl.rounded()) "
-                + "ratio=\(ratio.isNaN ? "n/a" : String(format: "%.2f", ratio)) warmingUp=\(entry.isWarmingUp)"
+            "\(entry.day.formatted(dateFormat)): CTL=\(entry.ctl.rounded()) ATL=\(entry.atl.rounded()) "
+                + "TSB=\(entry.tsb.rounded()) warmingUp=\(entry.isWarmingUp)"
         }
-        return (["\(simulatedDayCount) days simulated total"] + lines).joined(separator: "\n")
-    }
-
-    /// `date` is typically a "day" only in intent — the sheet's default is `.now` and a
-    /// `DatePicker` binding can carry whatever time-of-day it started with — but every `PlanFinding`/
-    /// `FitnessMetrics` entry's `day` is midnight-aligned. Comparing `date` against those raw would
-    /// exclude a finding on `date`'s own calendar day whenever `date`'s time-of-day is later than
-    /// midnight, which is effectively always — this normalizes first so the addition's own day is
-    /// never silently dropped from either range.
-    private static func evaluationRange(around date: Date, calendar: Calendar) -> ClosedRange<Date> {
-        let startOfDay = calendar.startOfDay(for: date)
-        let start = calendar.date(byAdding: .day, value: -guardrailLookbackDays, to: startOfDay) ?? startOfDay
-        let end = calendar.date(byAdding: .day, value: guardrailLookaheadDays, to: startOfDay) ?? startOfDay
-        return start...end
+        let header = seeded ? "Seeded from real history." : "No real prior day found to seed from."
+        return ([header] + lines).joined(separator: "\n")
     }
 
     /// `date`'s own calendar day through `date` + ``guardrailLookaheadDays`` — deliberately
@@ -246,12 +239,9 @@ public final class PlannedWorkoutSheetViewModel {
         return startOfDay...end
     }
 
-    /// Waits for any in-flight guardrail recompute (from the most recent template/parameter/date
-    /// change) to finish. Exposed for tests, which otherwise have no way to observe when the
-    /// fire-and-forget `Task` ``scheduleGuardrailRecompute()`` starts has actually landed.
-    public func waitForGuardrailRecompute() async {
-        await guardrailTask?.value
-    }
+    /// No-op now that ``recomputeGuardrails()`` runs synchronously — kept so existing call sites
+    /// (tests, mainly) that await a recompute settling don't need to change.
+    public func waitForGuardrailRecompute() async {}
 
     private var athleteCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)

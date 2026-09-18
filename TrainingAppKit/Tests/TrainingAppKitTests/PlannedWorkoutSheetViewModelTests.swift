@@ -19,11 +19,6 @@ struct PlannedWorkoutSheetViewModelTests {
         let athlete = AthleteProfile.fixture(
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
         )
-        // `TrainingModel.athlete` is a plain, caller-managed property -- it's never persisted to
-        // `athleteStore` on its own. `PlanSandbox.init` reads the athlete from the *store*, not
-        // from `model.athlete`, so without this save it throws `missingAthleteProfile` on every
-        // guardrail recompute -- silently, since `scheduleGuardrailRecompute()` swallows that error
-        // with `try?`, which is exactly how this test setup bug first surfaced as "no guardrails".
         try? await store.save(athlete)
         return (store, TrainingModel(stores: stores, athlete: athlete))
     }
@@ -98,8 +93,7 @@ struct PlannedWorkoutSheetViewModelTests {
         // 60 days of a modest, steady easy run: enough real history for CTL/ATL to clear the
         // ~42-day warmup and settle into an established (low, steady) trend by `plannedDate`, so
         // a 35km long run on top of it reads as a genuine ATL spike rather than the warmup-day
-        // guard skipping everything (an empty-history athlete's plan is a single-day series that
-        // never leaves warmup, which is why this seeds real activities rather than testing bare).
+        // guard skipping everything.
         let history = (1...60).map { offset in
             Activity(
                 source: .manual, sport: .running, start: plannedDate.addingTimeInterval(Double(-offset) * 86400),
@@ -107,6 +101,9 @@ struct PlannedWorkoutSheetViewModelTests {
             )
         }
         try? await store.upsert(history)
+        // `recomputeGuardrails()` seeds from `model.metrics`, which only reflects what `load(in:)`
+        // last pulled from the store -- seeding the store alone (as above) doesn't populate it.
+        try? await model.load(in: plannedDate.addingTimeInterval(-70 * 86400)...plannedDate)
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: plannedDate)
 
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.longRun
