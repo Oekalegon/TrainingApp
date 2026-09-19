@@ -68,16 +68,22 @@ public final class PlannedWorkoutDetailViewModel {
         )
     }
 
-    /// The workout's estimated duration — unlike the card's ``summary``, always shown here when the
-    /// workout exists, since a duration is always estimable (distance is only shown when the workout
-    /// itself defines it; see ``WeekViewModel/PlannedCardSummary/Extent``).
-    public var expectedDuration: TimeInterval? {
-        workout.map { statisticsCalculator.durationEstimator.duration(for: $0, athlete: model.athlete) }
+    /// The workout's projected duration and distance — the same projection the week's statistics use
+    /// (``StatisticsCalculator/projection(for:athlete:)``), `nil` when the workout is gone.
+    private var projection: WorkoutProjection? {
+        workout.map { statisticsCalculator.projection(for: $0, athlete: model.athlete) }
     }
 
-    /// The expected distance, only for a workout made solely of distance steps.
+    /// The workout's estimated duration.
+    public var expectedDuration: TimeInterval? {
+        projection?.duration
+    }
+
+    /// The workout's expected distance: exact for a distance-based workout, a pace-model estimate for
+    /// a duration-based one (see ``StatisticsCalculator/projection(for:athlete:)``). `nil` when the
+    /// athlete has no heart-rate zone settings to derive paces from.
     public var expectedDistanceMeters: Double? {
-        if case .distance(let meters)? = summary.extent { meters } else { nil }
+        projection?.distanceMeters
     }
 
     /// One line per block, e.g. `"Warm-up 10:00"` or `"4 × Work 8:00, Recovery 2:00"`. Empty when the

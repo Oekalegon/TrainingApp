@@ -9,7 +9,11 @@ import TrainingCore
 struct PlannedWorkoutDetailSheet: View {
     @State private var viewModel: PlannedWorkoutDetailViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var isEditing = false
+    /// The edit sheet's view model, created once when the pencil is tapped and kept here for as long as
+    /// the edit sheet is up. Building it inside the `.sheet` content closure instead would make a
+    /// fresh one — with the plan's original parameter values — every time this view's body
+    /// re-evaluates, so a slider would jump back right after being dragged.
+    @State private var editor: PlannedWorkoutSheetViewModel?
     @State private var isConfirmingDelete = false
     @State private var isShowingDeleteError = false
 
@@ -99,15 +103,17 @@ struct PlannedWorkoutDetailSheet: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        isEditing = true
+                        editor = viewModel.makeEditor()
                     } label: {
                         Image(systemName: "pencil")
                     }
                     .accessibilityLabel("Edit")
                 }
             }
-            .sheet(isPresented: $isEditing) {
-                PlannedWorkoutSheet(viewModel: viewModel.makeEditor())
+            .sheet(isPresented: Binding(get: { editor != nil }, set: { if !$0 { editor = nil } })) {
+                if let editor {
+                    PlannedWorkoutSheet(viewModel: editor)
+                }
             }
             .alert("Delete Planned Workout?", isPresented: $isConfirmingDelete) {
                 Button("Delete", role: .destructive) {

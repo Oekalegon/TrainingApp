@@ -59,8 +59,8 @@ struct PlannedWorkoutDetailViewModelTests {
         ])
     }
 
-    @Test("a mixed workout shows an estimated duration but no distance")
-    func mixedWorkoutHasDurationOnly() async throws {
+    @Test("a duration-based workout shows an estimated distance too, from the athlete's pace model")
+    func durationBasedWorkoutShowsProjectedDistance() async throws {
         let model = try await makeModel()
         let workout = intervalWorkout()
         try await model.add(workout)
@@ -70,7 +70,7 @@ struct PlannedWorkoutDetailViewModelTests {
         let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan, scheduler: nil)
 
         #expect((viewModel.expectedDuration ?? 0) > 0)
-        #expect(viewModel.expectedDistanceMeters == nil)
+        #expect((viewModel.expectedDistanceMeters ?? 0) > 0)
         #expect(viewModel.summary.name == "Intervals")
     }
 
