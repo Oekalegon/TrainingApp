@@ -8,6 +8,12 @@ import TrainingWorkoutKit
 /// parameters with a live expected-load preview, see non-blocking ``PlanEvaluator`` guardrail
 /// warnings for the hypothetical addition, then save — which instantiates the template, syncs the
 /// result to WorkoutKit, and schedules it.
+///
+/// Also drives the same sheet in edit mode (MVP2-39, ``init(model:editing:templates:estimator:scheduler:)``):
+/// an existing plan's date and expected-load override are editable, its workout is shown read-only
+/// (the template and parameters it was instantiated from aren't stored, and a workout definition
+/// may be shared by other plans, so it isn't edited here), and ``save()`` updates the plan in
+/// place — rescheduling on WorkoutKit if the day moved.
 @Observable
 @MainActor
 public final class PlannedWorkoutSheetViewModel {
@@ -20,6 +26,17 @@ public final class PlannedWorkoutSheetViewModel {
     /// entirely when this is `nil`, rather than only skipping `schedule` — a workout added to the
     /// library without ever having been synced is a consistent, if incomplete, state to save.
     private let scheduler: (any PlannedWorkoutScheduling)?
+    /// The plan being edited, as it was when the sheet opened; `nil` when creating a new one.
+    private let editingPlan: PlannedActivity?
+    /// The workout ``editingPlan`` schedules — `nil` when creating, or if that workout is no
+    /// longer in the library (in which case editing is still allowed, just without a workout name,
+    /// guardrail preview or WorkoutKit rescheduling).
+    private let editedWorkout: StructuredWorkout?
+
+    /// `true` when this view model edits an existing plan rather than creating one.
+    public var isEditing: Bool { editingPlan != nil }
+    /// The edited workout's name, shown read-only in edit mode.
+    public var editedWorkoutName: String? { editedWorkout?.name }
 
     /// The templates offered in the picker — the built-in library only; MVP2-15 doesn't add custom
     /// template persistence.
@@ -29,6 +46,15 @@ public final class PlannedWorkoutSheetViewModel {
     public var date: Date {
         didSet {
             guard date != oldValue else { return }
+            recomputeGuardrails()
+        }
+    }
+    /// Manual override of the estimated load (``PlannedActivity/expectedLoadOverride``); `nil`
+    /// means "use the estimate". Only editable in edit mode, where the sheet shows it.
+    public var loadOverride: Double? {
+        didSet {
+            guard loadOverride != oldValue else { return }
+            recomputeExpectedLoad()
             recomputeGuardrails()
         }
     }
@@ -128,6 +154,34 @@ public final class PlannedWorkoutSheetViewModel {
         self.templates = templates
         self.estimator = estimator
         self.scheduler = scheduler
+        self.editingPlan = nil
+        self.editedWorkout = nil
+    }
+
+    /// Creates a view model that edits `plan` in place (MVP2-39).
+    ///
+    /// - Parameters:
+    ///   - model: The training model the plan lives in.
+    ///   - plan: The plan to edit; its date and ``PlannedActivity/expectedLoadOverride`` seed
+    ///     ``date``/``loadOverride``.
+    ///   - templates/estimator/scheduler: As for ``init(model:date:templates:estimator:scheduler:)``.
+    public init(
+        model: TrainingModel,
+        editing plan: PlannedActivity,
+        templates: [WorkoutTemplate] = BuiltInWorkoutTemplates.all,
+        estimator: any PlannedLoadEstimator = TRIMPPlanEstimator(),
+        scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSheetViewModel.liveScheduler
+    ) {
+        self.model = model
+        self.date = plan.date
+        self.loadOverride = plan.expectedLoadOverride
+        self.templates = templates
+        self.estimator = estimator
+        self.scheduler = scheduler
+        self.editingPlan = plan
+        self.editedWorkout = model.workouts.first { $0.id == plan.workoutID }
+        recomputeExpectedLoad()
+        recomputeGuardrails()
     }
 
     #if canImport(WorkoutKit)
@@ -163,7 +217,15 @@ public final class PlannedWorkoutSheetViewModel {
     }
 
     private func recomputeExpectedLoad() {
-        guard let selectedTemplate else {
+        if let editedWorkout {
+            var load = estimator.estimatedLoad(for: editedWorkout, athlete: model.athlete)
+            if let loadOverride {
+                load.value = loadOverride
+            }
+            expectedLoad = load
+            return
+        }
+        guard editingPlan == nil, let selectedTemplate else {
             expectedLoad = nil
             return
         }
@@ -192,14 +254,32 @@ public final class PlannedWorkoutSheetViewModel {
     /// seeded/cache-backed from the athlete's true history, so continuing from its last real day
     /// carries genuine CTL/ATL forward instead of restarting cold.
     private func recomputeGuardrails() {
-        guard let selectedTemplate, let workout = try? selectedTemplate.instantiate(
-            name: workoutName.isEmpty ? nil : workoutName, values: parameterValues
-        ) else {
-            guardrailFindings = []
-            guardrailDiagnostic = nil
-            return
+        let workout: StructuredWorkout
+        let plan: PlannedActivity
+        if let editingPlan {
+            // Edit mode: project the plan as it would be after saving (new date/override), with the
+            // original left out of `otherPlans` below so it isn't counted twice.
+            guard let editedWorkout else {
+                guardrailFindings = []
+                guardrailDiagnostic = nil
+                return
+            }
+            workout = editedWorkout
+            var edited = editingPlan
+            edited.date = date
+            edited.expectedLoadOverride = loadOverride
+            plan = edited
+        } else {
+            guard let selectedTemplate, let instantiated = try? selectedTemplate.instantiate(
+                name: workoutName.isEmpty ? nil : workoutName, values: parameterValues
+            ) else {
+                guardrailFindings = []
+                guardrailDiagnostic = nil
+                return
+            }
+            workout = instantiated
+            plan = PlannedActivity(workoutID: workout.id, date: date)
         }
-        let plan = PlannedActivity(workoutID: workout.id, date: date)
         let calendar = athleteCalendar
         let startOfDay = calendar.startOfDay(for: date)
         let displayRange = Self.displayRange(around: date, calendar: calendar)
@@ -211,7 +291,9 @@ public final class PlannedWorkoutSheetViewModel {
         // Every other already-planned activity in the projected window too, so the projection
         // reflects the whole plan this addition is joining rather than just this one workout in
         // isolation -- `model.plans`/`model.workouts` are whatever's already loaded, no store hit.
-        let otherPlans = model.plans.filter { $0.date >= seriesStart && $0.date <= displayRange.upperBound }
+        let otherPlans = model.plans.filter {
+            $0.id != plan.id && $0.date >= seriesStart && $0.date <= displayRange.upperBound
+        }
         // Built by hand rather than via `DailyLoadSeries.days(today:)`: that method's `today` is
         // simultaneously "how far the series extends" *and* the actual/planned boundary ("before
         // today, only logged activities count -- a plan with nothing logged contributes 0"). Every
@@ -222,7 +304,11 @@ public final class PlannedWorkoutSheetViewModel {
         // (an earlier version of this method) silently zeroed the new workout's own load on every
         // day except the last, since everything before it read as "already happened, nothing
         // logged". A plain day-by-day loop over resolved plan loads has neither problem.
-        let workoutsByID = Dictionary(uniqueKeysWithValues: (model.workouts + [workout]).map { ($0.id, $0) })
+        // The workout itself is dropped from `model.workouts` before re-adding it: in edit mode it's
+        // already in the library, and `uniqueKeysWithValues` traps on a duplicate id.
+        let workoutsByID = Dictionary(
+            uniqueKeysWithValues: (model.workouts.filter { $0.id != workout.id } + [workout]).map { ($0.id, $0) }
+        )
         var loadByDay: [Date: Double] = [:]
         for scheduledPlan in otherPlans + [plan] {
             guard let scheduledWorkout = workoutsByID[scheduledPlan.workoutID] else { continue }
@@ -303,8 +389,14 @@ public final class PlannedWorkoutSheetViewModel {
     /// - Parameter today: Injected rather than read from `.now` internally, matching
     ///   `WeekViewModel.isPast(_:asOf:)`'s own convention (and `TrainingModel.recompute(asOf:)`'s,
     ///   further up the stack) — lets a test pin an exact boundary instead of racing `.now`.
+    ///
+    /// In edit mode the bound also reaches back to the plan's own day when that's already past (a
+    /// missed workout being edited), so the picker can still show the plan's current date rather
+    /// than clamping it — it can't be moved to a day earlier than the one it's already on.
     public func minimumDate(asOf today: Date = .now) -> Date {
-        athleteCalendar.startOfDay(for: today)
+        let todayStart = athleteCalendar.startOfDay(for: today)
+        guard let editingPlan else { return todayStart }
+        return min(todayStart, athleteCalendar.startOfDay(for: editingPlan.date))
     }
 
     /// Instantiates the selected template, syncs it to WorkoutKit, and schedules it — `true` on
@@ -333,7 +425,11 @@ public final class PlannedWorkoutSheetViewModel {
         // Guards against a double-tap landing before the `Task` wrapping this call has actually
         // started running (and so before `isSaving` below would otherwise have caught it), which
         // would otherwise instantiate and persist two separate workouts for one tap.
-        guard !isSaving, let selectedTemplate else { return false }
+        guard !isSaving else { return false }
+        if let editingPlan {
+            return await saveEdit(of: editingPlan)
+        }
+        guard let selectedTemplate else { return false }
         isSaving = true
         defer { isSaving = false }
         do {
@@ -349,6 +445,51 @@ public final class PlannedWorkoutSheetViewModel {
             }
             try await model.add(workout)
             try await model.add(plan)
+            return true
+        } catch {
+            saveError = "Couldn't save this workout: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Saves `original` over itself with the edited ``date``/``loadOverride`` (MVP2-39).
+    ///
+    /// If the day moved and the workout is still in the library, the plan is scheduled for its new
+    /// day on WorkoutKit *first*, and only then persisted, then its old day's entry is removed —
+    /// the same "don't persist until WorkoutKit succeeded" ordering ``save()`` documents, so a
+    /// failed schedule leaves the plan untouched at its old day instead of saved somewhere the
+    /// Watch doesn't know about. The final removal is best-effort (`try?`): by that point the edit
+    /// is already saved and correct locally, and failing the whole save over a leftover Watch entry
+    /// would just invite a retry that schedules the new day a second time.
+    private func saveEdit(of original: PlannedActivity) async -> Bool {
+        isSaving = true
+        defer { isSaving = false }
+        let calendar = athleteCalendar
+        var updated = original
+        updated.date = date
+        updated.expectedLoadOverride = loadOverride
+        let dayMoved = !calendar.isDate(original.date, inSameDayAs: date)
+        do {
+            var workout = editedWorkout
+            var workoutChanged = false
+            if dayMoved, let scheduler, var scheduledWorkout = workout {
+                let id = try await scheduler.sync(scheduledWorkout)
+                if scheduledWorkout.workoutKitID == nil {
+                    // Never synced before (saved without a scheduler): adopt the id now, so the
+                    // entry just scheduled can be found and removed again later.
+                    scheduledWorkout.workoutKitID = id
+                    workout = scheduledWorkout
+                    workoutChanged = true
+                }
+                try await scheduler.schedule(updated, workout: scheduledWorkout, calendar: calendar)
+            }
+            if workoutChanged, let workout {
+                try await model.add(workout)
+            }
+            try await model.add(updated)
+            if dayMoved, let scheduler, let workout {
+                try? await scheduler.unschedule(original, workout: workout, calendar: calendar)
+            }
             return true
         } catch {
             saveError = "Couldn't save this workout: \(error.localizedDescription)"
