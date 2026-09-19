@@ -323,6 +323,96 @@ struct WeekViewModelTests {
         #expect(viewModel.workout(for: plan)?.id == workout.id)
     }
 
+    @Test("plannedCardSummary shows distance for a distance-only workout, duration otherwise, and falls back when the workout is missing")
+    func plannedCardSummaryExtent() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let timed = StructuredWorkout(
+            name: "Steady", sport: .cycling,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let distance = StructuredWorkout(
+            name: "Reps", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .distance(400), target: .heartRateZone(4))], repetitions: 5)]
+        )
+        let timedPlan = PlannedActivity(workoutID: timed.id, date: day(2))
+        let distancePlan = PlannedActivity(workoutID: distance.id, date: day(2), expectedLoadOverride: 55)
+        let orphanPlan = PlannedActivity(workoutID: UUID(), date: day(2))
+        try await store.upsert([timed, distance])
+        try await store.upsert([timedPlan, distancePlan, orphanPlan])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let timedSummary = viewModel.plannedCardSummary(for: timedPlan)
+        #expect(timedSummary.sport == .cycling)
+        #expect(timedSummary.name == "Steady")
+        #expect(timedSummary.extent == .duration(1800))
+
+        let distanceSummary = viewModel.plannedCardSummary(for: distancePlan)
+        #expect(distanceSummary.extent == .distance(meters: 2000))
+        #expect(distanceSummary.load == 55)
+
+        let orphanSummary = viewModel.plannedCardSummary(for: orphanPlan)
+        #expect(orphanSummary.sport == .running)
+        #expect(orphanSummary.name == nil)
+        #expect(orphanSummary.extent == nil)
+    }
+
+    @Test("plannedCardSummary shows duration for mixed/open workouts and for a workout with no steps, never 0 m")
+    func plannedCardSummaryMixedOpenAndEmpty() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let mixed = StructuredWorkout(
+            name: "Mixed", sport: .running,
+            blocks: [WorkoutBlock(steps: [
+                WorkoutStep(kind: .work, goal: .distance(1000), target: .heartRateZone(3)),
+                WorkoutStep(kind: .work, goal: .time(600), target: .heartRateZone(2)),
+            ])]
+        )
+        let open = StructuredWorkout(
+            name: "Open", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .open, target: .heartRateZone(2))])]
+        )
+        let empty = StructuredWorkout(name: "Empty", sport: .running, blocks: [WorkoutBlock(steps: [])])
+        let plans = [mixed, open, empty].map { PlannedActivity(workoutID: $0.id, date: day(2)) }
+        try await store.upsert([mixed, open, empty])
+        try await store.upsert(plans)
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        for plan in plans {
+            guard case .duration = viewModel.plannedCardSummary(for: plan).extent else {
+                Issue.record("expected a duration extent for \(String(describing: viewModel.workout(for: plan)?.name))")
+                continue
+            }
+        }
+    }
+
+    @Test("pendingPlans(on:) omits plans already matched to a completed activity")
+    func pendingPlansOmitsReconciled() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let workout = StructuredWorkout(
+            name: "Steady", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let pending = PlannedActivity(workoutID: workout.id, date: day(2))
+        let matched = PlannedActivity(workoutID: workout.id, date: day(2), completedActivityID: UUID())
+        try await store.upsert([workout])
+        try await store.upsert([pending, matched])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.pendingPlans(on: day(2)).map(\.id) == [pending.id])
+        #expect(viewModel.plans(on: day(2)).count == 2)
+    }
+
     @Test("metrics(on:) returns the matching day's fitness metrics, nil outside the loaded range")
     func metricsOnDayFiltersToThatCalendarDay() async throws {
         let (store, stores) = makeStores()
