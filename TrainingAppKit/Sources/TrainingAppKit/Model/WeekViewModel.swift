@@ -22,12 +22,14 @@ public final class WeekViewModel {
     /// reads this indirectly through that method, and needs the read tracked the same way a plain
     /// stored property's would be.
     private var sportStatsPagesCaches: [Date: [SportStatsPage]] = [:]
-    /// `(model.activities.count, today)` as of the last time ``sportStatsPagesCaches`` was
-    /// populated — either changing invalidates the whole cache (an import/dedup could change any
-    /// cached week's activities, not just the displayed one, and a new calendar day shifts every
-    /// week's own change-vs-previous-week percentages).
+    /// `(model.activities.count, model.plans.count, model.workouts.count, today)` as of the last
+    /// time ``sportStatsPagesCaches`` was populated — any changing invalidates the whole cache (an
+    /// import/dedup could change any cached week's activities, not just the displayed one; a new
+    /// calendar day shifts every week's own change-vs-previous-week percentages; a plan or its
+    /// workout can change independently of `model.activities`, e.g. saving a new planned workout
+    /// via `PlannedWorkoutSheet`).
     @ObservationIgnored
-    private var sportStatsPagesCachesKey: (activityCount: Int, today: Date)?
+    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, today: Date)?
 
     /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
     /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
@@ -231,13 +233,32 @@ public final class WeekViewModel {
         if let cached = dailyLoadSplitCaches[weekStart] {
             return cached
         }
-        let split = computeDailyLoadSplit(for: weekStart, asOf: today)
+        let split = computeDailyLoadSplit(in: chartRange(for: weekStart), asOf: today)
         dailyLoadSplitCaches[weekStart] = split
         return split
     }
 
-    private func computeDailyLoadSplit(for weekStart: Date, asOf today: Date) -> DailyLoadSplit {
-        let range = chartRange(for: weekStart)
+    /// `dailyLoadSplit(for:asOf:)`'s own actual/planned split, but over an arbitrary `range` rather
+    /// than a week's fixed ``chartRange(for:)`` — for `MetricDetailView`'s Load chart, which pans
+    /// across a caller-chosen window (MVP1-45's Week/Month/3M/6M/Year periods) instead of the fixed
+    /// 3-week carousel `DailyLoadChartView` shows. Not cached, matching ``metrics(in:asOf:)``'s own
+    /// precedent for the same reason: this is only ever called from a pan/period-change buffer
+    /// reload, never from the per-frame swipe-drag hot path ``dailyLoadSplit(for:asOf:)`` itself
+    /// has to guard against.
+    ///
+    /// Loads the *union* of `range` and the currently loaded window first, same reasoning
+    /// ``metrics(in:asOf:)`` documents: `TrainingModel.load(in:)` replaces `model.activities`/
+    /// `plans`/`workouts` outright rather than merging into them, so loading a shifted range on its
+    /// own would silently drop data the main week view's own carousel still needs.
+    func dailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date = .now) async -> DailyLoadSplit {
+        let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
+        let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
+        try? await model.load(in: unionRange, asOf: today)
+        await refreshWeekCachesIfNeeded()
+        return computeDailyLoadSplit(in: range, asOf: today)
+    }
+
+    private func computeDailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date) -> DailyLoadSplit {
         let athlete = model.athlete
         let todayStart = calendar.startOfDay(for: today)
 
@@ -428,20 +449,23 @@ public final class WeekViewModel {
     /// each of its 3 carousel pages' own pinned stats bar, including the previous/next week's,
     /// which re-evaluate on every touch-move frame of the day list's own swipe gesture just like
     /// the current page does. Without a cache keyed per week, each of those frames on each page
-    /// would redundantly re-run two full `periodStats` computations (one `LoadCalculator`
+    /// would redundantly re-run two full `periodStatsSplit` computations (one `LoadCalculator`
     /// invocation per activity, each) even though neither that page's own week nor the underlying
     /// data changed — the same class of freeze this codebase already fixed once for the day list
     /// itself (MVP1-19). The whole cache is invalidated together (not per week) whenever
-    /// `model.activities.count` or `today`'s calendar day changes, since either can shift every
-    /// cached week's own figures at once.
+    /// `model.activities`/`model.plans`/`model.workouts`' counts or `today`'s calendar day changes
+    /// — any of those can shift every cached week's own figures at once, and a plan/workout can
+    /// change independently of `model.activities` (e.g. saving a new planned workout via
+    /// `PlannedWorkoutSheet`).
     public func sportStatsPages(for weekStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
-        let activityCount = model.activities.count
+        let key = (model.activities.count, model.plans.count, model.workouts.count)
         let keyIsCurrent = sportStatsPagesCachesKey.map {
-            $0.activityCount == activityCount && calendar.isDate($0.today, inSameDayAs: today)
+            $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
+                && calendar.isDate($0.today, inSameDayAs: today)
         } ?? false
         if !keyIsCurrent {
             sportStatsPagesCaches.removeAll()
-            sportStatsPagesCachesKey = (activityCount, today)
+            sportStatsPagesCachesKey = (key.0, key.1, key.2, today)
         }
         if let cached = sportStatsPagesCaches[weekStart] {
             return cached
@@ -452,50 +476,85 @@ public final class WeekViewModel {
     }
 
     private func computeSportStatsPages(weekStart: Date, asOf today: Date) -> [SportStatsPage] {
-        let current = periodStats(weekStart: weekStart, asOf: today)
+        let current = periodStatsSplit(weekStart: weekStart, asOf: today)
         let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
-        let previous = periodStats(weekStart: previousWeekStart, asOf: today)
+        let previous = periodStatsSplit(weekStart: previousWeekStart, asOf: today)
 
         let mainSport = model.athlete.mainSport
-        let otherSports = current.bySport.keys
+        let otherSports = Set(current.actual.keys).union(current.planned.keys)
             .filter { $0 != mainSport }
             .sorted { lhs, rhs in
-                let lhsDistance = current.bySport[lhs]?.distanceMeters ?? 0
-                let rhsDistance = current.bySport[rhs]?.distanceMeters ?? 0
+                let lhsDistance = current.actual[lhs]?.distanceMeters ?? 0
+                let rhsDistance = current.actual[rhs]?.distanceMeters ?? 0
                 return lhsDistance != rhsDistance ? lhsDistance > rhsDistance : lhs.displayName < rhs.displayName
             }
-        let loadChangeFraction = Self.changeFraction(current.totalLoad - previous.totalLoad, of: previous.totalLoad)
+        let currentTotalLoad = current.actual.values.reduce(0) { $0 + $1.load }
+        let previousTotalLoad = previous.actual.values.reduce(0) { $0 + $1.load }
+        let plannedTotalLoad = current.planned.values.reduce(0) { $0 + $1.load }
+        let previousPlannedTotalLoad = previous.planned.values.reduce(0) { $0 + $1.load }
+        // The previous week's own *expected* total (performed + still-planned as of `today`), not
+        // its performed-only total — for a week fully in the past this is the same number (nothing
+        // of that week is still "planned" relative to `today`), but for two still-future weeks
+        // shown back to back, the earlier one's performed total is always 0 (it hasn't happened
+        // yet), which would make every later week's own change read as a meaningless "+∞%". Using
+        // the previous week's expected total instead gives a real baseline in both cases: the
+        // week right after the one containing `today` compares against that week's own
+        // performed-so-far-plus-still-planned total, and a week further out compares against the
+        // week before it's own still-fully-planned total.
+        let previousExpectedTotalLoad = previousTotalLoad + previousPlannedTotalLoad
+        let loadChangeFraction = Self.changeFraction(currentTotalLoad - previousExpectedTotalLoad, of: previousExpectedTotalLoad)
+        let expectedLoadChangeFraction = Self.changeFraction(
+            (currentTotalLoad + plannedTotalLoad) - previousExpectedTotalLoad, of: previousExpectedTotalLoad
+        )
 
         return ([mainSport] + otherSports).map { sport in
-            let currentSport = current.bySport[sport] ?? Self.zeroSportStats(sport)
-            let previousSport = previous.bySport[sport] ?? Self.zeroSportStats(sport)
+            let currentActual = current.actual[sport] ?? Self.zeroSportStats(sport)
+            let previousActual = previous.actual[sport] ?? Self.zeroSportStats(sport)
+            let currentPlanned = current.planned[sport] ?? Self.zeroSportStats(sport)
+            let previousPlanned = previous.planned[sport] ?? Self.zeroSportStats(sport)
+            // See `previousExpectedTotalLoad`'s own doc comment for why this is performed+planned,
+            // not performed-only.
+            let previousExpectedDistance = previousActual.distanceMeters + previousPlanned.distanceMeters
+            let previousExpectedTime = previousActual.time + previousPlanned.time
             return SportStatsPage(
                 sport: sport,
-                distanceMeters: currentSport.distanceMeters,
-                time: currentSport.time,
+                distanceMeters: currentActual.distanceMeters,
+                time: currentActual.time,
                 distanceChangeFraction: Self.changeFraction(
-                    currentSport.distanceMeters - previousSport.distanceMeters, of: previousSport.distanceMeters
+                    currentActual.distanceMeters - previousExpectedDistance, of: previousExpectedDistance
                 ),
-                timeChangeFraction: Self.changeFraction(currentSport.time - previousSport.time, of: previousSport.time),
-                load: current.totalLoad,
+                timeChangeFraction: Self.changeFraction(currentActual.time - previousExpectedTime, of: previousExpectedTime),
+                load: currentTotalLoad,
                 loadChangeFraction: loadChangeFraction,
-                polarizedSplit: currentSport.timeInZone.polarizedSplit
+                polarizedSplit: currentActual.timeInZone.polarizedSplit,
+                plannedDistanceMeters: currentPlanned.distanceMeters,
+                plannedTime: currentPlanned.time,
+                plannedLoad: plannedTotalLoad,
+                plannedPolarizedSplit: currentPlanned.timeInZone.polarizedSplit,
+                expectedDistanceChangeFraction: Self.changeFraction(
+                    (currentActual.distanceMeters + currentPlanned.distanceMeters) - previousExpectedDistance,
+                    of: previousExpectedDistance
+                ),
+                expectedTimeChangeFraction: Self.changeFraction(
+                    (currentActual.time + currentPlanned.time) - previousExpectedTime, of: previousExpectedTime
+                ),
+                expectedLoadChangeFraction: expectedLoadChangeFraction
             )
         }
     }
 
-    /// Descriptive totals (every sport, not just one) for the calendar week starting `weekStart` —
-    /// shared by ``sportStatsPages(asOf:)`` for both the displayed week and the previous one.
-    private func periodStats(weekStart: Date, asOf today: Date) -> PeriodStats {
+    /// Descriptive totals (every sport, not just one), performed and planned independently, for
+    /// the calendar week starting `weekStart` — shared by ``sportStatsPages(asOf:)`` for both the
+    /// displayed week and the previous one.
+    private func periodStatsSplit(weekStart: Date, asOf today: Date) -> PeriodStatsSplit {
         let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
-        return statisticsCalculator.periodStats(
+        return statisticsCalculator.periodStatsSplit(
             activities: model.activities,
             plans: model.plans,
             workouts: model.workouts,
             athlete: model.athlete,
             range: weekStart...weekEnd,
-            asOf: today,
-            previous: nil
+            asOf: today
         )
     }
 
