@@ -395,6 +395,133 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(futureViewModel.minimumDate(asOf: day(5)) == calendar.startOfDay(for: day(5)))
     }
 
+    // MARK: - Editing parameters (MVP2-41)
+
+    /// A plan scheduling a workout instantiated from the built-in recovery-run template, so it carries
+    /// its template id and parameter values.
+    private func makeTemplatePlan(
+        model: TrainingModel, on date: Date, duration: Double = 20 * 60
+    ) async throws -> (PlannedActivity, StructuredWorkout) {
+        var workout = try BuiltInWorkoutTemplates.recoveryRun.instantiate(values: ["duration": duration])
+        workout.workoutKitID = UUID()
+        let plan = PlannedActivity(workoutID: workout.id, date: date)
+        try await model.add(workout)
+        try await model.add(plan)
+        return (plan, workout)
+    }
+
+    @Test("editing a template-built plan seeds the recorded parameter values and offers its parameters")
+    func editingSeedsParameters() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeTemplatePlan(model: model, on: day(3), duration: 35 * 60)
+
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        #expect(viewModel.canEditParameters)
+        #expect(viewModel.editableParameters.map(\.key) == BuiltInWorkoutTemplates.recoveryRun.parameters.map(\.key))
+        #expect(viewModel.parameterValues["duration"] == 35.0 * 60)
+    }
+
+    @Test("a workout without a recorded template can't have its parameters edited")
+    func editingLegacyWorkoutHasNoParameters() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let workout = StructuredWorkout(
+            name: "Old", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: day(3))
+        try await model.add(workout)
+        try await model.add(plan)
+
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        #expect(!viewModel.canEditParameters)
+        #expect(viewModel.editableParameters.isEmpty)
+    }
+
+    @Test("changing a parameter in edit mode updates the expected load")
+    func editingParameterUpdatesLoad() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeTemplatePlan(model: model, on: day(3), duration: 20 * 60)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+        let before = try #require(viewModel.expectedLoad?.value)
+
+        viewModel.setParameterValue(60 * 60, forKey: "duration")
+
+        #expect((viewModel.expectedLoad?.value ?? 0) > before)
+    }
+
+    @Test("saving a parameter change gives the plan a new workout, reschedules it, and removes the unshared old one")
+    func saveParameterChangeReplacesWorkout() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3), duration: 20 * 60)
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.setParameterValue(45 * 60, forKey: "duration")
+        let didSave = await viewModel.save()
+
+        #expect(didSave)
+        let saved = try #require(model.plans.first { $0.id == plan.id })
+        #expect(saved.workoutID != oldWorkout.id)
+        let newWorkout = try #require(model.workouts.first { $0.id == saved.workoutID })
+        #expect(newWorkout.name == oldWorkout.name)
+        #expect(newWorkout.templateID == oldWorkout.templateID)
+        #expect(newWorkout.parameterValues?["duration"] == 45.0 * 60)
+        #expect(!model.workouts.contains { $0.id == oldWorkout.id })
+        #expect(await scheduler.callLog == ["schedule", "unschedule"])
+    }
+
+    @Test("saving a parameter change keeps the old workout when another plan still uses it")
+    func saveParameterChangeKeepsSharedWorkout() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        try await model.add(PlannedActivity(workoutID: oldWorkout.id, date: day(6)))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        viewModel.setParameterValue(45 * 60, forKey: "duration")
+        #expect(await viewModel.save())
+
+        #expect(model.workouts.contains { $0.id == oldWorkout.id })
+        #expect(model.plans.filter { $0.workoutID == oldWorkout.id }.count == 1)
+    }
+
+    @Test("saving without touching a parameter leaves the plan on its existing workout")
+    func saveWithoutParameterChangeKeepsWorkout() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.loadOverride = 33
+        #expect(await viewModel.save())
+
+        #expect(model.plans.first?.workoutID == oldWorkout.id)
+        #expect(model.workouts.count == 1)
+        #expect(await scheduler.callLog.isEmpty)
+    }
+
+    @Test("a failed reschedule after a parameter change leaves the plan and its workout untouched")
+    func parameterChangeRescheduleFailureLeavesEverythingUntouched() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        let scheduler = FakeScheduler(scheduleShouldFail: true)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.setParameterValue(45 * 60, forKey: "duration")
+        #expect(!(await viewModel.save()))
+
+        #expect(model.plans.first?.workoutID == oldWorkout.id)
+        #expect(model.workouts.map(\.id) == [oldWorkout.id])
+    }
+
     @Test("minimumDate(asOf:) is the given day's calendar start in the athlete's timezone")
     func minimumDateIsStartOfGivenDayInAthleteTimeZone() async {
         let (_, model) = await makeModel()
