@@ -241,7 +241,8 @@ public struct WeekView: View {
                     kind: presentation.kind,
                     chartContext: chartContext(for: presentation),
                     period: $metricsChartPeriod,
-                    metricsProvider: { range in await viewModel.metrics(in: range) }
+                    metricsProvider: { range in await viewModel.metrics(in: range) },
+                    dailyLoadSplitProvider: { range in await viewModel.dailyLoadSplit(in: range) }
                 )
             }
             // Same reasoning as the destination above -- a real push, not a sheet.
@@ -266,6 +267,7 @@ public struct WeekView: View {
         let weekStart = WeekViewModel.weekStart(containing: anchor, calendar: viewModel.athleteCalendar)
         return MetricChartContext(
             metrics: viewModel.chartMetrics(for: weekStart),
+            dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
             subject: presentation.subject,
             calendar: viewModel.athleteCalendar
         )
@@ -568,7 +570,7 @@ public struct WeekView: View {
         VStack(spacing: 0) {
             Divider()
             SportStatsPagerView(pages: viewModel.sportStatsPages(for: weekStart))
-                .padding(.vertical, 12)
+                .padding(.vertical, 4)
             Divider()
         }
         .background(.thinMaterial)

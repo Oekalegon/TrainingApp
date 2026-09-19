@@ -9,6 +9,11 @@ struct MetricChartContext {
     /// graph, so the numbers agree between the two places they're shown. Used only to seed the
     /// screen's first paint before `metricsProvider` fetches its own, wider buffer.
     let metrics: [FitnessMetrics]
+    /// `WeekViewModel.dailyLoadSplit(for:)`'s own 3-week window for the week containing `subject`
+    /// — the Load kind's `LoadDetailChartView` own first-paint seed, mirroring `metrics`' role,
+    /// before `dailyLoadSplitProvider` fetches its own, wider buffer. Unused by the Fitness/Fatigue/
+    /// Form kinds, which only ever read `metrics`.
+    let dailyLoadSplit: DailyLoadSplit
     /// A specific day (a day-list pill tap) or a whole displayed week (a graph-panel tap) — see
     /// `MetricDetailSubject`'s own doc comment.
     let subject: MetricDetailSubject
@@ -58,6 +63,11 @@ struct MetricDetailView: View {
     /// in practice. Called for every period, including `.week`, since the chart's own swipe-to-pan
     /// (MVP1-45) needs a buffer wider than `chartContext.metrics` alone provides.
     let metricsProvider: (ClosedRange<Date>) async -> [FitnessMetrics]
+    /// `dailyLoadSplitProvider`'s own counterpart to `metricsProvider` — `WeekViewModel.dailyLoadSplit(in:asOf:)`
+    /// in practice. Only `.load`'s `LoadDetailChartView` reads the result, but this is still fetched
+    /// unconditionally alongside `metricsProvider` (same trigger, same buffer range) rather than
+    /// branching on `kind`, matching how `chartContext.dailyLoadSplit` is always populated too.
+    let dailyLoadSplitProvider: (ClosedRange<Date>) async -> DailyLoadSplit
 
     /// What the chart actually renders from — always a wider buffer than what's on screen (see
     /// `ChartPanState.bufferRange(around:period:calendar:)`), so dragging the chart can pan the
@@ -65,6 +75,9 @@ struct MetricDetailView: View {
     /// for an instant first paint, then replaced by a proper buffer fetched via `metricsProvider`
     /// once `.task(id: period)` runs.
     @State private var displayedMetrics: [FitnessMetrics]
+    /// `displayedMetrics`'s own counterpart for the Load kind's planned/performed split — same
+    /// seed-then-replace lifecycle, driven by `dailyLoadSplitProvider` alongside `metricsProvider`.
+    @State private var displayedDailyLoadSplit: DailyLoadSplit
     /// The chart's own pan/anchor/buffer-window state — a plain, testable type (see its own doc
     /// comment) rather than a handful of parallel `@State` vars living directly on this view.
     @State private var panState: ChartPanState
@@ -85,13 +98,16 @@ struct MetricDetailView: View {
         kind: TrainingMetricKind,
         chartContext: MetricChartContext,
         period: Binding<ChartPeriod>,
-        metricsProvider: @escaping (ClosedRange<Date>) async -> [FitnessMetrics]
+        metricsProvider: @escaping (ClosedRange<Date>) async -> [FitnessMetrics],
+        dailyLoadSplitProvider: @escaping (ClosedRange<Date>) async -> DailyLoadSplit
     ) {
         self.kind = kind
         self.chartContext = chartContext
         self._period = period
         self.metricsProvider = metricsProvider
+        self.dailyLoadSplitProvider = dailyLoadSplitProvider
         self._displayedMetrics = State(initialValue: chartContext.metrics)
+        self._displayedDailyLoadSplit = State(initialValue: chartContext.dailyLoadSplit)
         self._panState = State(
             initialValue: ChartPanState(
                 anchorDate: chartContext.anchorDate,
@@ -148,9 +164,14 @@ struct MetricDetailView: View {
     /// running to completion and returning a result).
     private func loadBuffer(around anchor: Date) async {
         let buffer = panState.bufferRange(around: anchor, period: period, calendar: chartContext.calendar)
+        // Sequential, not `async let`: both providers are plain (non-`Sendable`) MainActor
+        // closures, same as `metricsProvider` always was -- there's no meaningful parallelism to
+        // gain here anyway, since both ultimately go through the same `@MainActor` `WeekViewModel`.
         let metrics = await metricsProvider(buffer)
+        let dailyLoadSplit = await dailyLoadSplitProvider(buffer)
         guard !Task.isCancelled else { return }
         displayedMetrics = metrics
+        displayedDailyLoadSplit = dailyLoadSplit
         panState.loadedRange = buffer
     }
 
@@ -319,6 +340,8 @@ struct MetricDetailView: View {
         switch kind {
         case .load:
             LoadDetailChartView(
+                actualLoads: displayedDailyLoadSplit.actual,
+                plannedLoads: displayedDailyLoadSplit.planned,
                 metrics: displayedMetrics,
                 visibleRange: visibleRange,
                 period: period,
