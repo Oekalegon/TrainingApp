@@ -57,6 +57,17 @@ public final class WeekViewModel {
     @ObservationIgnored
     private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, today: Date)?
 
+    /// ``plannedCardSummary(for:)`` results, cached per plan (keyed by `PlannedActivity.id`) — the
+    /// day list re-renders on every touch-move frame of the week-swipe drag, and each summary runs
+    /// the TRIMP estimator plus a workout lookup, the same freeze class ``dailyLoadSplitCaches``
+    /// exists to keep out of that path.
+    private var plannedCardSummaryCache: [UUID: PlannedCardSummary] = [:]
+    /// `(model.plans.count, model.workouts.count)` as of the last time ``plannedCardSummaryCache``
+    /// was populated — a mismatch invalidates the whole cache, same reasoning as
+    /// ``dailyLoadSplitCachesKey``.
+    @ObservationIgnored
+    private var plannedCardSummaryCacheKey: (planCount: Int, workoutCount: Int)?
+
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
     public private(set) var displayedWeekStart: Date
@@ -330,9 +341,82 @@ public final class WeekViewModel {
             .filter { calendar.isDate($0.date, inSameDayAs: day) }
     }
 
+    /// `plans(on:)` minus those already matched to a completed activity (`completedActivityID !=
+    /// nil`) — that activity's own card represents them, so the day list shouldn't lay out a row
+    /// for them at all.
+    public func pendingPlans(on day: Date) -> [PlannedActivity] {
+        plans(on: day).filter { $0.completedActivityID == nil }
+    }
+
     /// The workout a plan schedules, if still in the library.
     public func workout(for plan: PlannedActivity) -> StructuredWorkout? {
         model.workouts.first { $0.id == plan.workoutID }
+    }
+
+    /// Everything a planned activity's card shows (MVP2-37), derived from the plan and its workout.
+    public struct PlannedCardSummary: Equatable, Sendable {
+        /// The one measure a workout is defined by — never both, since converting one to the other
+        /// needs a pace assumption that MVP2-35 hasn't settled yet, and showing a guess next to a
+        /// real figure would undercut it.
+        public enum Extent: Equatable, Sendable {
+            case duration(TimeInterval)
+            case distance(meters: Double)
+        }
+
+        /// `.running` when the plan's workout is no longer in the library.
+        public let sport: Sport
+        /// `nil` when the plan's workout is no longer in the library.
+        public let name: String?
+        /// ``PlannedActivity/expectedLoadOverride``, else the estimator's figure; `nil` when the
+        /// workout is missing.
+        public let load: Double?
+        public let extent: Extent?
+    }
+
+    /// The card content for `plan` (MVP2-37). A workout made up solely of distance-goal steps is
+    /// shown by its distance; every other workout by its estimated duration.
+    public func plannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
+        let key = (model.plans.count, model.workouts.count)
+        if plannedCardSummaryCacheKey.map({ $0.planCount != key.0 || $0.workoutCount != key.1 }) ?? true {
+            plannedCardSummaryCache.removeAll()
+            plannedCardSummaryCacheKey = key
+        }
+        if let cached = plannedCardSummaryCache[plan.id] {
+            return cached
+        }
+        let summary = computePlannedCardSummary(for: plan)
+        plannedCardSummaryCache[plan.id] = summary
+        return summary
+    }
+
+    private func computePlannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
+        guard let workout = workout(for: plan) else {
+            return PlannedCardSummary(sport: .running, name: nil, load: plan.expectedLoadOverride, extent: nil)
+        }
+        let athlete = model.athlete
+        let load = plan.expectedLoadOverride
+            ?? statisticsCalculator.estimator.estimatedLoad(for: workout, athlete: athlete).value
+
+        var distanceMeters = 0.0
+        var sawDistanceStep = false
+        var sawOtherStep = false
+        for block in workout.blocks {
+            for step in block.steps {
+                if case .distance(let meters) = step.goal {
+                    distanceMeters += meters * Double(block.repetitions)
+                    sawDistanceStep = true
+                } else {
+                    sawOtherStep = true
+                }
+            }
+        }
+        // Requires at least one distance step, so a workout with no steps at all isn't shown as
+        // "0 m".
+        let extent: PlannedCardSummary.Extent = sawDistanceStep && !sawOtherStep
+            ? .distance(meters: distanceMeters)
+            : .duration(statisticsCalculator.durationEstimator.duration(for: workout, athlete: athlete))
+
+        return PlannedCardSummary(sport: workout.sport, name: workout.name, load: load, extent: extent)
     }
 
     /// `day`'s fitness metrics, if computed — `nil` before ``load(asOf:)`` has covered it (e.g.

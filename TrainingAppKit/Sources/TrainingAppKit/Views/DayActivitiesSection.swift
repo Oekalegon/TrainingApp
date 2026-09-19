@@ -27,16 +27,6 @@ let weekViewBackground = Color(.systemGroupedBackground)
 let weekViewBackground = Color(white: 0.93)
 #endif
 
-/// `ActivityCard`'s own background — "elevated" relative to `weekViewBackground` (white in light
-/// mode, a dark elevated grey in dark mode), the opposite direction from
-/// `unhighlightedPillBackground`'s "recessed" pills/timeline, so a completed activity's card reads
-/// as the most prominent surface in the day list.
-#if os(iOS)
-private let activityCardBackground = Color(.secondarySystemGroupedBackground)
-#else
-private let activityCardBackground = Color.white
-#endif
-
 /// Renders one day's row in the week view's day list (design doc §2.1, MVP1-39/MVP1-40/MVP1-41): a
 /// weekday pill marking its place on the list's vertical timeline, that day's Load/Fitness/
 /// Fatigue/Form pills, and — sitting in the timeline between this pill and the next day's — that
@@ -67,8 +57,10 @@ struct DayActivitiesSection: View {
     /// the first load, in which case no pill row renders (rather than a row of placeholder zeros).
     let metrics: FitnessMetrics?
     let activities: [Activity]
+    /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.
     let plans: [PlannedActivity]
-    let workoutName: (PlannedActivity) -> String?
+    /// What a planned activity's card shows (MVP2-37) — see `WeekViewModel.plannedCardSummary(for:)`.
+    let plannedCardSummary: (PlannedActivity) -> WeekViewModel.PlannedCardSummary
     /// An activity's training load (TRIMP) — the card's headline number (MVP1-41). `nil` when
     /// `WeekViewModel.trainingLoad(for:)` couldn't score it, in which case the card omits the
     /// number rather than showing a misleading "0".
@@ -144,7 +136,7 @@ struct DayActivitiesSection: View {
                         // through the label — same reasoning as `WeekdayPillView`'s own backing.
                         .background(weekViewBackground)
                         .frame(width: WeekdayPillView.columnWidth)
-                        .padding(.top, ActivityCard.contentPadding)
+                        .padding(.top, TimelineCardStyle.contentPadding)
                     ActivityCard(
                         activity: activity,
                         trainingLoad: trainingLoad(activity),
@@ -153,13 +145,15 @@ struct DayActivitiesSection: View {
                     )
                 }
             }
+            // `plans` is `WeekViewModel.pendingPlans(on:)` — already minus plans a completed
+            // activity's card above represents, so no empty row is laid out for those.
             ForEach(plans) { plan in
                 HStack(alignment: .top, spacing: 4) {
                     // No time shown here — a `PlannedActivity` only carries a calendar day, not a
                     // time of day — but the column still needs to hold its width so the card below
                     // starts at the same x as the activity cards above it.
-                    Color.clear.frame(width: WeekdayPillView.columnWidth)
-                    PlannedActivityCard(plan: plan, workoutName: workoutName(plan))
+                    Color.clear.frame(width: WeekdayPillView.columnWidth, height: 0)
+                    PlannedActivityCard(plan: plan, summary: plannedCardSummary(plan))
                 }
             }
         }
@@ -324,154 +318,5 @@ private struct MetricPillView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(kind.name), \(value)")
         .accessibilityHint("Opens an explanation of \(kind.name)")
-    }
-}
-
-/// VoiceOver/tooltip text for `ActivityCard`'s overlap-warning badge (MVP1-63) — mirrors what
-/// `ActivityOverlapChecker`'s own doc comments say to do about each case, condensed to a phrase
-/// short enough to read as one badge's label rather than a full sentence.
-extension OverlapRecommendation {
-    var warningLabel: String {
-        switch self {
-        case .duplicate: "Possible duplicate activity"
-        case .merge: "Overlaps another activity with different data"
-        case .conflict: "Overlaps another activity"
-        case .possibleMultisport: "Close to another activity"
-        }
-    }
-}
-
-/// Corner radius shared by `ActivityCard` and `PlannedActivityCard` (design doc §2.1, MVP1-41),
-/// so a completed activity's filled card and a planned one's outlined card read as the same shape
-/// language sitting in the timeline between weekday rows, distinguished by fill/border rather than
-/// by silhouette.
-private let timelineCardCornerRadius: CGFloat = 12
-
-/// A completed activity, rendered as a filled card in the timeline between weekday rows (design
-/// doc §2.1, MVP1-41) rather than a plain list row — tapping it presents `ActivityDetailView` in a
-/// sheet (see `WeekView`'s `.sheet(item: $selectedActivity)`), so this is a plain `Button` rather
-/// than a `NavigationLink(value:)`/`navigationDestination` push.
-///
-/// Headline line: icon, sport name, and — trailing-aligned, same font as the name but secondary —
-/// a bolt icon plus the activity's Load (TRIMP), the single most important number here. Second
-/// line (endurance sports only): duration, distance, and climb (if over 50m, marked with a
-/// mountain icon), smaller and secondary, indented to align with the name above it rather than the
-/// icon. The time of day isn't shown in the card at all — `DayActivitiesSection` shows it on the
-/// timeline instead, aligned with this headline line.
-private struct ActivityCard: View {
-    let activity: Activity
-    /// This activity's TRIMP, from `WeekViewModel.trainingLoad(for:)` — the headline line omits
-    /// the number entirely when this is `nil` (couldn't be computed) or rounds to `0` (nothing
-    /// worth showing).
-    let trainingLoad: Double?
-    /// This activity's overlap issue, from `WeekViewModel.overlapWarning(for:)` (MVP1-63) — `nil`
-    /// when it isn't part of any overlap worth flagging, in which case no badge shows.
-    let overlapWarning: OverlapRecommendation?
-    let onSelect: () -> Void
-
-    /// Matches `DayActivitiesSection`'s time label's top padding, so the label and this card's
-    /// headline line land at the same y (see that view's own note on why — deterministic matched
-    /// offsets, not `.firstTextBaseline`, given this card's own padding/background/Button nesting).
-    static let contentPadding: CGFloat = 12
-    /// Fixed so the icon's actual glyph width (which varies per sport) doesn't change where the
-    /// second line's indent lands — the second line aligns to this width plus `iconSpacing`, not
-    /// to the icon's own measured size.
-    private static let iconWidth: CGFloat = 22
-    private static let iconSpacing: CGFloat = 8
-
-    private static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
-    private static let measurementFormat = Measurement<UnitLength>.FormatStyle.measurement(width: .abbreviated)
-
-    var body: some View {
-        Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: Self.iconSpacing) {
-                    Image(systemName: activity.sport.symbolName)
-                        .foregroundStyle(.primary)
-                        .frame(width: Self.iconWidth)
-                    Text(activity.sport.displayName)
-                        .foregroundStyle(.primary)
-                    if let overlapWarning {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .accessibilityLabel(overlapWarning.warningLabel)
-                    }
-                    Spacer()
-                    // Rounds first, then checks that against zero — `loadFormat` itself rounds to
-                    // the nearest whole number, so a raw value like 0.3 is `> 0` but would still
-                    // display as "0" if the raw (unrounded) value were what got checked here.
-                    if let trainingLoad, trainingLoad.rounded() > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: TrainingMetricKind.load.icon)
-                            Text(trainingLoad.formatted(Self.loadFormat))
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                .font(.subheadline)
-                if activity.sport.isEndurance {
-                    secondLineText
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, Self.iconWidth + Self.iconSpacing)
-                }
-            }
-            .padding(Self.contentPadding)
-            .background {
-                RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous)
-                    .fill(activityCardBackground)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// "1:30:00   8 km   🏔120 m" — duration always shown as H:MM:SS, distance/climb omitted
-    /// entirely (not shown as "0 km"/"0 m") when the source doesn't report one. No separator
-    /// character between parts, just extra spacing (rather than a single plain space) to visually
-    /// group each part's own text/icon without implying they're one continuous phrase; climb alone
-    /// also gets a leading mountain icon (via `Text(Image(...))` concatenation) to set it apart
-    /// from the plain duration/distance numbers next to it.
-    private static let partSpacing = "   "
-
-    private var secondLineText: Text {
-        let durationString = Duration.seconds(activity.duration).formatted(.time(pattern: .hourMinuteSecond))
-        var text = Text(durationString)
-        if let distanceMeters = activity.distanceMeters {
-            let distanceString = Measurement(value: distanceMeters, unit: UnitLength.meters).formatted(Self.measurementFormat)
-            text = Text("\(text)\(Self.partSpacing)\(distanceString)")
-        }
-        if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
-            let gainString = Measurement(value: gainMeters, unit: UnitLength.meters).formatted(Self.measurementFormat)
-            text = Text("\(text)\(Self.partSpacing)\(Image(systemName: "mountain.2")) \(gainString)")
-        }
-        return text
-    }
-}
-
-/// A planned activity that hasn't been reconciled to a completed one yet, rendered as a dashed,
-/// unfilled outline — same card shape as `ActivityCard`, but the absent fill and dashed border are
-/// what keep it reading as "not done yet" at a glance (design doc §2.1) rather than a second kind
-/// of completed activity. One already matched to a completed activity (`completedActivityID !=
-/// nil`) is skipped: the completed activity's own card above already represents it.
-private struct PlannedActivityCard: View {
-    let plan: PlannedActivity
-    let workoutName: String?
-
-    var body: some View {
-        if plan.completedActivityID == nil {
-            HStack {
-                Image(systemName: "circle.dashed")
-                    .foregroundStyle(.secondary)
-                Text(workoutName ?? "Planned workout")
-                Spacer()
-            }
-            .padding(12)
-            .foregroundStyle(.secondary)
-            .background {
-                RoundedRectangle(cornerRadius: timelineCardCornerRadius, style: .continuous)
-                    .strokeBorder(Color.secondary.opacity(0.3), style: StrokeStyle(dash: [4, 3]))
-            }
-        }
     }
 }

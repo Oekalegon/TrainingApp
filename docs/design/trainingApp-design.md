@@ -228,9 +228,14 @@ remember or restore which tab was last active.
   zero or couldn't be computed. Endurance sports (running, cycling, swimming, walking, rowing,
   hiking — not strength) get a second line: duration (H:MM:SS), distance, and climb (only over
   50m, marked with a mountain icon). A `PlannedActivity` with no matching `completedActivityID`
-  renders as a same-shaped card with a dashed, unfilled outline instead of `ActivityCard`'s filled
-  background — that fill/border distinction is what reads as "not done yet" at a glance, not a
-  separate muted color scheme.
+  renders as a same-shaped card (`PlannedActivityCard`) over a diagonal hatch on top of
+  `ActivityCard`'s own elevated fill, with no border — the hatch is what reads as "not done yet" at
+  a glance, not a separate muted color scheme. Its headline has the linked workout's sport icon,
+  the workout's name, and the expected Load (the plan's `expectedLoadOverride`, else the estimator's
+  figure); its second line shows only the one measure the workout actually defines — distance for
+  a workout made solely of distance steps, estimated duration otherwise — never a converted
+  counterpart (see MVP2-35). Plans already matched to a completed activity get no row at all
+  (`WeekViewModel.pendingPlans(on:)`). Not tappable yet (MVP2-38 adds a detail sheet).
 - The week view sits on its own light (dark in dark mode) grey background, distinct from the plain
   system background: the weekday pills, metric pills, and the timeline line itself are recessed
   relative to it (a `Color.primary`-based translucent overlay, so "slightly darker in light mode,

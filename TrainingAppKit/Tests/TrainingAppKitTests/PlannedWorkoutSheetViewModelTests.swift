@@ -243,6 +243,158 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(model.plans.count == 1)
     }
 
+    // MARK: - Edit mode (MVP2-39)
+
+    /// A plan scheduling a small, already-synced library workout, loaded into `model`.
+    private func makeEditablePlan(
+        model: TrainingModel, on date: Date, override: Double? = nil, synced: Bool = true
+    ) async throws -> (PlannedActivity, StructuredWorkout) {
+        var workout = StructuredWorkout(
+            name: "Steady", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        if synced {
+            workout.workoutKitID = UUID()
+        }
+        let plan = PlannedActivity(workoutID: workout.id, date: date, expectedLoadOverride: override)
+        try await model.add(workout)
+        try await model.add(plan)
+        return (plan, workout)
+    }
+
+    @Test("editing seeds date, override and expected load from the plan, and exposes the workout read-only")
+    func editingSeedsFromPlan() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeEditablePlan(model: model, on: day(3), override: 77)
+
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        #expect(viewModel.isEditing)
+        #expect(viewModel.date == day(3))
+        #expect(viewModel.loadOverride == 77)
+        #expect(viewModel.editedWorkoutName == "Steady")
+        #expect(viewModel.expectedLoad?.value == 77)
+        #expect(viewModel.guardrailDiagnostic != nil)
+    }
+
+    @Test("editing's loadOverride replaces the estimate in expectedLoad and clearing it restores the estimate")
+    func editingOverrideReplacesEstimate() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeEditablePlan(model: model, on: day(3))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+        let estimate = try #require(viewModel.expectedLoad?.value)
+
+        viewModel.loadOverride = estimate + 100
+        #expect(viewModel.expectedLoad?.value == estimate + 100)
+
+        viewModel.loadOverride = nil
+        #expect(viewModel.expectedLoad?.value == estimate)
+    }
+
+    @Test("saving an edit that changes only the override updates the plan in place and never touches WorkoutKit")
+    func editOverrideOnlyDoesNotReschedule() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeEditablePlan(model: model, on: day(3))
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.loadOverride = 42
+        let didSave = await viewModel.save()
+
+        #expect(didSave)
+        #expect(model.plans.count == 1)
+        #expect(model.plans.first?.id == plan.id)
+        #expect(model.plans.first?.expectedLoadOverride == 42)
+        #expect(model.plans.first?.date == day(3))
+        #expect(await scheduler.callLog.isEmpty)
+    }
+
+    @Test("saving an edit that moves the day schedules the new day first, then removes the old one")
+    func editMovingDayReschedules() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeEditablePlan(model: model, on: day(3))
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.date = day(5)
+        let didSave = await viewModel.save()
+
+        #expect(didSave)
+        #expect(model.plans.count == 1)
+        #expect(model.plans.first?.date == day(5))
+        #expect(await scheduler.callLog == ["schedule", "unschedule"])
+        #expect(await scheduler.scheduledPlans.first?.date == day(5))
+        #expect(await scheduler.unscheduledPlans.first?.date == day(3))
+    }
+
+    @Test("a failed reschedule leaves the plan on its old day and reports the error")
+    func editRescheduleFailureLeavesPlanUntouched() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeEditablePlan(model: model, on: day(3))
+        let scheduler = FakeScheduler(scheduleShouldFail: true)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.date = day(5)
+        let didSave = await viewModel.save()
+
+        #expect(!didSave)
+        #expect(viewModel.saveError != nil)
+        #expect(model.plans.first?.date == day(3))
+        #expect(await scheduler.unscheduledPlans.isEmpty)
+    }
+
+    @Test("moving a never-synced workout adopts a WorkoutKit id so the new entry can be found later")
+    func editMovingUnsyncedWorkoutAdoptsID() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, workout) = try await makeEditablePlan(model: model, on: day(3), synced: false)
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.date = day(5)
+        #expect(await viewModel.save())
+
+        #expect(model.workouts.first { $0.id == workout.id }?.workoutKitID == scheduler.mintedID)
+    }
+
+    @Test("editing a plan whose workout left the library still saves, without a name or any WorkoutKit call")
+    func editOrphanedPlan() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let orphan = PlannedActivity(workoutID: UUID(), date: day(3))
+        try await model.add(orphan)
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: orphan, scheduler: scheduler)
+
+        #expect(viewModel.editedWorkoutName == nil)
+        viewModel.date = day(5)
+        #expect(await viewModel.save())
+
+        #expect(model.plans.first?.date == day(5))
+        #expect(await scheduler.callLog.isEmpty)
+    }
+
+    @Test("minimumDate in edit mode reaches back to a past plan's own day, never before it")
+    func editMinimumDateIncludesPastPlanDay() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeEditablePlan(model: model, on: day(1))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = model.athlete.timeZone
+
+        #expect(viewModel.minimumDate(asOf: day(5)) == calendar.startOfDay(for: day(1)))
+        // A future plan keeps the normal "today" bound.
+        let (future, _) = try await makeEditablePlan(model: model, on: day(9))
+        let futureViewModel = PlannedWorkoutSheetViewModel(model: model, editing: future, scheduler: nil)
+        #expect(futureViewModel.minimumDate(asOf: day(5)) == calendar.startOfDay(for: day(5)))
+    }
+
     @Test("minimumDate(asOf:) is the given day's calendar start in the athlete's timezone")
     func minimumDateIsStartOfGivenDayInAthleteTimeZone() async {
         let (_, model) = await makeModel()
@@ -260,6 +412,10 @@ private final actor FakeScheduler: PlannedWorkoutScheduling {
     nonisolated let mintedID = UUID()
     private let scheduleShouldFail: Bool
     private(set) var scheduledPlans: [PlannedActivity] = []
+    private(set) var unscheduledPlans: [PlannedActivity] = []
+    /// Every scheduler call in order, so a test can pin "schedule the new day before removing the
+    /// old one".
+    private(set) var callLog: [String] = []
 
     init(scheduleShouldFail: Bool = false) {
         self.scheduleShouldFail = scheduleShouldFail
@@ -275,5 +431,11 @@ private final actor FakeScheduler: PlannedWorkoutScheduling {
             throw SchedulingFailed()
         }
         scheduledPlans.append(plan)
+        callLog.append("schedule")
+    }
+
+    func unschedule(_ plan: PlannedActivity, workout: StructuredWorkout, calendar: Calendar) async throws {
+        unscheduledPlans.append(plan)
+        callLog.append("unschedule")
     }
 }

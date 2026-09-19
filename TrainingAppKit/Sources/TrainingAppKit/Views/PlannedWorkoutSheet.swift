@@ -46,18 +46,45 @@ struct PlannedWorkoutSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Template") {
-                    Picker("Template", selection: $viewModel.selectedTemplate) {
-                        Text("Select a template").tag(nil as WorkoutTemplate?)
-                        ForEach(viewModel.templates) { template in
-                            Text(template.name).tag(template as WorkoutTemplate?)
+                Section(viewModel.isEditing ? "Workout" : "Template") {
+                    if viewModel.isEditing {
+                        // Read-only: the workout's template/parameters aren't stored, and its
+                        // definition may be shared with other plans (MVP2-39).
+                        LabeledContent("Name", value: viewModel.editedWorkoutName ?? "Planned workout")
+                    } else {
+                        Picker("Template", selection: $viewModel.selectedTemplate) {
+                            Text("Select a template").tag(nil as WorkoutTemplate?)
+                            ForEach(viewModel.templates) { template in
+                                Text(template.name).tag(template as WorkoutTemplate?)
+                            }
                         }
+                        TextField("Name", text: $viewModel.workoutName)
                     }
-                    TextField("Name", text: $viewModel.workoutName)
                     // Lower-bounded so this can't be used to route around the same past-date rule
                     // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
                     // sheet opened for today could still be scrolled back to yesterday from here.
                     DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate()..., displayedComponents: .date)
+                }
+
+                if viewModel.isEditing {
+                    Section("Expected Load") {
+                        if let expectedLoad = viewModel.expectedLoad {
+                            HStack {
+                                Image(systemName: TrainingMetricKind.load.icon)
+                                Text("\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP")
+                            }
+                        }
+                        Toggle("Override estimate", isOn: Binding(
+                            get: { viewModel.loadOverride != nil },
+                            set: { viewModel.loadOverride = $0 ? (viewModel.expectedLoad?.value.rounded() ?? 0) : nil }
+                        ))
+                        if viewModel.loadOverride != nil {
+                            TextField("TRIMP", value: $viewModel.loadOverride, format: .number.precision(.fractionLength(0)))
+                                #if os(iOS)
+                                .keyboardType(.numberPad)
+                                #endif
+                        }
+                    }
                 }
 
                 if let selectedTemplate = viewModel.selectedTemplate {
@@ -86,7 +113,11 @@ struct PlannedWorkoutSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                }
 
+                // Shown in both modes (in edit mode there's no selected template, only the edited
+                // plan's own projection).
+                if viewModel.isEditing || viewModel.selectedTemplate != nil {
                     let guardrailSummaries = viewModel.guardrailSummaries
                     if !guardrailSummaries.isEmpty {
                         Section("Guardrail Warnings") {
