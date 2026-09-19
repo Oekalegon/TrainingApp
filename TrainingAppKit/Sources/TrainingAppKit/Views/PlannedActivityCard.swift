@@ -8,50 +8,58 @@ import TrainingCore
 /// already matched to a completed activity (`completedActivityID != nil`) is skipped: the
 /// completed activity's own card above already represents it.
 ///
-/// Not tappable yet: MVP2-38's detail sheet adds that. Expected values are shown plainly (no "~"),
-/// since the hatch already says "planned".
+/// Tapping it (MVP2-38) presents the planned-workout detail sheet — see `WeekView`'s
+/// `.sheet(item: $selectedPlan)`. Expected values are shown plainly (no "~"), since the hatch
+/// already says "planned".
 struct PlannedActivityCard: View {
     let plan: PlannedActivity
     let summary: WeekViewModel.PlannedCardSummary
+    let onSelect: () -> Void
 
     var body: some View {
         if plan.completedActivityID == nil {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: TimelineCardStyle.iconSpacing) {
-                    Image(systemName: summary.sport.symbolName)
-                        .foregroundStyle(.primary)
-                        .frame(width: TimelineCardStyle.iconWidth)
-                    Text(summary.name ?? "Planned workout")
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    if let load = summary.load, load.rounded() > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: TrainingMetricKind.load.icon)
-                            Text(load.formatted(TimelineCardStyle.loadFormat))
+            Button(action: onSelect) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: TimelineCardStyle.iconSpacing) {
+                        Image(systemName: summary.sport.symbolName)
+                            .foregroundStyle(.primary)
+                            .frame(width: TimelineCardStyle.iconWidth)
+                        Text(summary.name ?? "Planned workout")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if let load = summary.load, load.rounded() > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: TrainingMetricKind.load.icon)
+                                Text(load.formatted(TimelineCardStyle.loadFormat))
+                            }
+                            .foregroundStyle(.secondary)
                         }
-                        .foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline)
+                    if let extentText {
+                        extentText
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, TimelineCardStyle.iconWidth + TimelineCardStyle.iconSpacing)
                     }
                 }
-                .font(.subheadline)
-                if let extentText {
-                    extentText
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, TimelineCardStyle.iconWidth + TimelineCardStyle.iconSpacing)
+                .padding(TimelineCardStyle.contentPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
+                        .fill(TimelineCardStyle.background)
+                    HatchPattern()
+                        .stroke(Color.secondary.opacity(0.10), lineWidth: 4)
+                        .clipShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
                 }
+                .contentShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
             }
-            .padding(TimelineCardStyle.contentPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
-                    .fill(TimelineCardStyle.background)
-                HatchPattern()
-                    .stroke(Color.secondary.opacity(0.10), lineWidth: 4)
-                    .clipShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
-            }
+            .buttonStyle(.plain)
             // One element with the "planned" state spelled out — the hatch is visual only.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
+            .accessibilityHint("Shows the workout's details")
+            .accessibilityAddTraits(.isButton)
         }
     }
 

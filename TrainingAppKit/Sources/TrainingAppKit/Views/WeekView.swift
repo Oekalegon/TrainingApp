@@ -56,6 +56,9 @@ public struct WeekView: View {
     /// The activity currently shown in the detail sheet, or `nil` when none is presented.
     /// `Activity` is `Identifiable`, so `.sheet(item:)` handles show/dismiss from this alone.
     @State private var selectedActivity: Activity?
+    /// The planned activity whose detail sheet is presented (MVP2-38), or `nil` when none is —
+    /// `PlannedActivity` is `Identifiable`, so `.sheet(item:)` drives it like `selectedActivity`.
+    @State private var selectedPlan: PlannedActivity?
     /// The day the "Create Planned Workout" sheet (MVP2-15) was opened for, or `nil` when it isn't
     /// presented — wrapped in `PlannedWorkoutDate` (`Date` alone isn't `Identifiable`) so
     /// `.sheet(item:)` can drive it the same way `selectedActivity` drives the activity sheet.
@@ -219,6 +222,9 @@ public struct WeekView: View {
                         onDelete: { await viewModel.deleteActivity(activity) }
                     )
                 }
+            }
+            .sheet(item: $selectedPlan) { plan in
+                PlannedWorkoutDetailSheet(viewModel: viewModel.plannedWorkoutDetailViewModel(for: plan))
             }
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
@@ -516,6 +522,7 @@ public struct WeekView: View {
                             overlapWarning: { viewModel.overlapWarning(for: $0) },
                             timeZone: viewModel.athleteTimeZone,
                             onSelectActivity: { selectedActivity = $0 },
+                            onSelectPlan: { selectedPlan = $0 },
                             onSelectMetric: { kind in
                                 metricsInfoPresentation = MetricsInfoPresentation(kind: kind, subject: .day(day))
                             },
