@@ -71,6 +71,7 @@ struct PlannedWorkoutDetailViewModelTests {
 
         #expect((viewModel.expectedDuration ?? 0) > 0)
         #expect((viewModel.expectedDistanceMeters ?? 0) > 0)
+        #expect(viewModel.isDistanceForecast)
         #expect(viewModel.summary.name == "Intervals")
     }
 
@@ -88,6 +89,8 @@ struct PlannedWorkoutDetailViewModelTests {
         let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan, scheduler: nil)
 
         #expect(viewModel.expectedDistanceMeters == 2000)
+        // Defined by the workout's own steps, so not a forecast.
+        #expect(!viewModel.isDistanceForecast)
     }
 
     @Test("deletionMessage names the workout and the plan's day in the athlete's timezone")

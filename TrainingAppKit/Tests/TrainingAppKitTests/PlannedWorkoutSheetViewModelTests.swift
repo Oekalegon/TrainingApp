@@ -410,6 +410,19 @@ struct PlannedWorkoutSheetViewModelTests {
         return (plan, workout)
     }
 
+    @Test("canSave: a new plan needs a template, an edit can always save (regression: edit mode's save button was disabled)")
+    func canSaveInEditAndCreate() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let creating = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: nil)
+        #expect(!creating.canSave)
+        creating.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+        #expect(creating.canSave)
+
+        let (plan, _) = try await makeTemplatePlan(model: model, on: day(3))
+        #expect(PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil).canSave)
+    }
+
     @Test("editing a template-built plan seeds the recorded parameter values and offers its parameters")
     func editingSeedsParameters() async throws {
         let (_, model) = await makeModel()

@@ -57,7 +57,18 @@ struct PlannedWorkoutDetailSheet: View {
                         LabeledContent("Duration", value: Duration.seconds(duration).formatted(.time(pattern: .hourMinuteSecond)))
                     }
                     if let meters = viewModel.expectedDistanceMeters {
-                        LabeledContent("Distance", value: Measurement(value: meters, unit: UnitLength.meters).formatted(Self.measurementFormat))
+                        LabeledContent("Distance") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(Measurement(value: meters, unit: UnitLength.meters).formatted(Self.measurementFormat))
+                                // A duration-based workout has no distance of its own — this is the
+                                // pace model's estimate, so it says so.
+                                if viewModel.isDistanceForecast {
+                                    Text("Forecast")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
                     if let load = summary.load {
                         LabeledContent("Load") {

@@ -50,6 +50,11 @@ public final class PlannedWorkoutSheetViewModel {
     /// `true` when any parameter now differs from what the edited workout was built with.
     private var parametersChanged: Bool { editedTemplate != nil && parameterValues != originalParameterValues }
 
+    /// Whether ``save()`` has something to save: an edit always does (date/load/parameters); a new plan
+    /// needs a template picked first. The sheet's save button follows this — keying it off
+    /// ``selectedTemplate`` alone left edit mode, which has none, permanently disabled.
+    public var canSave: Bool { isEditing || selectedTemplate != nil }
+
     /// `true` when this view model edits an existing plan rather than creating one.
     public var isEditing: Bool { editingPlan != nil }
     /// The edited workout's name, shown read-only in edit mode.

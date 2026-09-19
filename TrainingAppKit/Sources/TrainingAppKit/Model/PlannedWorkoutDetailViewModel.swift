@@ -86,6 +86,15 @@ public final class PlannedWorkoutDetailViewModel {
         projection?.distanceMeters
     }
 
+    /// `true` when ``expectedDistanceMeters`` is a pace-model estimate rather than something the
+    /// workout defines — i.e. whenever the workout isn't made solely of distance steps. The sheet
+    /// labels such a distance "Forecast".
+    public var isDistanceForecast: Bool {
+        guard expectedDistanceMeters != nil else { return false }
+        if case .distance? = summary.extent { return false }
+        return true
+    }
+
     /// One line per block, e.g. `"Warm-up 10:00"` or `"4 × Work 8:00, Recovery 2:00"`. Empty when the
     /// workout is missing.
     public var stepLines: [String] {

@@ -201,7 +201,7 @@ struct PlannedWorkoutSheet: View {
                         Image(systemName: "checkmark")
                     }
                     .accessibilityLabel("Save")
-                    .disabled(viewModel.selectedTemplate == nil || viewModel.isSaving)
+                    .disabled(!viewModel.canSave || viewModel.isSaving)
                 }
             }
             .alert("Couldn't Save Workout", isPresented: $isShowingSaveError, presenting: viewModel.saveError) { _ in
