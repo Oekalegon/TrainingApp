@@ -17,10 +17,32 @@ struct ActivityDetailView: View {
     /// actually run yet. Independent of `onResolveOverlap`: always available, not just when
     /// `viewModel.overlapContext` flags an issue.
     let onDelete: () async -> Void
+    /// Runs `WeekViewModel.joinActivities(_:with:)` with the other piece of a
+    /// ``OverlapRecommendation/join`` pair (MVP1-80). `async` for the same reason as
+    /// `onResolveOverlap`: the sheet closes only once the join has actually happened.
+    /// Returns whether the join happened; the sheet stays open (with a message) when it didn't.
+    let onJoin: (Activity) async -> Bool
+    /// Runs `WeekViewModel.unjoinActivity(_:)` for this (joined) activity (MVP1-80); same
+    /// success/stay-open contract as `onJoin`.
+    let onUnjoin: () async -> Bool
+    /// Loads the pieces this activity was joined from — empty for an ordinary activity — for the
+    /// "Joined from" section (MVP1-80).
+    let loadComponents: () async -> [Activity]
     @Environment(\.dismiss) private var dismiss
+    /// The pieces this activity was joined from, loaded once by `.task`; empty for an ordinary one.
+    @State private var components: [Activity] = []
+    /// Set when a join/unjoin was refused, so the sheet stays open and says so rather than
+    /// closing as if it had worked.
+    @State private var joinFailureMessage: String?
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
     /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
     @State private var isShowingDeleteConfirmation = false
+
+    private static func timeFormat(timeZone: TimeZone) -> Date.FormatStyle {
+        var format = Date.FormatStyle.dateTime.hour().minute()
+        format.timeZone = timeZone
+        return format
+    }
 
     private var dateFormat: Date.FormatStyle {
         var format = Date.FormatStyle.dateTime.weekday(.wide).day().month(.wide).hour().minute()
@@ -41,8 +63,47 @@ struct ActivityDetailView: View {
                                 await onResolveOverlap(id)
                                 dismiss()
                             }
+                        },
+                        onJoin: {
+                            Task {
+                                if await onJoin(overlapContext.otherActivity) {
+                                    dismiss()
+                                } else {
+                                    joinFailureMessage = "These activities couldn't be joined."
+                                }
+                            }
                         }
                     )
+                    if let joinFailureMessage {
+                        Text(joinFailureMessage).foregroundStyle(.red)
+                    }
+                }
+            }
+
+            if !components.isEmpty {
+                Section {
+                    ForEach(components) { piece in
+                        LabeledContent(
+                            piece.start.formatted(Self.timeFormat(timeZone: viewModel.timeZone)),
+                            value: Duration.seconds(piece.duration).formatted(.time(pattern: .hourMinuteSecond))
+                        )
+                    }
+                    Button("Unjoin Activities") {
+                        Task {
+                            if await onUnjoin() {
+                                dismiss()
+                            } else {
+                                joinFailureMessage = "This activity couldn't be unjoined."
+                            }
+                        }
+                    }
+                    if let joinFailureMessage {
+                        Text(joinFailureMessage).foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("Joined From")
+                } footer: {
+                    Text("This session was recorded in \(components.count) parts and is shown as one activity.")
                 }
             }
 
@@ -118,6 +179,7 @@ struct ActivityDetailView: View {
             }
         }
         .navigationTitle(viewModel.activity.sport.displayName)
+        .task { components = await loadComponents() }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -170,7 +232,7 @@ struct ActivityDetailView: View {
 
 /// The "Overlap" section's content in `ActivityDetailView` (MVP1-63) — a plain-language
 /// description of the issue plus resolution buttons, both driven by `context.recommendation`.
-/// Split out from `ActivityDetailView.body` since a `switch` over all four recommendation types
+/// Split out from `ActivityDetailView.body` since a `switch` over all five recommendation types
 /// reads more clearly as its own small view than inline in that `List`.
 private struct OverlapSectionContent: View {
     /// The activity whose own detail sheet this section is inside — as distinct from
@@ -181,6 +243,9 @@ private struct OverlapSectionContent: View {
     /// Called with the id of whichever activity (`thisActivity` or `context.otherActivity`) the
     /// athlete picked to delete.
     let onResolve: (UUID) -> Void
+    /// Called when the athlete accepts a ``OverlapRecommendation/join`` — combines `thisActivity`
+    /// with `context.otherActivity` into one.
+    let onJoin: () -> Void
 
     private static func timeFormat(timeZone: TimeZone) -> Date.FormatStyle {
         var format = Date.FormatStyle.dateTime.hour().minute()
@@ -215,6 +280,12 @@ private struct OverlapSectionContent: View {
             )
             .foregroundStyle(.secondary)
             resolutionButtons
+        case .join:
+            Text(
+                "This and \(otherActivityDescription) look like one session that was recorded in two parts."
+            )
+            .foregroundStyle(.secondary)
+            Button("Join into One Activity", action: onJoin)
         case .possibleMultisport:
             Text(
                 "This is close to \(otherActivityDescription) — likely a separate leg of the same multisport session. No action needed."

@@ -20,6 +20,10 @@ struct AthleteView: View {
     let activityDetailViewModel: (Activity) -> ActivityDetailViewModel
     let onResolveOverlap: (UUID) async -> Void
     let onDeleteActivity: (Activity) async -> Void
+    /// Join actions for the detail sheet (MVP1-80) — see `ActivityDetailView`.
+    let onJoinActivities: (Activity, Activity) async -> Bool
+    let onUnjoinActivity: (Activity) async -> Bool
+    let loadJoinedComponents: (Activity) async -> [Activity]
     @State private var isConfirmingResync = false
     @State private var isConfirmingDeduplicate = false
     /// Whether the overlap-review sheet (MVP1-67), opened by tapping ``OverlapWarningBanner``, is
@@ -170,7 +174,10 @@ struct AthleteView: View {
                     ActivityDetailView(
                         viewModel: activityDetailViewModel(activity),
                         onResolveOverlap: { id in await onResolveOverlap(id) },
-                        onDelete: { await onDeleteActivity(activity) }
+                        onDelete: { await onDeleteActivity(activity) },
+                        onJoin: { other in await onJoinActivities(activity, other) },
+                        onUnjoin: { await onUnjoinActivity(activity) },
+                        loadComponents: { await loadJoinedComponents(activity) }
                     )
                 }
             }

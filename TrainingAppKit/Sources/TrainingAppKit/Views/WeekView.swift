@@ -219,7 +219,10 @@ public struct WeekView: View {
                     ActivityDetailView(
                         viewModel: viewModel.activityDetailViewModel(for: activity),
                         onResolveOverlap: { id in await viewModel.resolveOverlap(deleting: id) },
-                        onDelete: { await viewModel.deleteActivity(activity) }
+                        onDelete: { await viewModel.deleteActivity(activity) },
+                        onJoin: { other in await viewModel.joinActivities(activity, with: other) },
+                        onUnjoin: { await viewModel.unjoinActivity(activity) },
+                        loadComponents: { await viewModel.joinedComponents(of: activity) }
                     )
                 }
             }

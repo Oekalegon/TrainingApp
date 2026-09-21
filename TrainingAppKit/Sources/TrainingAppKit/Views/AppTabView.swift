@@ -38,7 +38,10 @@ public struct AppTabView: View {
                 athleteTimeZone: viewModel.athleteTimeZone,
                 activityDetailViewModel: { viewModel.activityDetailViewModel(for: $0) },
                 onResolveOverlap: { await viewModel.resolveOverlap(deleting: $0) },
-                onDeleteActivity: { await viewModel.deleteActivity($0) }
+                onDeleteActivity: { await viewModel.deleteActivity($0) },
+                onJoinActivities: { await viewModel.joinActivities($0, with: $1) },
+                onUnjoinActivity: { await viewModel.unjoinActivity($0) },
+                loadJoinedComponents: { await viewModel.joinedComponents(of: $0) }
             )
             .tabItem {
                 Label("Athlete", systemImage: "person.circle")
