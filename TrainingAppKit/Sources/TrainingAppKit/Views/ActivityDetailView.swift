@@ -28,12 +28,19 @@ struct ActivityDetailView: View {
     /// Loads the pieces this activity was joined from — empty for an ordinary activity — for the
     /// "Joined from" section (MVP1-80).
     let loadComponents: () async -> [Activity]
+    /// Runs `WeekViewModel.linkActivity(_:toPlan:)` for the given plan id (MVP2-42) — also used to
+    /// confirm the current match. Same success/stay-open contract as `onJoin`.
+    let onLinkPlan: (UUID) async -> Bool
+    /// Runs `WeekViewModel.unlinkActivity(_:)` (MVP2-42); same contract.
+    let onUnlinkPlan: () async -> Bool
     @Environment(\.dismiss) private var dismiss
     /// The pieces this activity was joined from, loaded once by `.task`; empty for an ordinary one.
     @State private var components: [Activity] = []
     /// Set when a join/unjoin was refused, so the sheet stays open and says so rather than
     /// closing as if it had worked.
     @State private var joinFailureMessage: String?
+    /// Set when a link/unlink was refused, for the same reason as `joinFailureMessage`.
+    @State private var planLinkFailureMessage: String?
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
     /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
     @State private var isShowingDeleteConfirmation = false
@@ -105,6 +112,10 @@ struct ActivityDetailView: View {
                 } footer: {
                     Text("This session was recorded in \(components.count) parts and is shown as one activity.")
                 }
+            }
+
+            if let planLinkContext = viewModel.planLinkContext {
+                planLinkSection(planLinkContext)
             }
 
             Section {
@@ -195,6 +206,68 @@ struct ActivityDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This can't be undone.")
+        }
+    }
+
+    /// The "Planned Workout" section (MVP2-42): which plan this activity completed, with the means to
+    /// confirm, change or undo that. Every action dismisses on success, since the sheet's view
+    /// model is a snapshot of the activity as it was when the sheet opened.
+    @ViewBuilder
+    private func planLinkSection(_ context: PlanLinkContext) -> some View {
+        Section {
+            if let linked = context.linkedPlan {
+                LabeledContent("Completes", value: linked.title)
+                if context.isAmbiguous {
+                    Text("Other planned workouts that day fit about as well. Confirm this match or pick another.")
+                        .foregroundStyle(.secondary)
+                    Button("Confirm Match") { changePlanLink { await onLinkPlan(linked.id) } }
+                }
+            }
+            ForEach(context.candidates) { option in
+                Button {
+                    changePlanLink { await onLinkPlan(option.id) }
+                } label: {
+                    LabeledContent(
+                        context.linkedPlan == nil ? "Link to \(option.title)" : "Switch to \(option.title)",
+                        value: extentText(option.extent)
+                    )
+                }
+            }
+            if context.linkedPlan != nil {
+                Button("Unlink from Planned Workout", role: .destructive) {
+                    changePlanLink { await onUnlinkPlan() }
+                }
+            }
+            if let planLinkFailureMessage {
+                Text(planLinkFailureMessage).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Planned Workout")
+        } footer: {
+            if context.linkedPlan == nil {
+                Text("This activity isn't linked to a planned workout. Only plans on the same day can be linked.")
+            }
+        }
+    }
+
+    private func changePlanLink(_ action: @escaping () async -> Bool) {
+        Task {
+            if await action() {
+                dismiss()
+            } else {
+                planLinkFailureMessage = "The planned workout couldn't be changed."
+            }
+        }
+    }
+
+    private func extentText(_ extent: WeekViewModel.PlannedCardSummary.Extent?) -> String {
+        switch extent {
+        case .duration(let seconds):
+            Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+        case .distance(let meters):
+            distanceText(meters)
+        case nil:
+            ""
         }
     }
 

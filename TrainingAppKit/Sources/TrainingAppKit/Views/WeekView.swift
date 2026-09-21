@@ -222,7 +222,9 @@ public struct WeekView: View {
                         onDelete: { await viewModel.deleteActivity(activity) },
                         onJoin: { other in await viewModel.joinActivities(activity, with: other) },
                         onUnjoin: { await viewModel.unjoinActivity(activity) },
-                        loadComponents: { await viewModel.joinedComponents(of: activity) }
+                        loadComponents: { await viewModel.joinedComponents(of: activity) },
+                        onLinkPlan: { await viewModel.linkActivity(activity, toPlan: $0) },
+                        onUnlinkPlan: { await viewModel.unlinkActivity(activity) }
                     )
                 }
             }
