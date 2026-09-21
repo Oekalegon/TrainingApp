@@ -296,6 +296,17 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   Activities" button (`WeekViewModel.unjoinActivity(_:)`). Both actions report success, and the
   sheet only closes when they worked — a refused join (different sports, a piece already joined
   elsewhere) leaves it open with an inline message.
+- **Planned workout link** (MVP2-42): a "Planned Workout" section, shown when the activity is linked
+  to a plan or an unmatched plan exists on its day (`WeekViewModel.planLinkContext(for:)`). Matching
+  itself is automatic (TrainingKit's import runs `PlanReconciler`); this section is how the athlete
+  checks and corrects it. It shows the plan the activity completes and offers "Unlink from Planned
+  Workout"; when the automatic match had a close runner-up (`TrainingModel.planMatchAmbiguities`) it
+  says so and offers "Confirm Match" (a link to the same plan, which clears the flag). The other
+  unmatched plans on that day appear as "Switch to …"/"Link to …", never plans on another day, which
+  Core refuses anyway. Routed through `WeekViewModel.linkActivity(_:toPlan:)`/`unlinkActivity(_:)`
+  → `TrainingModel.linkActivity`/`unlinkActivity`. Like join, each action closes the sheet on success
+  and leaves it open with an inline message when refused. An unlink sticks: only newly imported
+  activities are auto-matched.
 - **Delete Activity** (MVP1-65): a centered red text button in its own section at the bottom of the
   list — matching a Settings-style "Delete Account" pattern, not a toolbar icon — independent of
   the Overlap section above
