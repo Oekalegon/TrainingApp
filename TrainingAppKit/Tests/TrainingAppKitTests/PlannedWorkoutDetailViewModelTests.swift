@@ -52,9 +52,12 @@ struct PlannedWorkoutDetailViewModelTests {
 
         let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan, scheduler: nil)
 
+        // Distances follow the device's units (metric locally, imperial on a US CI runner), so the
+        // expectation is built with the same formatter rather than hard-coding "400 m".
+        let recoveryDistance = Measurement(value: 400, unit: UnitLength.meters).formatted(.measurement(width: .abbreviated))
         #expect(viewModel.stepLines == [
             "Warm-up 10:00",
-            "4 × Work 8:00, Recovery 400 m",
+            "4 × Work 8:00, Recovery \(recoveryDistance)",
             "Cool-down open",
         ])
     }
