@@ -8,13 +8,27 @@ import TrainingCore
 /// already matched to a completed activity (`completedActivityID != nil`) is skipped: the
 /// completed activity's own card above already represents it.
 ///
+/// On a day that has already passed (`isMissed`), a plan still without a completed activity was
+/// missed, and the card is drawn differently: the plain view background with a secondary outline,
+/// secondary text, and no expected load, instead of the hatch.
+///
 /// Tapping it (MVP2-38) presents the planned-workout detail sheet — see `WeekView`'s
 /// `.sheet(item: $selectedPlan)`. Expected values are shown plainly (no "~"), since the hatch
 /// already says "planned".
 struct PlannedActivityCard: View {
     let plan: PlannedActivity
-    let summary: WeekViewModel.PlannedCardSummary
+    /// The card's summary, intensity and missed state, from `WeekViewModel.plannedCardContent(for:)`.
+    let content: WeekViewModel.PlannedCardContent
     let onSelect: () -> Void
+
+    private var summary: WeekViewModel.PlannedCardSummary { content.summary }
+    /// The workout's intended intensity (MVP2-43), shown in the hatch stripes' colour, the
+    /// counterpart of `ActivityCard`'s tinted background; `nil` keeps the grey hatch.
+    private var intensity: IntensityAssessment? { content.intensity }
+    /// Whether this plan's day has passed without a completed activity matching it — drawn as an
+    /// outlined card on the plain view background, with secondary text and no expected load: what
+    /// was planned but didn't happen, not something still to do. Ignores `intensity`.
+    private var isMissed: Bool { content.isMissed }
 
     var body: some View {
         if plan.completedActivityID == nil {
@@ -22,12 +36,13 @@ struct PlannedActivityCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: TimelineCardStyle.iconSpacing) {
                         Image(systemName: summary.sport.symbolName)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(isMissed ? .secondary : .primary)
                             .frame(width: TimelineCardStyle.iconWidth)
                         Text(summary.name ?? "Planned workout")
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(isMissed ? .secondary : .primary)
                         Spacer()
-                        if let load = summary.load, load.rounded() > 0 {
+                        // No expected load on a missed workout: it never became training load.
+                        if !isMissed, let load = summary.load, load.rounded() > 0 {
                             HStack(spacing: 2) {
                                 Image(systemName: TrainingMetricKind.load.icon)
                                 Text(load.formatted(TimelineCardStyle.loadFormat))
@@ -46,11 +61,20 @@ struct PlannedActivityCard: View {
                 .padding(TimelineCardStyle.contentPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background {
-                    RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
-                        .fill(TimelineCardStyle.background)
-                    HatchPattern()
-                        .stroke(Color.secondary.opacity(0.10), lineWidth: 4)
-                        .clipShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
+                    if isMissed {
+                        RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
+                            .fill(weekViewBackground)
+                        RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
+                            .strokeBorder(Color.secondary, lineWidth: 0.5)
+                    } else {
+                        RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
+                            .fill(TimelineCardStyle.background)
+                        // Only the stripes carry the intensity colour; the base stays the plain card
+                        // fill, so a planned card reads as "not done yet" first and tinted second.
+                        HatchPattern()
+                            .stroke(intensity?.hatchTint ?? Color.secondary.opacity(0.10), lineWidth: 4)
+                            .clipShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
+                    }
                 }
                 .contentShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
             }
@@ -66,28 +90,31 @@ struct PlannedActivityCard: View {
     private var extentText: Text? {
         switch summary.extent {
         case .duration(let seconds):
-            Text(Duration.seconds(seconds).formatted(.time(pattern: .hourMinuteSecond)))
+            Text(TimelineCardStyle.durationText(seconds))
         case .distance(let meters):
-            Text(Measurement(value: meters, unit: UnitLength.meters).formatted(TimelineCardStyle.measurementFormat))
+            Text(TimelineCardStyle.distanceText(meters: meters))
         case nil:
             nil
         }
     }
 
     private var accessibilityLabel: String {
-        var parts = ["Planned: \(summary.name ?? "Planned workout")"]
-        if let load = summary.load, load.rounded() > 0 {
+        var parts = ["\(isMissed ? "Missed" : "Planned"): \(summary.name ?? "Planned workout")"]
+        if !isMissed, let load = summary.load, load.rounded() > 0 {
             parts.append("load \(load.formatted(TimelineCardStyle.loadFormat))")
         }
         switch summary.extent {
         case .duration(let seconds):
-            parts.append(Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .wide)))
+            parts.append(TimelineCardStyle.spokenDuration(seconds))
         case .distance(let meters):
-            parts.append(Measurement(value: meters, unit: UnitLength.meters).formatted(.measurement(width: .wide)))
+            parts.append(TimelineCardStyle.spokenDistance(meters: meters))
         case nil:
             break
         }
-        parts.append("not yet done")
+        if let intensity, !isMissed {
+            parts.append(intensity.category.displayName.lowercased() + " intensity")
+        }
+        parts.append(isMissed ? "not done" : "not yet done")
         return parts.joined(separator: ", ")
     }
 }

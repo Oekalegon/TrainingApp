@@ -167,4 +167,17 @@ struct WeekViewModelPlanLinkTests {
 
         #expect(context.candidates.map(\.id) == [sameDay.id])
     }
+
+    @Test("a linked activity's card can show what its plan expected; an unlinked one has nothing")
+    func linkedPlanExpectation() async throws {
+        let (viewModel, plans, activity) = try await makeViewModel(planMinutes: [30], activityMinutes: 30)
+        #expect(activity.linkedPlanID == plans[0].id)
+
+        let expectation = try #require(viewModel.linkedPlanExpectation(for: activity))
+        #expect(expectation.duration == 1800)
+
+        var unlinked = activity
+        unlinked.linkedPlanID = nil
+        #expect(viewModel.linkedPlanExpectation(for: unlinked) == nil)
+    }
 }

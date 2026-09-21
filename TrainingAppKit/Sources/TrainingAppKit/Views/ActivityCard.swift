@@ -29,14 +29,21 @@ extension OverlapRecommendation {
 /// timeline instead, aligned with this headline line.
 struct ActivityCard: View {
     let activity: Activity
-    /// This activity's TRIMP, from `WeekViewModel.trainingLoad(for:)` — the headline line omits
-    /// the number entirely when this is `nil` (couldn't be computed) or rounds to `0` (nothing
-    /// worth showing).
-    let trainingLoad: Double?
-    /// This activity's overlap issue, from `WeekViewModel.overlapWarning(for:)` (MVP1-63) — `nil`
-    /// when it isn't part of any overlap worth flagging, in which case no badge shows.
-    let overlapWarning: OverlapRecommendation?
+    /// Everything the card shows beyond the activity itself — TRIMP, overlap badge, intensity tint and
+    /// the linked plan's expected values — from `WeekViewModel.activityCardContent(for:)`.
+    let content: WeekViewModel.ActivityCardContent
     let onSelect: () -> Void
+
+    /// The headline line omits the number entirely when this is `nil` (couldn't be computed) or
+    /// rounds to `0` (nothing worth showing).
+    private var trainingLoad: Double? { content.trainingLoad }
+    /// `nil` when the activity isn't part of any overlap worth flagging, in which case no badge shows.
+    private var overlapWarning: OverlapRecommendation? { content.overlapWarning }
+    /// Shown as a subdued background tint; `nil` leaves the plain card.
+    private var intensity: IntensityAssessment? { content.intensity }
+    /// The linked plan's expected values: its TRIMP follows the actual TRIMP after a slash, and its
+    /// duration and distance sit in a tertiary colour directly below the actual ones.
+    private var planned: WeekViewModel.LinkedPlanExpectation? { content.planned }
 
     var body: some View {
         Button(action: onSelect) {
@@ -56,30 +63,44 @@ struct ActivityCard: View {
                     // Rounds first, then checks that against zero — `loadFormat` itself rounds to
                     // the nearest whole number, so a raw value like 0.3 is `> 0` but would still
                     // display as "0" if the raw (unrounded) value were what got checked here.
-                    if let trainingLoad, trainingLoad.rounded() > 0 {
+                    if actualLoad != nil || plannedLoad != nil {
                         HStack(spacing: 2) {
                             Image(systemName: TrainingMetricKind.load.icon)
-                            Text(trainingLoad.formatted(TimelineCardStyle.loadFormat))
+                            loadText
                         }
                         .foregroundStyle(.secondary)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(loadAccessibilityLabel)
                     }
                 }
                 .font(.subheadline)
                 if activity.sport.isEndurance {
                     secondLineText
-                        .font(.caption)
+                        .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .padding(.leading, TimelineCardStyle.iconWidth + TimelineCardStyle.iconSpacing)
+                    if let plannedExtentText {
+                        plannedExtentText
+                            .font(.caption.monospacedDigit())
+                            .padding(.leading, TimelineCardStyle.iconWidth + TimelineCardStyle.iconSpacing)
+                            .accessibilityLabel(plannedExtentAccessibilityLabel)
+                    }
                 }
             }
             .padding(TimelineCardStyle.contentPadding)
             .background {
                 RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
                     .fill(TimelineCardStyle.background)
+                if let intensity {
+                    RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
+                        .fill(intensity.tint)
+                }
             }
             .contentShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
+        // The tint is visual only; say what it means.
+        .accessibilityValue(intensity?.accessibilityDescription ?? "")
     }
 
     /// "1:30:00   8 km   🏔120 m" — duration always shown as H:MM:SS, distance/climb omitted
@@ -90,15 +111,83 @@ struct ActivityCard: View {
     /// from the plain duration/distance numbers next to it.
     private static let partSpacing = "   "
 
+    private var durationString: String {
+        TimelineCardStyle.durationText(activity.duration)
+    }
+
+    /// The actual TRIMP, or `nil` when it couldn't be scored or rounds to nothing — the same rule as
+    /// the headline's original number.
+    private var actualLoad: Double? {
+        guard let trainingLoad, trainingLoad.rounded() > 0 else { return nil }
+        return trainingLoad
+    }
+
+    /// The linked plan's expected TRIMP, under the same rounds-to-nothing rule.
+    private var plannedLoad: Double? {
+        guard let load = planned?.load, load.rounded() > 0 else { return nil }
+        return load
+    }
+
+    /// "85 / 90": the actual TRIMP, then the expected one after a slash in a tertiary colour (a dash
+    /// stands in for an actual that couldn't be scored). Each piece carries its own monospaced
+    /// digits so the pair reads as one figure.
+    private var loadText: Text {
+        let format = TimelineCardStyle.loadFormat
+        let actual = Text(actualLoad?.formatted(format) ?? "–").monospacedDigit()
+        guard let plannedLoad else { return actual }
+        // Interpolating styled `Text`s rather than `+`, which is deprecated on the iOS 26 SDK.
+        let expected = Text(" / \(plannedLoad.formatted(format))").monospacedDigit().foregroundStyle(.tertiary)
+        return Text("\(actual)\(expected)")
+    }
+
+    private var loadAccessibilityLabel: String {
+        let format = TimelineCardStyle.loadFormat
+        var label = actualLoad.map { "Load \($0.formatted(format))" } ?? "Load not scored"
+        if let plannedLoad {
+            label += ", planned \(plannedLoad.formatted(format))"
+        }
+        return label
+    }
+
+    /// The linked plan's expected duration and distance — both, whichever the workout is defined
+    /// by (the other is projected from the athlete's pace) — in the same "duration   distance"
+    /// layout as `secondLineText`, so each lands directly under the actual value it compares with.
+    /// Monospaced digits keep a duration's width equal to the actual duration's, which is what
+    /// lines the distance column up.
+    private var plannedExtentText: Text? {
+        let duration = planned?.duration.map(TimelineCardStyle.durationText)
+        let distance = planned?.distanceMeters.map { TimelineCardStyle.distanceText(meters: $0) }
+        switch (duration, distance) {
+        case (let duration?, let distance?):
+            return Text("\(duration)\(Self.partSpacing)\(distance)").foregroundStyle(.tertiary)
+        case (let duration?, nil):
+            return Text(duration).foregroundStyle(.tertiary)
+        case (nil, let distance?):
+            return Text(distance).foregroundStyle(.tertiary)
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    private var plannedExtentAccessibilityLabel: String {
+        var parts: [String] = []
+        if let duration = planned?.duration {
+            parts.append("duration " + TimelineCardStyle.spokenDuration(duration))
+        }
+        if let distance = planned?.distanceMeters {
+            parts.append("distance " + TimelineCardStyle.spokenDistance(meters: distance))
+        }
+        return "Planned " + parts.joined(separator: ", ")
+    }
+
     private var secondLineText: Text {
-        let durationString = Duration.seconds(activity.duration).formatted(.time(pattern: .hourMinuteSecond))
         var text = Text(durationString)
         if let distanceMeters = activity.distanceMeters {
-            let distanceString = Measurement(value: distanceMeters, unit: UnitLength.meters).formatted(TimelineCardStyle.measurementFormat)
+            let distanceString = TimelineCardStyle.distanceText(meters: distanceMeters)
             text = Text("\(text)\(Self.partSpacing)\(distanceString)")
         }
         if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
-            let gainString = Measurement(value: gainMeters, unit: UnitLength.meters).formatted(TimelineCardStyle.measurementFormat)
+            let gainString = TimelineCardStyle.distanceText(meters: gainMeters)
             text = Text("\(text)\(Self.partSpacing)\(Image(systemName: "mountain.2")) \(gainString)")
         }
         return text
