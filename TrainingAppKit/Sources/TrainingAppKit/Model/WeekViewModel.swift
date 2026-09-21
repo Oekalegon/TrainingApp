@@ -703,7 +703,10 @@ public final class WeekViewModel {
 
     /// The detail view model for `activity`, pushed when it's tapped in the day list.
     public func activityDetailViewModel(for activity: Activity) -> ActivityDetailViewModel {
-        ActivityDetailViewModel(activity: activity, athlete: model.athlete, overlapContext: overlapContext(for: activity))
+        ActivityDetailViewModel(
+            activity: activity, athlete: model.athlete, overlapContext: overlapContext(for: activity),
+            planLinkContext: planLinkContext(for: activity)
+        )
     }
 
     /// The view model for the "Create Planned Workout" sheet (MVP2-15), opened from a day row's
