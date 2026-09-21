@@ -59,15 +59,12 @@ struct DayActivitiesSection: View {
     let activities: [Activity]
     /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.
     let plans: [PlannedActivity]
-    /// What a planned activity's card shows (MVP2-37) — see `WeekViewModel.plannedCardSummary(for:)`.
-    let plannedCardSummary: (PlannedActivity) -> WeekViewModel.PlannedCardSummary
-    /// An activity's training load (TRIMP) — the card's headline number (MVP1-41). `nil` when
-    /// `WeekViewModel.trainingLoad(for:)` couldn't score it, in which case the card omits the
-    /// number rather than showing a misleading "0".
-    let trainingLoad: (Activity) -> Double?
-    /// This activity's overlap issue, if any (MVP1-63) — see `WeekViewModel.overlapWarning(for:)`.
-    /// The card shows a warning badge when non-`nil`.
-    let overlapWarning: (Activity) -> OverlapRecommendation?
+    /// Everything an activity's card shows beyond the activity itself — TRIMP, overlap badge,
+    /// intensity, the linked plan's expected values — see `WeekViewModel.activityCardContent(for:)`.
+    let activityCard: (Activity) -> WeekViewModel.ActivityCardContent
+    /// Everything a planned activity's card shows beyond the plan itself — its summary (MVP2-37),
+    /// intensity, and whether it was missed — see `WeekViewModel.plannedCardContent(for:asOf:)`.
+    let plannedCard: (PlannedActivity) -> WeekViewModel.PlannedCardContent
     /// The athlete's timezone — every date here is formatted with this, not the device's default,
     /// so the dates/times shown agree with how `WeekViewModel` grouped them into this day in the
     /// first place.
@@ -142,8 +139,7 @@ struct DayActivitiesSection: View {
                         .padding(.top, TimelineCardStyle.contentPadding)
                     ActivityCard(
                         activity: activity,
-                        trainingLoad: trainingLoad(activity),
-                        overlapWarning: overlapWarning(activity),
+                        content: activityCard(activity),
                         onSelect: { onSelectActivity(activity) }
                     )
                 }
@@ -156,7 +152,11 @@ struct DayActivitiesSection: View {
                     // time of day — but the column still needs to hold its width so the card below
                     // starts at the same x as the activity cards above it.
                     Color.clear.frame(width: WeekdayPillView.columnWidth, height: 0)
-                    PlannedActivityCard(plan: plan, summary: plannedCardSummary(plan), onSelect: { onSelectPlan(plan) })
+                    PlannedActivityCard(
+                        plan: plan,
+                        content: plannedCard(plan),
+                        onSelect: { onSelectPlan(plan) }
+                    )
                 }
             }
         }

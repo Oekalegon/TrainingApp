@@ -19,6 +19,26 @@ enum TimelineCardStyle {
     static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
     static let measurementFormat = Measurement<UnitLength>.FormatStyle.measurement(width: .abbreviated)
 
+    /// "1:30:00" — a duration as H:MM:SS, as both cards show it.
+    static func durationText(_ seconds: TimeInterval) -> String {
+        Duration.seconds(seconds).formatted(.time(pattern: .hourMinuteSecond))
+    }
+
+    /// "8 km" — a distance in the user's units, abbreviated, as both cards show it.
+    static func distanceText(meters: Double) -> String {
+        Measurement(value: meters, unit: UnitLength.meters).formatted(measurementFormat)
+    }
+
+    /// "1 hour, 30 minutes" — for VoiceOver.
+    static func spokenDuration(_ seconds: TimeInterval) -> String {
+        Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .wide))
+    }
+
+    /// "8 kilometers" — for VoiceOver.
+    static func spokenDistance(meters: Double) -> String {
+        Measurement(value: meters, unit: UnitLength.meters).formatted(.measurement(width: .wide))
+    }
+
     /// The cards' own background — "elevated" relative to `weekViewBackground` (white in light mode,
     /// a dark elevated grey in dark mode), the opposite direction from `unhighlightedPillBackground`'s
     /// "recessed" pills/timeline, so a card reads as the most prominent surface in the day list.

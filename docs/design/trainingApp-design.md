@@ -236,6 +236,31 @@ remember or restore which tab was last active.
   a workout made solely of distance steps, estimated duration otherwise — never a converted
   counterpart (see MVP2-35). Plans already matched to a completed activity get no row at all
   (`WeekViewModel.pendingPlans(on:)`). Tapping it opens the planned-workout detail sheet (below).
+- **Intensity** (MVP2-43). Each card is tinted by the session's intensity — very low, low, medium or
+  high, from `TrainingModel.intensity(of:)`, which classifies from sustained time in heart-rate zones
+  rather than from TRIMP or the highest zone reached (see TrainingKit's
+  `docs/design/intensity-classification-design.md`). A completed card's whole background takes the
+  category's colour, subdued (very low blue, low green, medium yellow, high red — the heart-rate
+  zone colours) and fainter when the classification is low-confidence; a planned card keeps its plain
+  fill and tints only its hatch stripes, so it still reads as "not done yet" first. An activity linked
+  to a plan is classified against that plan (heart rate checks whether the planned hard steps were
+  performed); any other activity from its heart rate alone. VoiceOver announces the category.
+- **Planned vs. actual on a linked activity's card.** Its TRIMP is followed by the plan's expected
+  TRIMP after a slash in a tertiary colour ("85 / 90"), and a third line under the duration/distance
+  line shows the plan's expected duration and distance in the same layout, so each sits directly
+  under the actual value it compares with. Both are shown whichever the workout is defined by: the
+  other is projected from the athlete's pace model (`StatisticsCalculator.projection`), so a
+  distance is absent when no zone settings are recorded. Monospaced digits keep the columns aligned.
+- **Missed plans.** A plan on a day before today that no completed activity matched is drawn as an
+  outline only: the plain view background, a hairline secondary border, secondary text, no expected
+  Load (it never became training load) and no intensity colour. A plan for today stays hatched until
+  the day ends. This deliberately adds a third card state to the two above.
+- `DayActivitiesSection` takes one closure per card kind (`WeekViewModel.activityCardContent(for:)`,
+  `plannedCardContent(for:asOf:)`) returning everything the card shows. Those values are cached per
+  item against the inputs they depend on — a plan's load override, its workout's steps, an activity's
+  link and heart-rate data — and dropped when the athlete or intensity thresholds change, because the
+  list re-renders on every frame of the week-swipe drag and an id- or count-keyed cache would go
+  stale on an in-place edit.
 - The week view sits on its own light (dark in dark mode) grey background, distinct from the plain
   system background: the weekday pills, metric pills, and the timeline line itself are recessed
   relative to it (a `Color.primary`-based translucent overlay, so "slightly darker in light mode,
