@@ -257,8 +257,9 @@ remember or restore which tab was last active.
   authorization / initial sync), show an inline prompt — "Connect Health data" — that triggers
   the HealthKit authorization request. No separate onboarding screen (deferred to MVP 2, see §6).
 - **Overlap warning badge** (MVP1-63): an `Activity` card shows a small orange warning triangle
-  when `WeekViewModel.overlapWarning(for:)` finds a real issue (`.duplicate`/`.merge`/`.conflict`
-  from `TrainingModel.overlapAdvice`) — `.possibleMultisport` (e.g. a triathlon's separately-logged
+  when `WeekViewModel.overlapWarning(for:)` finds a real issue (`.duplicate`/`.merge`/`.conflict`/
+  `.join` from `TrainingModel.overlapAdvice`; when an activity is named by several pairs the
+  highest-priority one wins — see `OverlapRecommendation.priority`) — `.possibleMultisport` (e.g. a triathlon's separately-logged
   legs) is deliberately not treated as a warning here, since it isn't a problem. Purely passive;
   resolving it happens in the activity detail sheet (§2.2). The aggregate count across every
   outstanding overlap lives on the Athlete tab instead (§2.3), not here.
@@ -279,7 +280,7 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 - No map/route rendering, no cadence/elevation charts — text/stat rows only for MVP 1.
 - **Overlap section** (MVP1-63): shown when `WeekViewModel.overlapContext(for:)` finds this
   activity part of a pair — unlike the day-list badge above, this includes `.possibleMultisport`
-  (informational only, no action), since the detail sheet is where all four
+  (informational only, no action), since the detail sheet is where all five
   `OverlapRecommendation` cases are meant to surface distinctly (MVP1-29). `.duplicate` offers a
   single "Remove Duplicate" action (the pair's `remove` side is already decided);
   `.merge`/`.conflict` offer both "keep this, delete other" and "keep other, delete this", routed
@@ -287,6 +288,14 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   field-level merge (picking which source's data to keep per field) and multisport-leg linking
   aren't implemented — both need new `TrainingCore` data modeling — so `.merge` gets the delete-one
   fallback rather than an actual field picker.
+- **Join** (MVP1-80): `.join` (same-sport pieces back-to-back, e.g. a run accidentally stopped and
+  restarted) offers "Join into One Activity", routed through `WeekViewModel.joinActivities(_:with:)`
+  → `TrainingModel.joinActivities`. No confirmation alert, unlike Delete: a join is reversible. The
+  originals stay stored behind the joined activity, which the day list shows as one. A joined
+  activity's own detail sheet has a "Joined From" section listing its pieces with an "Unjoin
+  Activities" button (`WeekViewModel.unjoinActivity(_:)`). Both actions report success, and the
+  sheet only closes when they worked — a refused join (different sports, a piece already joined
+  elsewhere) leaves it open with an inline message.
 - **Delete Activity** (MVP1-65): a centered red text button in its own section at the bottom of the
   list — matching a Settings-style "Delete Account" pattern, not a toolbar icon — independent of
   the Overlap section above

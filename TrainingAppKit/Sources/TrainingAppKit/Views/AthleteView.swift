@@ -21,8 +21,8 @@ struct AthleteView: View {
     let onResolveOverlap: (UUID) async -> Void
     let onDeleteActivity: (Activity) async -> Void
     /// Join actions for the detail sheet (MVP1-80) — see `ActivityDetailView`.
-    let onJoinActivities: (Activity, Activity) async -> Void
-    let onUnjoinActivity: (Activity) async -> Void
+    let onJoinActivities: (Activity, Activity) async -> Bool
+    let onUnjoinActivity: (Activity) async -> Bool
     let loadJoinedComponents: (Activity) async -> [Activity]
     @State private var isConfirmingResync = false
     @State private var isConfirmingDeduplicate = false

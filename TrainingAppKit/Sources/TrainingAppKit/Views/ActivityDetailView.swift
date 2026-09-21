@@ -20,15 +20,20 @@ struct ActivityDetailView: View {
     /// Runs `WeekViewModel.joinActivities(_:with:)` with the other piece of a
     /// ``OverlapRecommendation/join`` pair (MVP1-80). `async` for the same reason as
     /// `onResolveOverlap`: the sheet closes only once the join has actually happened.
-    let onJoin: (Activity) async -> Void
-    /// Runs `WeekViewModel.unjoinActivity(_:)` for this (joined) activity (MVP1-80).
-    let onUnjoin: () async -> Void
+    /// Returns whether the join happened; the sheet stays open (with a message) when it didn't.
+    let onJoin: (Activity) async -> Bool
+    /// Runs `WeekViewModel.unjoinActivity(_:)` for this (joined) activity (MVP1-80); same
+    /// success/stay-open contract as `onJoin`.
+    let onUnjoin: () async -> Bool
     /// Loads the pieces this activity was joined from — empty for an ordinary activity — for the
     /// "Joined from" section (MVP1-80).
     let loadComponents: () async -> [Activity]
     @Environment(\.dismiss) private var dismiss
     /// The pieces this activity was joined from, loaded once by `.task`; empty for an ordinary one.
     @State private var components: [Activity] = []
+    /// Set when a join/unjoin was refused, so the sheet stays open and says so rather than
+    /// closing as if it had worked.
+    @State private var joinFailureMessage: String?
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
     /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
     @State private var isShowingDeleteConfirmation = false
@@ -61,11 +66,17 @@ struct ActivityDetailView: View {
                         },
                         onJoin: {
                             Task {
-                                await onJoin(overlapContext.otherActivity)
-                                dismiss()
+                                if await onJoin(overlapContext.otherActivity) {
+                                    dismiss()
+                                } else {
+                                    joinFailureMessage = "These activities couldn't be joined."
+                                }
                             }
                         }
                     )
+                    if let joinFailureMessage {
+                        Text(joinFailureMessage).foregroundStyle(.red)
+                    }
                 }
             }
 
@@ -79,9 +90,15 @@ struct ActivityDetailView: View {
                     }
                     Button("Unjoin Activities") {
                         Task {
-                            await onUnjoin()
-                            dismiss()
+                            if await onUnjoin() {
+                                dismiss()
+                            } else {
+                                joinFailureMessage = "This activity couldn't be unjoined."
+                            }
                         }
+                    }
+                    if let joinFailureMessage {
+                        Text(joinFailureMessage).foregroundStyle(.red)
                     }
                 } header: {
                     Text("Joined From")
