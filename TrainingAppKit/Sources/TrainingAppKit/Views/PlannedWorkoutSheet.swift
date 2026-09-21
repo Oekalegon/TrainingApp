@@ -51,6 +51,11 @@ struct PlannedWorkoutSheet: View {
                         // Read-only: the workout's template/parameters aren't stored, and its
                         // definition may be shared with other plans (MVP2-39).
                         LabeledContent("Name", value: viewModel.editedWorkoutName ?? "Planned workout")
+                        if viewModel.editedWorkoutName != nil, !viewModel.canEditParameters {
+                            Text("This workout's parameters can't be changed — it wasn't created from a template.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         Picker("Template", selection: $viewModel.selectedTemplate) {
                             Text("Select a template").tag(nil as WorkoutTemplate?)
@@ -64,6 +69,20 @@ struct PlannedWorkoutSheet: View {
                     // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
                     // sheet opened for today could still be scrolled back to yesterday from here.
                     DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate()..., displayedComponents: .date)
+                }
+
+                if viewModel.isEditing, !viewModel.editableParameters.isEmpty {
+                    Section("Parameters") {
+                        ForEach(viewModel.editableParameters) { parameter in
+                            ParameterRow(
+                                parameter: parameter,
+                                value: Binding(
+                                    get: { viewModel.parameterValues[parameter.key] ?? parameter.defaultValue },
+                                    set: { viewModel.setParameterValue($0, forKey: parameter.key) }
+                                )
+                            )
+                        }
+                    }
                 }
 
                 if viewModel.isEditing {
@@ -182,7 +201,7 @@ struct PlannedWorkoutSheet: View {
                         Image(systemName: "checkmark")
                     }
                     .accessibilityLabel("Save")
-                    .disabled(viewModel.selectedTemplate == nil || viewModel.isSaving)
+                    .disabled(!viewModel.canSave || viewModel.isSaving)
                 }
             }
             .alert("Couldn't Save Workout", isPresented: $isShowingSaveError, presenting: viewModel.saveError) { _ in

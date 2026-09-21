@@ -76,6 +76,9 @@ struct DayActivitiesSection: View {
     /// sheet, not a navigation push, so this hands back the tapped `Activity` rather than this
     /// view building a `NavigationLink` itself.
     let onSelectActivity: (Activity) -> Void
+    /// Called when a planned activity's card is tapped (MVP2-38) — `WeekView` presents the
+    /// planned-workout detail sheet, the same hand-back-the-value pattern as `onSelectActivity`.
+    let onSelectPlan: (PlannedActivity) -> Void
     /// Called when one of this row's Load/Fitness/Fatigue/Form pills is tapped (MVP1-45) —
     /// `WeekView` opens the fitness metrics detail view showing just that metric's explanation.
     let onSelectMetric: (TrainingMetricKind) -> Void
@@ -153,7 +156,7 @@ struct DayActivitiesSection: View {
                     // time of day — but the column still needs to hold its width so the card below
                     // starts at the same x as the activity cards above it.
                     Color.clear.frame(width: WeekdayPillView.columnWidth, height: 0)
-                    PlannedActivityCard(plan: plan, summary: plannedCardSummary(plan))
+                    PlannedActivityCard(plan: plan, summary: plannedCardSummary(plan), onSelect: { onSelectPlan(plan) })
                 }
             }
         }

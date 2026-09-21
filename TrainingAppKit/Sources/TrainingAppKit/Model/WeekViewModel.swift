@@ -371,6 +371,42 @@ public final class WeekViewModel {
         /// workout is missing.
         public let load: Double?
         public let extent: Extent?
+
+        /// The summary for `plan` given its `workout` (`nil` when no longer in the library). Shared by
+        /// the day list's card and ``PlannedWorkoutDetailViewModel``, so both always show the same
+        /// numbers. A workout made up solely of distance-goal steps gets its distance as ``extent``;
+        /// every other workout its estimated duration.
+        static func make(
+            plan: PlannedActivity, workout: StructuredWorkout?, athlete: AthleteProfile,
+            calculator: StatisticsCalculator
+        ) -> PlannedCardSummary {
+            guard let workout else {
+                return PlannedCardSummary(sport: .running, name: nil, load: plan.expectedLoadOverride, extent: nil)
+            }
+            let load = plan.expectedLoadOverride
+                ?? calculator.estimator.estimatedLoad(for: workout, athlete: athlete).value
+
+            var distanceMeters = 0.0
+            var sawDistanceStep = false
+            var sawOtherStep = false
+            for block in workout.blocks {
+                for step in block.steps {
+                    if case .distance(let meters) = step.goal {
+                        distanceMeters += meters * Double(block.repetitions)
+                        sawDistanceStep = true
+                    } else {
+                        sawOtherStep = true
+                    }
+                }
+            }
+            // Requires at least one distance step, so a workout with no steps at all isn't shown as
+            // "0 m".
+            let extent: Extent = sawDistanceStep && !sawOtherStep
+                ? .distance(meters: distanceMeters)
+                : .duration(calculator.durationEstimator.duration(for: workout, athlete: athlete))
+
+            return PlannedCardSummary(sport: workout.sport, name: workout.name, load: load, extent: extent)
+        }
     }
 
     /// The card content for `plan` (MVP2-37). A workout made up solely of distance-goal steps is
@@ -390,33 +426,9 @@ public final class WeekViewModel {
     }
 
     private func computePlannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
-        guard let workout = workout(for: plan) else {
-            return PlannedCardSummary(sport: .running, name: nil, load: plan.expectedLoadOverride, extent: nil)
-        }
-        let athlete = model.athlete
-        let load = plan.expectedLoadOverride
-            ?? statisticsCalculator.estimator.estimatedLoad(for: workout, athlete: athlete).value
-
-        var distanceMeters = 0.0
-        var sawDistanceStep = false
-        var sawOtherStep = false
-        for block in workout.blocks {
-            for step in block.steps {
-                if case .distance(let meters) = step.goal {
-                    distanceMeters += meters * Double(block.repetitions)
-                    sawDistanceStep = true
-                } else {
-                    sawOtherStep = true
-                }
-            }
-        }
-        // Requires at least one distance step, so a workout with no steps at all isn't shown as
-        // "0 m".
-        let extent: PlannedCardSummary.Extent = sawDistanceStep && !sawOtherStep
-            ? .distance(meters: distanceMeters)
-            : .duration(statisticsCalculator.durationEstimator.duration(for: workout, athlete: athlete))
-
-        return PlannedCardSummary(sport: workout.sport, name: workout.name, load: load, extent: extent)
+        PlannedCardSummary.make(
+            plan: plan, workout: workout(for: plan), athlete: model.athlete, calculator: statisticsCalculator
+        )
     }
 
     /// `day`'s fitness metrics, if computed — `nil` before ``load(asOf:)`` has covered it (e.g.
@@ -792,6 +804,11 @@ public final class WeekViewModel {
     /// add affordance — `date` defaults the sheet to that day, still editable inside it.
     public func plannedWorkoutSheetViewModel(date: Date) -> PlannedWorkoutSheetViewModel {
         PlannedWorkoutSheetViewModel(model: model, date: date)
+    }
+
+    /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
+    public func plannedWorkoutDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
+        PlannedWorkoutDetailViewModel(model: model, plan: plan)
     }
 
     /// The view model for the athlete account screen, presented from the week view's toolbar.

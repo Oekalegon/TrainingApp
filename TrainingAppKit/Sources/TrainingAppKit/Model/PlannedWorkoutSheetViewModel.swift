@@ -33,6 +33,28 @@ public final class PlannedWorkoutSheetViewModel {
     /// guardrail preview or WorkoutKit rescheduling).
     private let editedWorkout: StructuredWorkout?
 
+    /// The template ``editedWorkout`` was instantiated from, when its ``StructuredWorkout/templateID``
+    /// is set and that template is still in ``templates`` — what makes parameters editable in edit
+    /// mode (MVP2-41). `nil` for a workout built by hand, created before templates were recorded on
+    /// workouts, or whose template no longer exists.
+    private let editedTemplate: WorkoutTemplate?
+    /// ``editedWorkout``'s recorded parameter values (filled out with defaults), to detect whether the
+    /// athlete changed any.
+    private let originalParameterValues: [String: Double]
+
+    /// `true` when edit mode can change the workout's parameters (see ``editedTemplate``).
+    public var canEditParameters: Bool { editedTemplate != nil }
+    /// The parameters edit mode offers, in the template's order — empty when ``canEditParameters`` is
+    /// `false`.
+    public var editableParameters: [WorkoutTemplateParameter] { editedTemplate?.parameters ?? [] }
+    /// `true` when any parameter now differs from what the edited workout was built with.
+    private var parametersChanged: Bool { editedTemplate != nil && parameterValues != originalParameterValues }
+
+    /// Whether ``save()`` has something to save: an edit always does (date/load/parameters); a new plan
+    /// needs a template picked first. The sheet's save button follows this — keying it off
+    /// ``selectedTemplate`` alone left edit mode, which has none, permanently disabled.
+    public var canSave: Bool { isEditing || selectedTemplate != nil }
+
     /// `true` when this view model edits an existing plan rather than creating one.
     public var isEditing: Bool { editingPlan != nil }
     /// The edited workout's name, shown read-only in edit mode.
@@ -156,6 +178,8 @@ public final class PlannedWorkoutSheetViewModel {
         self.scheduler = scheduler
         self.editingPlan = nil
         self.editedWorkout = nil
+        self.editedTemplate = nil
+        self.originalParameterValues = [:]
     }
 
     /// Creates a view model that edits `plan` in place (MVP2-39).
@@ -179,7 +203,19 @@ public final class PlannedWorkoutSheetViewModel {
         self.estimator = estimator
         self.scheduler = scheduler
         self.editingPlan = plan
-        self.editedWorkout = model.workouts.first { $0.id == plan.workoutID }
+        let workout = model.workouts.first { $0.id == plan.workoutID }
+        self.editedWorkout = workout
+        let template = workout?.templateID.flatMap { id in templates.first { $0.id == id } }
+        self.editedTemplate = template
+        if let template {
+            // Recorded values, with any parameter the template gained since filled in from its default.
+            let recorded = workout?.parameterValues ?? [:]
+            let values = Dictionary(uniqueKeysWithValues: template.parameters.map { ($0.key, recorded[$0.key] ?? $0.defaultValue) })
+            self.originalParameterValues = values
+            self.parameterValues = values
+        } else {
+            self.originalParameterValues = [:]
+        }
         recomputeExpectedLoad()
         recomputeGuardrails()
     }
@@ -216,8 +252,20 @@ public final class PlannedWorkoutSheetViewModel {
         recomputeGuardrails()
     }
 
+    /// The workout edit mode currently shows/projects: ``editedWorkout`` untouched, or — once a
+    /// parameter changed — a fresh instantiation of ``editedTemplate`` with the new values (keeping
+    /// the workout's name), which is also what ``saveEdit(of:)`` persists. `nil` outside edit mode or
+    /// when the workout is gone.
+    private func effectiveEditedWorkout() -> StructuredWorkout? {
+        guard let editedWorkout else { return nil }
+        guard parametersChanged, let editedTemplate,
+              let instantiated = try? editedTemplate.instantiate(name: editedWorkout.name, values: parameterValues)
+        else { return editedWorkout }
+        return instantiated
+    }
+
     private func recomputeExpectedLoad() {
-        if let editedWorkout {
+        if editingPlan != nil, let editedWorkout = effectiveEditedWorkout() {
             var load = estimator.estimatedLoad(for: editedWorkout, athlete: model.athlete)
             if let loadOverride {
                 load.value = loadOverride
@@ -259,13 +307,14 @@ public final class PlannedWorkoutSheetViewModel {
         if let editingPlan {
             // Edit mode: project the plan as it would be after saving (new date/override), with the
             // original left out of `otherPlans` below so it isn't counted twice.
-            guard let editedWorkout else {
+            guard let editedWorkout = effectiveEditedWorkout() else {
                 guardrailFindings = []
                 guardrailDiagnostic = nil
                 return
             }
             workout = editedWorkout
             var edited = editingPlan
+            edited.workoutID = editedWorkout.id
             edited.date = date
             edited.expectedLoadOverride = loadOverride
             plan = edited
@@ -452,15 +501,22 @@ public final class PlannedWorkoutSheetViewModel {
         }
     }
 
-    /// Saves `original` over itself with the edited ``date``/``loadOverride`` (MVP2-39).
+    /// Saves `original` over itself with the edited ``date``/``loadOverride`` and, if any parameter
+    /// changed, a new workout (MVP2-39, MVP2-41).
     ///
-    /// If the day moved and the workout is still in the library, the plan is scheduled for its new
-    /// day on WorkoutKit *first*, and only then persisted, then its old day's entry is removed —
-    /// the same "don't persist until WorkoutKit succeeded" ordering ``save()`` documents, so a
-    /// failed schedule leaves the plan untouched at its old day instead of saved somewhere the
-    /// Watch doesn't know about. The final removal is best-effort (`try?`): by that point the edit
-    /// is already saved and correct locally, and failing the whole save over a leftover Watch entry
-    /// would just invite a retry that schedules the new day a second time.
+    /// A parameter change instantiates a *new* workout from ``editedTemplate`` and repoints this plan
+    /// at it, rather than rewriting the old one — other plans may share the old workout, and the
+    /// change is meant for this plan only. The old workout is then removed from the library if no
+    /// plan anywhere still references it.
+    ///
+    /// If the day moved or the workout was replaced, and the workout is still on WorkoutKit's
+    /// radar, the plan is scheduled (new day, new workout) on WorkoutKit *first*, and only then
+    /// persisted, then the old entry is removed — the same "don't persist until WorkoutKit
+    /// succeeded" ordering ``save()`` documents, so a failed schedule leaves the plan untouched
+    /// instead of saved somewhere the Watch doesn't know about. The final removals (the old Watch
+    /// entry, the unreferenced old workout) are best-effort (`try?`): by then the edit is saved and
+    /// correct locally, and failing the whole save over leftovers would just invite a retry that
+    /// schedules the new day a second time.
     private func saveEdit(of original: PlannedActivity) async -> Bool {
         isSaving = true
         defer { isSaving = false }
@@ -469,26 +525,38 @@ public final class PlannedWorkoutSheetViewModel {
         updated.date = date
         updated.expectedLoadOverride = loadOverride
         let dayMoved = !calendar.isDate(original.date, inSameDayAs: date)
+        let oldWorkout = editedWorkout
         do {
-            var workout = editedWorkout
-            var workoutChanged = false
-            if dayMoved, let scheduler, var scheduledWorkout = workout {
+            var workout = oldWorkout
+            var workoutNeedsSaving = false
+            var replacesWorkout = false
+            if parametersChanged, let replacement = effectiveEditedWorkout(), replacement.id != oldWorkout?.id {
+                workout = replacement
+                updated.workoutID = replacement.id
+                workoutNeedsSaving = true
+                replacesWorkout = true
+            }
+            let needsScheduling = dayMoved || replacesWorkout
+            if needsScheduling, let scheduler, var scheduledWorkout = workout {
                 let id = try await scheduler.sync(scheduledWorkout)
                 if scheduledWorkout.workoutKitID == nil {
-                    // Never synced before (saved without a scheduler): adopt the id now, so the
-                    // entry just scheduled can be found and removed again later.
+                    // Never synced before (saved without a scheduler, or freshly instantiated): adopt
+                    // the id now, so the entry just scheduled can be found and removed again later.
                     scheduledWorkout.workoutKitID = id
                     workout = scheduledWorkout
-                    workoutChanged = true
+                    workoutNeedsSaving = true
                 }
                 try await scheduler.schedule(updated, workout: scheduledWorkout, calendar: calendar)
             }
-            if workoutChanged, let workout {
+            if workoutNeedsSaving, let workout {
                 try await model.add(workout)
             }
             try await model.add(updated)
-            if dayMoved, let scheduler, let workout {
-                try? await scheduler.unschedule(original, workout: workout, calendar: calendar)
+            if needsScheduling, let scheduler, let oldWorkout {
+                try? await scheduler.unschedule(original, workout: oldWorkout, calendar: calendar)
+            }
+            if replacesWorkout, let oldWorkout {
+                _ = try? await model.deleteWorkoutIfUnreferenced(id: oldWorkout.id)
             }
             return true
         } catch {

@@ -235,7 +235,7 @@ remember or restore which tab was last active.
   figure); its second line shows only the one measure the workout actually defines — distance for
   a workout made solely of distance steps, estimated duration otherwise — never a converted
   counterpart (see MVP2-35). Plans already matched to a completed activity get no row at all
-  (`WeekViewModel.pendingPlans(on:)`). Not tappable yet (MVP2-38 adds a detail sheet).
+  (`WeekViewModel.pendingPlans(on:)`). Tapping it opens the planned-workout detail sheet (below).
 - The week view sits on its own light (dark in dark mode) grey background, distinct from the plain
   system background: the weekday pills, metric pills, and the timeline line itself are recessed
   relative to it (a `Color.primary`-based translucent overlay, so "slightly darker in light mode,
@@ -297,8 +297,14 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   Overlap section's resolution buttons use, so a deleted HealthKit-sourced activity is tombstoned
   (MVP1-64) and won't reappear on the next resync either way.
 
-Tapping a *planned* (not-yet-completed) activity is out of scope for detail — MVP 1 doesn't
-render workout structure detail, only the plan's date/expected load inline in the week view.
+Tapping a *planned* (not-yet-completed) activity (MVP2-38) opens a small read-only sheet
+(`PlannedWorkoutDetailSheet`): the workout's sport icon, name and date; its expected duration (always
+estimable), distance (only for a workout made solely of distance steps — no converted guess, see
+MVP2-35) and load; and a plain step list, one line per block (`4 × Work 8:00, Recovery 400 m`).
+Richer per-step targets/zones are deferred. A pencil in the toolbar opens `PlannedWorkoutSheet` in
+edit mode (date, load override, and — for a workout built from a template, which records its template id and parameter values — those parameters, e.g. an easy run's duration; changing one instantiates a new workout for this plan and removes the old one if no other plan uses it, so a workout shared with other plans is never altered; a workout without a recorded template keeps a read-only definition), and a
+Delete button at the bottom behind a confirmation alert removes only the plan
+(`TrainingModel.deletePlan`), never the library workout, and its WorkoutKit entry best-effort.
 
 ### 2.3 Athlete account
 
