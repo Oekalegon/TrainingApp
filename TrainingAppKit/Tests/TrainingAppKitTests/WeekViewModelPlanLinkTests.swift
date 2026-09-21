@@ -79,7 +79,7 @@ struct WeekViewModelPlanLinkTests {
         #expect(viewModel.planLinkContext(for: activity) == nil)
     }
 
-    @Test("linking switches the plan, confirming clears the ambiguity, and the detail view model carries the context")
+    @Test("linking switches the plan and the detail view model carries the context")
     func linkAndConfirm() async throws {
         let (viewModel, plans, activity) = try await makeViewModel(planMinutes: [30, 31], activityMinutes: 30)
         let other = try #require(viewModel.planLinkContext(for: activity)?.candidates.first)
@@ -116,5 +116,55 @@ struct WeekViewModelPlanLinkTests {
 
         #expect(await viewModel.linkActivity(activity, toPlan: later.id, asOf: day(2)) == false)
         #expect(viewModel.model.activities.first?.linkedPlanID == nil)
+    }
+
+    @Test("confirming the current match clears the ambiguity and keeps the link")
+    func confirmClearsAmbiguity() async throws {
+        let (viewModel, _, activity) = try await makeViewModel(planMinutes: [30, 31], activityMinutes: 30)
+        let context = try #require(viewModel.planLinkContext(for: activity))
+        let current = try #require(context.linkedPlan)
+        #expect(context.isAmbiguous)
+
+        #expect(await viewModel.linkActivity(activity, toPlan: current.id, asOf: day(2)))
+
+        let confirmed = try #require(viewModel.model.activities.first)
+        let after = try #require(viewModel.planLinkContext(for: confirmed))
+        #expect(after.linkedPlan?.id == current.id)
+        #expect(!after.isAmbiguous)
+    }
+
+    @Test("\"same day\" follows the athlete's time zone, not UTC")
+    func candidatesUseAthleteTimeZone() async throws {
+        let auckland = try #require(TimeZone(identifier: "Pacific/Auckland"))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = auckland
+        func local(day: Int, hour: Int, minute: Int = 0) throws -> Date {
+            try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: day, hour: hour, minute: minute)))
+        }
+        let store = InMemoryStore()
+        let model = TrainingModel(
+            stores: StoreSet(
+                activityStore: store, planStore: store, workoutStore: store,
+                cycleStore: store, athleteStore: store
+            ),
+            athlete: AthleteProfile.fixture(timeZoneIdentifier: "Pacific/Auckland")
+        )
+        let w = workout("Run", minutes: 30)
+        try await model.add(w, asOf: try local(day: 10, hour: 12))
+        // Same Auckland day as the activity below (though not the same UTC day) and the next one.
+        let sameDay = PlannedActivity(workoutID: w.id, date: try local(day: 10, hour: 7))
+        let nextDay = PlannedActivity(workoutID: w.id, date: try local(day: 11, hour: 7))
+        try await model.add(sameDay, asOf: try local(day: 10, hour: 12))
+        try await model.add(nextDay, asOf: try local(day: 10, hour: 12))
+        let activity = Activity(
+            source: .manual, sport: .running, start: try local(day: 10, hour: 23, minute: 30), duration: 1800
+        )
+        try await store.upsert([activity])
+        try await model.load(in: try local(day: 9, hour: 0)...(try local(day: 12, hour: 0)), asOf: try local(day: 10, hour: 12))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: try local(day: 10, hour: 12))
+
+        let context = try #require(viewModel.planLinkContext(for: activity))
+
+        #expect(context.candidates.map(\.id) == [sameDay.id])
     }
 }

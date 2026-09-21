@@ -251,6 +251,7 @@ struct ActivityDetailView: View {
     }
 
     private func changePlanLink(_ action: @escaping () async -> Bool) {
+        planLinkFailureMessage = nil
         Task {
             if await action() {
                 dismiss()
