@@ -599,7 +599,11 @@ public final class WeekViewModel {
         var result: [UUID: OverlapRecommendation] = [:]
         for advice in model.overlapAdvice {
             if case .possibleMultisport = advice.recommendation { continue }
-            for id in [advice.first, advice.second] where result[id] == nil {
+            for id in [advice.first, advice.second] {
+                // An activity can be named by several pairs (e.g. a session split in three: A–B and
+                // B–C are both joins); keep the highest-priority one rather than whichever the
+                // checker happened to emit first, so the badge is stable.
+                if let existing = result[id], existing.priority <= advice.recommendation.priority { continue }
                 result[id] = advice.recommendation
             }
         }
@@ -620,12 +624,16 @@ public final class WeekViewModel {
     /// the detail sheet is where all four recommendation types are meant to surface distinctly
     /// (MVP1-29), even the ones that don't need a delete action.
     public func overlapContext(for activity: Activity) -> OverlapContext? {
+        var best: OverlapContext?
         for advice in model.overlapAdvice where advice.first == activity.id || advice.second == activity.id {
             let otherID = advice.first == activity.id ? advice.second : advice.first
             guard let other = model.activities.first(where: { $0.id == otherID }) else { continue }
-            return OverlapContext(recommendation: advice.recommendation, otherActivity: other)
+            // Highest-priority pair wins, so a real issue (or a join) is never hidden behind a
+            // possibleMultisport pairing that merely sorted earlier.
+            if let best, best.recommendation.priority <= advice.recommendation.priority { continue }
+            best = OverlapContext(recommendation: advice.recommendation, otherActivity: other)
         }
-        return nil
+        return best
     }
 
     /// One row per activity worth reviewing for an overlap issue (MVP1-63) — every activity named
@@ -661,6 +669,28 @@ public final class WeekViewModel {
     /// ``OverlapRecommendation/conflict``: "remove this one, keep the other".
     public func resolveOverlap(deleting id: UUID, asOf today: Date = .now) async {
         await deleteActivity(id: id, asOf: today)
+    }
+
+    /// Joins `activity` and `other` — pieces of one session that was accidentally recorded in two
+    /// (``OverlapRecommendation/join``, MVP1-80) — into a single activity. The originals stay
+    /// stored and are only hidden behind the joined activity, so this is undone by
+    /// ``unjoinActivity(_:asOf:)``. Failures fail silently, like every other store-mutating action
+    /// here.
+    public func joinActivities(_ activity: Activity, with other: Activity, asOf today: Date = .now) async {
+        try? await model.joinActivities(activity.id, other.id, asOf: today)
+        await refreshWeekCachesIfNeeded()
+    }
+
+    /// Splits the joined `activity` back into the pieces it was built from (MVP1-80).
+    public func unjoinActivity(_ activity: Activity, asOf today: Date = .now) async {
+        try? await model.unjoinActivity(id: activity.id, asOf: today)
+        await refreshWeekCachesIfNeeded()
+    }
+
+    /// The pieces `activity` was joined from, earliest first, or empty if it isn't a joined
+    /// activity — backs the detail sheet's "Joined from" section (MVP1-80).
+    public func joinedComponents(of activity: Activity) async -> [Activity] {
+        (try? await model.components(ofJoinedActivity: activity.id)) ?? []
     }
 
     /// The activity detail sheet's general "Delete Activity" action (MVP1-65), independent of any
@@ -932,5 +962,19 @@ public final class WeekViewModel {
 
     static func weekStart(containing date: Date, calendar: Calendar) -> Date {
         calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+    }
+}
+
+extension OverlapRecommendation {
+    /// Which pairing to surface first when an activity is named by several: real issues before a
+    /// join suggestion, and a multisport pairing (never an issue) last.
+    fileprivate var priority: Int {
+        switch self {
+        case .duplicate: 0
+        case .merge: 1
+        case .conflict: 2
+        case .join: 3
+        case .possibleMultisport: 4
+        }
     }
 }

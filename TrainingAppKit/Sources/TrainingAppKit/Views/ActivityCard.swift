@@ -10,6 +10,7 @@ extension OverlapRecommendation {
         case .duplicate: "Possible duplicate activity"
         case .merge: "Overlaps another activity with different data"
         case .conflict: "Overlaps another activity"
+        case .join: "May be one session split in two"
         case .possibleMultisport: "Close to another activity"
         }
     }

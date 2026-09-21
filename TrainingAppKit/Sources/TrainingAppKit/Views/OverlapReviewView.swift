@@ -103,6 +103,7 @@ private extension OverlapRecommendation {
         case .duplicate: "Duplicate"
         case .merge: "Merge"
         case .conflict: "Conflict"
+        case .join: "Join?"
         case .possibleMultisport: "Multisport?"
         }
     }

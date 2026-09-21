@@ -1585,7 +1585,7 @@ struct WeekViewModelTests {
 }
 
 @MainActor
-private final class FakeRefresher: ActivityRefreshing {
+final class FakeRefresher: ActivityRefreshing {
     private(set) var callCount = 0
     private(set) var authorizationRequested = false
     private let shouldThrow: Bool
