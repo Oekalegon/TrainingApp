@@ -10,6 +10,12 @@ struct RaceSheetViewModelTests {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
+    private var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .init(identifier: "UTC")!
+        return calendar
+    }
+
     private func makeModel() async -> (InMemoryStore, TrainingModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
@@ -34,7 +40,7 @@ struct RaceSheetViewModelTests {
         #expect(!viewModel.canSave)
     }
 
-    @Test("save() persists a race with the entered name/date/priority, trimmed")
+    @Test("save() persists a race with the entered name/date/priority, trimmed and date normalized to start of day")
     func saveCreatesRace() async {
         let (store, model) = await makeModel()
         let viewModel = RaceSheetViewModel(model: model, date: day(0))
@@ -48,7 +54,9 @@ struct RaceSheetViewModelTests {
         let races = model.races
         #expect(races.count == 1)
         #expect(races.first?.name == "Local 10K")
-        #expect(races.first?.date == day(30))
+        // Normalized, not the raw `day(30)` — see `save()`'s own doc comment on why
+        // `PlanEvaluator`'s race-day TSB rule needs this to be an exact start-of-day value.
+        #expect(races.first?.date == utcCalendar.startOfDay(for: day(30)))
         #expect(races.first?.priority == .secondary)
         let stored = try? await store.races(in: day(0)...day(60))
         #expect(stored?.first?.name == "Local 10K")
@@ -72,8 +80,6 @@ struct RaceSheetViewModelTests {
         let viewModel = RaceSheetViewModel(model: model, date: day(0))
 
         let today = day(5)
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .init(identifier: "UTC")!
-        #expect(viewModel.minimumDate(asOf: today) == calendar.startOfDay(for: today))
+        #expect(viewModel.minimumDate(asOf: today) == utcCalendar.startOfDay(for: today))
     }
 }

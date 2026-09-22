@@ -135,6 +135,40 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(Set(viewModel.guardrailSummaries.map(\.rule)) == distinctRules)
     }
 
+    @Test("a race loaded on model.races fires PlanEvaluator's race-day TSB guardrail against this hypothetical addition")
+    func raceDayTSBFindingFiresForALoadedRace() async {
+        let (store, model) = await makeModel()
+        let plannedDate = day(400)
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = TimeZone(identifier: "UTC")!
+        // `FitnessMetrics`/`PlanFinding` days are always midnight-aligned; a race's own `date`
+        // has to match that exactly for `PlanEvaluator`'s dictionary lookup to find it (see
+        // `RaceSheetViewModel.save()`'s own doc comment) — `plannedDate` itself deliberately
+        // isn't (epoch 1_700_000_000 is 22:13:20 UTC), so the race here is seeded pre-normalized
+        // rather than at `plannedDate` directly.
+        let raceDay = utcCalendar.startOfDay(for: plannedDate)
+        let history = (1...60).map { offset in
+            Activity(
+                source: .manual, sport: .running, start: plannedDate.addingTimeInterval(Double(-offset) * 86400),
+                duration: 1800, perceivedExertion: 4
+            )
+        }
+        try? await store.upsert(history)
+        // A race on the addition's own day -- the same big long run that dips TSB into
+        // `tsbBand`'s risk band the day after also drives ATL up sharply the day of, which is
+        // more than enough to breach `minTSBOnRaceDay` (5), a far stricter bound than
+        // `minAcceptableTSB` (-30).
+        try? await store.upsert([Race(name: "Race day", date: raceDay, priority: .primary)])
+        try? await model.load(in: plannedDate.addingTimeInterval(-70 * 86400)...plannedDate)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: plannedDate)
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.longRun
+        viewModel.setParameterValue(35_000, forKey: "distance")
+        await viewModel.waitForGuardrailRecompute()
+
+        #expect(viewModel.guardrailFindings.contains { $0.rule == .raceDayTSB && $0.day == raceDay })
+    }
+
     @Test("guardrailSummaries collapses a contiguous run of the same rule into one entry with a day range")
     func guardrailSummariesCollapseContiguousRuns() async {
         let (_, model) = await makeModel()

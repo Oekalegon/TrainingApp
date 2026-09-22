@@ -343,6 +343,12 @@ public final class PlannedWorkoutSheetViewModel {
         let otherPlans = model.plans.filter {
             $0.id != plan.id && $0.date >= seriesStart && $0.date <= displayRange.upperBound
         }
+        // Races landing inside the projected window, so `PlanEvaluator`'s race-day TSB rule
+        // (MVP2-18) can actually fire against this hypothetical addition — `model.races` is
+        // whatever's already loaded, no store hit, same as `model.plans`/`model.workouts` above.
+        let relevantRaces = model.races.filter {
+            $0.date >= seriesStart && $0.date <= displayRange.upperBound
+        }
         // Built by hand rather than via `DailyLoadSeries.days(today:)`: that method's `today` is
         // simultaneously "how far the series extends" *and* the actual/planned boundary ("before
         // today, only logged activities count -- a plan with nothing logged contributes 0"). Every
@@ -377,7 +383,7 @@ public final class PlannedWorkoutSheetViewModel {
             for: projectedDays, parameters: model.parameters, seed: seed
         )
 
-        let evaluation = PlanEvaluator().evaluate(projectedMetrics, races: [], cycles: model.cycles)
+        let evaluation = PlanEvaluator().evaluate(projectedMetrics, races: relevantRaces, cycles: model.cycles)
         let displayedMetrics = projectedMetrics.filter { displayRange.contains($0.day) }
         guardrailFindings = evaluation.findings.filter { displayRange.contains($0.day) }
         guardrailDiagnostic = Self.diagnosticDescription(seeded: seed != nil, displayedMetrics: displayedMetrics)

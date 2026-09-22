@@ -63,7 +63,15 @@ public final class RaceSheetViewModel {
         guard !trimmedName.isEmpty else { return false }
         isSaving = true
         defer { isSaving = false }
-        let race = Race(name: trimmedName, date: date, priority: priority)
+        // Normalized to the athlete calendar's start of day: `date` itself can carry whatever
+        // time-of-day the sheet's `DatePicker` happened to start from (its `.date`-only
+        // `displayedComponents` only constrains what's *editable*, not what's already in the
+        // bound value) -- WeekViewModel's own day grouping tolerates that by comparing with
+        // `isDate(_:inSameDayAs:)` everywhere, but `PlanEvaluator`'s race-day TSB rule looks a
+        // race's `date` up as an exact dictionary key against `FitnessMetrics.day` (itself always
+        // a start-of-day value), so an unnormalized `date` here would silently never match and
+        // the guardrail would never fire (MVP2-18).
+        let race = Race(name: trimmedName, date: athleteCalendar.startOfDay(for: date), priority: priority)
         do {
             try await model.add(race)
             return true
