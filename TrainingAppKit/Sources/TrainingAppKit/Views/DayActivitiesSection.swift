@@ -79,14 +79,15 @@ struct DayActivitiesSection: View {
     /// Called when one of this row's Load/Fitness/Fatigue/Form pills is tapped (MVP1-45) —
     /// `WeekView` opens the fitness metrics detail view showing just that metric's explanation.
     let onSelectMetric: (TrainingMetricKind) -> Void
-    /// Whether the "add planned workout" button below is enabled — `false` for a day in the past
-    /// (MVP2-15): planning a workout for a day that's already happened doesn't make sense, but the
+    /// Whether the "add" button below is enabled — `false` for a day in the past (MVP2-15):
+    /// planning a workout or race for a day that's already happened doesn't make sense, but the
     /// button itself still shows (rather than disappearing) since a past day is also where a
     /// future "log an activity that wasn't auto-imported" entry point would belong.
     let canAddWorkout: Bool
-    /// Called when this day's "add planned workout" button is tapped (MVP2-15) — `WeekView`
-    /// presents the create-workout sheet defaulted to `date`.
-    let onAddWorkout: () -> Void
+    /// Called when this day's "add" button is tapped (MVP2-15, MVP2-17, MVP2-22) — `WeekView`
+    /// presents `AddEntrySheet` defaulted to `date`, which offers the planned-workout/race choice
+    /// itself via its own type picker rather than this button needing a dialog of its own.
+    let onAddEntry: () -> Void
 
     /// Hour + minute only — shown beside each activity card on the timeline, in the same column
     /// the weekday pill sits in above it (MVP1-41; the pill itself already carries the day).
@@ -107,14 +108,14 @@ struct DayActivitiesSection: View {
                 } else {
                     Spacer()
                 }
-                Button(action: onAddWorkout) {
+                Button(action: onAddEntry) {
                     Image(systemName: "plus.circle")
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canAddWorkout)
                 .opacity(canAddWorkout ? 1 : 0.35)
-                .accessibilityLabel("Add planned workout")
+                .accessibilityLabel("Add")
             }
 
             ForEach(activities) { activity in

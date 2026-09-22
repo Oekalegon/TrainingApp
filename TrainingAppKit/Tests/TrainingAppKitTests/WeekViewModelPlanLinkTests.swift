@@ -32,7 +32,7 @@ struct WeekViewModelPlanLinkTests {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
-            cycleStore: store, athleteStore: store
+            cycleStore: store, raceStore: store, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
         var plans: [PlannedActivity] = []
@@ -145,7 +145,7 @@ struct WeekViewModelPlanLinkTests {
         let model = TrainingModel(
             stores: StoreSet(
                 activityStore: store, planStore: store, workoutStore: store,
-                cycleStore: store, athleteStore: store
+                cycleStore: store, raceStore: store, athleteStore: store
             ),
             athlete: AthleteProfile.fixture(timeZoneIdentifier: "Pacific/Auckland")
         )
