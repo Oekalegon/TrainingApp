@@ -61,24 +61,27 @@ struct AddEntrySheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                // Deliberately outside any `Section`, matching `Form`'s own "no section" look for
-                // a single control that isn't itself a list of fields — a `Section` header/footer
-                // pair here would visually compete with `PlannedWorkoutFormFields`'/
-                // `RaceFormFields`' own section below it for no reason.
+            // The type picker sits above the `Form`, not as a row inside it -- a `Form` row
+            // renders every control (this one included) inside its own inset grouped-list
+            // background, which reads as "one more field to fill in" rather than what this
+            // actually is: a switch for which set of fields the form below is currently showing.
+            VStack(spacing: 0) {
                 Picker("Type", selection: $kind) {
                     ForEach(Kind.allCases) { kind in
                         Text(kind.rawValue).tag(kind)
                     }
                 }
                 .pickerStyle(.segmented)
-                .listRowSeparator(.hidden)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
 
-                switch kind {
-                case .plannedWorkout:
-                    PlannedWorkoutFormFields(viewModel: plannedWorkoutViewModel)
-                case .race:
-                    RaceFormFields(viewModel: raceViewModel)
+                Form {
+                    switch kind {
+                    case .plannedWorkout:
+                        PlannedWorkoutFormFields(viewModel: plannedWorkoutViewModel)
+                    case .race:
+                        RaceFormFields(viewModel: raceViewModel)
+                    }
                 }
             }
             .navigationTitle(kind == .plannedWorkout ? "Planned Workout" : "Add Race")
