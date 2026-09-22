@@ -22,7 +22,6 @@ extension IntensityCategory {
         case .high: HeartRateZone.anaerobic.color
         }
     }
-
 }
 
 extension IntensityAssessment {
@@ -38,8 +37,10 @@ extension IntensityAssessment {
 }
 
 extension IntensityAssessment {
-    /// The colour of the accent bar `ActivityCard`/`PlannedActivityCard` draw on their leading edge
-    /// (MVP2-51) — the category colour at full strength; the rest of the card stays uncoloured.
+    /// The colour of the small intensity marker `ActivityCard`/`PlannedActivityCard` draw leading
+    /// their headline row (MVP2-51) — the category colour at full strength, regardless of
+    /// `confidence`; at this marker's size a fainter fill for a low-confidence assessment wasn't
+    /// legible enough to be worth the earlier tinted-background design's opacity trick.
     var tint: Color {
         category.color
     }

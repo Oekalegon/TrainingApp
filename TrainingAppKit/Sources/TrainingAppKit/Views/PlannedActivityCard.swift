@@ -46,6 +46,10 @@ struct PlannedActivityCard: View {
                             if let intensity, !isMissed {
                                 Image(systemName: "circle.circle")
                                     .foregroundStyle(intensity.tint)
+                                    // Decorative — `accessibilityLabel` below already spells out the
+                                    // intensity; without this, the symbol's own default label would
+                                    // add a redundant "circle, circle" ahead of it.
+                                    .accessibilityHidden(true)
                             }
                         }
                         .frame(width: TimelineCardStyle.intensityMarkerWidth)

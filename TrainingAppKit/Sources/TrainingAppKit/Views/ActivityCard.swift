@@ -56,6 +56,10 @@ struct ActivityCard: View {
                         if let intensity {
                             Image(systemName: "circle.fill")
                                 .foregroundStyle(intensity.tint)
+                                // Decorative — `accessibilityValue(intensity?.accessibilityDescription)`
+                                // below already says what it means; without this, the symbol's own
+                                // default label would add a redundant "circle, filled" to the button.
+                                .accessibilityHidden(true)
                         }
                     }
                     .frame(width: TimelineCardStyle.intensityMarkerWidth)
