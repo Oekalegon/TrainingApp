@@ -29,7 +29,15 @@ struct AddEntrySheet: View {
     /// add from a day row, so it should never cost an extra tap to reach.
     @State private var kind: Kind = .plannedWorkout
     @Environment(\.dismiss) private var dismiss
-    @State private var isShowingSaveError = false
+    /// The error to show in the save-error alert, or `nil` when it isn't presented — set from the
+    /// *attempted* kind's own `saveError` right when its `save()` call resolves, rather than the
+    /// alert re-reading `kind` (which is `@State`, so it can change while the save is still in
+    /// flight — nothing here disables the picker during a save). An earlier version read
+    /// `saveError`/the alert's title as computed properties switching on live `kind`: flipping the
+    /// picker mid-save made a genuine failure on the tab that was actually saving silently
+    /// disappear, since the alert ended up checking the *other*, never-attempted view model's
+    /// `saveError` (always `nil`) instead.
+    @State private var pendingAlert: SaveErrorAlert?
 
     private var canSave: Bool {
         switch kind {
@@ -45,18 +53,26 @@ struct AddEntrySheet: View {
         }
     }
 
-    private var saveError: String? {
-        switch kind {
-        case .plannedWorkout: plannedWorkoutViewModel.saveError
-        case .race: raceViewModel.saveError
-        }
-    }
-
+    /// Runs whichever kind was selected *when this was called* (captured into `attemptedKind`
+    /// before the first `await`, immune to the picker changing underneath it) and reports the
+    /// outcome against that same kind, never whatever `kind` happens to be by the time this
+    /// resolves.
     private func save() async -> Bool {
-        switch kind {
-        case .plannedWorkout: await plannedWorkoutViewModel.save()
-        case .race: await raceViewModel.save()
+        let attemptedKind = kind
+        let saved: Bool
+        let error: String?
+        switch attemptedKind {
+        case .plannedWorkout:
+            saved = await plannedWorkoutViewModel.save()
+            error = plannedWorkoutViewModel.saveError
+        case .race:
+            saved = await raceViewModel.save()
+            error = raceViewModel.saveError
         }
+        if !saved, let error {
+            pendingAlert = SaveErrorAlert(kind: attemptedKind, message: error)
+        }
+        return saved
     }
 
     var body: some View {
@@ -78,6 +94,10 @@ struct AddEntrySheet: View {
                 // separation from it rather than the picker just being vertically centered in a
                 // uniform padding band.
                 .padding(.bottom, 20)
+                // Belt-and-suspenders alongside `save()` capturing its own `attemptedKind`: this
+                // keeps the athlete from starting to fill in the other tab while a save is
+                // genuinely still running, rather than just making that harmless if they do.
+                .disabled(isSaving)
 
                 Form {
                     switch kind {
@@ -93,7 +113,7 @@ struct AddEntrySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                // Symbol-only, matching `PlannedWorkoutSheet`/`RaceSheet`'s own toolbars.
+                // Symbol-only, matching `PlannedWorkoutSheet`'s own toolbar.
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         dismiss()
@@ -107,8 +127,6 @@ struct AddEntrySheet: View {
                         Task {
                             if await save() {
                                 dismiss()
-                            } else if saveError != nil {
-                                isShowingSaveError = true
                             }
                         }
                     } label: {
@@ -119,13 +137,34 @@ struct AddEntrySheet: View {
                 }
             }
             .alert(
-                kind == .plannedWorkout ? "Couldn't Save Workout" : "Couldn't Save Race",
-                isPresented: $isShowingSaveError, presenting: saveError
+                pendingAlert?.title ?? "Couldn't Save",
+                isPresented: Binding(
+                    get: { pendingAlert != nil },
+                    set: { if !$0 { pendingAlert = nil } }
+                ),
+                presenting: pendingAlert
             ) { _ in
                 Button("OK", role: .cancel) {}
-            } message: { message in
-                Text(message)
+            } message: { alert in
+                Text(alert.message)
             }
+        }
+    }
+}
+
+/// `AddEntrySheet.pendingAlert`'s value: which kind's save failed (for the alert's title) and the
+/// message to show, fixed at the moment `save()` resolved rather than re-derived from `kind`
+/// (which may have moved on by the time the athlete sees this).
+private struct SaveErrorAlert: Identifiable, Equatable {
+    let kind: AddEntrySheet.Kind
+    let message: String
+
+    var id: String { message }
+
+    var title: String {
+        switch kind {
+        case .plannedWorkout: "Couldn't Save Workout"
+        case .race: "Couldn't Save Race"
         }
     }
 }

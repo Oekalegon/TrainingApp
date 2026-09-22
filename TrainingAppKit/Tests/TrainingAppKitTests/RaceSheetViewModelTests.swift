@@ -82,4 +82,50 @@ struct RaceSheetViewModelTests {
         let today = day(5)
         #expect(viewModel.minimumDate(asOf: today) == utcCalendar.startOfDay(for: today))
     }
+
+    @Test("save() sets saveError and returns false when the store fails, without touching model.races")
+    func saveReportsStoreFailure() async {
+        let store = InMemoryStore()
+        let failingStores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: FailingRaceStore(), athleteStore: store
+        )
+        let model = TrainingModel(stores: failingStores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
+        let viewModel = RaceSheetViewModel(model: model, date: day(0))
+        viewModel.name = "Local 10K"
+
+        let saved = await viewModel.save()
+
+        #expect(!saved)
+        #expect(viewModel.saveError != nil)
+        #expect(model.races.isEmpty)
+    }
+
+    @Test("a second concurrent save() call is a no-op while the first is still in flight")
+    func concurrentSaveCallsDoNotDoubleSave() async {
+        let (_, model) = await makeModel()
+        let viewModel = RaceSheetViewModel(model: model, date: day(0))
+        viewModel.name = "Local 10K"
+
+        async let first = viewModel.save()
+        async let second = viewModel.save()
+        let (firstResult, secondResult) = await (first, second)
+
+        // Exactly one of the two actually saved -- both racing to `true` (or both silently
+        // dropping to `false`) would either double-persist or silently lose the save.
+        #expect(firstResult != secondResult)
+        #expect(model.races.count == 1)
+    }
+}
+
+/// A `RaceStore` whose `upsert` always throws, for exercising `RaceSheetViewModel.save()`'s error
+/// path without a real storage failure. Every other method is unused by that path, so each just
+/// returns an empty/`nil` result.
+private struct FailingRaceStore: RaceStore {
+    struct Failure: Error {}
+
+    func races(in range: ClosedRange<Date>) async throws -> [Race] { [] }
+    func race(id: UUID) async throws -> Race? { nil }
+    func upsert(_ races: [Race]) async throws { throw Failure() }
+    func deleteRace(id: UUID) async throws {}
 }
