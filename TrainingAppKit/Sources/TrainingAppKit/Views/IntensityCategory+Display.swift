@@ -37,16 +37,11 @@ extension IntensityAssessment {
 }
 
 extension IntensityAssessment {
-    /// A completed card's background tint (MVP2-43): the category colour, subdued so the card's text
-    /// stays legible in light and dark mode. Fainter again when the assessment is low-confidence, so
-    /// a guess doesn't read as firmly as a well-supported result.
+    /// The colour of the small intensity marker `ActivityCard`/`PlannedActivityCard` draw leading
+    /// their headline row (MVP2-51) — the category colour at full strength, regardless of
+    /// `confidence`; at this marker's size a fainter fill for a low-confidence assessment wasn't
+    /// legible enough to be worth the earlier tinted-background design's opacity trick.
     var tint: Color {
-        category.color.opacity(confidence == .low ? 0.08 : 0.16)
-    }
-
-    /// A planned card's hatch-stripe colour: the same hue as ``tint``, stronger because thin
-    /// stripes over a plain fill cover far less area than a full background does.
-    var hatchTint: Color {
-        category.color.opacity(confidence == .low ? 0.14 : 0.28)
+        category.color
     }
 }

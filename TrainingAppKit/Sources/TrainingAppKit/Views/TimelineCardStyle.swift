@@ -15,6 +15,14 @@ enum TimelineCardStyle {
     /// the icon's own measured size.
     static let iconWidth: CGFloat = 22
     static let iconSpacing: CGFloat = 8
+    /// Width reserved for the intensity marker (MVP2-51) — a small coloured circle leading the
+    /// headline row, vertically aligned with the sport icon/name rather than spanning the card's
+    /// full height. Reserved unconditionally, whether or not a given card has an intensity to show,
+    /// so the sport icon lands at the same x on every card.
+    static let intensityMarkerWidth: CGFloat = 16
+    /// Where the second line (and, on `ActivityCard`, the linked plan's expected values) indents to
+    /// — past the intensity marker slot and the sport icon, not tied to either's actual glyph size.
+    static let secondLineIndent: CGFloat = intensityMarkerWidth + iconSpacing + iconWidth + iconSpacing
 
     static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
     static let measurementFormat = Measurement<UnitLength>.FormatStyle.measurement(width: .abbreviated)
