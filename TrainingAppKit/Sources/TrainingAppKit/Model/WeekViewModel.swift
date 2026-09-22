@@ -726,6 +726,13 @@ public final class WeekViewModel {
         PlannedWorkoutSheetViewModel(model: model, date: date)
     }
 
+    /// The view model for the "Add Race" sheet (MVP2-17), opened from a day row's add affordance
+    /// alongside ``plannedWorkoutSheetViewModel(date:)`` — `date` defaults the sheet to that day,
+    /// still editable inside it.
+    public func raceSheetViewModel(date: Date) -> RaceSheetViewModel {
+        RaceSheetViewModel(model: model, date: date)
+    }
+
     /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
     public func plannedWorkoutDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
         PlannedWorkoutDetailViewModel(model: model, plan: plan)
