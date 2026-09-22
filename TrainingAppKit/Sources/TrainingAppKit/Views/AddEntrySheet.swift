@@ -73,7 +73,11 @@ struct AddEntrySheet: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.top, 8)
+                // Wider than the matching top inset, so the gap down to the list reads as
+                // separation from it rather than the picker just being vertically centered in a
+                // uniform padding band.
+                .padding(.bottom, 20)
 
                 Form {
                     switch kind {
