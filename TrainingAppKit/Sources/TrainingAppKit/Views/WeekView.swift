@@ -59,15 +59,11 @@ public struct WeekView: View {
     /// The planned activity whose detail sheet is presented (MVP2-38), or `nil` when none is —
     /// `PlannedActivity` is `Identifiable`, so `.sheet(item:)` drives it like `selectedActivity`.
     @State private var selectedPlan: PlannedActivity?
-    /// The day the "Create Planned Workout" sheet (MVP2-15) was opened for, or `nil` when it isn't
-    /// presented — set when a day row's own add-choice dialog (owned by `DayActivitiesSection`,
-    /// so it anchors its popover to the tapped button rather than to this screen) picks "Planned
-    /// Workout" — wrapped in `DayAddDate` (`Date` alone isn't `Identifiable`) so `.sheet(item:)`
-    /// can drive it the same way `selectedActivity` drives the activity sheet.
-    @State private var addingWorkoutDate: DayAddDate?
-    /// The day the "Add Race" sheet (MVP2-17/MVP2-22) was opened for, or `nil` when it isn't
-    /// presented — set when a day row's add-choice dialog picks "Race".
-    @State private var addingRaceDate: DayAddDate?
+    /// The day a day row's "add" button (MVP2-15, MVP2-17, MVP2-22) was tapped for, or `nil` when
+    /// `AddEntrySheet` isn't presented — wrapped in `DayAddDate` (`Date` alone isn't
+    /// `Identifiable`) so `.sheet(item:)` can drive it the same way `selectedActivity` drives the
+    /// activity sheet.
+    @State private var addingEntryDate: DayAddDate?
     /// Horizontal offset applied to the previous/current/next page `HStack`, on top of its base
     /// "current page centered" position — 0 while idle, tracking the finger during a drag, then
     /// animated to a full page width (commit) or back to 0 (cancel) once the drag ends. Nothing
@@ -239,11 +235,11 @@ public struct WeekView: View {
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
             }
-            .sheet(item: $addingWorkoutDate) { workoutDate in
-                PlannedWorkoutSheet(viewModel: viewModel.plannedWorkoutSheetViewModel(date: workoutDate.date))
-            }
-            .sheet(item: $addingRaceDate) { raceDate in
-                RaceSheet(viewModel: viewModel.raceSheetViewModel(date: raceDate.date))
+            .sheet(item: $addingEntryDate) { entryDate in
+                AddEntrySheet(
+                    plannedWorkoutViewModel: viewModel.plannedWorkoutSheetViewModel(date: entryDate.date),
+                    raceViewModel: viewModel.raceSheetViewModel(date: entryDate.date)
+                )
             }
             // A navigation push onto this same `NavigationStack`, not a `.sheet` -- these are
             // full detail screens (chart + explanation + zone card), not a quick modal glance, so
@@ -541,8 +537,7 @@ public struct WeekView: View {
                                 metricsInfoPresentation = MetricsInfoPresentation(kind: kind, subject: .day(day))
                             },
                             canAddWorkout: !viewModel.isPast(day),
-                            onAddWorkout: { addingWorkoutDate = DayAddDate(date: day) },
-                            onAddRace: { addingRaceDate = DayAddDate(date: day) }
+                            onAddEntry: { addingEntryDate = DayAddDate(date: day) }
                         )
                     }
                     // Continues the timeline past the last day's own connector (which stops at
@@ -694,9 +689,8 @@ private struct MetricsInfoPresentation: Identifiable, Hashable {
     let subject: MetricDetailSubject
 }
 
-/// `WeekView.addingWorkoutDate`/`addingRaceDate`'s value (MVP2-15, MVP2-22) — just wraps a `Date`
-/// so `.sheet(item:)` can drive presentation the way it does for
-/// `selectedActivity`/`metricsInfoPresentation`.
+/// `WeekView.addingEntryDate`'s value (MVP2-15, MVP2-22) — just wraps a `Date` so `.sheet(item:)`
+/// can drive presentation the way it does for `selectedActivity`/`metricsInfoPresentation`.
 private struct DayAddDate: Identifiable, Hashable {
     let id = UUID()
     let date: Date

@@ -84,22 +84,10 @@ struct DayActivitiesSection: View {
     /// button itself still shows (rather than disappearing) since a past day is also where a
     /// future "log an activity that wasn't auto-imported" entry point would belong.
     let canAddWorkout: Bool
-    /// Called when this day's add-choice dialog picks "Planned Workout" (MVP2-15) — `WeekView`
-    /// presents the create-workout sheet defaulted to `date`.
-    let onAddWorkout: () -> Void
-    /// Called when this day's add-choice dialog picks "Race" (MVP2-17, MVP2-22) — `WeekView`
-    /// presents the Add Race sheet defaulted to `date`.
-    let onAddRace: () -> Void
-    /// Whether this day's add-choice dialog is showing — local, transient `@State` the "+" button
-    /// owns itself, unlike the `WeekView`-owned state everything else here reports through
-    /// closures. `.confirmationDialog` needs to be attached to the view it should visually anchor
-    /// to (on iPadOS/macOS it renders as a popover pointing at that view); attaching it up at
-    /// `WeekView`'s `NavigationStack` root instead — which spans the whole screen — left the
-    /// popover anchored to an arbitrary point rather than this button. A row recreated mid-choice
-    /// (a week swipe) just closes the dialog, same as any other dismissal — the class doc's
-    /// "deliberately holds no local `@State`" caution is about state meant to persist across that
-    /// recreation, which this isn't.
-    @State private var isShowingAddChoice = false
+    /// Called when this day's "add" button is tapped (MVP2-15, MVP2-17, MVP2-22) — `WeekView`
+    /// presents `AddEntrySheet` defaulted to `date`, which offers the planned-workout/race choice
+    /// itself via its own type picker rather than this button needing a dialog of its own.
+    let onAddEntry: () -> Void
 
     /// Hour + minute only — shown beside each activity card on the timeline, in the same column
     /// the weekday pill sits in above it (MVP1-41; the pill itself already carries the day).
@@ -120,9 +108,7 @@ struct DayActivitiesSection: View {
                 } else {
                     Spacer()
                 }
-                Button {
-                    isShowingAddChoice = true
-                } label: {
+                Button(action: onAddEntry) {
                     Image(systemName: "plus.circle")
                         .foregroundStyle(.secondary)
                 }
@@ -130,11 +116,6 @@ struct DayActivitiesSection: View {
                 .disabled(!canAddWorkout)
                 .opacity(canAddWorkout ? 1 : 0.35)
                 .accessibilityLabel("Add")
-                .confirmationDialog("Add to This Day", isPresented: $isShowingAddChoice) {
-                    Button("Planned Workout", action: onAddWorkout)
-                    Button("Race", action: onAddRace)
-                    Button("Cancel", role: .cancel) {}
-                }
             }
 
             ForEach(activities) { activity in

@@ -40,138 +40,10 @@ struct PlannedWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingSaveError = false
 
-    private static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
-    private static let dayRangeFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
-
     var body: some View {
         NavigationStack {
             Form {
-                Section(viewModel.isEditing ? "Workout" : "Template") {
-                    if viewModel.isEditing {
-                        // Read-only: the workout's template/parameters aren't stored, and its
-                        // definition may be shared with other plans (MVP2-39).
-                        LabeledContent("Name", value: viewModel.editedWorkoutName ?? "Planned workout")
-                        if viewModel.editedWorkoutName != nil, !viewModel.canEditParameters {
-                            Text("This workout's parameters can't be changed — it wasn't created from a template.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        Picker("Template", selection: $viewModel.selectedTemplate) {
-                            Text("Select a template").tag(nil as WorkoutTemplate?)
-                            ForEach(viewModel.templates) { template in
-                                Text(template.name).tag(template as WorkoutTemplate?)
-                            }
-                        }
-                        TextField("Name", text: $viewModel.workoutName)
-                    }
-                    // Lower-bounded so this can't be used to route around the same past-date rule
-                    // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
-                    // sheet opened for today could still be scrolled back to yesterday from here.
-                    DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate()..., displayedComponents: .date)
-                }
-
-                if viewModel.isEditing, !viewModel.editableParameters.isEmpty {
-                    Section("Parameters") {
-                        ForEach(viewModel.editableParameters) { parameter in
-                            ParameterRow(
-                                parameter: parameter,
-                                value: Binding(
-                                    get: { viewModel.parameterValues[parameter.key] ?? parameter.defaultValue },
-                                    set: { viewModel.setParameterValue($0, forKey: parameter.key) }
-                                )
-                            )
-                        }
-                    }
-                }
-
-                if viewModel.isEditing {
-                    Section("Expected Load") {
-                        if let expectedLoad = viewModel.expectedLoad {
-                            HStack {
-                                Image(systemName: TrainingMetricKind.load.icon)
-                                Text("\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP")
-                            }
-                        }
-                        Toggle("Override estimate", isOn: Binding(
-                            get: { viewModel.loadOverride != nil },
-                            set: { viewModel.loadOverride = $0 ? (viewModel.expectedLoad?.value.rounded() ?? 0) : nil }
-                        ))
-                        if viewModel.loadOverride != nil {
-                            TextField("TRIMP", value: $viewModel.loadOverride, format: .number.precision(.fractionLength(0)))
-                                #if os(iOS)
-                                .keyboardType(.numberPad)
-                                #endif
-                        }
-                    }
-                }
-
-                if let selectedTemplate = viewModel.selectedTemplate {
-                    if !selectedTemplate.parameters.isEmpty {
-                        Section("Parameters") {
-                            ForEach(selectedTemplate.parameters) { parameter in
-                                ParameterRow(
-                                    parameter: parameter,
-                                    value: Binding(
-                                        get: { viewModel.parameterValues[parameter.key] ?? parameter.defaultValue },
-                                        set: { viewModel.setParameterValue($0, forKey: parameter.key) }
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    Section("Expected Load") {
-                        if let expectedLoad = viewModel.expectedLoad {
-                            HStack {
-                                Image(systemName: TrainingMetricKind.load.icon)
-                                Text("\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP")
-                            }
-                        } else {
-                            Text("Not available")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                // Shown in both modes (in edit mode there's no selected template, only the edited
-                // plan's own projection).
-                if viewModel.isEditing || viewModel.selectedTemplate != nil {
-                    let guardrailSummaries = viewModel.guardrailSummaries
-                    if !guardrailSummaries.isEmpty {
-                        Section("Guardrail Warnings") {
-                            ForEach(guardrailSummaries) { summary in
-                                Label {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(summary.rule.displayName)
-                                        if summary.dayCount > 1 {
-                                            Text("\(summary.firstDay.formatted(Self.dayRangeFormat)) – \(summary.lastDay.formatted(Self.dayRangeFormat)) · \(summary.dayCount) days")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        } else {
-                                            Text(summary.firstDay.formatted(Self.dayRangeFormat))
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                } icon: {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                }
-                                .foregroundStyle(summary.severity.tintColor)
-                            }
-                        }
-                    }
-
-                    if let guardrailDiagnostic = viewModel.guardrailDiagnostic {
-                        Section {
-                            DisclosureGroup("Projected CTL/ATL/TSB/ratio by day") {
-                                Text(guardrailDiagnostic)
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
+                PlannedWorkoutFormFields(viewModel: viewModel)
             }
             .navigationTitle("Planned Workout")
             #if os(iOS)
@@ -208,6 +80,147 @@ struct PlannedWorkoutSheet: View {
                 Button("OK", role: .cancel) {}
             } message: { message in
                 Text(message)
+            }
+        }
+    }
+}
+
+/// The template/parameters/expected-load/guardrail `Form` sections `PlannedWorkoutSheet` shows —
+/// pulled out so `AddEntrySheet` (MVP2-22) can embed the same fields below its planned-workout/
+/// race type picker, inside its own `Form`/toolbar/save flow, without duplicating this content.
+/// `PlannedWorkoutSheet` itself (used standalone for MVP2-39's edit mode, which has no type
+/// picker) still owns the `Form`, title, toolbar, and save-error alert around this.
+struct PlannedWorkoutFormFields: View {
+    @Bindable var viewModel: PlannedWorkoutSheetViewModel
+
+    fileprivate static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
+    fileprivate static let dayRangeFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
+
+    var body: some View {
+        Section(viewModel.isEditing ? "Workout" : "Template") {
+            if viewModel.isEditing {
+                // Read-only: the workout's template/parameters aren't stored, and its
+                // definition may be shared with other plans (MVP2-39).
+                LabeledContent("Name", value: viewModel.editedWorkoutName ?? "Planned workout")
+                if viewModel.editedWorkoutName != nil, !viewModel.canEditParameters {
+                    Text("This workout's parameters can't be changed — it wasn't created from a template.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Picker("Template", selection: $viewModel.selectedTemplate) {
+                    Text("Select a template").tag(nil as WorkoutTemplate?)
+                    ForEach(viewModel.templates) { template in
+                        Text(template.name).tag(template as WorkoutTemplate?)
+                    }
+                }
+                TextField("Name", text: $viewModel.workoutName)
+            }
+            // Lower-bounded so this can't be used to route around the same past-date rule
+            // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
+            // sheet opened for today could still be scrolled back to yesterday from here.
+            DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate()..., displayedComponents: .date)
+        }
+
+        if viewModel.isEditing, !viewModel.editableParameters.isEmpty {
+            Section("Parameters") {
+                ForEach(viewModel.editableParameters) { parameter in
+                    ParameterRow(
+                        parameter: parameter,
+                        value: Binding(
+                            get: { viewModel.parameterValues[parameter.key] ?? parameter.defaultValue },
+                            set: { viewModel.setParameterValue($0, forKey: parameter.key) }
+                        )
+                    )
+                }
+            }
+        }
+
+        if viewModel.isEditing {
+            Section("Expected Load") {
+                if let expectedLoad = viewModel.expectedLoad {
+                    HStack {
+                        Image(systemName: TrainingMetricKind.load.icon)
+                        Text("\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP")
+                    }
+                }
+                Toggle("Override estimate", isOn: Binding(
+                    get: { viewModel.loadOverride != nil },
+                    set: { viewModel.loadOverride = $0 ? (viewModel.expectedLoad?.value.rounded() ?? 0) : nil }
+                ))
+                if viewModel.loadOverride != nil {
+                    TextField("TRIMP", value: $viewModel.loadOverride, format: .number.precision(.fractionLength(0)))
+                        #if os(iOS)
+                        .keyboardType(.numberPad)
+                        #endif
+                }
+            }
+        }
+
+        if let selectedTemplate = viewModel.selectedTemplate {
+            if !selectedTemplate.parameters.isEmpty {
+                Section("Parameters") {
+                    ForEach(selectedTemplate.parameters) { parameter in
+                        ParameterRow(
+                            parameter: parameter,
+                            value: Binding(
+                                get: { viewModel.parameterValues[parameter.key] ?? parameter.defaultValue },
+                                set: { viewModel.setParameterValue($0, forKey: parameter.key) }
+                            )
+                        )
+                    }
+                }
+            }
+
+            Section("Expected Load") {
+                if let expectedLoad = viewModel.expectedLoad {
+                    HStack {
+                        Image(systemName: TrainingMetricKind.load.icon)
+                        Text("\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP")
+                    }
+                } else {
+                    Text("Not available")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+
+        // Shown in both modes (in edit mode there's no selected template, only the edited
+        // plan's own projection).
+        if viewModel.isEditing || viewModel.selectedTemplate != nil {
+            let guardrailSummaries = viewModel.guardrailSummaries
+            if !guardrailSummaries.isEmpty {
+                Section("Guardrail Warnings") {
+                    ForEach(guardrailSummaries) { summary in
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(summary.rule.displayName)
+                                if summary.dayCount > 1 {
+                                    Text("\(summary.firstDay.formatted(Self.dayRangeFormat)) – \(summary.lastDay.formatted(Self.dayRangeFormat)) · \(summary.dayCount) days")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text(summary.firstDay.formatted(Self.dayRangeFormat))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(summary.severity.tintColor)
+                    }
+                }
+            }
+
+            if let guardrailDiagnostic = viewModel.guardrailDiagnostic {
+                Section {
+                    DisclosureGroup("Projected CTL/ATL/TSB/ratio by day") {
+                        Text(guardrailDiagnostic)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }
