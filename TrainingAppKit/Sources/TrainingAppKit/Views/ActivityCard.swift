@@ -39,7 +39,8 @@ struct ActivityCard: View {
     private var trainingLoad: Double? { content.trainingLoad }
     /// `nil` when the activity isn't part of any overlap worth flagging, in which case no badge shows.
     private var overlapWarning: OverlapRecommendation? { content.overlapWarning }
-    /// Shown as a subdued background tint; `nil` leaves the plain card.
+    /// Shown as a small coloured circle leading the headline row (MVP2-51); `nil` leaves that slot
+    /// empty.
     private var intensity: IntensityAssessment? { content.intensity }
     /// The linked plan's expected values: its TRIMP follows the actual TRIMP after a slash, and its
     /// duration and distance sit in a tertiary colour directly below the actual ones.
@@ -49,10 +50,20 @@ struct ActivityCard: View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: TimelineCardStyle.iconSpacing) {
+                    // Reserves `intensityMarkerWidth` whether or not `intensity` is set, so the
+                    // sport icon lands at the same x on every card.
+                    Group {
+                        if let intensity {
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(intensity.tint)
+                        }
+                    }
+                    .frame(width: TimelineCardStyle.intensityMarkerWidth)
                     Image(systemName: activity.sport.symbolName)
                         .foregroundStyle(.primary)
                         .frame(width: TimelineCardStyle.iconWidth)
                     Text(activity.sport.displayName)
+                        .bold()
                         .foregroundStyle(.primary)
                     if let overlapWarning {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -78,28 +89,22 @@ struct ActivityCard: View {
                     secondLineText
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .padding(.leading, TimelineCardStyle.iconWidth + TimelineCardStyle.iconSpacing)
+                        .padding(.leading, TimelineCardStyle.secondLineIndent)
                     if let plannedExtentText {
                         plannedExtentText
                             .font(.caption.monospacedDigit())
-                            .padding(.leading, TimelineCardStyle.iconWidth + TimelineCardStyle.iconSpacing)
+                            .padding(.leading, TimelineCardStyle.secondLineIndent)
                             .accessibilityLabel(plannedExtentAccessibilityLabel)
                     }
                 }
             }
             .padding(TimelineCardStyle.contentPadding)
-            .background {
-                RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
-                    .fill(TimelineCardStyle.background)
-                if let intensity {
-                    RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
-                        .fill(intensity.tint)
-                }
-            }
+            .background(TimelineCardStyle.background)
+            .clipShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
-        // The tint is visual only; say what it means.
+        // The marker is visual only; say what it means.
         .accessibilityValue(intensity?.accessibilityDescription ?? "")
     }
 

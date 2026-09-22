@@ -22,6 +22,7 @@ extension IntensityCategory {
         case .high: HeartRateZone.anaerobic.color
         }
     }
+
 }
 
 extension IntensityAssessment {
@@ -37,16 +38,9 @@ extension IntensityAssessment {
 }
 
 extension IntensityAssessment {
-    /// A completed card's background tint (MVP2-43): the category colour, subdued so the card's text
-    /// stays legible in light and dark mode. Fainter again when the assessment is low-confidence, so
-    /// a guess doesn't read as firmly as a well-supported result.
+    /// The colour of the accent bar `ActivityCard`/`PlannedActivityCard` draw on their leading edge
+    /// (MVP2-51) — the category colour at full strength; the rest of the card stays uncoloured.
     var tint: Color {
-        category.color.opacity(confidence == .low ? 0.08 : 0.16)
-    }
-
-    /// A planned card's hatch-stripe colour: the same hue as ``tint``, stronger because thin
-    /// stripes over a plain fill cover far less area than a full background does.
-    var hatchTint: Color {
-        category.color.opacity(confidence == .low ? 0.14 : 0.28)
+        category.color
     }
 }
