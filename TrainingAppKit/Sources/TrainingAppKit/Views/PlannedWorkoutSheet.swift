@@ -97,7 +97,11 @@ struct PlannedWorkoutFormFields: View {
     fileprivate static let dayRangeFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
 
     var body: some View {
-        Section(viewModel.isEditing ? "Workout" : "Template") {
+        // "Workout" in both modes: the section holds Name/Date (and, in create mode, the
+        // template picker) throughout -- it isn't just about picking a template, which "Template"
+        // used to say back when that field was the whole section (MVP2-15), before Name/Date
+        // joined it.
+        Section("Workout") {
             if viewModel.isEditing {
                 // Read-only: the workout's template/parameters aren't stored, and its
                 // definition may be shared with other plans (MVP2-39).
