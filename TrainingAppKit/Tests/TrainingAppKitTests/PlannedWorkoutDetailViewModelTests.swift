@@ -14,7 +14,7 @@ struct PlannedWorkoutDetailViewModelTests {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
-            cycleStore: store, athleteStore: store
+            cycleStore: store, raceStore: store, athleteStore: store
         )
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         try await store.save(athlete)
