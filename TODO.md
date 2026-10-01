@@ -87,6 +87,10 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 - [ ] iPad layout
 - [ ] watchOS companion
 
+## Docs & tooling
+
+- [ ] Fix the 38 existing TrainingKit DocC warnings (2026-10-01: TrainingCore 16, TrainingPersistence 10, TrainingTools 10, TrainingHealthKit 1, TrainingWorkoutKit 1). Most are ``links`` to symbols in another target; replace them with code voice. Then switch `trainingkit-pr-review` to `--warnings-as-errors`, and consider adding that check to CI.
+
 ---
 
 ## Done
