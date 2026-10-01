@@ -4,7 +4,7 @@ Temporary todo list for TrainingApp and TrainingKit while the todo database is u
 It was rebuilt on 2026-10-01 from git history, `TrainingKit/docs/roadmap.md` and the design docs, so the titles are paraphrased.
 
 To mark an item done, change `[ ]` to `[x]` and add the date or PR, e.g. `(done 2026-10-03, #66)`.
-New todos take the next free ID in their project. Items marked `MVP2-?` had no ID that could be recovered.
+New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP2-100). Items marked `MVP2-?` had no ID that could be recovered.
 
 ---
 
@@ -24,6 +24,10 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
   - On yes, append a `HeartRateZoneSettings` entry effective from that activity's date, tagged as measured in a workout and linked to the activity, then recompute from that date.
   - Only ever **raises** the value (the real max may be higher still).
   - One-time scan of the last ~12 months for the best existing peak.
+- [ ] **MVP2-101** Close the athlete-update race left by MVP2-56 (TrainingKit#65 review).
+  - `TrainingModel.applyMaxHeartRate` runs in TrainingKit's import queue, but the app's HealthKit merge (`TrainingAppEnvironment.refreshAthleteProfile`) reads, merges and saves `model.athlete` outside it.
+  - A pull-to-refresh landing while a max HR update saves can drop one of the two changes: the model keeps whichever assignment came last, and the store keeps whichever save came last.
+  - Fix: give TrainingKit a public queued athlete update, e.g. `TrainingModel.updateAthlete(_ transform: (AthleteProfile) -> AthleteProfile, asOf:)` running in `runQueued`, which computes from the current athlete, saves, assigns and recomputes. Route the HealthKit merge and `applyMaxHeartRate` through it, and add a test that interleaves the two.
 - [ ] **MVP2-55** Register planned workouts for the coming days in Apple Fitness, so each structured workout is available on the Watch on the day it's due, ideally first in the list.
   - Today a workout is scheduled only once, when its plan is saved (MVP2-15/39), through `WorkoutKitBridge.schedule`. Its doc says callers should schedule lazily within the ±7-day window the Watch shows, but nothing does that yet.
   - Needed: a rolling sync, on launch or foreground, that schedules plans in the window, keeps within `WorkoutScheduler`'s scheduled-workout limit, and unschedules entries for plans that moved or were deleted.
@@ -38,6 +42,7 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 - [ ] **MVP2-?** Refine a workout's TRIMP estimate from the median actual TRIMP of its linked activities
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
 - [ ] **MVP2-?** Race marker on the calendar that distinguishes primary from secondary/tertiary races
+- [ ] **MVP2-100** Daily calendar JSON export for a chosen period (e.g. the season plan). One entry per day with every completed and planned activity (missed ones left out): TRIMP (actual or expected), workout type, name, (expected) duration and distance. Each day also carries the fitness metrics (CTL, ATL, TSB, monotony, strain, ...).
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
 ## MVP3: Calibration
