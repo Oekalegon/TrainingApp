@@ -94,6 +94,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 
 ## Docs & tooling
 
+- [ ] Switch CI to Xcode 27 once GitHub offers a `macos-27` runner image (`runs-on: macos-27` in both repos' `.github/workflows/swift.yml`). Until then CI builds with Xcode 26.6 (Swift 6.3) while development uses Xcode 27 (Swift 6.4), so code can build locally and fail in CI. That's what happened to TrainingKit#67: a local constant named after the method its initializer called. Until the switch, check TrainingKit changes against Xcode 26.6 before pushing.
 - [ ] Fix the 38 existing TrainingKit DocC warnings (2026-10-01: TrainingCore 16, TrainingPersistence 10, TrainingTools 10, TrainingHealthKit 1, TrainingWorkoutKit 1). Most are ``links`` to symbols in another target; replace them with code voice. Then switch `trainingkit-pr-review` to `--warnings-as-errors`, and consider adding that check to CI.
 
 ---
