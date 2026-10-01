@@ -1,7 +1,7 @@
 import Foundation
 import TrainingCore
 
-/// Drives the "Export Calendar" sheet (MVP2-100): pick a period, write it as JSON via
+/// Drives the week view's "Export Calendar" sheet (MVP2-100): pick a period, write it as JSON via
 /// `TrainingModel.calendarExport(from:through:templates:asOf:)`, then hand the file to the share
 /// sheet.
 ///

@@ -771,7 +771,8 @@ public final class WeekViewModel {
         RaceSheetViewModel(model: model, date: date)
     }
 
-    /// The view model for the Athlete tab's "Export Calendar" sheet (MVP2-100).
+    /// The view model for the week view's "Export Calendar" sheet (MVP2-100), opened from the
+    /// toolbar's share button.
     public func calendarExportViewModel() -> CalendarExportViewModel {
         CalendarExportViewModel(model: model)
     }

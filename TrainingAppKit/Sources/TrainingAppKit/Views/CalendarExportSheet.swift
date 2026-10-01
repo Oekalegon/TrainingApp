@@ -1,8 +1,9 @@
 import SwiftUI
 import TrainingCore
 
-/// The Athlete tab's "Export Calendar" sheet (MVP2-100): choose a period, create the JSON export,
-/// then share it (Files, AirDrop, Mail and so on) through the system share sheet.
+/// The "Export Calendar" sheet (MVP2-100), opened from the week view toolbar's share button:
+/// choose a period, create the JSON export, then share it (Files, AirDrop, Mail and so on) through
+/// the system share sheet.
 struct CalendarExportSheet: View {
     @State var viewModel: CalendarExportViewModel
     @Environment(\.dismiss) private var dismiss

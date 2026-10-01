@@ -274,6 +274,16 @@ remember or restore which tab was last active.
   Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date. No
   separate "explain the metrics" entry point — that's reachable only per-metric, by tapping its
   own pill in the day list (see above).
+- **Export Calendar** (MVP2-100): a share button (`square.and.arrow.up`) in the toolbar opens
+  `CalendarExportSheet`.
+  - **Period:** From and To date pickers, plus presets: "Until <race>" when a primary race is
+    planned (listed first, since a season plan is the main use), "Next 4 Weeks" and "Last 12 Weeks".
+  - **Create Export** calls `TrainingModel.calendarExport(from:through:templates:asOf:)` (format in
+    TrainingKit's design doc §9.4) and writes `Training Calendar <first> to <last>.json` to the
+    temporary directory. The button then becomes a `ShareLink` (Files, AirDrop, Mail…). Changing a
+    date discards the file, and a result for a period changed mid-export is dropped.
+  - **Reads the stores directly,** so it doesn't disturb the loaded weeks.
+    `CalendarExportViewModel` holds the logic and is tested.
 - **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
@@ -425,17 +435,6 @@ import time and persisted, not recomputed on read, so an app update that fixes a
 `HKWorkoutActivityType` that used to fall back to `Sport.other`) doesn't retroactively fix
 activities imported before the fix. This is a recovery action, not a settings toggle — the screen
 otherwise stays read-only as described above.
-
-**Export Calendar…** (MVP2-100): a row in the "Calendar" section opens `CalendarExportSheet`.
-- **Period:** From and To date pickers, plus presets: "Next 4 Weeks", "Last 12 Weeks", and "Until
-  <race>" when a primary race is planned. The race preset is first, since a season plan is the main
-  use.
-- **Create Export** calls `TrainingModel.calendarExport(from:through:templates:asOf:)` (format in
-  TrainingKit's design doc §9.4) and writes `Training Calendar <first> to <last>.json` to the
-  temporary directory. The button then becomes a `ShareLink` (Files, AirDrop, Mail…). Changing a
-  date discards the file, and a result for a period changed mid-export is dropped.
-- **Reads the stores directly,** so it doesn't disturb the week view's loaded weeks.
-  `CalendarExportViewModel` holds the logic and is tested.
 
 ---
 
