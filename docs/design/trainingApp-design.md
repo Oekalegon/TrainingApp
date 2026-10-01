@@ -494,7 +494,9 @@ accepted as-is between explicit triggers.
 Each import also re-reads the athlete's biometrics from HealthKit and merges them into the profile
 (`AthleteProfile.merging(_:asOf:)`): resting HR, sex, and a Tanaka max-HR estimate from date of
 birth. A max measured in a workout (MVP2-56) is a floor on the real max, so the merge never
-replaces it with a lower formula estimate. A *higher* estimate does still replace it.
+replaces it with a lower formula estimate. A *higher* estimate does still replace it. The merge
+goes through `TrainingModel.updateAthlete(asOf:_:)` (MVP2-101), so it runs in TrainingKit's
+import queue on the current profile and can't race with an accepted max-HR update.
 
 Pull-to-refresh on the week view is the one place MVP 1 goes further than a passive reload: it
 calls `TrainingModel.importActivities(from:)` (§3.3) to pull anything new from HealthKit, then
