@@ -26,7 +26,10 @@ struct AthleteView: View {
     let loadJoinedComponents: (Activity) async -> [Activity]
     let onLinkPlan: (Activity, UUID) async -> Bool
     let onUnlinkPlan: (Activity) async -> Bool
+    /// Makes a fresh view model each time the export sheet opens (MVP2-100).
+    let calendarExportViewModel: () -> CalendarExportViewModel
     @State private var isConfirmingResync = false
+    @State private var isShowingCalendarExport = false
     @State private var isConfirmingDeduplicate = false
     /// Whether the overlap-review sheet (MVP1-67), opened by tapping ``OverlapWarningBanner``, is
     /// presented.
@@ -122,6 +125,9 @@ struct AthleteView: View {
                 Section("Calendar") {
                     LabeledContent("Week Starts On", value: viewModel.athlete.weekStartsOn.displayName)
                     LabeledContent("Time Zone", value: viewModel.athlete.timeZone.identifier)
+                    Button("Export Calendar…", systemImage: "square.and.arrow.up") {
+                        isShowingCalendarExport = true
+                    }
                 }
 
                 Section {
@@ -177,6 +183,9 @@ struct AthleteView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Permanently removes duplicate activities left over from an older version of the app. This can't be undone.")
+            }
+            .sheet(isPresented: $isShowingCalendarExport) {
+                CalendarExportSheet(viewModel: calendarExportViewModel())
             }
             .sheet(item: $selectedActivity) { activity in
                 // Its own NavigationStack: a sheet doesn't inherit the presenting view's

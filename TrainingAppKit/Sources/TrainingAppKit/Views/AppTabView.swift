@@ -43,7 +43,8 @@ public struct AppTabView: View {
                 onUnjoinActivity: { await viewModel.unjoinActivity($0) },
                 loadJoinedComponents: { await viewModel.joinedComponents(of: $0) },
                 onLinkPlan: { await viewModel.linkActivity($0, toPlan: $1) },
-                onUnlinkPlan: { await viewModel.unlinkActivity($0) }
+                onUnlinkPlan: { await viewModel.unlinkActivity($0) },
+                calendarExportViewModel: { viewModel.calendarExportViewModel() }
             )
             .tabItem {
                 Label("Athlete", systemImage: "person.circle")

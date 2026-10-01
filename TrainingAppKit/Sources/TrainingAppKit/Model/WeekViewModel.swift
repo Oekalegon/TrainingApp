@@ -771,6 +771,11 @@ public final class WeekViewModel {
         RaceSheetViewModel(model: model, date: date)
     }
 
+    /// The view model for the Athlete tab's "Export Calendar" sheet (MVP2-100).
+    public func calendarExportViewModel() -> CalendarExportViewModel {
+        CalendarExportViewModel(model: model)
+    }
+
     /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
     public func plannedWorkoutDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
         PlannedWorkoutDetailViewModel(model: model, plan: plan)

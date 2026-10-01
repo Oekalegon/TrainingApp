@@ -426,6 +426,17 @@ import time and persisted, not recomputed on read, so an app update that fixes a
 activities imported before the fix. This is a recovery action, not a settings toggle — the screen
 otherwise stays read-only as described above.
 
+**Export Calendar…** (MVP2-100): a row in the "Calendar" section opens `CalendarExportSheet`.
+- **Period:** From and To date pickers, plus presets: "Next 4 Weeks", "Last 12 Weeks", and "Until
+  <race>" when a primary race is planned. The race preset is first, since a season plan is the main
+  use.
+- **Create Export** calls `TrainingModel.calendarExport(from:through:templates:asOf:)` (format in
+  TrainingKit's design doc §9.4) and writes `Training Calendar <first> to <last>.json` to the
+  temporary directory. The button then becomes a `ShareLink` (Files, AirDrop, Mail…). Changing a
+  date discards the file, and a result for a period changed mid-export is dropped.
+- **Reads the stores directly,** so it doesn't disturb the week view's loaded weeks.
+  `CalendarExportViewModel` holds the logic and is tested.
+
 ---
 
 ## 3. Data & state architecture
