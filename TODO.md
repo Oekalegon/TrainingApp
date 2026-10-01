@@ -18,6 +18,12 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 - [ ] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later)
 - [ ] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`)
 - [ ] **MVP2-54** Check that the stats values (stats bar, daily-load chart, CTL/ATL/TSB pills) update **immediately** when a planned or completed activity is added or deleted, without switching weeks; MVP2-53 found the same staleness for plan links. Also confirm that missed planned workouts are not counted anywhere. Add tests for any gap found.
+- [ ] **MVP2-56** Raise max HR from ordinary workouts. Max HR drives the Karvonen zones and TRIMP, and is currently formula-based (Tanaka). A 1 km interval session in Sep 2026 reached 11 bpm above it.
+  - After each import, find the activity's highest *reliable* HR: sustained for a few seconds, smoothed, with implausible jumps rejected.
+  - If it beats the current max, ask: "reached X, above your max of Y — update?".
+  - On yes, append a `HeartRateZoneSettings` entry effective from that activity's date, tagged as measured in a workout and linked to the activity, then recompute from that date.
+  - Only ever **raises** the value (the real max may be higher still).
+  - One-time scan of the last ~12 months for the best existing peak.
 - [ ] **MVP2-55** Register planned workouts for the coming days in Apple Fitness, so each structured workout is available on the Watch on the day it's due, ideally first in the list.
   - Today a workout is scheduled only once, when its plan is saved (MVP2-15/39), through `WorkoutKitBridge.schedule`. Its doc says callers should schedule lazily within the ±7-day window the Watch shows, but nothing does that yet.
   - Needed: a rolling sync, on launch or foreground, that schedules plans in the window, keeps within `WorkoutScheduler`'s scheduled-workout limit, and unschedules entries for plans that moved or were deleted.
@@ -26,7 +32,7 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 - [ ] **MVP2-?** `Goal` model: a non-event target (e.g. "sub-20 5k") with no date and no calendar presence
 - [ ] **MVP2-?** Structured Workout creator: create, edit, duplicate
 - [ ] **MVP2-?** Extend `SessionType` to match the 14-workout library
-- [ ] **MVP2-?** `StructuredWorkout.purpose` (`.general` / `.maxHRTest` / `.lthrTest`) and the MaxHR and LTHR field-test workouts (Friel 30-min)
+- [ ] **MVP2-?** `StructuredWorkout.purpose` (`.general` / `.maxHRTest` / `.lthrTest`) and the MaxHR and LTHR field-test workouts (Friel 30-min). Reuses MVP2-56's peak detection and update prompt. Unlike MVP2-56, a test result may also **lower** max HR.
 - [ ] **MVP2-?** After a test workout: "we measured X, update your profile?" confirmation
 - [ ] **MVP2-?** `AthleteProfile` tracks how MaxHR/LTHR was obtained (`.formula` / `.workout` / `.labTest`), plus manual lab-test entry
 - [ ] **MVP2-?** Refine a workout's TRIMP estimate from the median actual TRIMP of its linked activities
