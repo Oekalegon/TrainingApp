@@ -17,6 +17,12 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 - [ ] **MVP2-8** Label TRIMP as "estimated" vs "measured" everywhere it's shown (planned/no-HR activities)
 - [ ] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later)
 - [ ] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`)
+- [ ] **MVP2-54** Check that the stats values (stats bar, daily-load chart, CTL/ATL/TSB pills) update **immediately** when a planned or completed activity is added or deleted, without switching weeks; MVP2-53 found the same staleness for plan links. Also confirm that missed planned workouts are not counted anywhere. Add tests for any gap found.
+- [ ] **MVP2-55** Register planned workouts for the coming days in Apple Fitness, so each structured workout is available on the Watch on the day it's due, ideally first in the list.
+  - Today a workout is scheduled only once, when its plan is saved (MVP2-15/39), through `WorkoutKitBridge.schedule`. Its doc says callers should schedule lazily within the ±7-day window the Watch shows, but nothing does that yet.
+  - Needed: a rolling sync, on launch or foreground, that schedules plans in the window, keeps within `WorkoutScheduler`'s scheduled-workout limit, and unschedules entries for plans that moved or were deleted.
+  - **No duplicates:** before scheduling, check `WorkoutScheduler.shared.scheduledWorkouts`. Skip a plan whose workout is already scheduled that day, matching by `workoutKitID` and also by equivalent steps, in case the same workout was added under another id.
+  - Find out whether WorkoutKit lets us control the order in the Workout app's list.
 - [ ] **MVP2-?** `Goal` model: a non-event target (e.g. "sub-20 5k") with no date and no calendar presence
 - [ ] **MVP2-?** Structured Workout creator: create, edit, duplicate
 - [ ] **MVP2-?** Extend `SessionType` to match the 14-workout library
