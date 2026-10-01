@@ -10,9 +10,12 @@ struct WeekViewModelMaxHeartRateTests {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
-    /// A 10-minute run that holds `peak` for its middle two minutes, starting at noon UTC on `day`.
+    /// A run at 150 bpm that ramps up 10 bpm per 5 s sample (a real heart's pace, below
+    /// TrainingKit's cadence-lock threshold) to hold `peak` for two minutes, then ramps back down.
     private func run(on start: Date, peak: Double) -> Activity {
-        let bpms = Array(repeating: 150.0, count: 48) + Array(repeating: peak, count: 24) + Array(repeating: 150.0, count: 48)
+        let ramp = stride(from: 150.0, to: peak, by: 10).dropFirst().map { $0 }
+        let bpms = Array(repeating: 150.0, count: 48) + ramp + Array(repeating: peak, count: 24)
+            + ramp.reversed() + Array(repeating: 150.0, count: 48)
         let samples = bpms.enumerated().map { index, bpm in
             HeartRateSample(time: start.addingTimeInterval(Double(index) * 5), bpm: bpm)
         }
