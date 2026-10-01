@@ -210,6 +210,45 @@ public struct WeekView: View {
             }
             .task(id: viewModel.displayedWeekStart) {
                 await viewModel.load()
+                // Cheap once the history scan has run: a check over the loaded activities only.
+                await viewModel.checkForMaxHeartRateSuggestion()
+            }
+            // MVP2-56: a workout held a heart rate above the athlete's max. Raising it moves every
+            // zone and training-load score from that day on, so it's never done without asking.
+            .alert(
+                "New Max Heart Rate?",
+                isPresented: Binding(
+                    get: { viewModel.maxHeartRateSuggestion != nil },
+                    // Dismissal only clears the prompt; the buttons say what the athlete chose.
+                    // Each acts on the suggestion it was shown with, so the order SwiftUI runs the
+                    // action and this setter in doesn't matter.
+                    set: { isPresented in
+                        if !isPresented { viewModel.clearMaxHeartRatePrompt() }
+                    }
+                ),
+                presenting: viewModel.maxHeartRateSuggestion
+            ) { suggestion in
+                Button("Update to \(Int(suggestion.peakBPM)) bpm") {
+                    Task { await viewModel.acceptMaxHeartRateSuggestion(suggestion) }
+                }
+                Button("Not Now", role: .cancel) {
+                    viewModel.declineMaxHeartRateSuggestion(suggestion)
+                }
+            } message: { suggestion in
+                Text(viewModel.maxHeartRatePromptMessage(for: suggestion))
+            }
+            .alert(
+                "Couldn't Update Max Heart Rate",
+                isPresented: Binding(
+                    get: { viewModel.maxHeartRateUpdateFailed },
+                    set: { isPresented in
+                        if !isPresented { viewModel.acknowledgeMaxHeartRateUpdateFailure() }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Your max heart rate wasn't changed. You'll be asked again.")
             }
             .sheet(item: $selectedActivity) { activity in
                 // Its own NavigationStack: a sheet doesn't inherit the presenting view's

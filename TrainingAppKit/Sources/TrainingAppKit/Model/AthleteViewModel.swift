@@ -33,6 +33,29 @@ public struct AthleteViewModel {
         athlete.currentHeartRateZoneSettings
     }
 
+    /// Where the current max heart rate came from, for a caption under the Max HR row (MVP2-56):
+    /// "Estimated from age", or "Measured in a workout on 24 Sep 2026". `nil` when there are no
+    /// settings on record.
+    ///
+    /// The workout's date is the earliest entry carrying that source, which is the entry that
+    /// starts at the workout itself; later entries raised to the same value share its source.
+    public var maxHeartRateSourceDescription: String? {
+        guard let settings = currentHeartRateZoneSettings else { return nil }
+        switch settings.maxHeartRateSource {
+        case .formula:
+            return "Estimated from age"
+        case .workout:
+            let measuredFrom = athlete.heartRateZoneHistory
+                .filter { $0.maxHeartRateSource == settings.maxHeartRateSource }
+                .map(\.effectiveDate)
+                .min() ?? settings.effectiveDate
+            let date = measuredFrom.formatted(
+                Date.FormatStyle(timeZone: athlete.timeZone).day().month(.abbreviated).year()
+            )
+            return "Measured in a workout on \(date)"
+        }
+    }
+
     /// Every named zone's bpm range under ``currentHeartRateZoneSettings``, in zone order
     /// (1 through 5) — empty when there are no settings on record yet, or when the current
     /// method can't resolve a zone at all (`.lactateThreshold` with no LTHR set, matching

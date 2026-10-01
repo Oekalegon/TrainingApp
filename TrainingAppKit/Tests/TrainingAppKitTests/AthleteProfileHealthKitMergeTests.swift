@@ -113,4 +113,45 @@ struct AthleteProfileHealthKitMergeTests {
 
         #expect(merged.heartRateZoneHistory.isEmpty)
     }
+
+    @Test("a max measured in a workout isn't replaced by a lower formula estimate on the next refresh (MVP2-56)")
+    func measuredMaxSurvivesLowerEstimate() {
+        let activityID = UUID()
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178)
+        athlete = athlete.raisingMaxHeartRate(to: 189, from: day(0), source: .workout(activityID: activityID))
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 50, biologicalSex: nil, estimatedMaxHeartRateBPM: 178)
+
+        let merged = athlete.merging(snapshot, asOf: day(5))
+
+        #expect(merged == athlete)
+        #expect(merged.currentHeartRateZoneSettings?.maxHeartRateBPM == 189)
+    }
+
+    @Test("a resting-HR change keeps the measured max and its source in the new entry (MVP2-56)")
+    func restingChangeCarriesMeasuredMax() {
+        let activityID = UUID()
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178)
+        athlete = athlete.raisingMaxHeartRate(to: 189, from: day(0), source: .workout(activityID: activityID))
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 45, biologicalSex: nil, estimatedMaxHeartRateBPM: 178)
+
+        let merged = athlete.merging(snapshot, asOf: day(5))
+
+        let current = merged.currentHeartRateZoneSettings
+        #expect(current?.effectiveDate == day(5))
+        #expect(current?.restingHeartRateBPM == 45)
+        #expect(current?.maxHeartRateBPM == 189)
+        #expect(current?.maxHeartRateSource == .workout(activityID: activityID))
+    }
+
+    @Test("a formula estimate above a measured max replaces it, since the measured value is only a floor")
+    func higherEstimateReplacesMeasuredMax() {
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 170)
+        athlete = athlete.raisingMaxHeartRate(to: 175, from: day(0), source: .workout(activityID: UUID()))
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 50, biologicalSex: nil, estimatedMaxHeartRateBPM: 182)
+
+        let merged = athlete.merging(snapshot, asOf: day(5))
+
+        #expect(merged.currentHeartRateZoneSettings?.maxHeartRateBPM == 182)
+        #expect(merged.currentHeartRateZoneSettings?.maxHeartRateSource == .formula)
+    }
 }
