@@ -16,19 +16,16 @@ import HealthKit
 public final class TrainingAppEnvironment: ActivityRefreshing {
     public let model: TrainingModel
     private let importer: any ActivityImporting
-    private let athleteStore: any AthleteStore
     private let healthStore: HKHealthStore
     private let athleteReader: HealthKitAthleteReader
 
     private init(
         model: TrainingModel,
         importer: any ActivityImporting,
-        athleteStore: any AthleteStore,
         healthStore: HKHealthStore
     ) {
         self.model = model
         self.importer = importer
-        self.athleteStore = athleteStore
         self.healthStore = healthStore
         self.athleteReader = HealthKitAthleteReader(healthStore: healthStore)
     }
@@ -55,7 +52,7 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         // for the bug this avoids.
         let importer = HealthKitActivityImporter(healthStore: healthStore, activityStore: store)
         return TrainingAppEnvironment(
-            model: model, importer: importer, athleteStore: store, healthStore: healthStore
+            model: model, importer: importer, healthStore: healthStore
         )
     }
 
@@ -79,13 +76,14 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     /// itself already treats a denied/missing data type as `nil` per field rather than throwing,
     /// so a save failure here shouldn't take down `refreshActivities(asOf:)`, which just
     /// successfully imported real activity data.
+    ///
+    /// Goes through `TrainingModel.updateAthlete(asOf:_:)` (MVP2-101), so the merge runs on
+    /// whatever profile is current when its turn comes in TrainingKit's queue. Merging into a copy
+    /// read before the save and assigning it afterwards could drop a max heart rate the athlete
+    /// accepted in the meantime (MVP2-56), or be dropped by it.
     private func refreshAthleteProfile(asOf today: Date) async {
         let snapshot = await athleteReader.snapshot(asOf: today)
-        let merged = model.athlete.merging(snapshot, asOf: today)
-        guard merged != model.athlete else { return }
-        model.athlete = merged
-        try? await athleteStore.save(merged)
-        await model.recompute(asOf: today)
+        try? await model.updateAthlete(asOf: today) { $0.merging(snapshot, asOf: today) }
     }
 
     /// See ``ActivityRefreshing/requestAuthorization()``.

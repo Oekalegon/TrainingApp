@@ -179,9 +179,11 @@ struct WeekViewModelIntensityTests {
         // Threshold pace 300 s/km, zone 2 is 1.20 × that: 360 s/km.
         #expect(abs((viewModel.linkedPlanExpectation(for: activity)?.distanceMeters ?? 0) - 1200 / 0.36) < 0.5)
 
-        var athlete = model.athlete
-        athlete.paceModel = PaceModel(thresholdPaceSecondsPerKilometer: 240)
-        model.athlete = athlete
+        try await model.updateAthlete(asOf: day(2)) { athlete in
+            var athlete = athlete
+            athlete.paceModel = PaceModel(thresholdPaceSecondsPerKilometer: 240)
+            return athlete
+        }
 
         // Now 288 s/km.
         #expect(abs((viewModel.linkedPlanExpectation(for: activity)?.distanceMeters ?? 0) - 1200 / 0.288) < 0.5)
