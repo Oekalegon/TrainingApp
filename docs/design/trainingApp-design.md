@@ -294,13 +294,17 @@ remember or restore which tab was last active.
   sensor spikes don't count).
   - It checks the loaded activities first. Once per device, it also scans the last 12 months in
     the store, so an old formula-based max gets corrected without waiting for the next hard
-    session.
+    session. The scan waits for the first HealthKit import: on a fresh install the store starts
+    empty, and a scan then would find nothing and never run again.
+  - Checks pause while an accepted update is still saving, so the same workout isn't asked about
+    twice.
   - A hit shows an alert: "Your running workout on 24 Sep held 189 bpm, above your max heart rate
     of 178 bpm. Update your max heart rate to 189 bpm? Your zones and training load from that day
     on will be recalculated."
   - **Update** calls `TrainingModel.applyMaxHeartRate(_:asOf:)`. The change is raise-only and
     applies from that workout's date onward. It refreshes the week caches; a failed save shows
-    "Couldn't Update Max Heart Rate" and the app asks again next time.
+    "Couldn't Update Max Heart Rate", and the next check (after an import or a week change) asks
+    again.
   - **Not Now** records the activity as declined (`MaxHeartRatePromptHistory`, kept in
     `UserDefaults`), so it's never suggested again. A later workout that beats the max still is.
   - Closing the alert any other way just asks again on the next check.

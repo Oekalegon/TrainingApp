@@ -116,6 +116,10 @@ public final class WeekViewModel {
     /// Set when saving an accepted max heart rate failed, for `WeekView` to report; cleared when
     /// shown.
     public internal(set) var maxHeartRateUpdateFailed = false
+    /// `true` while an accepted max heart rate is being saved. Until it lands, `model.athlete`
+    /// still has the old max, so a check in that window would ask about the same workout again.
+    @ObservationIgnored
+    var isApplyingMaxHeartRate = false
     /// What the athlete has already declined, and whether the history scan has run.
     @ObservationIgnored
     let maxHeartRatePromptHistory: any MaxHeartRatePromptHistory

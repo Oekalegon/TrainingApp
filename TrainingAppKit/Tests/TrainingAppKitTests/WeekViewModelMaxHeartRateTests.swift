@@ -154,6 +154,7 @@ struct WeekViewModelMaxHeartRateTests {
         let (store, _, viewModel) = makeViewModel(history: history)
         let old = run(on: day(-200), peak: 186)
         try await store.upsert([old])
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
         await viewModel.load(asOf: day(3))
 
         await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
@@ -170,11 +171,52 @@ struct WeekViewModelMaxHeartRateTests {
     func historyScanIgnoresOldActivities() async throws {
         let (store, _, viewModel) = makeViewModel()
         try await store.upsert([run(on: day(-400), peak: 190)])
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
         await viewModel.load(asOf: day(3))
 
         await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
 
         #expect(viewModel.maxHeartRateSuggestion == nil)
+    }
+
+    @Test("the history scan waits for the first import, so a fresh install's empty store doesn't use it up")
+    func historyScanWaitsForFirstImport() async throws {
+        let history = InMemoryMaxHeartRatePromptHistory()
+        let (store, _, viewModel) = makeViewModel(history: history)
+        await viewModel.load(asOf: day(3))
+
+        await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
+
+        #expect(!history.hasScannedHistory)
+
+        // The first import brings in older history.
+        let old = run(on: day(-200), peak: 186)
+        try await store.upsert([old])
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
+        await viewModel.load(asOf: day(3))
+        await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
+
+        #expect(history.hasScannedHistory)
+        #expect(viewModel.maxHeartRateSuggestion?.activityID == old.id)
+    }
+
+    @Test("a check while an accepted update is still saving doesn't ask about the same workout again")
+    func noRepromptWhileApplying() async throws {
+        let (store, model, viewModel) = makeViewModel()
+        try await store.upsert([run(on: day(2), peak: 189)])
+        await viewModel.load(asOf: day(3))
+        await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
+        let suggestion = try #require(viewModel.maxHeartRateSuggestion)
+
+        let accepting = Task { await viewModel.acceptMaxHeartRateSuggestion(suggestion, asOf: day(3)) }
+        await Task.yield()
+        await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
+        #expect(viewModel.maxHeartRateSuggestion == nil)
+
+        await accepting.value
+        await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
+        #expect(viewModel.maxHeartRateSuggestion == nil)
+        #expect(model.athlete.currentHeartRateZoneSettings?.maxHeartRateBPM == 189)
     }
 
     @Test("the prompt names the sport, date, peak and current max")

@@ -248,7 +248,7 @@ public struct WeekView: View {
             ) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Your max heart rate wasn't changed. You'll be asked again after the next refresh.")
+                Text("Your max heart rate wasn't changed. You'll be asked again.")
             }
             .sheet(item: $selectedActivity) { activity in
                 // Its own NavigationStack: a sheet doesn't inherit the presenting view's
