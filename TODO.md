@@ -4,29 +4,45 @@ Temporary todo list for TrainingApp and TrainingKit while the todo database is u
 It was rebuilt on 2026-10-01 from git history, `TrainingKit/docs/roadmap.md` and the design docs, so the titles are paraphrased.
 
 To mark an item done, change `[ ]` to `[x]` and add the date or PR, e.g. `(done 2026-10-03, #66)`.
-New todos take the next free ID in their project. Items marked `MVP2-?` had no ID that could be recovered.
+New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP2-100). Items marked `MVP2-?` had no ID that could be recovered.
 
 ---
 
 ## In progress
 
-- [ ] **MVP2-53** Refresh plans after import so auto-matched links show live. The TrainingKit part is merged (#63); the App's TrainingKit bump is PR #66, green and ready to merge.
+- [ ] Verify MVP2-53 in the app after the next real workout: finish an activity that has a planned workout, sync, and check the week view shows one linked card without switching weeks
 
 ## MVP2: Structured & Planned Workouts
 
 - [ ] **MVP2-8** Label TRIMP as "estimated" vs "measured" everywhere it's shown (planned/no-HR activities)
 - [ ] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later)
 - [ ] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`)
+- [ ] **MVP2-54** Check that the stats values (stats bar, daily-load chart, CTL/ATL/TSB pills) update **immediately** when a planned or completed activity is added or deleted, without switching weeks; MVP2-53 found the same staleness for plan links. Also confirm that missed planned workouts are not counted anywhere. Add tests for any gap found.
+- [ ] **MVP2-56** Raise max HR from ordinary workouts. Max HR drives the Karvonen zones and TRIMP, and is currently formula-based (Tanaka). A 1 km interval session in Sep 2026 reached 11 bpm above it.
+  - After each import, find the activity's highest *reliable* HR: sustained for a few seconds, smoothed, with implausible jumps rejected.
+  - If it beats the current max, ask: "reached X, above your max of Y — update?".
+  - On yes, append a `HeartRateZoneSettings` entry effective from that activity's date, tagged as measured in a workout and linked to the activity, then recompute from that date.
+  - Only ever **raises** the value (the real max may be higher still).
+  - One-time scan of the last ~12 months for the best existing peak.
+- [ ] **MVP2-101** Close the athlete-update race left by MVP2-56 (TrainingKit#65 review).
+  - `TrainingModel.applyMaxHeartRate` runs in TrainingKit's import queue, but the app's HealthKit merge (`TrainingAppEnvironment.refreshAthleteProfile`) reads, merges and saves `model.athlete` outside it.
+  - A pull-to-refresh landing while a max HR update saves can drop one of the two changes: the model keeps whichever assignment came last, and the store keeps whichever save came last.
+  - Fix: give TrainingKit a public queued athlete update, e.g. `TrainingModel.updateAthlete(_ transform: (AthleteProfile) -> AthleteProfile, asOf:)` running in `runQueued`, which computes from the current athlete, saves, assigns and recomputes. Route the HealthKit merge and `applyMaxHeartRate` through it, and add a test that interleaves the two.
+- [ ] **MVP2-55** Register planned workouts for the coming days in Apple Fitness, so each structured workout is available on the Watch on the day it's due, ideally first in the list.
+  - Today a workout is scheduled only once, when its plan is saved (MVP2-15/39), through `WorkoutKitBridge.schedule`. Its doc says callers should schedule lazily within the ±7-day window the Watch shows, but nothing does that yet.
+  - Needed: a rolling sync, on launch or foreground, that schedules plans in the window, keeps within `WorkoutScheduler`'s scheduled-workout limit, and unschedules entries for plans that moved or were deleted.
+  - **No duplicates:** before scheduling, check `WorkoutScheduler.shared.scheduledWorkouts`. Skip a plan whose workout is already scheduled that day, matching by `workoutKitID` and also by equivalent steps, in case the same workout was added under another id.
+  - Find out whether WorkoutKit lets us control the order in the Workout app's list.
 - [ ] **MVP2-?** `Goal` model: a non-event target (e.g. "sub-20 5k") with no date and no calendar presence
 - [ ] **MVP2-?** Structured Workout creator: create, edit, duplicate
 - [ ] **MVP2-?** Extend `SessionType` to match the 14-workout library
-- [ ] **MVP2-?** `StructuredWorkout.purpose` (`.general` / `.maxHRTest` / `.lthrTest`) and the MaxHR and LTHR field-test workouts (Friel 30-min)
+- [ ] **MVP2-?** `StructuredWorkout.purpose` (`.general` / `.maxHRTest` / `.lthrTest`) and the MaxHR and LTHR field-test workouts (Friel 30-min). Reuses MVP2-56's peak detection and update prompt. Unlike MVP2-56, a test result may also **lower** max HR.
 - [ ] **MVP2-?** After a test workout: "we measured X, update your profile?" confirmation
 - [ ] **MVP2-?** `AthleteProfile` tracks how MaxHR/LTHR was obtained (`.formula` / `.workout` / `.labTest`), plus manual lab-test entry
 - [ ] **MVP2-?** Refine a workout's TRIMP estimate from the median actual TRIMP of its linked activities
-- [ ] **MVP2-?** Leave missed planned workouts out of CTL/ATL/TSB, monotony/strain and the aggregate stats (check what is already done)
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
 - [ ] **MVP2-?** Race marker on the calendar that distinguishes primary from secondary/tertiary races
+- [ ] **MVP2-100** Daily calendar JSON export for a chosen period (e.g. the season plan). One entry per day with every completed and planned activity (missed ones left out): TRIMP (actual or expected), workout type, name, (expected) duration and distance. Each day also carries the fitness metrics (CTL, ATL, TSB, monotony, strain, ...).
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
 ## MVP3: Calibration
@@ -114,6 +130,8 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 - [x] **MVP2-42** Link/unlink an activity to a plan (2026-09-21)
 - [x] **MVP2-43** Intensity classification; planned-vs-actual values and missed plans on cards (2026-09-22)
 - [x] **MVP2-51** Intensity marker icon instead of tint (2026-09-22)
+- [x] **MVP2-53** Refresh plans after import so auto-matched links show live (2026-10-01, TrainingKit#63, #66)
+- [x] **MVP2-?** Missed planned workouts are left out of CTL/ATL/TSB (`DailyLoadSeries`) and the daily-load chart and stats (MVP2-30). Confirmed 2026-10-01
 
 ### MVP1 (released as 0.1.0 on 2026-09-17)
 - [x] **MVP1-1** InMemoryStore
