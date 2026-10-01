@@ -10,7 +10,7 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 
 ## In progress
 
-- [ ] **MVP2-53** Refresh plans after import so auto-matched links show live. The TrainingKit part is merged (#63); the App's TrainingKit bump on `feature/mvp2-53-week-view-refresh` still needs a PR and merge.
+- [ ] **MVP2-53** Refresh plans after import so auto-matched links show live. The TrainingKit part is merged (#63); the App's TrainingKit bump is PR #66, green and ready to merge.
 
 ## MVP2: Structured & Planned Workouts
 
