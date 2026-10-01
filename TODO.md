@@ -122,7 +122,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [x] **MVP2-51** Intensity marker icon instead of tint (2026-09-22)
 - [x] **MVP2-53** Refresh plans after import so auto-matched links show live (2026-10-01, TrainingKit#63, #66)
 - [x] **MVP2-56** Raise max HR from ordinary workouts: raise-only, athlete-confirmed, date-effective; 10 s held peak with cadence-lock and stuck-reading guards; one-time 12-month scan after the first import (2026-10-01, TrainingKit#65, #70)
-- [x] **MVP2-101** Queued athlete updates: `TrainingModel.updateAthlete(asOf:_:)`, used by `applyMaxHeartRate` and the HealthKit merge, so the two can't overwrite each other (2026-10-01, TrainingKit#66, this PR)
+- [x] **MVP2-101** Queued athlete updates: `TrainingModel.updateAthlete(asOf:_:)`, used by `applyMaxHeartRate` and the HealthKit merge, so the two can't overwrite each other (2026-10-01, TrainingKit#66, #71)
 - [x] **MVP2-?** Missed planned workouts are left out of CTL/ATL/TSB (`DailyLoadSeries`) and the daily-load chart and stats (MVP2-30). Confirmed 2026-10-01
 
 ### MVP1 (released as 0.1.0 on 2026-09-17)
