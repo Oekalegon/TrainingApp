@@ -10,7 +10,7 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 
 ## In progress
 
-- [ ] **MVP2-53** Refresh plans after import so auto-matched links show live. The TrainingKit part is merged (#63); the App's TrainingKit bump is PR #66, green and ready to merge.
+- [ ] Verify MVP2-53 in the app after the next real workout: finish an activity that has a planned workout, sync, and check the week view shows one linked card without switching weeks
 
 ## MVP2: Structured & Planned Workouts
 
@@ -24,7 +24,6 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 - [ ] **MVP2-?** After a test workout: "we measured X, update your profile?" confirmation
 - [ ] **MVP2-?** `AthleteProfile` tracks how MaxHR/LTHR was obtained (`.formula` / `.workout` / `.labTest`), plus manual lab-test entry
 - [ ] **MVP2-?** Refine a workout's TRIMP estimate from the median actual TRIMP of its linked activities
-- [ ] **MVP2-?** Leave missed planned workouts out of CTL/ATL/TSB, monotony/strain and the aggregate stats (check what is already done)
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
 - [ ] **MVP2-?** Race marker on the calendar that distinguishes primary from secondary/tertiary races
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
@@ -114,6 +113,8 @@ New todos take the next free ID in their project. Items marked `MVP2-?` had no I
 - [x] **MVP2-42** Link/unlink an activity to a plan (2026-09-21)
 - [x] **MVP2-43** Intensity classification; planned-vs-actual values and missed plans on cards (2026-09-22)
 - [x] **MVP2-51** Intensity marker icon instead of tint (2026-09-22)
+- [x] **MVP2-53** Refresh plans after import so auto-matched links show live (2026-10-01, TrainingKit#63, #66)
+- [x] **MVP2-?** Missed planned workouts are left out of CTL/ATL/TSB (`DailyLoadSeries`) and the daily-load chart and stats (MVP2-30). Confirmed 2026-10-01
 
 ### MVP1 (released as 0.1.0 on 2026-09-17)
 - [x] **MVP1-1** InMemoryStore
