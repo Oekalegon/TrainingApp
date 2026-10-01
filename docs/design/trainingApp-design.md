@@ -288,6 +288,28 @@ remember or restore which tab was last active.
   legs) is deliberately not treated as a warning here, since it isn't a problem. Purely passive;
   resolving it happens in the activity detail sheet (§2.2). The aggregate count across every
   outstanding overlap lives on the Athlete tab instead (§2.3), not here.
+- **New max heart rate prompt** (MVP2-56): after each import, and when the week view loads,
+  `WeekViewModel.checkForMaxHeartRateSuggestion(asOf:)` looks for a workout that *held* a heart
+  rate above the athlete's current max (TrainingKit's `PeakHeartRateDetector`: 10 s or longer, so
+  sensor spikes don't count).
+  - It checks the loaded activities first. Once per device, it also scans the last 12 months in
+    the store, so an old formula-based max gets corrected without waiting for the next hard
+    session.
+  - A hit shows an alert: "Your running workout on 24 Sep held 189 bpm, above your max heart rate
+    of 178 bpm. Update your max heart rate to 189 bpm? Your zones and training load from that day
+    on will be recalculated."
+  - **Update** calls `TrainingModel.applyMaxHeartRate(_:asOf:)`. The change is raise-only and
+    applies from that workout's date onward. It refreshes the week caches; a failed save shows
+    "Couldn't Update Max Heart Rate" and the app asks again next time.
+  - **Not Now** records the activity as declined (`MaxHeartRatePromptHistory`, kept in
+    `UserDefaults`), so it's never suggested again. A later workout that beats the max still is.
+  - Closing the alert any other way just asks again on the next check.
+  - It's never applied silently, because every zone and every TRIMP score from that day on moves
+    with it.
+- **Caches follow the athlete**: the sport-stats pages, daily-load split and heart-rate histogram
+  caches include the athlete in their keys alongside the activity, plan and workout counts. A
+  changed max or resting heart rate rescores every activity's load and moves the zone
+  boundaries, so it invalidates them the same way a new activity does.
 
 ### 2.2 Activity detail
 
@@ -375,7 +397,9 @@ imported biometric data looks right, not to be a settings screen:
   Athlete tab's own tab-bar icon (§2.0), so it's visible without switching tabs.
 - Name, biological sex.
 - Current heart-rate zone settings (`athlete.currentHeartRateZoneSettings`): resting HR, max HR,
-  lactate threshold HR (if set), zone method — plus a "Zones" table (MVP1-71,
+  lactate threshold HR (if set), zone method. Max HR carries a caption saying where it came from
+  (MVP2-56, `AthleteViewModel.maxHeartRateSourceDescription`): "Estimated from age", or "Measured
+  in a workout on 24 Sep 2026" once a workout has raised it — plus a "Zones" table (MVP1-71,
   `AthleteViewModel.heartRateZoneRanges`) listing each named zone's own bpm range under those
   settings (`HeartRateZoneModel.zoneBPMRange(_:)`), each preceded by a colored dot in that zone's
   color (`HeartRateZone.color`), same treatment as the activity detail sheet's own zone list
@@ -462,6 +486,11 @@ import wiring. Tracked as a separate todo (see §7).
 somewhat so `recompute` has enough trailing history for CTL's warm-up) and again on
 `scenePhase == .active` (foreground). No background refresh in MVP 1 — CloudKit sync latency is
 accepted as-is between explicit triggers.
+
+Each import also re-reads the athlete's biometrics from HealthKit and merges them into the profile
+(`AthleteProfile.merging(_:asOf:)`): resting HR, sex, and a Tanaka max-HR estimate from date of
+birth. A max measured in a workout (MVP2-56) is a floor on the real max, so the merge never
+replaces it with a lower formula estimate. A *higher* estimate does still replace it.
 
 Pull-to-refresh on the week view is the one place MVP 1 goes further than a passive reload: it
 calls `TrainingModel.importActivities(from:)` (§3.3) to pull anything new from HealthKit, then

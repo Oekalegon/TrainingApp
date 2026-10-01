@@ -29,9 +29,10 @@ public final class WeekViewModel {
     /// import/dedup could change any cached week's activities, not just the displayed one; a new
     /// calendar day shifts every week's own change-vs-previous-week percentages; a plan or its
     /// workout can change independently of `model.activities`, e.g. saving a new planned workout
-    /// via `PlannedWorkoutSheet`).
+    /// via `PlannedWorkoutSheet`). The athlete is part of the key too: a changed max or resting
+    /// heart rate rescores every activity's load (MVP2-56).
     @ObservationIgnored
-    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, today: Date)?
+    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date)?
 
     /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
     /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
@@ -43,6 +44,11 @@ public final class WeekViewModel {
     /// cache rather than trying to single out which weeks actually changed.
     @ObservationIgnored
     private var weekGraphCachesActivityCount: Int?
+    /// `model.athlete` as of the last time ``weekGraphCaches`` was populated. A change (e.g. a new
+    /// max heart rate, MVP2-56) moves the zone boundaries the histogram is shaded against, so it
+    /// marks every cached week stale the same way a changed activity count does.
+    @ObservationIgnored
+    private var weekGraphCachesAthlete: AthleteProfile?
 
     /// ``dailyLoadSplit(for:)`` results, cached per week (keyed by that week's `weekStart`) — same
     /// reasoning as ``sportStatsPagesCaches``: `WeekView.graphPanel(weekStart:isCurrentPage:)` calls
@@ -55,9 +61,10 @@ public final class WeekViewModel {
     /// `(model.activities.count, model.plans.count, model.workouts.count)` as of the last time
     /// ``dailyLoadSplitCaches`` was populated — three counts, not just `activityCount` the way
     /// ``sportStatsPagesCachesKey`` does, since a plan or its workout can change independently of
-    /// `model.activities` (e.g. saving a new planned workout via `PlannedWorkoutSheet`).
+    /// `model.activities` (e.g. saving a new planned workout via `PlannedWorkoutSheet`), plus the
+    /// athlete, whose heart-rate settings every activity's load is scored with (MVP2-56).
     @ObservationIgnored
-    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, today: Date)?
+    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date)?
 
     /// The card caches: ``plannedCardSummary(for:)``, ``linkedPlanExpectation(for:)`` and
     /// ``intensity(for:)-(Activity)``/``intensity(for:)-(PlannedActivity)`` results. The day list
@@ -102,9 +109,34 @@ public final class WeekViewModel {
     public private(set) var isDeduplicating = false
 
     /// Creates a week view model showing the week containing `today`.
-    public init(model: TrainingModel, refresher: any ActivityRefreshing, today: Date = .now) {
+    /// A workout that held a heart rate above the athlete's max, waiting for them to confirm or
+    /// decline raising it (MVP2-56). `WeekView` shows it as an alert. See
+    /// ``checkForMaxHeartRateSuggestion(asOf:)``.
+    public internal(set) var maxHeartRateSuggestion: MaxHeartRateSuggestion?
+    /// Set when saving an accepted max heart rate failed, for `WeekView` to report; cleared when
+    /// shown.
+    public internal(set) var maxHeartRateUpdateFailed = false
+    /// What the athlete has already declined, and whether the history scan has run.
+    @ObservationIgnored
+    let maxHeartRatePromptHistory: any MaxHeartRatePromptHistory
+
+    /// Creates the week view model.
+    ///
+    /// - Parameters:
+    ///   - model: The training model to read from and write to.
+    ///   - refresher: Runs HealthKit imports for pull-to-refresh.
+    ///   - maxHeartRatePromptHistory: What the athlete already said about max heart rate
+    ///     suggestions; defaults to the app's `UserDefaults`-backed record.
+    ///   - today: The day whose week is shown first.
+    public init(
+        model: TrainingModel,
+        refresher: any ActivityRefreshing,
+        maxHeartRatePromptHistory: (any MaxHeartRatePromptHistory)? = nil,
+        today: Date = .now
+    ) {
         self.model = model
         self.refresher = refresher
+        self.maxHeartRatePromptHistory = maxHeartRatePromptHistory ?? UserDefaultsMaxHeartRatePromptHistory()
         let calendar = Self.calendar(for: model.athlete)
         self.calendar = calendar
         self.displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
@@ -242,11 +274,11 @@ public final class WeekViewModel {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
         let keyIsCurrent = dailyLoadSplitCachesKey.map {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
-                && calendar.isDate($0.today, inSameDayAs: today)
+                && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
         } ?? false
         if !keyIsCurrent {
             dailyLoadSplitCaches.removeAll()
-            dailyLoadSplitCachesKey = (key.0, key.1, key.2, today)
+            dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today)
         }
         if let cached = dailyLoadSplitCaches[weekStart] {
             return cached
@@ -485,11 +517,11 @@ public final class WeekViewModel {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
         let keyIsCurrent = sportStatsPagesCachesKey.map {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
-                && calendar.isDate($0.today, inSameDayAs: today)
+                && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
         } ?? false
         if !keyIsCurrent {
             sportStatsPagesCaches.removeAll()
-            sportStatsPagesCachesKey = (key.0, key.1, key.2, today)
+            sportStatsPagesCachesKey = (key.0, key.1, key.2, model.athlete, today)
         }
         if let cached = sportStatsPagesCaches[weekStart] {
             return cached
@@ -633,7 +665,7 @@ public final class WeekViewModel {
     /// settled, and a caller that only cares about the displayed week's own data (already updated
     /// first) isn't kept waiting by anything else, since `WeekView` never awaits this call itself.
     ///
-    /// A changed `activityCount` marks every currently cached week stale and due for
+    /// A changed `activityCount` or athlete (MVP2-56) marks every currently cached week stale and due for
     /// recomputation, but deliberately doesn't clear ``weekGraphCaches`` up front to do that —
     /// `weekGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
     /// (synchronously, before this method's first `await`) was visible to
@@ -648,20 +680,22 @@ public final class WeekViewModel {
     /// week's own histogram they'd affect this dramatically between one frame and the next.
     public func refreshWeekCachesIfNeeded() async {
         let activityCount = model.activities.count
-        let activityCountChanged = weekGraphCachesActivityCount != activityCount
-        if activityCountChanged {
+        let inputsChanged = weekGraphCachesActivityCount != activityCount
+            || weekGraphCachesAthlete != model.athlete
+        if inputsChanged {
             weekGraphCachesActivityCount = activityCount
+            weekGraphCachesAthlete = model.athlete
         }
         let window = cachedWeekStarts
         let windowSet = Set(window)
         weekGraphCaches = weekGraphCaches.filter { windowSet.contains($0.key) }
 
         let displayedWeekStart = self.displayedWeekStart
-        if activityCountChanged || weekGraphCaches[displayedWeekStart] == nil {
+        if inputsChanged || weekGraphCaches[displayedWeekStart] == nil {
             await cacheWeekGraph(weekStart: displayedWeekStart, priority: .userInitiated)
         }
         for weekStart in window where weekStart != displayedWeekStart
-            && (activityCountChanged || weekGraphCaches[weekStart] == nil) {
+            && (inputsChanged || weekGraphCaches[weekStart] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
     }
@@ -686,7 +720,7 @@ public final class WeekViewModel {
                 weekActivities, athlete: athlete, asOf: asOf, statisticsCalculator: statisticsCalculator
             )
         }.value
-        guard isStillCacheable(weekStart, activityCount: activityCount) else { return }
+        guard isStillCacheable(weekStart, activityCount: activityCount), athlete == model.athlete else { return }
         weekGraphCaches[weekStart] = histogram
     }
 
@@ -799,6 +833,7 @@ public final class WeekViewModel {
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
+        await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
     /// The empty-state "Connect Health data" action (design doc §2.1): requests authorization,
@@ -814,6 +849,7 @@ public final class WeekViewModel {
             return
         }
         await refreshWeekCachesIfNeeded()
+        await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
     /// The athlete screen's "Force Full Resync" action (design doc §2.3): re-imports every
@@ -827,6 +863,7 @@ public final class WeekViewModel {
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
+        await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
     /// The athlete screen's "Deduplicate Activities" action (MVP1-44): removes duplicate

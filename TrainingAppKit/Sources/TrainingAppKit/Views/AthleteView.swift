@@ -70,7 +70,16 @@ struct AthleteView: View {
                 if let settings = viewModel.currentHeartRateZoneSettings {
                     Section("Heart Rate Zones") {
                         LabeledContent("Resting HR", value: "\(Int(settings.restingHeartRateBPM.rounded())) bpm")
-                        LabeledContent("Max HR", value: "\(Int(settings.maxHeartRateBPM.rounded())) bpm")
+                        LabeledContent {
+                            Text("\(Int(settings.maxHeartRateBPM.rounded())) bpm")
+                        } label: {
+                            Text("Max HR")
+                            // Where the value came from (MVP2-56): an age estimate is a guess,
+                            // a workout-measured value is a floor on the real max.
+                            if let source = viewModel.maxHeartRateSourceDescription {
+                                Text(source)
+                            }
+                        }
                         if let lactateThreshold = settings.lactateThresholdHeartRateBPM {
                             LabeledContent("Lactate Threshold", value: "\(Int(lactateThreshold.rounded())) bpm")
                         }

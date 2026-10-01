@@ -124,4 +124,33 @@ struct AthleteViewModelTests {
 
         #expect(viewModel.thresholdPaceText == "4:05 /km")
     }
+
+    @Test("maxHeartRateSourceDescription is nil without heart-rate settings")
+    func maxHeartRateSourceNilWithoutSettings() {
+        #expect(AthleteViewModel(athlete: .fixture()).maxHeartRateSourceDescription == nil)
+    }
+
+    @Test("a formula-based max HR is described as estimated from age")
+    func formulaMaxDescribedAsEstimate() {
+        let viewModel = AthleteViewModel(athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178))
+
+        #expect(viewModel.maxHeartRateSourceDescription == "Estimated from age")
+    }
+
+    @Test("a workout-measured max HR names the workout's date, even after later entries carry it forward")
+    func workoutMaxNamesWorkoutDate() {
+        let workoutDay = Date(timeIntervalSince1970: 1_700_000_000)
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178)
+        athlete.heartRateZoneHistory.append(HeartRateZoneSettings(
+            effectiveDate: workoutDay.addingTimeInterval(20 * 86400), restingHeartRateBPM: 47, maxHeartRateBPM: 178
+        ))
+        athlete = athlete.raisingMaxHeartRate(to: 189, from: workoutDay, source: .workout(activityID: UUID()))
+
+        let viewModel = AthleteViewModel(athlete: athlete)
+
+        let date = workoutDay.formatted(
+            Date.FormatStyle(timeZone: athlete.timeZone).day().month(.abbreviated).year()
+        )
+        #expect(viewModel.maxHeartRateSourceDescription == "Measured in a workout on \(date)")
+    }
 }
