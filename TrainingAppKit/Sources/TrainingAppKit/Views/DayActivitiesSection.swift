@@ -59,6 +59,9 @@ struct DayActivitiesSection: View {
     let activities: [Activity]
     /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.
     let plans: [PlannedActivity]
+    /// Races on this day, most important first — each renders as a lettered circle marker (A
+    /// primary, B secondary, C tertiary) with its name, above the day's activities.
+    let races: [Race]
     /// Everything an activity's card shows beyond the activity itself — TRIMP, overlap badge,
     /// intensity, the linked plan's expected values — see `WeekViewModel.activityCardContent(for:)`.
     let activityCard: (Activity) -> WeekViewModel.ActivityCardContent
@@ -116,6 +119,22 @@ struct DayActivitiesSection: View {
                 .disabled(!canAddWorkout)
                 .opacity(canAddWorkout ? 1 : 0.35)
                 .accessibilityLabel("Add")
+            }
+
+            ForEach(races) { race in
+                HStack(spacing: 4) {
+                    Image(systemName: race.priority.markerSymbolName)
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: WeekdayPillView.columnWidth)
+                        // Opaque backing so the timeline line behind it doesn't show through.
+                        .background(weekViewBackground)
+                        .accessibilityHidden(true)
+                    Text(race.name)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(race.priority.displayName) race: \(race.name)")
             }
 
             ForEach(activities) { activity in
@@ -322,5 +341,26 @@ private struct MetricPillView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(kind.name), \(value)")
         .accessibilityHint("Opens an explanation of \(kind.name)")
+    }
+}
+
+extension RacePriority {
+    /// The SF Symbol marking a race of this priority on the calendar: a filled circle holding the
+    /// letter A (primary), B (secondary) or C (tertiary).
+    var markerSymbolName: String {
+        switch self {
+        case .primary: "a.circle.fill"
+        case .secondary: "b.circle.fill"
+        case .tertiary: "c.circle.fill"
+        }
+    }
+
+    /// Lowercase priority name for accessibility labels.
+    var displayName: String {
+        switch self {
+        case .primary: "Primary"
+        case .secondary: "Secondary"
+        case .tertiary: "Tertiary"
+        }
     }
 }

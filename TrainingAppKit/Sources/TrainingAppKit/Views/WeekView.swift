@@ -577,6 +577,7 @@ public struct WeekView: View {
                             metrics: viewModel.metrics(on: day),
                             activities: viewModel.activities(on: day),
                             plans: viewModel.pendingPlans(on: day),
+                            races: viewModel.races(on: day),
                             activityCard: { viewModel.activityCardContent(for: $0) },
                             plannedCard: { viewModel.plannedCardContent(for: $0) },
                             timeZone: viewModel.athleteTimeZone,

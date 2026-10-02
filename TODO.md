@@ -31,7 +31,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-?** `AthleteProfile` tracks how MaxHR/LTHR was obtained (`.formula` / `.workout` / `.labTest`), plus manual lab-test entry
 - [ ] **MVP2-?** Refine a workout's TRIMP estimate from the median actual TRIMP of its linked activities
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
-- [ ] **MVP2-?** Race marker on the calendar that distinguishes primary from secondary/tertiary races
+- [ ] **MVP2-?** Race marker on the calendar that distinguishes primary from secondary/tertiary races (week view day rows done: A/B/C circle symbol; chart marker not yet)
 - [ ] **MVP2-103** Calendar JSON import, the counterpart of the export (MVP2-100/102) and in the same format: read a `CalendarExport` file back into the app (completed activities, planned workouts with their steps). Decide how it handles duplicates of what is already in the stores (see FIT-8) and what a different `schemaVersion` does.
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 

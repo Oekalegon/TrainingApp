@@ -413,6 +413,23 @@ struct WeekViewModelTests {
         #expect(viewModel.plans(on: day(2)).count == 2)
     }
 
+    @Test("races(on:) returns that day's races, primary first")
+    func racesOnDayOrderedByPriority() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let tertiary = Race(name: "Parkrun", date: day(2), priority: .tertiary)
+        let primary = Race(name: "Marathon", date: day(2), priority: .primary)
+        let other = Race(name: "Elsewhere", date: day(4), priority: .secondary)
+        try await store.upsert([tertiary, primary, other])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.races(on: day(2)).map(\.id) == [primary.id, tertiary.id])
+        #expect(viewModel.races(on: day(3)).isEmpty)
+    }
+
     @Test("metrics(on:) returns the matching day's fitness metrics, nil outside the loaded range")
     func metricsOnDayFiltersToThatCalendarDay() async throws {
         let (store, stores) = makeStores()

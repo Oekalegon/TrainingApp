@@ -402,6 +402,18 @@ public final class WeekViewModel {
         plans(on: day).filter { $0.completedActivityID == nil }
     }
 
+    /// Races on `day` (MVP2-?), most important first (primary, then secondary, then tertiary) so
+    /// the day row lists them in a stable, meaningful order.
+    public func races(on day: Date) -> [Race] {
+        let order = RacePriority.allCases
+        return model.races
+            .filter { calendar.isDate($0.date, inSameDayAs: day) }
+            .sorted {
+                let (a, b) = (order.firstIndex(of: $0.priority) ?? 0, order.firstIndex(of: $1.priority) ?? 0)
+                return a == b ? $0.name < $1.name : a < b
+            }
+    }
+
     /// The workout a plan schedules, if still in the library.
     public func workout(for plan: PlannedActivity) -> StructuredWorkout? {
         model.workouts.first { $0.id == plan.workoutID }
