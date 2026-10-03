@@ -59,8 +59,7 @@ struct DayActivitiesSection: View {
     let activities: [Activity]
     /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.
     let plans: [PlannedActivity]
-    /// Races on this day, most important first — each renders as a lettered circle marker (A
-    /// primary, B secondary, C tertiary) with its name, above the day's activities.
+    /// Races on this day, most important first — each renders as a `RaceCard` above the day's activities.
     let races: [Race]
     /// Everything an activity's card shows beyond the activity itself — TRIMP, overlap badge,
     /// intensity, the linked plan's expected values — see `WeekViewModel.activityCardContent(for:)`.
@@ -122,19 +121,11 @@ struct DayActivitiesSection: View {
             }
 
             ForEach(races) { race in
-                HStack(spacing: 4) {
-                    Image(systemName: race.priority.markerSymbolName)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: WeekdayPillView.columnWidth)
-                        // Opaque backing so the timeline line behind it doesn't show through.
-                        .background(weekViewBackground)
-                        .accessibilityHidden(true)
-                    Text(race.name)
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .top, spacing: 4) {
+                    // Keeps the card at the same x as the activity cards below; no time of day.
+                    Color.clear.frame(width: WeekdayPillView.columnWidth, height: 0)
+                    RaceCard(race: race)
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(race.priority.displayName) race: \(race.name)")
             }
 
             ForEach(activities) { activity in
