@@ -33,6 +33,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
 - [ ] **MVP2-?** Race marker on the calendar that distinguishes primary from secondary/tertiary races
 - [ ] **MVP2-100** Daily calendar JSON export for a chosen period (e.g. the season plan). One entry per day with every completed and planned activity (missed ones left out): TRIMP (actual or expected), workout type, name, (expected) duration and distance. Each day also carries the fitness metrics (CTL, ATL, TSB, monotony, strain, ...).
+- [ ] **MVP2-102** Include workout steps (e.g. intervals) in the daily calendar JSON export (MVP2-100). Always included, no opt-out. Each activity gets a `steps` array: for planned workouts the structured workout's steps (warm-up, repeats, recovery, cool-down) with type, duration or distance and intensity target; for completed activities the steps of the linked planned workout, or laps where there are no steps.
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
 ## MVP3: Calibration
