@@ -33,7 +33,8 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
 - [ ] **MVP2-104** Race marker on the calendar that distinguishes primary from secondary/tertiary races. Week view day rows done (race card with an A/B/C circle, #74); chart marker not yet.
 - [ ] **MVP2-106** More interval workout templates from the roadmap's library (long and mixed intervals, fartlek, fast finish, hill reps, ...), and check the planned-workout sheet's sliders on the new templates: the sprint, repetition and recovery sliders are continuous, so a rest can land on an odd number of seconds.
-- [ ] **MVP2-103** Calendar JSON import, the counterpart of the export (MVP2-100/102) and in the same format: read a `CalendarExport` file back into the app (completed activities, planned workouts with their steps). Decide how it handles duplicates of what is already in the stores (see FIT-8) and what a different `schemaVersion` does.
+- [ ] **MVP2-108** Show planned workouts on the week view before any Health data is imported. On a fresh install the "No training data yet" empty state hides the day rows, so a calendar import (MVP2-103) or a new plan shows no sign it exists until Health is connected. Found on the simulator, which has no Health data.
+- [ ] **MVP2-107** Import completed activities from a calendar export file (the rest of MVP2-103). Needs the model to hold an imported load for an activity without heart-rate data: `LoadMethod.manual` exists, but `Activity` has no field for it, so this means a new optional field with SwiftData and CloudKit persistence changes and a migration. Decide how it deduplicates against activities HealthKit imports later.
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
 ## MVP3: Calibration
@@ -128,6 +129,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [x] **MVP2-100** Daily calendar JSON export for a chosen period: share button in the week view toolbar, completed and upcoming planned workouts per day (missed left out) with TRIMP, sport/template/intensity, name, duration, distance, plus CTL/ATL/TSB/monotony/strain (2026-10-01, TrainingKit#67, #72)
 - [x] **MVP2-102** Workout steps in the calendar JSON export: every entry has a `steps` array, repetitions expanded, with kind, goal, projected duration and distance and target; a completed activity carries its fulfilled plan's steps, empty without a plan (2026-10-04, TrainingKit#69, #72)
 - [x] **MVP2-105** Interval workout templates: Base Full-out hill sprints, and Short interval run in time and track versions (2026-10-04, TrainingKit#70, #75)
+- [x] **MVP2-103** Calendar JSON import: planned workouts, rebuilt from their steps, with duplicates skipped, past entries skipped, and an edited TRIMP kept as a load override; completed activities and daily metrics aren't imported (activities are MVP2-107). Import Calendar button in the week view toolbar with a preview sheet (2026-10-04, TrainingKit#71, #76)
 - [x] **MVP2-?** Missed planned workouts are left out of CTL/ATL/TSB (`DailyLoadSeries`) and the daily-load chart and stats (MVP2-30). Confirmed 2026-10-01
 
 ### MVP1 (released as 0.1.0 on 2026-09-17)
