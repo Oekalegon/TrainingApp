@@ -30,6 +30,8 @@ public struct WeekView: View {
     #endif
     /// Whether the "Select Date" sheet is presented.
     @State private var isShowingDatePicker = false
+    /// Whether the "Export Calendar" sheet (MVP2-100) is showing.
+    @State private var isShowingCalendarExport = false
     /// `MetricDetailView`'s own navigation-push state (MVP1-45/MVP1-60), or `nil` while none is
     /// pushed — set by tapping a day-list pill (`onSelectMetric` below, a `.day` subject) or the
     /// graph panel itself (`showGraphInfo(forPage:)`, a `.week` subject). A single `Hashable`/
@@ -207,6 +209,11 @@ public struct WeekView: View {
                         isShowingDatePicker = true
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Export Calendar", systemImage: "square.and.arrow.up") {
+                        isShowingCalendarExport = true
+                    }
+                }
             }
             .task(id: viewModel.displayedWeekStart) {
                 await viewModel.load()
@@ -273,6 +280,9 @@ public struct WeekView: View {
             }
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
+            }
+            .sheet(isPresented: $isShowingCalendarExport) {
+                CalendarExportSheet(viewModel: viewModel.calendarExportViewModel())
             }
             .sheet(item: $addingEntryDate) { entryDate in
                 AddEntrySheet(

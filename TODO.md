@@ -32,8 +32,6 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-?** Refine a workout's TRIMP estimate from the median actual TRIMP of its linked activities
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
 - [ ] **MVP2-?** Race marker on the calendar that distinguishes primary from secondary/tertiary races
-- [ ] **MVP2-100** Daily calendar JSON export for a chosen period (e.g. the season plan). One entry per day with every completed and planned activity (missed ones left out): TRIMP (actual or expected), workout type, name, (expected) duration and distance. Each day also carries the fitness metrics (CTL, ATL, TSB, monotony, strain, ...).
-- [ ] **MVP2-102** Include workout steps (e.g. intervals) in the daily calendar JSON export (MVP2-100). Always included, no opt-out. Each activity gets a `steps` array: for planned workouts the structured workout's steps (warm-up, repeats, recovery, cool-down) with type, duration or distance and intensity target; for completed activities the steps of the linked planned workout, or an empty array when there is no plan (activities record no laps). The TrainingKit part is in TrainingKit#69 (open); the app only needs the TrainingKit bump and a mention in design doc 2.3.
 - [ ] **MVP2-103** Calendar JSON import, the counterpart of the export (MVP2-100/102) and in the same format: read a `CalendarExport` file back into the app (completed activities, planned workouts with their steps). Decide how it handles duplicates of what is already in the stores (see FIT-8) and what a different `schemaVersion` does.
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
@@ -97,6 +95,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 
 ## Docs & tooling
 
+- [ ] Switch CI to Xcode 27 once GitHub offers a `macos-27` runner image (`runs-on: macos-27` in both repos' `.github/workflows/swift.yml`). Until then CI builds with Xcode 26.6 (Swift 6.3) while development uses Xcode 27 (Swift 6.4), so code can build locally and fail in CI. That's what happened to TrainingKit#67: a local constant named after the method its initializer called. Until the switch, check TrainingKit changes against Xcode 26.6 before pushing.
 - [ ] Fix the 38 existing TrainingKit DocC warnings (2026-10-01: TrainingCore 16, TrainingPersistence 10, TrainingTools 10, TrainingHealthKit 1, TrainingWorkoutKit 1). Most are ``links`` to symbols in another target; replace them with code voice. Then switch `trainingkit-pr-review` to `--warnings-as-errors`, and consider adding that check to CI.
 
 ---
@@ -125,6 +124,8 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [x] **MVP2-53** Refresh plans after import so auto-matched links show live (2026-10-01, TrainingKit#63, #66)
 - [x] **MVP2-56** Raise max HR from ordinary workouts: raise-only, athlete-confirmed, date-effective; 10 s held peak with cadence-lock and stuck-reading guards; one-time 12-month scan after the first import (2026-10-01, TrainingKit#65, #70)
 - [x] **MVP2-101** Queued athlete updates: `TrainingModel.updateAthlete(asOf:_:)`, used by `applyMaxHeartRate` and the HealthKit merge, so the two can't overwrite each other (2026-10-01, TrainingKit#66, #71)
+- [x] **MVP2-100** Daily calendar JSON export for a chosen period: share button in the week view toolbar, completed and upcoming planned workouts per day (missed left out) with TRIMP, sport/template/intensity, name, duration, distance, plus CTL/ATL/TSB/monotony/strain (2026-10-01, TrainingKit#67, #72)
+- [x] **MVP2-102** Workout steps in the calendar JSON export: every entry has a `steps` array, repetitions expanded, with kind, goal, projected duration and distance and target; a completed activity carries its fulfilled plan's steps, empty without a plan (2026-10-04, TrainingKit#69, #72)
 - [x] **MVP2-?** Missed planned workouts are left out of CTL/ATL/TSB (`DailyLoadSeries`) and the daily-load chart and stats (MVP2-30). Confirmed 2026-10-01
 
 ### MVP1 (released as 0.1.0 on 2026-09-17)
