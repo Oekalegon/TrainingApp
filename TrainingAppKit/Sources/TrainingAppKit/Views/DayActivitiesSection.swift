@@ -334,24 +334,3 @@ private struct MetricPillView: View {
         .accessibilityHint("Opens an explanation of \(kind.name)")
     }
 }
-
-extension RacePriority {
-    /// The SF Symbol marking a race of this priority on the calendar: a filled circle holding the
-    /// letter A (primary), B (secondary) or C (tertiary).
-    var markerSymbolName: String {
-        switch self {
-        case .primary: "a.circle.fill"
-        case .secondary: "b.circle.fill"
-        case .tertiary: "c.circle.fill"
-        }
-    }
-
-    /// Lowercase priority name for accessibility labels.
-    var displayName: String {
-        switch self {
-        case .primary: "Primary"
-        case .secondary: "Secondary"
-        case .tertiary: "Tertiary"
-        }
-    }
-}

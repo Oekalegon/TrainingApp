@@ -430,6 +430,52 @@ struct WeekViewModelTests {
         #expect(viewModel.races(on: day(3)).isEmpty)
     }
 
+    @Test("races on one day with the same priority are ordered by name")
+    func racesWithSamePriorityOrderedByName() async throws {
+        let (store, stores) = makeStores()
+        try await store.upsert([
+            Race(name: "Zandvoort 10K", date: day(2), priority: .secondary),
+            Race(name: "Amsterdam 10K", date: day(2), priority: .secondary)
+        ])
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.races(on: day(2)).map(\.name) == ["Amsterdam 10K", "Zandvoort 10K"])
+    }
+
+    @Test("a race belongs to the athlete's local day, not the UTC day")
+    func racesUseTheAthletesTimeZone() async throws {
+        let (store, stores) = makeStores()
+        // 2023-11-14 23:30 UTC, which is 12:30 on 15 November in Auckland (UTC+13).
+        let raceDate = Date(timeIntervalSince1970: 1_699_920_000 + 23.5 * 3600)
+        try await store.upsert([Race(name: "Night Race", date: raceDate, priority: .primary)])
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "Pacific/Auckland"))
+        try await model.load(in: raceDate.addingTimeInterval(-3 * 86400)...raceDate.addingTimeInterval(3 * 86400), asOf: raceDate)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: raceDate)
+        var auckland = Calendar(identifier: .gregorian)
+        auckland.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        let fifteenth = auckland.startOfDay(for: raceDate)
+
+        #expect(viewModel.races(on: fifteenth).map(\.name) == ["Night Race"])
+        #expect(viewModel.races(on: auckland.date(byAdding: .day, value: -1, to: fifteenth)!).isEmpty)
+    }
+
+    @Test("a race saved after the week loaded shows on its day without reloading")
+    func racesIncludeARaceSavedAfterLoad() async throws {
+        let (_, stores) = makeStores()
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        #expect(viewModel.races(on: day(3)).isEmpty)
+
+        let sheet = RaceSheetViewModel(model: model, date: day(3))
+        sheet.name = "Local 10K"
+        #expect(await sheet.save())
+
+        #expect(viewModel.races(on: day(3)).map(\.name) == ["Local 10K"])
+    }
+
     @Test("metrics(on:) returns the matching day's fitness metrics, nil outside the loaded range")
     func metricsOnDayFiltersToThatCalendarDay() async throws {
         let (store, stores) = makeStores()

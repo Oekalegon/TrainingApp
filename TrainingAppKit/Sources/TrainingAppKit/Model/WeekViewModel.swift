@@ -405,13 +405,15 @@ public final class WeekViewModel {
     /// Races on `day` (MVP2-104), most important first (primary, then secondary, then tertiary) so
     /// the day row lists them in a stable, meaningful order.
     public func races(on day: Date) -> [Race] {
+        let onDay = model.races.filter { calendar.isDate($0.date, inSameDayAs: day) }
+        // Most days have no race: skip the sort, which runs for every day of three pages per drag frame.
+        guard onDay.count > 1 else { return onDay }
+        // `allCases` is declared most important first (primary, secondary, tertiary).
         let order = RacePriority.allCases
-        return model.races
-            .filter { calendar.isDate($0.date, inSameDayAs: day) }
-            .sorted {
-                let (a, b) = (order.firstIndex(of: $0.priority) ?? 0, order.firstIndex(of: $1.priority) ?? 0)
-                return a == b ? $0.name < $1.name : a < b
-            }
+        return onDay.sorted {
+            let (a, b) = (order.firstIndex(of: $0.priority) ?? 0, order.firstIndex(of: $1.priority) ?? 0)
+            return a == b ? $0.name < $1.name : a < b
+        }
     }
 
     /// The workout a plan schedules, if still in the library.
