@@ -6,13 +6,13 @@ import TrainingWorkoutKit
 
 /// Drives the "Create Planned Workout" sheet (MVP2-15): pick a ``WorkoutTemplate``, fill in its
 /// parameters with a live expected-load preview, see non-blocking ``PlanEvaluator`` guardrail
-/// warnings for the hypothetical addition, then save — which instantiates the template, syncs the
-/// result to WorkoutKit, and schedules it.
+/// warnings for the hypothetical addition, then save — which instantiates the template, checks it maps to a
+/// WorkoutKit workout, and schedules it on the Watch if it's due within 7 days.
 ///
 /// Also drives the same sheet in edit mode (MVP2-39, ``init(model:editing:templates:estimator:scheduler:)``):
 /// an existing plan's date and expected-load override are editable, its workout is shown read-only
 /// (the template and parameters it was instantiated from aren't stored, and a workout definition
-/// may be shared by other plans, so it isn't edited here), and ``save()`` updates the plan in
+/// may be shared by other plans, so it isn't edited here), and ``save(asOf:)`` updates the plan in
 /// place — rescheduling on WorkoutKit if the day moved.
 @Observable
 @MainActor
@@ -22,9 +22,10 @@ public final class PlannedWorkoutSheetViewModel {
     /// `nil` on a platform without WorkoutKit (e.g. macOS, per `Package.swift`'s doc comment on why
     /// `TrainingAppKit` still declares that platform) or in a test that passed `nil` explicitly to
     /// avoid the real `WorkoutScheduler`, which requires a genuine app bundle context — see
-    /// ``PlannedWorkoutScheduling``'s own doc comment. `save()` skips the sync/schedule step
-    /// entirely when this is `nil`, rather than only skipping `schedule` — a workout added to the
-    /// library without ever having been synced is a consistent, if incomplete, state to save.
+    /// ``PlannedWorkoutScheduling``'s own doc comment. `save(asOf:)` skips the validate/schedule step
+    /// entirely when this is `nil`, rather than only skipping `schedule` — a plan that was never
+    /// scheduled is a consistent, if incomplete, state to save, which ``WatchScheduleSync`` fills
+    /// in later.
     private let scheduler: (any PlannedWorkoutScheduling)?
     /// The plan being edited, as it was when the sheet opened; `nil` when creating a new one.
     private let editingPlan: PlannedActivity?
@@ -59,7 +60,7 @@ public final class PlannedWorkoutSheetViewModel {
     /// a new name or parameter value is never written into it.
     private var workoutNeedsReplacing: Bool { parametersChanged || nameChanged }
 
-    /// Whether ``save()`` has something to save: an edit always does (date/load/parameters); a new plan
+    /// Whether ``save(asOf:)`` has something to save: an edit always does (date/load/parameters); a new plan
     /// needs a template picked first. The sheet's save button follows this — keying it off
     /// ``selectedTemplate`` alone left edit mode, which has none, permanently disabled.
     public var canSave: Bool { isEditing || selectedTemplate != nil }
@@ -135,7 +136,7 @@ public final class PlannedWorkoutSheetViewModel {
     /// so "what would tomorrow's TSB/ratio be" is directly checkable rather than asked about. `nil`
     /// before the sheet's first recompute.
     public private(set) var guardrailDiagnostic: String?
-    /// Set when ``save()`` fails — a WorkoutKit mapping error (unsupported activity/goal/alert) or
+    /// Set when ``save(asOf:)`` fails — a WorkoutKit mapping error (unsupported activity/goal/alert) or
     /// a store failure. The sheet shows this as a blocking alert, distinct from the non-blocking
     /// ``guardrailFindings``.
     public private(set) var saveError: String?
@@ -185,7 +186,7 @@ public final class PlannedWorkoutSheetViewModel {
     ///   - estimator: Estimates ``expectedLoad`` from a step's target intensity; defaults to the
     ///     same ``TRIMPPlanEstimator`` `TrainingModel` itself uses, so the preview agrees with what
     ///     the fitness chart will show once this workout is scheduled.
-    ///   - scheduler: Syncs/schedules the instantiated workout to WorkoutKit; defaults to a real
+    ///   - scheduler: Validates the instantiated workout and schedules it on WorkoutKit; defaults to a real
     ///     `WorkoutKitBridge` where available, `nil` otherwise. Tests pass `nil` explicitly to skip
     ///     WorkoutKit entirely, since the real bridge's `schedule` crashes outside a genuine app
     ///     bundle context.
@@ -308,7 +309,7 @@ public final class PlannedWorkoutSheetViewModel {
     /// The workout edit mode currently shows/projects: ``editedWorkout`` untouched, or — once a
     /// parameter or the name changed — a fresh workout with the new values and name (instantiated
     /// from ``editedTemplate``, or a renamed copy for one without a template), which is also what
-    /// ``saveEdit(of:)`` persists. `nil` outside edit mode or when the workout is gone.
+    /// ``saveEdit(of:asOf:)`` persists. `nil` outside edit mode or when the workout is gone.
     private func effectiveEditedWorkout() -> StructuredWorkout? {
         guard let editedWorkout else { return nil }
         guard workoutNeedsReplacing else { return editedWorkout }
@@ -321,7 +322,7 @@ public final class PlannedWorkoutSheetViewModel {
             else { return editedWorkout }
             return instantiated
         }
-        // Renamed only: the same steps under a new identity, unsynced until it is scheduled.
+        // Renamed only: the same steps under a new identity.
         return StructuredWorkout(
             name: name, sport: editedWorkout.sport, blocks: editedWorkout.blocks,
             templateID: editedWorkout.templateID, parameterValues: editedWorkout.parameterValues
@@ -518,49 +519,49 @@ public final class PlannedWorkoutSheetViewModel {
         return min(todayStart, athleteCalendar.startOfDay(for: editingPlan.date))
     }
 
-    /// Instantiates the selected template, syncs it to WorkoutKit, and schedules it — `true` on
-    /// success, in which case the sheet dismisses; `false` leaves ``saveError`` set for the sheet
-    /// to show.
+    /// Instantiates the selected template, checks it can go on the Watch, and schedules it there if
+    /// its day is within the next 7 days — `true` on success, in which case the sheet dismisses;
+    /// `false` leaves ``saveError`` set for the sheet to show.
     ///
-    /// Nothing is persisted to `model` until sync *and* schedule have both already succeeded: an
-    /// earlier version called `model.add(workout)` right after `sync`, before `schedule` — if
-    /// `schedule` then failed (a real possibility on-device: no Watch paired, permission revoked,
-    /// iCloud unavailable), the workout was already permanently in the library with no
-    /// `PlannedActivity` referencing it, and retrying minted a second, equally orphaned workout
-    /// (`instantiate` assigns a fresh id every call).
+    /// A plan further out isn't scheduled here: ``WatchScheduleSync`` puts it on the Watch once its
+    /// day comes within the window, and would remove an entry made any earlier.
+    ///
+    /// Nothing is persisted to `model` until validation *and* schedule have both already succeeded:
+    /// an earlier version added the workout to the library before scheduling — if `schedule` then
+    /// failed (a real possibility on-device: no Watch paired, permission revoked, iCloud
+    /// unavailable), the workout was already permanently in the library with no `PlannedActivity`
+    /// referencing it, and retrying minted a second, equally orphaned workout (`instantiate` assigns
+    /// a fresh id every call).
     ///
     /// Not fully airtight the other way, deliberately: if `schedule` succeeds and then
     /// `model.add(workout)`/`model.add(plan)` throws (a local store write failing, e.g. a
-    /// transient CloudKit error), WorkoutKit now has a real scheduled workout with nothing in
-    /// TrainingApp's own store referencing it — worse than the orphan above, since it's visible to
-    /// the athlete on their Watch with no way to manage it from the app. This ordering accepts
-    /// that residual risk rather than eliminating it, on the bet that a local write failing right
-    /// after a successful WorkoutKit call is far rarer than WorkoutKit itself failing; genuinely
-    /// closing it would need real reconciliation (a "pending schedule" outbox, or reading
-    /// `WorkoutScheduler`'s own state back on next launch), which is more machinery than this MVP
-    /// feature justifies today.
+    /// transient CloudKit error), WorkoutKit now has an entry for a plan TrainingApp's own store
+    /// doesn't have. That entry no longer outlives the session, though: the entry carries the plan's
+    /// id, so the next ``WatchScheduleSync`` run finds no such plan and removes it (MVP2-55).
+    ///
+    /// - Parameter now: The current time, injected so tests can pin the 7-day window.
     @discardableResult
-    public func save() async -> Bool {
+    public func save(asOf now: Date = .now) async -> Bool {
         // Guards against a double-tap landing before the `Task` wrapping this call has actually
         // started running (and so before `isSaving` below would otherwise have caught it), which
         // would otherwise instantiate and persist two separate workouts for one tap.
         guard !isSaving else { return false }
         if let editingPlan {
-            return await saveEdit(of: editingPlan)
+            return await saveEdit(of: editingPlan, asOf: now)
         }
         guard let selectedTemplate else { return false }
         isSaving = true
         defer { isSaving = false }
         do {
-            var workout = try selectedTemplate.instantiate(
+            let workout = try selectedTemplate.instantiate(
                 name: nameToSave(for: selectedTemplate), values: parameterValues
             )
-            if let scheduler {
-                workout.workoutKitID = try await scheduler.sync(workout)
-            }
             let plan = PlannedActivity(workoutID: workout.id, date: date)
             if let scheduler {
-                try await scheduler.schedule(plan, workout: workout, calendar: athleteCalendar)
+                try scheduler.validate(workout)
+                if WatchSchedulePlanner.isInWindow(plan.date, asOf: now, calendar: athleteCalendar) {
+                    try await scheduler.schedule(plan, workout: workout, calendar: athleteCalendar)
+                }
             }
             try await model.add(workout)
             try await model.add(plan)
@@ -579,15 +580,15 @@ public final class PlannedWorkoutSheetViewModel {
     /// change is meant for this plan only. The old workout is then removed from the library if no
     /// plan anywhere still references it.
     ///
-    /// If the day moved or the workout was replaced, and the workout is still on WorkoutKit's
-    /// radar, the plan is scheduled (new day, new workout) on WorkoutKit *first*, and only then
-    /// persisted, then the old entry is removed — the same "don't persist until WorkoutKit
-    /// succeeded" ordering ``save()`` documents, so a failed schedule leaves the plan untouched
-    /// instead of saved somewhere the Watch doesn't know about. The final removals (the old Watch
-    /// entry, the unreferenced old workout) are best-effort (`try?`): by then the edit is saved and
-    /// correct locally, and failing the whole save over leftovers would just invite a retry that
-    /// schedules the new day a second time.
-    private func saveEdit(of original: PlannedActivity) async -> Bool {
+    /// If the day moved or the workout was replaced, and the plan's new day is within the next 7
+    /// days, the plan is scheduled on WorkoutKit *first*, and only then persisted — the same "don't
+    /// persist until WorkoutKit succeeded" ordering ``save(asOf:)`` documents, so a failed schedule
+    /// leaves the plan untouched instead of saved somewhere the Watch doesn't know about. Scheduling
+    /// replaces the plan's old entry, since entries carry the plan's id (MVP2-55). A plan moved
+    /// beyond the window has its old entry removed instead, after saving. That removal and the
+    /// unreferenced old workout's are best-effort: by then the edit is saved and correct locally,
+    /// and ``WatchScheduleSync`` removes a leftover entry on its next run.
+    private func saveEdit(of original: PlannedActivity, asOf now: Date) async -> Bool {
         isSaving = true
         defer { isSaving = false }
         let calendar = athleteCalendar
@@ -596,34 +597,28 @@ public final class PlannedWorkoutSheetViewModel {
         updated.expectedLoadOverride = loadOverride
         let dayMoved = !calendar.isDate(original.date, inSameDayAs: date)
         let oldWorkout = editedWorkout
+        let inWindow = WatchSchedulePlanner.isInWindow(updated.date, asOf: now, calendar: calendar)
         do {
             var workout = oldWorkout
-            var workoutNeedsSaving = false
             var replacesWorkout = false
             if workoutNeedsReplacing, let replacement = effectiveEditedWorkout(), replacement.id != oldWorkout?.id {
                 workout = replacement
                 updated.workoutID = replacement.id
-                workoutNeedsSaving = true
                 replacesWorkout = true
             }
             let needsScheduling = dayMoved || replacesWorkout
-            if needsScheduling, let scheduler, var scheduledWorkout = workout {
-                let id = try await scheduler.sync(scheduledWorkout)
-                if scheduledWorkout.workoutKitID == nil {
-                    // Never synced before (saved without a scheduler, or freshly instantiated): adopt
-                    // the id now, so the entry just scheduled can be found and removed again later.
-                    scheduledWorkout.workoutKitID = id
-                    workout = scheduledWorkout
-                    workoutNeedsSaving = true
+            if needsScheduling, let scheduler, let workout {
+                try scheduler.validate(workout)
+                if inWindow {
+                    try await scheduler.schedule(updated, workout: workout, calendar: calendar)
                 }
-                try await scheduler.schedule(updated, workout: scheduledWorkout, calendar: calendar)
             }
-            if workoutNeedsSaving, let workout {
+            if replacesWorkout, let workout {
                 try await model.add(workout)
             }
             try await model.add(updated)
-            if needsScheduling, let scheduler, let oldWorkout {
-                try? await scheduler.unschedule(original, workout: oldWorkout, calendar: calendar)
+            if needsScheduling, !inWindow, let scheduler {
+                await scheduler.unschedule(original)
             }
             if replacesWorkout, let oldWorkout {
                 _ = try? await model.deleteWorkoutIfUnreferenced(id: oldWorkout.id)

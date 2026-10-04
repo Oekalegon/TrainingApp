@@ -311,8 +311,8 @@ remember or restore which tab was last active.
     closes it. A file that isn't an export, or comes from a newer version of the app, shows a message
     and offers choosing again.
   - Daily fitness numbers in the file are never imported: they are recalculated. A TRIMP that was
-    edited in the file, or was an override, becomes the plan's load override. Imported plans aren't
-    scheduled in WorkoutKit yet (MVP2-55).
+    edited in the file, or was an override, becomes the plan's load override. Imported plans due in the
+    next 7 days go on the Watch the next time the app becomes active (§3.5).
 - **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
@@ -414,7 +414,7 @@ MVP2-35) and load; and a plain step list, one line per block (`4 × Work 8:00, R
 Richer per-step targets/zones are deferred. A pencil in the toolbar opens `PlannedWorkoutSheet` in
 edit mode (date, load override, and — for a workout built from a template, which records its template id and parameter values — those parameters, e.g. an easy run's duration; changing one instantiates a new workout for this plan and removes the old one if no other plan uses it, so a workout shared with other plans is never altered; a workout without a recorded template keeps a read-only definition), and a
 Delete button at the bottom behind a confirmation alert removes only the plan
-(`TrainingModel.deletePlan`), never the library workout, and its WorkoutKit entry best-effort.
+(`TrainingModel.deletePlan`), never the library workout, and its WorkoutKit entry best-effort (§3.5).
 
 The Name field of `PlannedWorkoutSheet` (MVP2-110) is a default title the athlete can always change. When creating, it starts as the template's generated title ("40min Easy Run", "23 km Long Run", "10x8sec Hill Sprints", from TrainingKit's `WorkoutTemplate.defaultTitle`; a steady run's time includes its warmup and cooldown) and follows the parameter controls until the athlete edits it by hand; picking another template starts over; a cleared field saves the generated title. When editing, the field starts as the saved name and follows parameter changes only if that name is still exactly the generated title. A new name saves as a new workout, like a parameter change, so a workout shared with other plans is never renamed under them; a cleared field keeps the saved name. Distances are written in km/m or miles/yards by the device's measurement system (`PlannedWorkoutSheetViewModel.distanceSystem`).
 
@@ -545,6 +545,33 @@ calls `TrainingModel.importActivities(from:)` (§3.3) to pull anything new from 
 (HealthKit not authorized, import failure) fail silently back to the pre-refresh state — MVP 1
 doesn't add error-presentation UI beyond that; worth a follow-up once the app has been used for
 a while.
+
+### 3.5 Planned workouts on the Watch (MVP2-55)
+
+The Watch's Workout app lists scheduled workouts 7 days back and 7 days ahead, and WorkoutKit never
+wakes the app, so the app keeps the next 7 days scheduled itself. `WatchScheduleSync.sync(asOf:)`
+runs when `AppTabView` sees `scenePhase == .active`: on launch and every time the app comes back to
+the foreground, which also moves the window on after midnight.
+
+- **Which plans.** `WatchSchedulePlanner` picks the plans dated today through 6 days ahead, in the
+  athlete's time zone, that aren't linked to an activity and whose workout maps to a WorkoutKit
+  `CustomWorkout`, soonest first, up to `WorkoutScheduler.maxAllowedScheduledWorkoutCount`. Plans
+  linked to an activity in the last 7 days keep their (completed) entry while slots remain.
+- **Each run.** It reads every plan from the store (not just the week view's loaded range), removes
+  every other entry with TrainingKit's `WorkoutKitBridge.unscheduleAll(except:)` — missed workouts,
+  plans beyond the window, deleted plans, and entries from before MVP2-55 that carry a workout's id
+  — then schedules the chosen plans. Each entry carries its plan's id, so scheduling an unchanged
+  plan is a no-op and scheduling a moved or edited one replaces its entry.
+- **Permission.** The first run asks for WorkoutKit permission. Declined, or on a device that can't
+  schedule workouts, the sync does nothing.
+- **Saving and deleting.** `PlannedWorkoutSheetViewModel` schedules a new or moved plan right away
+  when it's within the window (and won't save it if scheduling fails); a plan moved beyond the
+  window has its entry removed. Deleting a plan removes its entry. Both removals are best-effort,
+  since the next sync catches anything left behind.
+
+Not done yet (MVP2-113): syncing after plans change in other ways (calendar import, plan linking),
+after a HealthKit workout arrives, and on background refresh; a settings switch; and a "sent to
+Watch" mark on plan cards.
 
 ---
 

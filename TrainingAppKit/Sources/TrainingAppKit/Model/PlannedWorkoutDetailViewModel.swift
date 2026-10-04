@@ -142,7 +142,8 @@ public final class PlannedWorkoutDetailViewModel {
     /// (a failure there leaves everything as it was, with ``deleteError`` set), then its WorkoutKit
     /// entry is removed best-effort: by then the deletion is done and correct locally, and a leftover
     /// Watch entry isn't worth reporting as a failed delete (same reasoning as
-    /// ``PlannedWorkoutSheetViewModel``'s edit save).
+    /// ``PlannedWorkoutSheetViewModel``'s edit save) — ``WatchScheduleSync`` removes it on its next
+    /// run anyway, since no plan has its id any more.
     ///
     /// - Returns: `true` on success, in which case the sheet dismisses.
     @discardableResult
@@ -151,22 +152,13 @@ public final class PlannedWorkoutDetailViewModel {
         isDeleting = true
         defer { isDeleting = false }
         let deleted = plan
-        let deletedWorkout = workout
         do {
             try await model.deletePlan(id: planID)
         } catch {
             deleteError = "Couldn't delete this workout: \(error.localizedDescription)"
             return false
         }
-        if let scheduler, let deletedWorkout {
-            try? await scheduler.unschedule(deleted, workout: deletedWorkout, calendar: schedulingCalendar)
-        }
+        await scheduler?.unschedule(deleted)
         return true
-    }
-
-    private var schedulingCalendar: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = model.athlete.timeZone
-        return calendar
     }
 }

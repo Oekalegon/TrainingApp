@@ -116,7 +116,7 @@ struct PlannedWorkoutSheetViewModelTests {
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.baseHillSprints
         viewModel.setParameterValue(10, forKey: "reps")
 
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(didSave)
         #expect(model.workouts.first?.name == "10x8sec Hill Sprints")
@@ -129,7 +129,7 @@ struct PlannedWorkoutSheetViewModelTests {
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
         viewModel.workoutName = ""
 
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(didSave)
         #expect(model.workouts.first?.name == "20min Recovery Run")
@@ -156,7 +156,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
 
         viewModel.workoutName = "Shakeout"
-        #expect(await viewModel.save())
+        #expect(await viewModel.save(asOf: day(0)))
 
         let saved = try #require(model.plans.first { $0.id == plan.id })
         #expect(saved.workoutID != oldWorkout.id)
@@ -164,7 +164,7 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(model.workouts.first { $0.id == oldWorkout.id }?.name == oldWorkout.name)
     }
 
-    @Test("a rename reschedules the new workout and unschedules the old one")
+    @Test("a rename schedules the new workout, which replaces the plan's Watch entry")
     func renameReschedules() async throws {
         let (_, model) = await makeModel()
         try await model.load(in: day(-7)...day(14))
@@ -173,9 +173,9 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
 
         viewModel.workoutName = "Shakeout"
-        #expect(await viewModel.save())
+        #expect(await viewModel.save(asOf: day(0)))
 
-        #expect(await scheduler.callLog == ["schedule", "unschedule"])
+        #expect(await scheduler.callLog == ["schedule"])
         #expect(!model.workouts.contains { $0.id == oldWorkout.id })
     }
 
@@ -189,7 +189,7 @@ struct PlannedWorkoutSheetViewModelTests {
         )
 
         viewModel.workoutName = "Shakeout"
-        #expect(!(await viewModel.save()))
+        #expect(!(await viewModel.save(asOf: day(0))))
 
         #expect(model.plans.first { $0.id == plan.id }?.workoutID == oldWorkout.id)
         #expect(model.workouts.map(\.id) == [oldWorkout.id])
@@ -209,7 +209,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
 
         viewModel.workoutName = "Renamed"
-        #expect(await viewModel.save())
+        #expect(await viewModel.save(asOf: day(0)))
 
         let saved = try #require(model.plans.first { $0.id == plan.id })
         let renamed = try #require(model.workouts.first { $0.id == saved.workoutID })
@@ -225,7 +225,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
 
         viewModel.workoutName = ""
-        #expect(await viewModel.save())
+        #expect(await viewModel.save(asOf: day(0)))
 
         #expect(model.plans.first?.workoutID == oldWorkout.id)
     }
@@ -362,7 +362,7 @@ struct PlannedWorkoutSheetViewModelTests {
         utcCalendar.timeZone = TimeZone(identifier: "UTC")!
         // `FitnessMetrics`/`PlanFinding` days are always midnight-aligned; a race's own `date`
         // has to match that exactly for `PlanEvaluator`'s dictionary lookup to find it (see
-        // `RaceSheetViewModel.save()`'s own doc comment) — `plannedDate` itself deliberately
+        // `RaceSheetViewModel.save(asOf: day(0))`'s own doc comment) — `plannedDate` itself deliberately
         // isn't (epoch 1_700_000_000 is 22:13:20 UTC), so the race here is seeded pre-normalized
         // rather than at `plannedDate` directly.
         let raceDay = utcCalendar.startOfDay(for: plannedDate)
@@ -426,7 +426,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(2), scheduler: nil)
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
 
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(didSave)
         #expect(model.workouts.count == 1)
@@ -440,24 +440,37 @@ struct PlannedWorkoutSheetViewModelTests {
         let (_, model) = await makeModel()
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0), scheduler: nil)
 
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(!didSave)
         #expect(model.workouts.isEmpty)
     }
 
-    @Test("save() syncs through the injected scheduler and persists its workoutKitID")
-    func saveSyncsThroughScheduler() async {
+    @Test("save() schedules a plan due within the next 7 days")
+    func saveSchedulesPlanInWindow() async {
         let (_, model) = await makeModel()
         let scheduler = FakeScheduler()
-        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: scheduler)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(6), scheduler: scheduler)
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
 
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(didSave)
-        #expect(model.workouts.first?.workoutKitID == scheduler.mintedID)
-        #expect(await scheduler.scheduledPlans.count == 1)
+        #expect(await scheduler.scheduledPlans.map(\.id) == model.plans.map(\.id))
+    }
+
+    @Test("save() leaves a plan beyond the next 7 days for WatchScheduleSync to schedule later")
+    func saveSkipsPlanBeyondWindow() async {
+        let (_, model) = await makeModel()
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(7), scheduler: scheduler)
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        let didSave = await viewModel.save(asOf: day(0))
+
+        #expect(didSave)
+        #expect(model.plans.count == 1)
+        #expect(await scheduler.callLog.isEmpty)
     }
 
     @Test("save() persists nothing when schedule() fails, rather than leaving an orphaned library workout")
@@ -467,7 +480,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: scheduler)
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
 
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(!didSave)
         #expect(viewModel.saveError != nil)
@@ -485,8 +498,9 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: scheduler)
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
 
-        async let first = viewModel.save()
-        async let second = viewModel.save()
+        let now = day(0)
+        async let first = viewModel.save(asOf: now)
+        async let second = viewModel.save(asOf: now)
         let (firstResult, secondResult) = await (first, second)
 
         // Exactly one of the two actually saved -- both racing to `true` (or both silently
@@ -498,17 +512,14 @@ struct PlannedWorkoutSheetViewModelTests {
 
     // MARK: - Edit mode (MVP2-39)
 
-    /// A plan scheduling a small, already-synced library workout, loaded into `model`.
+    /// A plan scheduling a small library workout, loaded into `model`.
     private func makeEditablePlan(
-        model: TrainingModel, on date: Date, override: Double? = nil, synced: Bool = true
+        model: TrainingModel, on date: Date, override: Double? = nil
     ) async throws -> (PlannedActivity, StructuredWorkout) {
-        var workout = StructuredWorkout(
+        let workout = StructuredWorkout(
             name: "Steady", sport: .running,
             blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
         )
-        if synced {
-            workout.workoutKitID = UUID()
-        }
         let plan = PlannedActivity(workoutID: workout.id, date: date, expectedLoadOverride: override)
         try await model.add(workout)
         try await model.add(plan)
@@ -555,7 +566,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
 
         viewModel.loadOverride = 42
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(didSave)
         #expect(model.plans.count == 1)
@@ -565,7 +576,7 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(await scheduler.callLog.isEmpty)
     }
 
-    @Test("saving an edit that moves the day schedules the new day first, then removes the old one")
+    @Test("saving an edit that moves the day schedules the new day, which replaces the old entry")
     func editMovingDayReschedules() async throws {
         let (_, model) = await makeModel()
         try await model.load(in: day(-7)...day(14))
@@ -574,14 +585,13 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
 
         viewModel.date = day(5)
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(didSave)
         #expect(model.plans.count == 1)
         #expect(model.plans.first?.date == day(5))
-        #expect(await scheduler.callLog == ["schedule", "unschedule"])
+        #expect(await scheduler.callLog == ["schedule"])
         #expect(await scheduler.scheduledPlans.first?.date == day(5))
-        #expect(await scheduler.unscheduledPlans.first?.date == day(3))
     }
 
     @Test("a failed reschedule leaves the plan on its old day and reports the error")
@@ -593,7 +603,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
 
         viewModel.date = day(5)
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(!didSave)
         #expect(viewModel.saveError != nil)
@@ -601,18 +611,20 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(await scheduler.unscheduledPlans.isEmpty)
     }
 
-    @Test("moving a never-synced workout adopts a WorkoutKit id so the new entry can be found later")
-    func editMovingUnsyncedWorkoutAdoptsID() async throws {
+    @Test("moving a plan beyond the next 7 days removes its Watch entry instead of scheduling it")
+    func editMovingBeyondWindowUnschedules() async throws {
         let (_, model) = await makeModel()
         try await model.load(in: day(-7)...day(14))
-        let (plan, workout) = try await makeEditablePlan(model: model, on: day(3), synced: false)
+        let (plan, _) = try await makeEditablePlan(model: model, on: day(3))
         let scheduler = FakeScheduler()
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
 
-        viewModel.date = day(5)
-        #expect(await viewModel.save())
+        viewModel.date = day(10)
+        #expect(await viewModel.save(asOf: day(0)))
 
-        #expect(model.workouts.first { $0.id == workout.id }?.workoutKitID == scheduler.mintedID)
+        #expect(model.plans.first?.date == day(10))
+        #expect(await scheduler.callLog == ["unschedule"])
+        #expect(await scheduler.unscheduledPlans.map(\.id) == [plan.id])
     }
 
     @Test("editing a plan whose workout left the library still saves, without a name or any WorkoutKit call")
@@ -626,7 +638,7 @@ struct PlannedWorkoutSheetViewModelTests {
 
         #expect(viewModel.editedWorkoutName == nil)
         viewModel.date = day(5)
-        #expect(await viewModel.save())
+        #expect(await viewModel.save(asOf: day(0)))
 
         #expect(model.plans.first?.date == day(5))
         #expect(await scheduler.callLog.isEmpty)
@@ -729,7 +741,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
 
         viewModel.setParameterValue(45 * 60, forKey: "duration")
-        let didSave = await viewModel.save()
+        let didSave = await viewModel.save(asOf: day(0))
 
         #expect(didSave)
         let saved = try #require(model.plans.first { $0.id == plan.id })
@@ -739,7 +751,7 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(newWorkout.templateID == oldWorkout.templateID)
         #expect(newWorkout.parameterValues?["duration"] == 45.0 * 60)
         #expect(!model.workouts.contains { $0.id == oldWorkout.id })
-        #expect(await scheduler.callLog == ["schedule", "unschedule"])
+        #expect(await scheduler.callLog == ["schedule"])
     }
 
     @Test("saving a parameter change keeps the old workout when another plan still uses it")
@@ -751,7 +763,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
 
         viewModel.setParameterValue(45 * 60, forKey: "duration")
-        #expect(await viewModel.save())
+        #expect(await viewModel.save(asOf: day(0)))
 
         #expect(model.workouts.contains { $0.id == oldWorkout.id })
         #expect(model.plans.filter { $0.workoutID == oldWorkout.id }.count == 1)
@@ -766,7 +778,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
 
         viewModel.loadOverride = 33
-        #expect(await viewModel.save())
+        #expect(await viewModel.save(asOf: day(0)))
 
         #expect(model.plans.first?.workoutID == oldWorkout.id)
         #expect(model.workouts.count == 1)
@@ -782,7 +794,7 @@ struct PlannedWorkoutSheetViewModelTests {
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
 
         viewModel.setParameterValue(45 * 60, forKey: "duration")
-        #expect(!(await viewModel.save()))
+        #expect(!(await viewModel.save(asOf: day(0))))
 
         #expect(model.plans.first?.workoutID == oldWorkout.id)
         #expect(model.workouts.map(\.id) == [oldWorkout.id])
