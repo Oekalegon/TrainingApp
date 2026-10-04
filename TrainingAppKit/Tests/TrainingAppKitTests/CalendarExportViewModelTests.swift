@@ -11,10 +11,10 @@ struct CalendarExportViewModelTests {
         Date(timeIntervalSince1970: 1_699_920_000 + Double(offset) * 86400 + hour * 3600)
     }
 
-    private func makeViewModel() -> (InMemoryStore, CalendarExportViewModel) {
+    private func makeViewModel(failing: Bool = false) -> (InMemoryStore, CalendarExportViewModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
-            activityStore: store, planStore: store, workoutStore: store,
+            activityStore: store, planStore: store, workoutStore: failing ? FailingWorkoutStore() : store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190))
@@ -85,6 +85,32 @@ struct CalendarExportViewModelTests {
 
         viewModel.lastDay = day(13)
         #expect(viewModel.exportedFile == nil)
+        #expect(!FileManager.default.fileExists(atPath: file.path), "a changed period deletes the old file")
+    }
+
+    @Test("a failing store gives a failure message, which a period change clears")
+    func failedExport() async {
+        let (_, viewModel) = makeViewModel(failing: true)
+
+        await viewModel.export()
+
+        #expect(viewModel.exportFailed)
+        #expect(viewModel.exportedFile == nil)
+        viewModel.lastDay = day(10)
+        #expect(!viewModel.exportFailed)
+    }
+
+    @Test("discarding removes the written file")
+    func discardRemovesFile() async throws {
+        let (_, viewModel) = makeViewModel()
+        viewModel.lastDay = day(2)
+        await viewModel.export()
+        let file = try #require(viewModel.exportedFile)
+
+        viewModel.discardExportedFile()
+
+        #expect(viewModel.exportedFile == nil)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 
     @Test("a backwards period can't be exported")
@@ -97,4 +123,14 @@ struct CalendarExportViewModelTests {
         #expect(!viewModel.isPeriodValid)
         #expect(viewModel.exportedFile == nil)
     }
+}
+
+/// A workout library whose reads fail, so exporting fails without a real storage error.
+private struct FailingWorkoutStore: WorkoutLibraryStore {
+    struct Failure: Error {}
+
+    func workouts() async throws -> [StructuredWorkout] { throw Failure() }
+    func workout(id: UUID) async throws -> StructuredWorkout? { nil }
+    func upsert(_ workouts: [StructuredWorkout]) async throws {}
+    func deleteWorkout(id: UUID) async throws {}
 }

@@ -16,7 +16,9 @@ struct CalendarExportSheet: View {
             Form {
                 Section {
                     DatePicker("From", selection: $viewModel.firstDay, displayedComponents: .date)
+                        .disabled(viewModel.isExporting)
                     DatePicker("To", selection: $viewModel.lastDay, displayedComponents: .date)
+                        .disabled(viewModel.isExporting)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
                             ForEach(viewModel.presets) { preset in
@@ -25,6 +27,7 @@ struct CalendarExportSheet: View {
                             }
                         }
                     }
+                    .disabled(viewModel.isExporting)
                 } header: {
                     Text("Period")
                 } footer: {
@@ -34,7 +37,7 @@ struct CalendarExportSheet: View {
                         Text("The export couldn't be created. Please try again.")
                             .foregroundStyle(.red)
                     } else {
-                        Text("A JSON file with one entry per day: completed and planned workouts (missed ones left out) with their TRIMP, type, name, duration and distance, plus the day's fitness, fatigue, form, monotony and strain.")
+                        Text("A JSON file with one entry per day: completed and planned workouts (missed ones left out) with their TRIMP, type, name, duration, distance and steps, plus the day's fitness, fatigue, form, monotony and strain.")
                     }
                 }
             }
@@ -58,6 +61,7 @@ struct CalendarExportSheet: View {
                 }
             }
             .task { await viewModel.loadUpcomingRace() }
+            .onDisappear { viewModel.discardExportedFile() }
             #if os(iOS)
             .sheet(item: $sharedFile) { shared in
                 ActivityView(url: shared.url) { completed in
@@ -77,6 +81,7 @@ struct CalendarExportSheet: View {
     private var confirmationButton: some View {
         if viewModel.isExporting {
             ProgressView()
+                .accessibilityLabel("Creating export")
         } else {
             #if os(iOS)
             Button {

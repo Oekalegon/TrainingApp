@@ -6,7 +6,8 @@ import TrainingCore
 /// sheet.
 ///
 /// The file goes to the temporary directory, named after the period. The share sheet copies or
-/// sends it from there, so the app never keeps exports around.
+/// sends it from there, and the file is deleted when the period changes or the sheet closes
+/// (``discardExportedFile()``), since it holds the athlete's health data.
 @Observable
 @MainActor
 public final class CalendarExportViewModel {
@@ -37,10 +38,12 @@ public final class CalendarExportViewModel {
         }
     }
 
-    /// The first day of the period. Changing it discards a previously written file.
-    public var firstDay: Date { didSet { exportedFile = nil } }
-    /// The last day of the period, inclusive. Changing it discards a previously written file.
-    public var lastDay: Date { didSet { exportedFile = nil } }
+    /// The first day of the period. Changing it discards a previously written file and a failure
+    /// message.
+    public var firstDay: Date { didSet { periodChanged() } }
+    /// The last day of the period, inclusive. Changing it discards a previously written file and a
+    /// failure message.
+    public var lastDay: Date { didSet { periodChanged() } }
     /// The quick periods on offer: the fixed ones, plus "Until <race>" once
     /// ``loadUpcomingRace()`` found a primary race.
     public private(set) var presets: [Preset] = [.nextFourWeeks, .lastTwelveWeeks]
@@ -104,11 +107,23 @@ public final class CalendarExportViewModel {
         presets = [.untilRace(name: race.name, date: race.date), .nextFourWeeks, .lastTwelveWeeks]
     }
 
+    /// Deletes the written file, if any. Called when the sheet closes.
+    public func discardExportedFile() {
+        if let file = exportedFile { try? FileManager.default.removeItem(at: file) }
+        exportedFile = nil
+    }
+
+    private func periodChanged() {
+        discardExportedFile()
+        exportFailed = false
+    }
+
     /// Builds the export for the period and writes it to a temporary JSON file, setting
     /// ``exportedFile`` on success or ``exportFailed`` on failure.
     ///
-    /// If the period changes while the export is being built, the result is dropped rather than
-    /// offered for a period the athlete no longer has selected.
+    /// The period is checked again before the file is written: if it changed while the export was
+    /// being built, the result is dropped rather than offered for a period the athlete no longer
+    /// has selected. (The sheet also disables the period controls during an export.)
     public func export() async {
         guard isPeriodValid, !isExporting else { return }
         isExporting = true
@@ -120,8 +135,8 @@ public final class CalendarExportViewModel {
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("Training Calendar \(export.firstDay) to \(export.lastDay)")
                 .appendingPathExtension("json")
-            try export.jsonData().write(to: url, options: .atomic)
             guard firstDay == first, lastDay == last else { return }
+            try export.jsonData().write(to: url, options: .atomic)
             exportedFile = url
         } catch {
             exportFailed = true

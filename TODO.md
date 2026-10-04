@@ -32,6 +32,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-?** Refine a workout's TRIMP estimate from the median actual TRIMP of its linked activities
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
 - [ ] **MVP2-?** Race marker on the calendar that distinguishes primary from secondary/tertiary races
+- [ ] **MVP2-103** Calendar JSON import, the counterpart of the export (MVP2-100/102) and in the same format: read a `CalendarExport` file back into the app (completed activities, planned workouts with their steps). Decide how it handles duplicates of what is already in the stores (see FIT-8) and what a different `schemaVersion` does.
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
 ## MVP3: Calibration
@@ -124,6 +125,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [x] **MVP2-56** Raise max HR from ordinary workouts: raise-only, athlete-confirmed, date-effective; 10 s held peak with cadence-lock and stuck-reading guards; one-time 12-month scan after the first import (2026-10-01, TrainingKit#65, #70)
 - [x] **MVP2-101** Queued athlete updates: `TrainingModel.updateAthlete(asOf:_:)`, used by `applyMaxHeartRate` and the HealthKit merge, so the two can't overwrite each other (2026-10-01, TrainingKit#66, #71)
 - [x] **MVP2-100** Daily calendar JSON export for a chosen period: share button in the week view toolbar, completed and upcoming planned workouts per day (missed left out) with TRIMP, sport/template/intensity, name, duration, distance, plus CTL/ATL/TSB/monotony/strain (2026-10-01, TrainingKit#67, #72)
+- [x] **MVP2-102** Workout steps in the calendar JSON export: every entry has a `steps` array, repetitions expanded, with kind, goal, projected duration and distance and target; a completed activity carries its fulfilled plan's steps, empty without a plan (2026-10-04, TrainingKit#69, #72)
 - [x] **MVP2-?** Missed planned workouts are left out of CTL/ATL/TSB (`DailyLoadSeries`) and the daily-load chart and stats (MVP2-30). Confirmed 2026-10-01
 
 ### MVP1 (released as 0.1.0 on 2026-09-17)
