@@ -52,16 +52,27 @@ struct PlannedWorkoutDetailSheet: View {
                     }
                 }
 
-                Section("Expected") {
+                Section {
                     if let duration = viewModel.expectedDuration {
-                        LabeledContent("Duration", value: Duration.seconds(duration).formatted(.time(pattern: .hourMinuteSecond)))
+                        LabeledContent("Duration") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(Duration.seconds(duration).formatted(.time(pattern: .hourMinuteSecond)))
+                                // Distance and open steps take as long as the athlete's pace makes
+                                // them — a forecast, so it says so.
+                                if viewModel.isDurationForecast {
+                                    Text("Forecast")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
                     if let meters = viewModel.expectedDistanceMeters {
                         LabeledContent("Distance") {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(Measurement(value: meters, unit: UnitLength.meters).formatted(Self.measurementFormat))
-                                // A duration-based workout has no distance of its own — this is the
-                                // pace model's estimate, so it says so.
+                                // A duration-based workout has no distance of its own — this is a
+                                // forecast from the athlete's paces, so it says so.
                                 if viewModel.isDistanceForecast {
                                     Text("Forecast")
                                         .font(.caption2)
@@ -77,6 +88,12 @@ struct PlannedWorkoutDetailSheet: View {
                                 Text("\(load.formatted(Self.loadFormat)) TRIMP")
                             }
                         }
+                    }
+                } header: {
+                    Text("Expected")
+                } footer: {
+                    if let basis = viewModel.forecastBasis {
+                        Text(basis)
                     }
                 }
 

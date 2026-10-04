@@ -17,6 +17,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-8** Label TRIMP as "estimated" vs "measured" everywhere it's shown (planned/no-HR activities)
 - [ ] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later)
 - [ ] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`)
+  - Implemented on `claude/vibrant-pascal-tk8z7m` (not merged): `HistoricalPaceEstimator` forecasts from similar earlier workouts, per zone and per step. Planned cards still show only the measure the workout defines; the detail sheet and linked cards show both.
 - [ ] **MVP2-54** Check that the stats values (stats bar, daily-load chart, CTL/ATL/TSB pills) update **immediately** when a planned or completed activity is added or deleted, without switching weeks; MVP2-53 found the same staleness for plan links. Also confirm that missed planned workouts are not counted anywhere. Add tests for any gap found.
 - [ ] **MVP2-55** Register planned workouts for the coming days in Apple Fitness, so each structured workout is available on the Watch on the day it's due, ideally first in the list.
   - Today a workout is scheduled only once, when its plan is saved (MVP2-15/39), through `WorkoutKitBridge.schedule`. Its doc says callers should schedule lazily within the ±7-day window the Watch shows, but nothing does that yet.
@@ -40,6 +41,8 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
   - **TrainingKit:** a function from a template and its values to a title, with tests for every template. Return structured pieces or take a unit system/formatter, so units ("min", "sec", "km" vs miles) follow the user's locale and settings.
   - **TrainingApp:** bump the TrainingKit pin (as in MVP2-105) and use the generated title as the sheet's default name. It keeps following the sliders until the athlete edits the name by hand; that state stays in `PlannedWorkoutSheetViewModel`, with tests.
 - [ ] **MVP2-111** Estimate a planned workout's likely duration from previous workouts made with the same template. Open-ended steps (the run to the hill in the hill-sprint template) are ignored in default titles and count as a fixed 10 minutes in planned-duration estimates (`WorkoutDurationEstimator`), so the two can disagree; the median of earlier linked activities would be closer. Related to the TRIMP refinement item above.
+  - Implemented on `claude/vibrant-pascal-tk8z7m` (not merged): open steps take the median time they took in earlier linked runs of the same workout or template.
+- [ ] **MVP2-112** Move `PaceHistory`/`HistoricalPaceEstimator` into TrainingKit and use them in `StatisticsCalculator`'s planned projections, so the week's planned totals agree with the per-card forecasts (MVP2-35, MVP2-111). Also consider persisting the history instead of re-reading 180 days from the store.
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
 ## MVP3: Calibration
