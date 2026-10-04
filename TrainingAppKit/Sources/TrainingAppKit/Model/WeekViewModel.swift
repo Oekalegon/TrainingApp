@@ -402,7 +402,7 @@ public final class WeekViewModel {
         plans(on: day).filter { $0.completedActivityID == nil }
     }
 
-    /// Races on `day` (MVP2-?), most important first (primary, then secondary, then tertiary) so
+    /// Races on `day` (MVP2-104), most important first (primary, then secondary, then tertiary) so
     /// the day row lists them in a stable, meaningful order.
     public func races(on day: Date) -> [Race] {
         let order = RacePriority.allCases

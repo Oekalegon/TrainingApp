@@ -255,6 +255,12 @@ remember or restore which tab was last active.
   outline only: the plain view background, a hairline secondary border, secondary text, no expected
   Load (it never became training load) and no intensity colour. A plan for today stays hatched until
   the day ends. This deliberately adds a third card state to the two above.
+- **Race cards** (MVP2-104). A race on a day is drawn as a `RaceCard` above that day's activities,
+  laid out like an activity card's headline: a lettered circle for the priority (A primary, B
+  secondary, C tertiary) where the activity card has its intensity marker, a flag icon and the race
+  name. Several races on one day are listed primary first (`WeekViewModel.races(on:)`). The card is
+  not tappable (there is no race detail sheet yet) and reads as one VoiceOver element, e.g. "Primary
+  race: Marathon". The daily-load chart has no race marker yet.
 - `DayActivitiesSection` takes one closure per card kind (`WeekViewModel.activityCardContent(for:)`,
   `plannedCardContent(for:asOf:)`) returning everything the card shows. Those values are cached per
   item against the inputs they depend on — a plan's load override, its workout's steps, an activity's
