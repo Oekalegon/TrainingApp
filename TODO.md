@@ -23,6 +23,16 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
   - Needed: a rolling sync, on launch or foreground, that schedules plans in the window, keeps within `WorkoutScheduler`'s scheduled-workout limit, and unschedules entries for plans that moved or were deleted.
   - **No duplicates:** before scheduling, check `WorkoutScheduler.shared.scheduledWorkouts`. Skip a plan whose workout is already scheduled that day, matching by `workoutKitID` and also by equivalent steps, in case the same workout was added under another id.
   - Find out whether WorkoutKit lets us control the order in the Workout app's list.
+- [ ] **MVP2-112** MVP2-55 (app): adopt per-plan Watch scheduling from TrainingKit.
+  - Update callers: `unschedule(_:workout:calendar:)` becomes `unschedule(_:)`.
+  - Moving a plan or editing its workout now needs only `schedule`; remove the `unschedule` call before it.
+  - After upgrading, call `unscheduleAll(except:)` once with every plan ID in the store, so entries scheduled under the old IDs leave the Watch.
+  - Replace `sync(_:)` with `customWorkout(from:)`.
+- [ ] **MVP2-113** MVP2-55 (app): keep the Watch in sync with the plans. Builds on MVP2-112.
+  - Re-sync when plans change, when the app opens, after a HealthKit workout arrives, and on background refresh.
+  - Ask for Watch permission.
+  - Turn it on by default, with a switch to turn it off.
+  - A "sent to Watch" mark on plan cards.
 - [ ] **MVP2-?** `Goal` model: a non-event target (e.g. "sub-20 5k") with no date and no calendar presence
 - [ ] **MVP2-?** Structured Workout creator: create, edit, duplicate
 - [ ] **MVP2-?** Extend `SessionType` to match the 14-workout library
