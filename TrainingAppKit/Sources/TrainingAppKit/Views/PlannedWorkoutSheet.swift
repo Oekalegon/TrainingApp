@@ -103,9 +103,13 @@ struct PlannedWorkoutFormFields: View {
         // joined it.
         Section("Workout") {
             if viewModel.isEditing {
-                // Read-only: the workout's template/parameters aren't stored, and its
-                // definition may be shared with other plans (MVP2-39).
-                LabeledContent("Name", value: viewModel.editedWorkoutName ?? "Planned workout")
+                // Editable (MVP2-110): saving a new name makes a new workout rather than renaming
+                // one that other plans may share (MVP2-39).
+                if viewModel.editedWorkoutName != nil {
+                    TextField("Name", text: $viewModel.workoutName)
+                } else {
+                    LabeledContent("Name", value: "Planned workout")
+                }
                 if viewModel.editedWorkoutName != nil, !viewModel.canEditParameters {
                     Text("This workout's parameters can't be changed — it wasn't created from a template.")
                         .font(.caption)
