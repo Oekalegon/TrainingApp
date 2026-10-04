@@ -76,12 +76,12 @@ public final class PlannedWorkoutDetailViewModel {
     }
 
     /// The workout's forecast duration and distance from the athlete's earlier, similar workouts —
-    /// the same forecast as the day list's card (see ``HistoricalPaceEstimator``); `nil` when the
+    /// the same forecast as the day list's card and the week's statistics
+    /// (`StatisticsCalculator.projection(for:athlete:paceHistory:before:excluding:)`); `nil` when the
     /// workout is gone.
-    private var projection: HistoricalProjection? {
+    private var projection: WorkoutProjection? {
         workout.map {
-            HistoricalPaceEstimator(durationEstimator: statisticsCalculator.durationEstimator)
-                .projection(for: $0, athlete: model.athlete, history: paceHistory, before: plan.date)
+            statisticsCalculator.projection(for: $0, athlete: model.athlete, paceHistory: paceHistory, before: plan.date)
         }
     }
 

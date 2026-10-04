@@ -8,7 +8,7 @@ extension WeekViewModel {
         /// Expected TRIMP: the plan's override, else the estimator's figure.
         public let load: Double?
         /// Expected duration — exact for a duration-based workout, forecast from the athlete's
-        /// earlier paces for distance and open steps (see ``HistoricalPaceEstimator``).
+        /// earlier paces for distance and open steps (see ``WeekViewModel/paceHistory``).
         public let duration: TimeInterval?
         /// Expected distance — exact for a distance-based workout, forecast from the athlete's
         /// earlier paces for time and open steps; `nil` when the forecast can't be made (no heart-rate
@@ -34,8 +34,8 @@ extension WeekViewModel {
         refreshCardCachesIfNeeded()
         let inputs = projectionInputs(for: plan, workout: workout) + [activity.id.hashValue, activity.start.hashValue]
         return linkedExpectationCache.value(for: plan.id, inputs: inputs) {
-            let projection = paceEstimator.projection(
-                for: workout, athlete: model.athlete, history: paceHistory,
+            let projection = statisticsCalculator.projection(
+                for: workout, athlete: model.athlete, paceHistory: paceHistory,
                 before: activity.start, excluding: activity.id
             )
             return LinkedPlanExpectation(

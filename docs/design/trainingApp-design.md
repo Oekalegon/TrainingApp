@@ -422,31 +422,23 @@ The Name field of `PlannedWorkoutSheet` (MVP2-110) is a default title the athlet
 #### Pace forecasts (MVP2-35, MVP2-111)
 
 A planned workout defines either time or distance per step, so the other — and the length of an
-open step such as the run to the hill — has to be forecast. `HistoricalPaceEstimator` forecasts it
-from the athlete's own earlier workouts rather than from `AthleteProfile.paceModel`'s fixed
-threshold-pace table alone:
+open step such as the run to the hill — has to be forecast. TrainingKit forecasts it from the
+athlete's own earlier, similar workouts rather than from `AthleteProfile.paceModel` alone (see
+"Pace forecasts" in TrainingKit's design doc): per heart-rate zone, kept slower in lower zones;
+per step kind and zone, so a recovery jog isn't forecast at steady pace; and open steps from the
+median time they took in earlier runs of the same workout or template.
 
-- `WeekViewModel.paceHistory` (`PaceHistory`) reads the last 180 days of activities from the store
-  (refreshed with the week caches when activities, links, the library or the athlete change). For
-  each activity with speed and heart-rate streams it records the time and distance run in each
-  heart-rate zone, and, for an activity linked to a plan, lays the workout's steps over the
-  recording (time steps by time, distance steps by distance, open steps share the remainder) to
-  record each step's kind, planned zone, time and distance.
-- Similar workouts are those of the same sport family whose time-in-zone mix overlaps the plan's by
-  at least half, weighted by that overlap, by how close their duration is, by recency (60-day
-  half-life), and more for the same workout or template; the best 12 are used.
-- Pace per zone is their distance over time in that zone, pulled towards the pace model (itself
-  scaled by how much faster or slower than it the athlete ran) by 5 minutes' worth of evidence, and
-  kept rising with the zone, so zone 1 is never forecast faster than zone 4.
-- Each step then takes the pace that kind of step in that zone was run at, favouring steps of
-  similar length and pulled towards the zone's pace, so a zone-2 recovery jog between intervals
-  isn't forecast at steady zone-2 pace. An open step takes the median time it took in earlier runs
-  of the same workout or template, else 10 minutes.
-
-With no history the forecast equals the pace model's. The planned card, the linked activity's
-planned line and the detail sheet use it; the week's statistics totals still use TrainingKit's
-`StatisticsCalculator` projection with the pace model, so a week's planned distance can differ
-slightly from the sum of the forecasts until the estimator moves into TrainingKit.
+- `WeekViewModel.refreshPaceHistoryIfNeeded(asOf:)` has `TrainingModel.refreshPaceHistory(in:)` read
+  the last 180 days of activities from the store into `TrainingModel.paceHistory`. It runs with the
+  week caches (after loads, imports and link changes) and only when the activities, links, library,
+  athlete or day changed.
+- The planned card's duration, a linked activity's planned line (from activities before that one
+  only), the detail sheet and the week's planned totals all pass that history to
+  `StatisticsCalculator` (`projection(for:athlete:paceHistory:before:excluding:)`,
+  `periodStatsSplit(…paceHistory:)`), so they agree. With no history the figures are the pace
+  model's.
+- The detail sheet marks forecast values "Forecast" and its footer says how many similar workouts
+  they came from.
 
 ### 2.3 Athlete account
 

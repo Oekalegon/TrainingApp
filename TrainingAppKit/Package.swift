@@ -10,7 +10,8 @@ let package = Package(
         .library(name: "TrainingAppKit", targets: ["TrainingAppKit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/Oekalegon/TrainingKit.git", branch: "develop")
+        // Temporarily the MVP2-35/111 TrainingKit branch; back to `develop` once that PR merges.
+        .package(url: "https://github.com/Oekalegon/TrainingKit.git", branch: "claude/vibrant-pascal-tk8z7m")
     ],
     targets: [
         .target(
