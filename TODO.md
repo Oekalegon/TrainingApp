@@ -33,6 +33,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-?** *Merged* card state showing planned and actual together (check how much MVP2-43 covers)
 - [ ] **MVP2-104** Race marker on the calendar that distinguishes primary from secondary/tertiary races. Week view day rows done (race card with an A/B/C circle, #74); chart marker not yet.
 - [ ] **MVP2-106** More interval workout templates from the roadmap's library (long and mixed intervals, fartlek, fast finish, hill reps, ...), and check the planned-workout sheet's sliders on the new templates: the sprint, repetition and recovery sliders are continuous, so a rest can land on an odd number of seconds.
+- [ ] **MVP2-108** Show planned workouts on the week view before any Health data is imported. On a fresh install the "No training data yet" empty state hides the day rows, so a calendar import (MVP2-103) or a new plan shows no sign it exists until Health is connected. Found on the simulator, which has no Health data.
 - [ ] **MVP2-107** Import completed activities from a calendar export file (the rest of MVP2-103). Needs the model to hold an imported load for an activity without heart-rate data: `LoadMethod.manual` exists, but `Activity` has no field for it, so this means a new optional field with SwiftData and CloudKit persistence changes and a migration. Decide how it deduplicates against activities HealthKit imports later.
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 

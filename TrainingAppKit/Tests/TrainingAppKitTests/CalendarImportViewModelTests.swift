@@ -11,10 +11,10 @@ struct CalendarImportViewModelTests {
         Date(timeIntervalSince1970: 1_699_920_000 + Double(offset) * 86400 + hour * 3600)
     }
 
-    private func makeModel() -> (InMemoryStore, TrainingModel) {
+    private func makeModel(failingPlanStore: Bool = false, failingReads: Bool = false) -> (InMemoryStore, TrainingModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
-            activityStore: store, planStore: store, workoutStore: store,
+            activityStore: store, planStore: failingPlanStore ? FailingPlanStore(base: store, failingReads: failingReads) : store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
         return (store, TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)))
@@ -71,6 +71,54 @@ struct CalendarImportViewModelTests {
         #expect(!viewModel.canImport, "nothing to add, so the confirm button stays disabled")
     }
 
+    @Test("a store failure during the import keeps the preview and shows an error, and a retry can succeed")
+    func failedImportKeepsPreview() async throws {
+        let url = try await writeExportFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let (store, model) = makeModel(failingPlanStore: true)
+        let viewModel = CalendarImportViewModel(model: model, today: day(3, hour: 9))
+        await viewModel.load(from: url)
+
+        await viewModel.performImport()
+
+        guard case .preview(_, let report) = viewModel.state else { Issue.record("state was \(viewModel.state)"); return }
+        #expect(report.added == 2)
+        #expect(viewModel.importError == "The calendar couldn't be imported. Please try again.")
+        #expect(viewModel.canImport, "the athlete can try again without choosing the file again")
+        #expect(try await store.plans(in: day(0)...day(6)).isEmpty)
+    }
+
+    @Test("a store failure while previewing fails the load with a message")
+    func failedPreview() async throws {
+        let url = try await writeExportFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let (_, model) = makeModel(failingPlanStore: true, failingReads: true)
+        let viewModel = CalendarImportViewModel(model: model, today: day(3, hour: 9))
+
+        await viewModel.load(from: url)
+
+        #expect(viewModel.state == .failed("The file couldn't be read. Please try again."))
+        #expect(!viewModel.canImport)
+    }
+
+    @Test("choosing another file replaces the preview and clears an earlier import error")
+    func anotherFileReplacesPreview() async throws {
+        let first = try await writeExportFile(name: "First.json")
+        let second = try await writeExportFile(name: "Second.json")
+        defer { [first, second].forEach { try? FileManager.default.removeItem(at: $0) } }
+        let (_, model) = makeModel(failingPlanStore: true)
+        let viewModel = CalendarImportViewModel(model: model, today: day(3, hour: 9))
+        await viewModel.load(from: first)
+        await viewModel.performImport()
+        #expect(viewModel.importError != nil)
+
+        await viewModel.load(from: second)
+
+        guard case .preview(let name, _) = viewModel.state else { Issue.record("state was \(viewModel.state)"); return }
+        #expect(name.hasSuffix("Second.json"))
+        #expect(viewModel.importError == nil)
+    }
+
     @Test("a file that isn't an export fails with a message and offers choosing again")
     func notAnExport() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).json")
@@ -97,6 +145,24 @@ struct CalendarImportViewModelTests {
         await viewModel.load(from: url)
 
         #expect(viewModel.state == .failed("This file was made by a newer version of the app. Update the app to import it."))
+    }
+
+    @Test("choosing a file while one is still loading is ignored")
+    func loadWhileLoadingIgnored() async throws {
+        let first = try await writeExportFile(name: "First.json")
+        let second = try await writeExportFile(name: "Second.json")
+        defer { [first, second].forEach { try? FileManager.default.removeItem(at: $0) } }
+        let (_, model) = makeModel()
+        let viewModel = CalendarImportViewModel(model: model, today: day(3, hour: 9))
+
+        async let one: Void = viewModel.load(from: first)
+        async let two: Void = viewModel.load(from: second)
+        _ = await (one, two)
+
+        guard case .preview(let name, _) = viewModel.state else { Issue.record("state was \(viewModel.state)"); return }
+        #expect(name.hasSuffix("First.json") || name.hasSuffix("Second.json"))
+        viewModel.reset()
+        #expect(viewModel.state == .idle)
     }
 
     @Test("a missing file fails instead of crashing")
@@ -134,4 +200,20 @@ struct CalendarImportViewModelTests {
 
         #expect(try await store.plans(in: day(0)...day(6)).count == 2, "not imported twice")
     }
+}
+
+/// A plan store whose writes fail (and, with `failingReads`, whose reads too), so an import or a
+/// preview fails without a real storage error.
+private struct FailingPlanStore: PlanStore {
+    struct Failure: Error {}
+    let base: InMemoryStore
+    var failingReads = false
+
+    func plans(in range: ClosedRange<Date>) async throws -> [PlannedActivity] {
+        if failingReads { throw Failure() }
+        return try await base.plans(in: range)
+    }
+    func upsert(_ plans: [PlannedActivity]) async throws { throw Failure() }
+    func plan(id: UUID) async throws -> PlannedActivity? { try await base.plan(id: id) }
+    func deletePlan(id: UUID) async throws {}
 }

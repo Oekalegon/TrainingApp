@@ -69,7 +69,7 @@ struct CalendarImportSheet: View {
             if let message {
                 Text(message).foregroundStyle(.red)
             } else {
-                Text("Choose a JSON file made by Export Calendar. Planned workouts are added with their steps. Completed activities and daily fitness numbers aren't imported: they come from Health and are recalculated.")
+                Text("Choose a JSON file made by Export Calendar. Planned workouts are added with their steps. Completed activities aren't imported: they come from Health. Daily fitness numbers aren't imported either: they are recalculated.")
             }
         }
     }
@@ -90,7 +90,9 @@ struct CalendarImportSheet: View {
         } header: {
             Text(title)
         } footer: {
-            if !future, report.added > 0 {
+            if let message = viewModel.importError {
+                Text(message).foregroundStyle(.red)
+            } else if !future, report.added > 0 {
                 Text("The workouts aren't sent to your Watch yet. They will be when Apple Fitness syncing is added.")
             }
         }

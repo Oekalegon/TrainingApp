@@ -28,6 +28,9 @@ public final class CalendarImportViewModel {
 
     /// The current step.
     public private(set) var state: State = .idle
+    /// Set when ``performImport()`` failed. The preview stays, so the athlete can try again without
+    /// choosing the file again; cleared by the next attempt or file.
+    public private(set) var importError: String?
 
     private let model: TrainingModel
     private let today: Date
@@ -61,11 +64,12 @@ public final class CalendarImportViewModel {
         guard !isBusy else { return }
         state = .loading
         export = nil
+        importError = nil
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         do {
-            let data = try Data(contentsOf: url)
-            let export = try CalendarExport.decode(from: data)
+            // Off the main actor: a season-long export with its steps can be a megabyte or more.
+            let export = try await Task.detached { try CalendarExport.decode(from: Data(contentsOf: url)) }.value
             let report = try await model.calendarImportPreview(export, asOf: today)
             self.export = export
             state = .preview(fileName: url.lastPathComponent, report: report)
@@ -76,15 +80,18 @@ public final class CalendarImportViewModel {
         }
     }
 
-    /// Imports the previewed file, setting ``state`` to ``State/imported(_:)`` or
-    /// ``State/failed(_:)``. Does nothing unless ``canImport``.
+    /// Imports the previewed file, setting ``state`` to ``State/imported(_:)``. On failure the
+    /// preview stays and ``importError`` is set. Does nothing unless ``canImport``.
     public func performImport() async {
         guard canImport, let export else { return }
+        let preview = state
+        importError = nil
         state = .importing
         do {
             state = .imported(try await model.importCalendar(export, asOf: today))
         } catch {
-            state = .failed("The calendar couldn't be imported. Please try again.")
+            state = preview
+            importError = "The calendar couldn't be imported. Please try again."
         }
     }
 
@@ -92,6 +99,7 @@ public final class CalendarImportViewModel {
     public func reset() {
         guard !isBusy else { return }
         export = nil
+        importError = nil
         state = .idle
     }
 
@@ -108,17 +116,6 @@ public final class CalendarImportViewModel {
             "This file isn't a Training Calendar export."
         case .unsupportedSchemaVersion:
             "This file was made by a newer version of the app. Update the app to import it."
-        }
-    }
-}
-
-extension CalendarImportReport.RejectionReason {
-    /// The explanation shown next to a rejected entry.
-    var explanation: String {
-        switch self {
-        case .noSteps: "No steps (the file predates steps)"
-        case .invalidStep: "A step couldn't be read"
-        case .invalidDate: "The date isn't valid"
         }
     }
 }
