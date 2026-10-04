@@ -59,6 +59,8 @@ struct DayActivitiesSection: View {
     let activities: [Activity]
     /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.
     let plans: [PlannedActivity]
+    /// Races on this day, most important first — each renders as a `RaceCard` above the day's activities.
+    let races: [Race]
     /// Everything an activity's card shows beyond the activity itself — TRIMP, overlap badge,
     /// intensity, the linked plan's expected values — see `WeekViewModel.activityCardContent(for:)`.
     let activityCard: (Activity) -> WeekViewModel.ActivityCardContent
@@ -116,6 +118,14 @@ struct DayActivitiesSection: View {
                 .disabled(!canAddWorkout)
                 .opacity(canAddWorkout ? 1 : 0.35)
                 .accessibilityLabel("Add")
+            }
+
+            ForEach(races) { race in
+                HStack(alignment: .top, spacing: 4) {
+                    // Keeps the card at the same x as the activity cards below; no time of day.
+                    Color.clear.frame(width: WeekdayPillView.columnWidth, height: 0)
+                    RaceCard(race: race)
+                }
             }
 
             ForEach(activities) { activity in
