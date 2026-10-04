@@ -132,7 +132,7 @@ struct PlannedWorkoutDetailViewModelTests {
         #expect(viewModel.deleteError == nil)
     }
 
-    @Test("delete() works for a plan whose workout left the library, with no WorkoutKit call")
+    @Test("delete() works for a plan whose workout left the library, and still removes its Watch entry")
     func deleteOrphanedPlan() async throws {
         let model = try await makeModel()
         let orphan = PlannedActivity(workoutID: UUID(), date: day(3))
@@ -143,7 +143,27 @@ struct PlannedWorkoutDetailViewModelTests {
         #expect(await viewModel.delete())
 
         #expect(model.plans.isEmpty)
-        #expect(await scheduler.callLog.isEmpty)
+        #expect(await scheduler.unscheduledPlans.map(\.id) == [orphan.id])
+    }
+
+    @Test("delete() and an edit through makeEditor() report a plan change, so the Watch sync runs again")
+    func deleteAndEditReportPlanChange() async throws {
+        let model = try await makeModel()
+        let workout = intervalWorkout()
+        try await model.add(workout)
+        let plan = PlannedActivity(workoutID: workout.id, date: day(3))
+        try await model.add(plan)
+        let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan, scheduler: FakeScheduler())
+        let changes = ChangeCounter()
+        viewModel.onPlansChanged = { changes.count += 1 }
+
+        let editor = viewModel.makeEditor()
+        editor.loadOverride = 90
+        #expect(await editor.save(asOf: day(0)))
+        #expect(changes.count == 1)
+
+        #expect(await viewModel.delete())
+        #expect(changes.count == 2)
     }
 
     @Test("the summary follows an edit saved through makeEditor()")

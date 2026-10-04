@@ -8,11 +8,21 @@ import TrainingCore
 /// Owns the single `WeekViewModel` for the app's lifetime so both tabs share it: `WeekView` reads
 /// it directly, and `AthleteView` reads it via `WeekViewModel.athleteViewModel` — that coupling is
 /// why `WeekViewModel` is constructed once here rather than inside `WeekView` itself.
+///
+/// Also puts the next 7 days of planned workouts on the Watch each time the app becomes active
+/// (MVP2-55, ``WatchScheduleSync``).
 public struct AppTabView: View {
     @State private var viewModel: WeekViewModel
+    @Environment(\.scenePhase) private var scenePhase
+    private let watchSync: WatchScheduleSync?
 
-    public init(model: TrainingModel, refresher: any ActivityRefreshing) {
-        _viewModel = State(initialValue: WeekViewModel(model: model, refresher: refresher))
+    /// - Parameters:
+    ///   - model: The app's training model.
+    ///   - refresher: Imports activities from HealthKit.
+    ///   - watchSync: Run on launch and every time the app becomes active again; `nil` skips it.
+    public init(model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil) {
+        _viewModel = State(initialValue: WeekViewModel(model: model, refresher: refresher, watchSync: watchSync))
+        self.watchSync = watchSync
     }
 
     public var body: some View {
@@ -53,6 +63,10 @@ public struct AppTabView: View {
             // `WeekViewModel.overlapReviewItems`. `.badge(0)` hides the badge on its own, so no
             // extra `nil`-vs-count branch is needed here.
             .badge(overlapReviewItems.count)
+        }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            guard phase == .active else { return }
+            watchSync?.requestSync()
         }
     }
 }
