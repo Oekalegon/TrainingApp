@@ -416,6 +416,8 @@ edit mode (date, load override, and — for a workout built from a template, whi
 Delete button at the bottom behind a confirmation alert removes only the plan
 (`TrainingModel.deletePlan`), never the library workout, and its WorkoutKit entry best-effort.
 
+When creating a planned workout, `PlannedWorkoutSheet`'s Name field (MVP2-110) starts as the template's generated title ("50min Easy Run", "23 km Long Run", "10x8sec Hill Sprints", from TrainingKit's `WorkoutTemplate.defaultTitle`) and follows the parameter controls until the athlete edits it by hand; picking another template starts over. A cleared field saves the generated title. Distances are written in km/m or miles/yards by the device's measurement system (`PlannedWorkoutSheetViewModel.distanceSystem`). Editing an existing workout keeps its name.
+
 ### 2.3 Athlete account
 
 Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0).

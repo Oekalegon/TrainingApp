@@ -31,8 +31,92 @@ struct PlannedWorkoutSheetViewModelTests {
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
 
         #expect(viewModel.parameterValues["duration"] == BuiltInWorkoutTemplates.recoveryRun.parameters[0].defaultValue)
-        #expect(viewModel.workoutName == "Recovery run")
+        #expect(viewModel.workoutName == "20min Recovery Run")
         #expect(viewModel.expectedLoad != nil)
+    }
+
+    // MARK: Default title (MVP2-110)
+
+    @Test("the default title follows the sliders until the athlete edits the name")
+    func defaultTitleFollowsParameters() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.distanceSystem = .metric
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        #expect(viewModel.workoutName == "30min Easy Run")
+
+        viewModel.setParameterValue(50 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "50min Easy Run")
+
+        viewModel.workoutName = "Morning jog"
+        viewModel.setParameterValue(40 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "Morning jog")
+    }
+
+    @Test("picking another template replaces a custom name with its title")
+    func changingTemplateResetsCustomName() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.distanceSystem = .metric
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        viewModel.workoutName = "Morning jog"
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.longRun
+        #expect(viewModel.workoutName == "20 km Long Run")
+
+        viewModel.setParameterValue(23_000, forKey: "distance")
+        #expect(viewModel.workoutName == "23 km Long Run")
+    }
+
+    @Test("typing the generated title back in doesn't count as customizing it")
+    func retypingGeneratedTitleKeepsFollowing() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        viewModel.workoutName = "20min Recovery Run"
+        viewModel.setParameterValue(30 * 60, forKey: "duration")
+
+        #expect(viewModel.workoutName == "30min Recovery Run")
+    }
+
+    @Test("the title's distances follow the distance system")
+    func titleUsesDistanceSystem() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.distanceSystem = .metric
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.longRun
+        #expect(viewModel.workoutName == "20 km Long Run")
+
+        viewModel.distanceSystem = .imperial
+        #expect(viewModel.workoutName == "12.4 mi Long Run")
+    }
+
+    @Test("the generated title is saved as the workout's name")
+    func savesGeneratedTitle() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0), scheduler: nil)
+        viewModel.distanceSystem = .metric
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.baseHillSprints
+        viewModel.setParameterValue(10, forKey: "reps")
+
+        let didSave = await viewModel.save()
+
+        #expect(didSave)
+        #expect(model.workouts.first?.name == "10x8sec Hill Sprints")
+    }
+
+    @Test("a cleared name saves as the generated title, not the bare template name")
+    func clearedNameSavesGeneratedTitle() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0), scheduler: nil)
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+        viewModel.workoutName = ""
+
+        let didSave = await viewModel.save()
+
+        #expect(didSave)
+        #expect(model.workouts.first?.name == "20min Recovery Run")
     }
 
     @Test("setParameterValue(_:forKey:) recomputes expectedLoad, larger duration means more load")

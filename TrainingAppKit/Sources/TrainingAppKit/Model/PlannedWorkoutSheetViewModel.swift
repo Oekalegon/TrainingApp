@@ -86,7 +86,21 @@ public final class PlannedWorkoutSheetViewModel {
             seedFromSelectedTemplate()
         }
     }
-    public var workoutName: String = ""
+    /// The new workout's name. Starts as the template's generated title (MVP2-110, e.g. "50min
+    /// Easy Run") and follows ``parameterValues`` until the athlete edits it by hand, after which
+    /// it is theirs until another template is picked.
+    public var workoutName: String = "" {
+        didSet {
+            // The view's TextField writes here directly; our own writes set `generatedTitle` first.
+            if workoutName != generatedTitle { nameIsCustomized = true }
+        }
+    }
+    /// How distances are written in a generated title; defaults to the device's measurement system.
+    public var distanceSystem: DistanceSystem = Locale.current.measurementSystem == .metric ? .metric : .imperial {
+        didSet { if distanceSystem != oldValue { refreshGeneratedTitle() } }
+    }
+    private var generatedTitle = ""
+    private var nameIsCustomized = false
     /// Parameter key to value, seeded from each parameter's `defaultValue` when a template is
     /// selected. Not private(set): the sheet's sliders/steppers write through
     /// ``setParameterValue(_:forKey:)`` instead, which also triggers both live recomputations.
@@ -231,6 +245,7 @@ public final class PlannedWorkoutSheetViewModel {
     /// dictionary write wouldn't trigger the guardrail simulation.
     public func setParameterValue(_ value: Double, forKey key: String) {
         parameterValues[key] = value
+        refreshGeneratedTitle()
         recomputeExpectedLoad()
         recomputeGuardrails()
     }
@@ -238,6 +253,8 @@ public final class PlannedWorkoutSheetViewModel {
     private func seedFromSelectedTemplate() {
         guard let selectedTemplate else {
             parameterValues = [:]
+            nameIsCustomized = false
+            generatedTitle = ""
             workoutName = ""
             expectedLoad = nil
             guardrailFindings = []
@@ -247,9 +264,26 @@ public final class PlannedWorkoutSheetViewModel {
         parameterValues = Dictionary(
             uniqueKeysWithValues: selectedTemplate.parameters.map { ($0.key, $0.defaultValue) }
         )
-        workoutName = selectedTemplate.name
+        nameIsCustomized = false
+        refreshGeneratedTitle()
         recomputeExpectedLoad()
         recomputeGuardrails()
+    }
+
+    /// Rewrites ``workoutName`` as the template's title at the current values, unless the athlete
+    /// has edited the name.
+    private func refreshGeneratedTitle() {
+        guard !nameIsCustomized, let selectedTemplate else { return }
+        generatedTitle = selectedTemplate.defaultTitle(values: parameterValues, distanceSystem: distanceSystem)
+        workoutName = generatedTitle
+    }
+
+    /// The name to save: what's in the field, or the generated title if the athlete cleared it (so
+    /// an emptied field doesn't fall back to the bare template name).
+    private func nameToSave(for template: WorkoutTemplate) -> String {
+        workoutName.isEmpty
+            ? template.defaultTitle(values: parameterValues, distanceSystem: distanceSystem)
+            : workoutName
     }
 
     /// The workout edit mode currently shows/projects: ``editedWorkout`` untouched, or — once a
@@ -320,7 +354,7 @@ public final class PlannedWorkoutSheetViewModel {
             plan = edited
         } else {
             guard let selectedTemplate, let instantiated = try? selectedTemplate.instantiate(
-                name: workoutName.isEmpty ? nil : workoutName, values: parameterValues
+                name: nameToSave(for: selectedTemplate), values: parameterValues
             ) else {
                 guardrailFindings = []
                 guardrailDiagnostic = nil
@@ -489,7 +523,7 @@ public final class PlannedWorkoutSheetViewModel {
         defer { isSaving = false }
         do {
             var workout = try selectedTemplate.instantiate(
-                name: workoutName.isEmpty ? nil : workoutName, values: parameterValues
+                name: nameToSave(for: selectedTemplate), values: parameterValues
             )
             if let scheduler {
                 workout.workoutKitID = try await scheduler.sync(workout)
