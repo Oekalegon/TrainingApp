@@ -12,6 +12,9 @@ import TrainingCore
 public final class WeekViewModel {
     // Internal (not private) so `WeekViewModel+Overlaps.swift`'s extension can reach it.
     let model: TrainingModel
+    /// Keeps the Watch's scheduled workouts in step with the plans (MVP2-55); `nil` in tests and
+    /// where WorkoutKit isn't available.
+    let watchSync: WatchScheduleSync?
     private let refresher: any ActivityRefreshing
     private let calendar: Calendar
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
@@ -138,15 +141,18 @@ public final class WeekViewModel {
     ///   - refresher: Runs HealthKit imports for pull-to-refresh.
     ///   - maxHeartRatePromptHistory: What the athlete already said about max heart rate
     ///     suggestions; defaults to the app's `UserDefaults`-backed record.
+    ///   - watchSync: Run again after a plan is saved, deleted or imported (MVP2-55); `nil` skips it.
     ///   - today: The day whose week is shown first.
     public init(
         model: TrainingModel,
         refresher: any ActivityRefreshing,
         maxHeartRatePromptHistory: (any MaxHeartRatePromptHistory)? = nil,
+        watchSync: WatchScheduleSync? = nil,
         today: Date = .now
     ) {
         self.model = model
         self.refresher = refresher
+        self.watchSync = watchSync
         self.maxHeartRatePromptHistory = maxHeartRatePromptHistory ?? UserDefaultsMaxHeartRatePromptHistory()
         let calendar = Self.calendar(for: model.athlete)
         self.calendar = calendar
@@ -797,7 +803,9 @@ public final class WeekViewModel {
     /// The view model for the "Create Planned Workout" sheet (MVP2-15), opened from a day row's
     /// add affordance — `date` defaults the sheet to that day, still editable inside it.
     public func plannedWorkoutSheetViewModel(date: Date) -> PlannedWorkoutSheetViewModel {
-        PlannedWorkoutSheetViewModel(model: model, date: date)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: date)
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
     }
 
     /// The view model for the "Add Race" sheet (MVP2-17), opened from a day row's add affordance
@@ -816,12 +824,21 @@ public final class WeekViewModel {
     /// The view model for the week view's "Import Calendar" sheet (MVP2-103), opened from the
     /// toolbar's import button.
     public func calendarImportViewModel() -> CalendarImportViewModel {
-        CalendarImportViewModel(model: model)
+        let viewModel = CalendarImportViewModel(model: model)
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
     }
 
     /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
     public func plannedWorkoutDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
-        PlannedWorkoutDetailViewModel(model: model, plan: plan, paceHistory: paceHistory)
+        let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan, paceHistory: paceHistory)
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
+    }
+
+    /// Runs the Watch sync (MVP2-55) after a plan is saved, deleted or imported. A no-op without one.
+    private func requestWatchSync() {
+        watchSync?.requestSync()
     }
 
     /// The view model for the athlete account screen, presented from the week view's toolbar.
