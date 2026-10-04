@@ -6,7 +6,7 @@ import TrainingCore
 /// `WorkoutKitBridge` (whose `WorkoutScheduler` crashes outside a genuine app bundle).
 final actor FakeScheduler: PlannedWorkoutScheduling {
     private let scheduleShouldFail: Bool
-    private let isAuthorized: Bool
+    private let authorized: Bool
     nonisolated let maxScheduledCount: Int
     /// Workouts `validate` rejects, by id.
     nonisolated let invalidWorkoutIDs: Set<UUID>
@@ -14,6 +14,9 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
     private(set) var unscheduledPlans: [PlannedActivity] = []
     /// The `planIDs` each `unscheduleAll(except:)` call was given.
     private(set) var keptPlanIDs: [Set<UUID>] = []
+    /// Run once, inside the first `unscheduleAll(except:)` call, so a test can start a second sync
+    /// while one is in progress.
+    private var duringFirstUnscheduleAll: (@Sendable () async -> Void)?
     /// Every scheduler call in order, so a test can pin "remove leftovers before scheduling".
     private(set) var callLog: [String] = []
 
@@ -24,7 +27,7 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
         invalidWorkoutIDs: Set<UUID> = []
     ) {
         self.scheduleShouldFail = scheduleShouldFail
-        self.isAuthorized = isAuthorized
+        self.authorized = isAuthorized
         self.maxScheduledCount = maxScheduledCount
         self.invalidWorkoutIDs = invalidWorkoutIDs
     }
@@ -55,11 +58,24 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
     func unscheduleAll(except planIDs: Set<UUID>) async -> Int {
         keptPlanIDs.append(planIDs)
         callLog.append("unscheduleAll")
+        if let hook = duringFirstUnscheduleAll {
+            duringFirstUnscheduleAll = nil
+            await hook()
+        }
         return 0
+    }
+
+    func setDuringFirstUnscheduleAll(_ hook: @escaping @Sendable () async -> Void) {
+        duringFirstUnscheduleAll = hook
     }
 
     func requestAuthorizationIfNeeded() async -> Bool {
         callLog.append("authorize")
-        return isAuthorized
+        return authorized
+    }
+
+    func isAuthorized() async -> Bool {
+        callLog.append("isAuthorized")
+        return authorized
     }
 }

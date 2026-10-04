@@ -555,23 +555,29 @@ the foreground, which also moves the window on after midnight.
 
 - **Which plans.** `WatchSchedulePlanner` picks the plans dated today through 6 days ahead, in the
   athlete's time zone, that aren't linked to an activity and whose workout maps to a WorkoutKit
-  `CustomWorkout`, soonest first, up to `WorkoutScheduler.maxAllowedScheduledWorkoutCount`. Plans
-  linked to an activity in the last 7 days keep their (completed) entry while slots remain.
+  `CustomWorkout`, soonest first, up to `WorkoutScheduler.maxAllowedScheduledWorkoutCount`. The
+  past week's plans keep their entry while slots remain, linked ones first, then the most recent.
+  Unlinked past plans are kept too: the sync runs as the app opens, before the HealthKit import has
+  linked a workout done since, and removing its entry would lose the Watch's "done" mark.
 - **Each run.** It reads every plan from the store (not just the week view's loaded range), removes
-  every other entry with TrainingKit's `WorkoutKitBridge.unscheduleAll(except:)` — missed workouts,
-  plans beyond the window, deleted plans, and entries from before MVP2-55 that carry a workout's id
-  — then schedules the chosen plans. Each entry carries its plan's id, so scheduling an unchanged
+  every other entry with TrainingKit's `WorkoutKitBridge.unscheduleAll(except:)` — plans older than a
+  week, plans beyond the window, deleted plans, and entries from before MVP2-55 that carry a
+  workout's id — then schedules the chosen plans. A sync requested while one runs makes that run
+  go round again, so a plan saved after it read the store isn't removed or overwritten. Each entry carries its plan's id, so scheduling an unchanged
   plan is a no-op and scheduling a moved or edited one replaces its entry.
-- **Permission.** The first run asks for WorkoutKit permission. Declined, or on a device that can't
-  schedule workouts, the sync does nothing.
+- **Permission.** The first run with a plan to send asks for WorkoutKit permission, so a new athlete
+  isn't asked before planning anything. Declined, not yet asked, or on a device that can't schedule
+  workouts, the sync does nothing.
+- **When else it runs.** `WeekViewModel` runs it again after the planned-workout sheet saves, the
+  detail sheet deletes, or a calendar import succeeds (`onPlansChanged`).
 - **Saving and deleting.** `PlannedWorkoutSheetViewModel` schedules a new or moved plan right away
   when it's within the window (and won't save it if scheduling fails); a plan moved beyond the
   window has its entry removed. Deleting a plan removes its entry. Both removals are best-effort,
   since the next sync catches anything left behind.
 
-Not done yet (MVP2-113): syncing after plans change in other ways (calendar import, plan linking),
-after a HealthKit workout arrives, and on background refresh; a settings switch; and a "sent to
-Watch" mark on plan cards.
+Not done yet (MVP2-113): syncing after plan linking, after a HealthKit workout arrives, and on
+background refresh; a banner when permission is denied; a settings switch; and a "sent to Watch"
+mark on plan cards.
 
 ---
 

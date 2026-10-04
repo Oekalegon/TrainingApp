@@ -2,17 +2,21 @@ import Foundation
 import TrainingCore
 
 /// Decides which plans belong on the Watch (MVP2-55): the unlinked plans of the next 7 days, plus
-/// recently completed ones, within WorkoutKit's cap on scheduled entries.
+/// the past week's, within WorkoutKit's cap on scheduled entries.
 ///
 /// Pure, so the window and cap rules are tested without WorkoutKit; ``WatchScheduleSync`` applies
 /// the result. The Watch's Workout app lists scheduled workouts 7 days back and 7 days ahead, so:
 ///
 /// - **To schedule:** plans dated today through 6 days from now (``isInWindow(_:asOf:calendar:)``)
 ///   that aren't linked to an activity yet and whose workout can go on the Watch, soonest first.
-/// - **To keep:** those, plus plans of the last 7 days (or later today) that are linked to an
-///   activity, so the Watch can keep showing them as done — most recent first, while slots remain.
-/// - Everything else is removed: missed workouts, plans beyond the window, entries whose plan was
-///   deleted, and entries scheduled before MVP2-55 under a workout's id instead of a plan's.
+/// - **To keep:** those, plus the plans of the last 7 days and any in the window already linked to
+///   an activity, while slots remain: linked ones first, then the most recent. Past plans that
+///   aren't linked are kept too, because the sync runs as the app opens, before the HealthKit
+///   import has linked a workout done since; removing its entry would lose the Watch's record that
+///   it was done. A workout that really was missed stays listed as not done, which is accurate.
+/// - Everything else is removed: plans older than a week, plans beyond the window, entries whose
+///   plan was deleted, and entries scheduled before MVP2-55 under a workout's id instead of a
+///   plan's.
 public enum WatchSchedulePlanner {
     /// How many days the Watch shows ahead, today included.
     public static let windowDays = 7
@@ -21,7 +25,7 @@ public enum WatchSchedulePlanner {
     public struct Result: Equatable, Sendable {
         /// Plans to schedule, soonest first. Scheduling one that's already there is a no-op.
         public var toSchedule: [PlannedActivity]
-        /// The ids of every plan whose entry may stay: ``toSchedule``'s, plus recently completed ones.
+        /// The ids of every plan whose entry may stay: ``toSchedule``'s, plus recent past ones.
         public var keep: Set<UUID>
     }
 
@@ -59,15 +63,26 @@ public enum WatchSchedulePlanner {
             .filter { window.contains($0.date) && $0.completedActivityID == nil && canSchedule($0) }
             .sorted(by: soonestFirst)
             .prefix(max(0, cap))
-        let completed = plans
-            .filter { $0.completedActivityID != nil && (lookbackStart..<window.upperBound).contains($0.date) }
-            .sorted(by: soonestFirst)
-            .reversed()
+        let recent = plans
+            .filter { plan in
+                let isLinked = plan.completedActivityID != nil
+                return (lookbackStart..<window.lowerBound).contains(plan.date)
+                    || (isLinked && window.contains(plan.date))
+            }
+            .sorted(by: linkedThenMostRecentFirst)
             .prefix(max(0, cap - upcoming.count))
         return Result(
             toSchedule: Array(upcoming),
-            keep: Set(upcoming.map(\.id)).union(completed.map(\.id))
+            keep: Set(upcoming.map(\.id)).union(recent.map(\.id))
         )
+    }
+
+    /// Linked plans before unlinked ones, then the most recent first, then by id.
+    private static func linkedThenMostRecentFirst(_ lhs: PlannedActivity, _ rhs: PlannedActivity) -> Bool {
+        let lhsLinked = lhs.completedActivityID != nil
+        let rhsLinked = rhs.completedActivityID != nil
+        if lhsLinked != rhsLinked { return lhsLinked }
+        return lhs.date != rhs.date ? lhs.date > rhs.date : lhs.id.uuidString < rhs.id.uuidString
     }
 
     /// Orders by date, then by id, so plans on the same instant always come out in the same order.

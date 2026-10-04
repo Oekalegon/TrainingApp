@@ -17,6 +17,9 @@ public final class PlannedWorkoutDetailViewModel {
     /// (so the alert/summary don't go blank in the instant before the sheet dismisses).
     private let openedPlan: PlannedActivity
     private let scheduler: (any PlannedWorkoutScheduling)?
+    /// Called after the plan is deleted or edited, so the Watch sync can run again (MVP2-55).
+    @ObservationIgnored
+    public var onPlansChanged: (@MainActor () -> Void)?
     private let statisticsCalculator = StatisticsCalculator()
 
     /// Set when ``delete()`` fails; the sheet shows it as an alert.
@@ -34,7 +37,7 @@ public final class PlannedWorkoutDetailViewModel {
     public init(
         model: TrainingModel,
         plan: PlannedActivity,
-        scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSheetViewModel.liveScheduler
+        scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSchedulers.live
     ) {
         self.model = model
         self.planID = plan.id
@@ -135,7 +138,9 @@ public final class PlannedWorkoutDetailViewModel {
 
     /// The edit-mode view model for this plan, presented by the sheet's pencil button (MVP2-39).
     public func makeEditor() -> PlannedWorkoutSheetViewModel {
-        PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+        let editor = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+        editor.onPlansChanged = onPlansChanged
+        return editor
     }
 
     /// Deletes the plan — only the plan, never the library workout. The plan is removed locally first
@@ -159,6 +164,7 @@ public final class PlannedWorkoutDetailViewModel {
             return false
         }
         await scheduler?.unschedule(deleted)
+        onPlansChanged?()
         return true
     }
 }

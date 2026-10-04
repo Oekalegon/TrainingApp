@@ -33,6 +33,10 @@ public final class CalendarImportViewModel {
     public private(set) var importError: String?
 
     private let model: TrainingModel
+    /// Called after an import succeeds, so the Watch sync puts imported plans that are due soon on
+    /// the Watch (MVP2-55).
+    @ObservationIgnored
+    public var onPlansChanged: (@MainActor () -> Void)?
     private let today: Date
     /// The file read by ``load(from:)``, kept so the import saves exactly what was previewed.
     private var export: CalendarExport?
@@ -89,6 +93,7 @@ public final class CalendarImportViewModel {
         state = .importing
         do {
             state = .imported(try await model.importCalendar(export, asOf: today))
+            onPlansChanged?()
         } catch {
             state = preview
             importError = "The calendar couldn't be imported. Please try again."

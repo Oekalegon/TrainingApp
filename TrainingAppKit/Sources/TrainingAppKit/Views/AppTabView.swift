@@ -21,7 +21,7 @@ public struct AppTabView: View {
     ///   - refresher: Imports activities from HealthKit.
     ///   - watchSync: Run on launch and every time the app becomes active again; `nil` skips it.
     public init(model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil) {
-        _viewModel = State(initialValue: WeekViewModel(model: model, refresher: refresher))
+        _viewModel = State(initialValue: WeekViewModel(model: model, refresher: refresher, watchSync: watchSync))
         self.watchSync = watchSync
     }
 
@@ -65,8 +65,8 @@ public struct AppTabView: View {
             .badge(overlapReviewItems.count)
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
-            guard phase == .active, let watchSync else { return }
-            Task { await watchSync.sync() }
+            guard phase == .active else { return }
+            watchSync?.requestSync()
         }
     }
 }

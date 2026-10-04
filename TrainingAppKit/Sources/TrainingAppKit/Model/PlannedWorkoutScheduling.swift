@@ -32,8 +32,24 @@ public protocol PlannedWorkoutScheduling: Sendable {
     /// device doesn't support scheduled workouts or the athlete declined.
     func requestAuthorizationIfNeeded() async -> Bool
 
+    /// Whether the app may schedule workouts, without asking.
+    func isAuthorized() async -> Bool
+
     /// How many entries the app may hold on the Watch at once.
     var maxScheduledCount: Int { get }
+}
+
+/// Where the app's real ``PlannedWorkoutScheduling`` comes from.
+public enum PlannedWorkoutSchedulers {
+    /// A `WorkoutKitBridge` where WorkoutKit is available, `nil` otherwise. The default for every
+    /// view model and ``WatchScheduleSync``; tests pass a fake or `nil` instead.
+    public static var live: (any PlannedWorkoutScheduling)? {
+        #if canImport(WorkoutKit)
+        WorkoutKitBridge()
+        #else
+        nil
+        #endif
+    }
 }
 
 #if canImport(WorkoutKit)
@@ -52,6 +68,11 @@ extension WorkoutKitBridge: PlannedWorkoutScheduling {
         default:
             return false
         }
+    }
+
+    public func isAuthorized() async -> Bool {
+        guard WorkoutScheduler.isSupported else { return false }
+        return await WorkoutKitAuthorization.state == .authorized
     }
 
     public var maxScheduledCount: Int { WorkoutScheduler.maxAllowedScheduledWorkoutCount }

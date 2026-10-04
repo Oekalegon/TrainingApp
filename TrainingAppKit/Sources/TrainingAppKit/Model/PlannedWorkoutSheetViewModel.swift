@@ -27,6 +27,10 @@ public final class PlannedWorkoutSheetViewModel {
     /// scheduled is a consistent, if incomplete, state to save, which ``WatchScheduleSync`` fills
     /// in later.
     private let scheduler: (any PlannedWorkoutScheduling)?
+    /// Called after a save succeeds, so the Watch sync can run again (MVP2-55): the save schedules
+    /// only this plan, and a sync already running may have read the store before it.
+    @ObservationIgnored
+    public var onPlansChanged: (@MainActor () -> Void)?
     /// The plan being edited, as it was when the sheet opened; `nil` when creating a new one.
     private let editingPlan: PlannedActivity?
     /// The workout ``editingPlan`` schedules — `nil` when creating, or if that workout is no
@@ -195,7 +199,7 @@ public final class PlannedWorkoutSheetViewModel {
         date: Date = .now,
         templates: [WorkoutTemplate] = BuiltInWorkoutTemplates.all,
         estimator: any PlannedLoadEstimator = TRIMPPlanEstimator(),
-        scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSheetViewModel.liveScheduler
+        scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSchedulers.live
     ) {
         self.model = model
         self.date = date
@@ -220,7 +224,7 @@ public final class PlannedWorkoutSheetViewModel {
         editing plan: PlannedActivity,
         templates: [WorkoutTemplate] = BuiltInWorkoutTemplates.all,
         estimator: any PlannedLoadEstimator = TRIMPPlanEstimator(),
-        scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSheetViewModel.liveScheduler
+        scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSchedulers.live
     ) {
         self.model = model
         self.date = plan.date
@@ -252,12 +256,6 @@ public final class PlannedWorkoutSheetViewModel {
         recomputeExpectedLoad()
         recomputeGuardrails()
     }
-
-    #if canImport(WorkoutKit)
-    public static var liveScheduler: (any PlannedWorkoutScheduling)? { WorkoutKitBridge() }
-    #else
-    public static var liveScheduler: (any PlannedWorkoutScheduling)? { nil }
-    #endif
 
     /// Writes one parameter's value and recomputes ``expectedLoad``/``guardrailFindings``. The
     /// sheet's controls call this rather than mutating ``parameterValues`` directly, since a plain
@@ -565,6 +563,7 @@ public final class PlannedWorkoutSheetViewModel {
             }
             try await model.add(workout)
             try await model.add(plan)
+            onPlansChanged?()
             return true
         } catch {
             saveError = "Couldn't save this workout: \(error.localizedDescription)"
@@ -623,6 +622,7 @@ public final class PlannedWorkoutSheetViewModel {
             if replacesWorkout, let oldWorkout {
                 _ = try? await model.deleteWorkoutIfUnreferenced(id: oldWorkout.id)
             }
+            onPlansChanged?()
             return true
         } catch {
             saveError = "Couldn't save this workout: \(error.localizedDescription)"

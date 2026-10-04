@@ -42,7 +42,8 @@ struct WatchScheduleSyncTests {
         await WatchScheduleSync(model: model, scheduler: scheduler).sync(asOf: day(0))
 
         #expect(await scheduler.callLog == ["authorize", "unscheduleAll", "schedule"])
-        #expect(await scheduler.keptPlanIDs == [[soon.id]])
+        // The past plan keeps its entry: it may have been done and not linked yet.
+        #expect(await scheduler.keptPlanIDs == [[past.id, soon.id]])
         #expect(await scheduler.scheduledPlans.map(\.id) == [soon.id])
     }
 
@@ -77,6 +78,42 @@ struct WatchScheduleSyncTests {
 
         #expect(await scheduler.scheduledPlans.map(\.id) == [goodPlan.id])
         #expect(await scheduler.keptPlanIDs == [[goodPlan.id]])
+    }
+
+    @Test("doesn't ask for permission while there's nothing to send, but still clears old entries")
+    func noPromptWithoutUpcomingPlans() async throws {
+        let (store, model) = try await makeModel()
+        let steady = workout()
+        try await store.upsert([steady])
+        try await store.upsert([PlannedActivity(workoutID: steady.id, date: day(20))])
+        let scheduler = FakeScheduler()
+
+        await WatchScheduleSync(model: model, scheduler: scheduler).sync(asOf: day(0))
+
+        #expect(await scheduler.callLog == ["isAuthorized", "unscheduleAll"])
+        #expect(await scheduler.keptPlanIDs == [[]])
+    }
+
+    @Test("a sync requested during a run makes that run go round again instead of being dropped")
+    func requestDuringRunReruns() async throws {
+        let (store, model) = try await makeModel()
+        let steady = workout()
+        try await store.upsert([steady])
+        let soon = PlannedActivity(workoutID: steady.id, date: day(1))
+        try await store.upsert([soon])
+        let scheduler = FakeScheduler()
+        let sync = WatchScheduleSync(model: model, scheduler: scheduler)
+        let now = day(0)
+        await scheduler.setDuringFirstUnscheduleAll {
+            await sync.sync(asOf: now)
+        }
+
+        await sync.sync(asOf: now)
+
+        #expect(await scheduler.callLog == [
+            "authorize", "unscheduleAll", "schedule",
+            "authorize", "unscheduleAll", "schedule",
+        ])
     }
 
     @Test("does nothing without permission to schedule workouts")

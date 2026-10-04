@@ -459,6 +459,25 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(await scheduler.scheduledPlans.map(\.id) == model.plans.map(\.id))
     }
 
+    @Test("a successful save reports a plan change, so the Watch sync runs again; a failed one doesn't")
+    func saveReportsPlanChange() async {
+        let (_, model) = await makeModel()
+        let changes = ChangeCounter()
+        let failing = PlannedWorkoutSheetViewModel(
+            model: model, date: day(1), scheduler: FakeScheduler(scheduleShouldFail: true)
+        )
+        failing.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+        failing.onPlansChanged = { changes.count += 1 }
+        #expect(!(await failing.save(asOf: day(0))))
+        #expect(changes.count == 0)
+
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: FakeScheduler())
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+        viewModel.onPlansChanged = { changes.count += 1 }
+        #expect(await viewModel.save(asOf: day(0)))
+        #expect(changes.count == 1)
+    }
+
     @Test("save() leaves a plan beyond the next 7 days for WatchScheduleSync to schedule later")
     func saveSkipsPlanBeyondWindow() async {
         let (_, model) = await makeModel()

@@ -47,7 +47,7 @@ struct WatchSchedulePlannerTests {
         #expect(!WatchSchedulePlanner.isInWindow(dayAfter, asOf: beforeChange, calendar: calendar))
     }
 
-    @Test("schedules the unlinked plans of the next 7 days, soonest first, and keeps only those")
+    @Test("schedules the unlinked plans of the next 7 days, soonest first, and keeps the past week's")
     func schedulesUpcomingPlans() {
         let yesterday = plan(on: day(-1))
         let today = plan(on: day(0))
@@ -58,7 +58,7 @@ struct WatchSchedulePlannerTests {
         let result = plan([yesterday, today, sixDaysOut, tomorrow, sevenDaysOut])
 
         #expect(result.toSchedule.map(\.id) == [today.id, tomorrow.id, sixDaysOut.id])
-        #expect(result.keep == [today.id, tomorrow.id, sixDaysOut.id])
+        #expect(result.keep == [yesterday.id, today.id, tomorrow.id, sixDaysOut.id])
     }
 
     @Test("leaves out plans whose workout can't go on the Watch")
@@ -72,20 +72,33 @@ struct WatchSchedulePlannerTests {
         #expect(result.keep == [good.id])
     }
 
-    @Test("keeps completed plans of the last 7 days without scheduling them; older ones go")
-    func keepsRecentlyCompletedPlans() {
+    @Test("keeps the last 7 days' plans, linked or not, without scheduling them; older ones go")
+    func keepsRecentPastPlans() {
         let doneToday = plan(on: day(0), completed: true)
         let doneLastWeek = plan(on: day(-7), completed: true)
         let doneLongAgo = plan(on: day(-8), completed: true)
-        let missed = plan(on: day(-2))
+        // Done yesterday but not linked yet: the sync runs before the HealthKit import.
+        let notYetLinked = plan(on: day(-1))
+        let missedLongAgo = plan(on: day(-8))
 
-        let result = plan([doneToday, doneLastWeek, doneLongAgo, missed])
+        let result = plan([doneToday, doneLastWeek, doneLongAgo, notYetLinked, missedLongAgo])
 
         #expect(result.toSchedule.isEmpty)
-        #expect(result.keep == [doneToday.id, doneLastWeek.id])
+        #expect(result.keep == [doneToday.id, doneLastWeek.id, notYetLinked.id])
     }
 
-    @Test("the cap goes to upcoming plans first, then to the most recently completed ones")
+    @Test("with few slots left, linked past plans win over unlinked ones")
+    func capPrefersLinkedPastPlans() {
+        let upcoming = plan(on: day(1))
+        let unlinkedRecent = plan(on: day(-1))
+        let linkedOlder = plan(on: day(-5), completed: true)
+
+        let result = plan([upcoming, unlinkedRecent, linkedOlder], cap: 2)
+
+        #expect(result.keep == [upcoming.id, linkedOlder.id])
+    }
+
+    @Test("the cap goes to upcoming plans first, then to the most recent past ones")
     func capPrefersUpcomingPlans() {
         let upcoming = (0..<3).map { plan(on: day($0)) }
         let recent = plan(on: day(-1), completed: true)
