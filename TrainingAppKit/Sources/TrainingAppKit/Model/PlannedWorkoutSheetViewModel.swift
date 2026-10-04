@@ -95,21 +95,23 @@ public final class PlannedWorkoutSheetViewModel {
             seedFromSelectedTemplate()
         }
     }
-    /// The new workout's name. Starts as the template's generated title (MVP2-110, e.g. "50min
-    /// Easy Run") and follows ``parameterValues`` until the athlete edits it by hand, after which
-    /// it is theirs until another template is picked.
+    /// The workout's name. When creating, it starts as the template's generated title (MVP2-110,
+    /// e.g. "40min Easy Run") and follows ``parameterValues`` until the athlete edits it by hand,
+    /// after which it is theirs until another template is picked. When editing, it starts as the
+    /// saved name, and follows ``parameterValues`` only if that is still the generated title.
     public var workoutName: String = "" {
         didSet {
             // The view's TextField writes here directly; our own writes set `generatedTitle` first.
-            if workoutName != generatedTitle { nameIsCustomized = true }
+            // A comparison, not a one-way latch: typing back to the generated title resumes following.
+            nameIsCustomized = workoutName != generatedTitle
         }
     }
     /// How distances are written in a generated title; defaults to the device's measurement system.
     public var distanceSystem: DistanceSystem = Locale.current.measurementSystem == .metric ? .metric : .imperial {
         didSet { if distanceSystem != oldValue { refreshGeneratedTitle() } }
     }
-    private var generatedTitle = ""
-    private var nameIsCustomized = false
+    @ObservationIgnored private var generatedTitle = ""
+    @ObservationIgnored private var nameIsCustomized = false
     /// Parameter key to value, seeded from each parameter's `defaultValue` when a template is
     /// selected. Not private(set): the sheet's sliders/steppers write through
     /// ``setParameterValue(_:forKey:)`` instead, which also triggers both live recomputations.
@@ -286,12 +288,13 @@ public final class PlannedWorkoutSheetViewModel {
         recomputeGuardrails()
     }
 
-    /// Rewrites ``workoutName`` as the template's title at the current values, unless the athlete
-    /// has edited the name.
+    /// Brings the generated title up to date with the current values, and writes it to
+    /// ``workoutName`` unless the athlete has edited the name. The title is tracked even while the
+    /// name is custom, so typing the name back to it (see ``workoutName``) resumes following.
     private func refreshGeneratedTitle() {
-        guard !nameIsCustomized, let template = selectedTemplate ?? editedTemplate else { return }
+        guard let template = selectedTemplate ?? editedTemplate else { return }
         generatedTitle = template.defaultTitle(values: parameterValues, distanceSystem: distanceSystem)
-        workoutName = generatedTitle
+        if !nameIsCustomized { workoutName = generatedTitle }
     }
 
     /// The name to save: what's in the field, or the generated title if the athlete cleared it (so
@@ -311,6 +314,8 @@ public final class PlannedWorkoutSheetViewModel {
         guard workoutNeedsReplacing else { return editedWorkout }
         let name = workoutName.isEmpty ? editedWorkout.name : workoutName
         if parametersChanged {
+            // A malformed template (not reachable from the UI) leaves the workout untouched, name
+            // change included.
             guard let editedTemplate,
                   let instantiated = try? editedTemplate.instantiate(name: name, values: parameterValues)
             else { return editedWorkout }

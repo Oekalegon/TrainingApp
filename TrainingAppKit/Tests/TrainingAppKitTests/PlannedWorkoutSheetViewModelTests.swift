@@ -81,6 +81,21 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(viewModel.workoutName == "30min Recovery Run")
     }
 
+    @Test("typing the name back to the generated title one character at a time resumes following")
+    func typingBackToGeneratedTitleResumesFollowing() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        viewModel.workoutName = "20min Recovery Ru"
+        viewModel.setParameterValue(25 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "20min Recovery Ru")
+
+        viewModel.workoutName = "25min Recovery Run"
+        viewModel.setParameterValue(30 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "30min Recovery Run")
+    }
+
     @Test("the title's distances follow the distance system")
     func titleUsesDistanceSystem() async {
         let (_, model) = await makeModel()
@@ -147,6 +162,37 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(saved.workoutID != oldWorkout.id)
         #expect(model.workouts.first { $0.id == saved.workoutID }?.name == "Shakeout")
         #expect(model.workouts.first { $0.id == oldWorkout.id }?.name == oldWorkout.name)
+    }
+
+    @Test("a rename reschedules the new workout and unschedules the old one")
+    func renameReschedules() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.workoutName = "Shakeout"
+        #expect(await viewModel.save())
+
+        #expect(await scheduler.callLog == ["schedule", "unschedule"])
+        #expect(!model.workouts.contains { $0.id == oldWorkout.id })
+    }
+
+    @Test("a failed reschedule after a rename leaves the plan and its workout untouched")
+    func renameRescheduleFailureLeavesEverythingUntouched() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        let viewModel = PlannedWorkoutSheetViewModel(
+            model: model, editing: plan, scheduler: FakeScheduler(scheduleShouldFail: true)
+        )
+
+        viewModel.workoutName = "Shakeout"
+        #expect(!(await viewModel.save()))
+
+        #expect(model.plans.first { $0.id == plan.id }?.workoutID == oldWorkout.id)
+        #expect(model.workouts.map(\.id) == [oldWorkout.id])
     }
 
     @Test("renaming a workout that has no template keeps its steps")
