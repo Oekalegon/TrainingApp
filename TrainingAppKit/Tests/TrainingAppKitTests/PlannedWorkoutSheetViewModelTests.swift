@@ -31,8 +31,227 @@ struct PlannedWorkoutSheetViewModelTests {
         viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
 
         #expect(viewModel.parameterValues["duration"] == BuiltInWorkoutTemplates.recoveryRun.parameters[0].defaultValue)
-        #expect(viewModel.workoutName == "Recovery run")
+        #expect(viewModel.workoutName == "20min Recovery Run")
         #expect(viewModel.expectedLoad != nil)
+    }
+
+    // MARK: Default title (MVP2-110)
+
+    @Test("the default title follows the sliders until the athlete edits the name")
+    func defaultTitleFollowsParameters() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.distanceSystem = .metric
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        // 5 min warmup + 30 min + 5 min cooldown.
+        #expect(viewModel.workoutName == "40min Easy Run")
+
+        viewModel.setParameterValue(45 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "55min Easy Run")
+
+        viewModel.workoutName = "Morning jog"
+        viewModel.setParameterValue(40 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "Morning jog")
+    }
+
+    @Test("picking another template replaces a custom name with its title")
+    func changingTemplateResetsCustomName() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.distanceSystem = .metric
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        viewModel.workoutName = "Morning jog"
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.longRun
+        #expect(viewModel.workoutName == "20 km Long Run")
+
+        viewModel.setParameterValue(23_000, forKey: "distance")
+        #expect(viewModel.workoutName == "23 km Long Run")
+    }
+
+    @Test("typing the generated title back in doesn't count as customizing it")
+    func retypingGeneratedTitleKeepsFollowing() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        viewModel.workoutName = "20min Recovery Run"
+        viewModel.setParameterValue(30 * 60, forKey: "duration")
+
+        #expect(viewModel.workoutName == "30min Recovery Run")
+    }
+
+    @Test("typing the name back to the generated title one character at a time resumes following")
+    func typingBackToGeneratedTitleResumesFollowing() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        viewModel.workoutName = "20min Recovery Ru"
+        viewModel.setParameterValue(25 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "20min Recovery Ru")
+
+        viewModel.workoutName = "25min Recovery Run"
+        viewModel.setParameterValue(30 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "30min Recovery Run")
+    }
+
+    @Test("the title's distances follow the distance system")
+    func titleUsesDistanceSystem() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+        viewModel.distanceSystem = .metric
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.longRun
+        #expect(viewModel.workoutName == "20 km Long Run")
+
+        viewModel.distanceSystem = .imperial
+        #expect(viewModel.workoutName == "12.4 mi Long Run")
+    }
+
+    @Test("the generated title is saved as the workout's name")
+    func savesGeneratedTitle() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0), scheduler: nil)
+        viewModel.distanceSystem = .metric
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.baseHillSprints
+        viewModel.setParameterValue(10, forKey: "reps")
+
+        let didSave = await viewModel.save()
+
+        #expect(didSave)
+        #expect(model.workouts.first?.name == "10x8sec Hill Sprints")
+    }
+
+    @Test("a cleared name saves as the generated title, not the bare template name")
+    func clearedNameSavesGeneratedTitle() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0), scheduler: nil)
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+        viewModel.workoutName = ""
+
+        let didSave = await viewModel.save()
+
+        #expect(didSave)
+        #expect(model.workouts.first?.name == "20min Recovery Run")
+    }
+
+    // MARK: Editing the name (MVP2-110)
+
+    @Test("edit mode starts with the saved name, editable")
+    func editModeNameIsEditable() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, workout) = try await makeTemplatePlan(model: model, on: day(3))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        #expect(viewModel.workoutName == workout.name)
+    }
+
+    @Test("renaming in edit mode saves a new workout and leaves a shared one alone")
+    func renameCreatesNewWorkout() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        try await model.add(PlannedActivity(workoutID: oldWorkout.id, date: day(6)))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        viewModel.workoutName = "Shakeout"
+        #expect(await viewModel.save())
+
+        let saved = try #require(model.plans.first { $0.id == plan.id })
+        #expect(saved.workoutID != oldWorkout.id)
+        #expect(model.workouts.first { $0.id == saved.workoutID }?.name == "Shakeout")
+        #expect(model.workouts.first { $0.id == oldWorkout.id }?.name == oldWorkout.name)
+    }
+
+    @Test("a rename reschedules the new workout and unschedules the old one")
+    func renameReschedules() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        let scheduler = FakeScheduler()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+
+        viewModel.workoutName = "Shakeout"
+        #expect(await viewModel.save())
+
+        #expect(await scheduler.callLog == ["schedule", "unschedule"])
+        #expect(!model.workouts.contains { $0.id == oldWorkout.id })
+    }
+
+    @Test("a failed reschedule after a rename leaves the plan and its workout untouched")
+    func renameRescheduleFailureLeavesEverythingUntouched() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        let viewModel = PlannedWorkoutSheetViewModel(
+            model: model, editing: plan, scheduler: FakeScheduler(scheduleShouldFail: true)
+        )
+
+        viewModel.workoutName = "Shakeout"
+        #expect(!(await viewModel.save()))
+
+        #expect(model.plans.first { $0.id == plan.id }?.workoutID == oldWorkout.id)
+        #expect(model.workouts.map(\.id) == [oldWorkout.id])
+    }
+
+    @Test("renaming a workout that has no template keeps its steps")
+    func renameWorkoutWithoutTemplate() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let workout = StructuredWorkout(
+            name: "Hand-made", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1200), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: day(3))
+        try await model.add(workout)
+        try await model.add(plan)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        viewModel.workoutName = "Renamed"
+        #expect(await viewModel.save())
+
+        let saved = try #require(model.plans.first { $0.id == plan.id })
+        let renamed = try #require(model.workouts.first { $0.id == saved.workoutID })
+        #expect(renamed.name == "Renamed")
+        #expect(renamed.blocks == workout.blocks)
+    }
+
+    @Test("emptying the name in edit mode keeps the saved name")
+    func emptyNameKeepsSavedName() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        viewModel.workoutName = ""
+        #expect(await viewModel.save())
+
+        #expect(model.plans.first?.workoutID == oldWorkout.id)
+    }
+
+    @Test("a still-default title follows a parameter change in edit mode; a custom name doesn't")
+    func editModeTitleFollowsOnlyIfDefault() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, _) = try await makeTemplatePlan(model: model, on: day(3))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+        viewModel.distanceSystem = .metric
+        // `makeTemplatePlan` names the workout "Recovery run", not the generated title.
+        viewModel.setParameterValue(30 * 60, forKey: "duration")
+        #expect(viewModel.workoutName == "Recovery run")
+
+        var workout = try BuiltInWorkoutTemplates.recoveryRun.instantiate(
+            name: "20min Recovery Run", values: ["duration": 20 * 60]
+        )
+        workout.workoutKitID = UUID()
+        let defaultPlan = PlannedActivity(workoutID: workout.id, date: day(4))
+        try await model.add(workout)
+        try await model.add(defaultPlan)
+        let followed = PlannedWorkoutSheetViewModel(model: model, editing: defaultPlan, scheduler: nil)
+        followed.distanceSystem = .metric
+        followed.setParameterValue(30 * 60, forKey: "duration")
+        #expect(followed.workoutName == "30min Recovery Run")
     }
 
     @Test("setParameterValue(_:forKey:) recomputes expectedLoad, larger duration means more load")
