@@ -276,12 +276,15 @@ remember or restore which tab was last active.
 - **Gestures**: horizontal swipe moves the displayed week by ±1 week (re-centers the chart,
   reloads the day list). Both the chart and the day list scroll together — the displayed week is
   one piece of state, not two.
-- **Toolbar**: "Today" button resets the displayed week to the current calendar week; "Select
-  Date" opens a date-picker sheet to jump directly to the week containing an arbitrary date. No
-  separate "explain the metrics" entry point — that's reachable only per-metric, by tapping its
-  own pill in the day list (see above).
-- **Export Calendar** (MVP2-100): a share button (`square.and.arrow.up`) in the toolbar opens
-  `CalendarExportSheet`.
+- **Toolbar** (MVP2-109): previous/next-week buttons on the left, and one "More Actions" menu
+  (`ellipsis`) on the right. The menu holds "Today" (resets the displayed week to the current
+  calendar week), "Select Date" (a date-picker sheet to jump directly to the week containing an
+  arbitrary date), "Export Calendar" and "Import Calendar". Grouping them keeps the toolbar narrow
+  enough for the week title to show when the large title collapses. No separate "explain the
+  metrics" entry point — that's reachable only per-metric, by tapping its own pill in the day list
+  (see above).
+- **Export Calendar** (MVP2-100): a menu item (`square.and.arrow.up`) in the toolbar's "More Actions" menu
+  opens `CalendarExportSheet`.
   - **Period:** From and To date pickers, plus presets: "Until <race>" when a primary race is
     planned (listed first, since a season plan is the main use), "Next 4 Weeks" and "Last 12 Weeks".
   - **The checkmark** (toolbar, labelled "Share Export") calls
@@ -295,8 +298,8 @@ remember or restore which tab was last active.
     the sheet deletes the file, since it holds health data.
   - **Reads the stores directly,** so it doesn't disturb the loaded weeks.
     `CalendarExportViewModel` holds the logic and is tested.
-- **Import Calendar** (MVP2-103): a button (`square.and.arrow.down`) in the toolbar, beside Export
-  Calendar, opens `CalendarImportSheet`.
+- **Import Calendar** (MVP2-103): a menu item (`square.and.arrow.down`) in the toolbar's "More Actions" menu,
+  beside Export Calendar, opens `CalendarImportSheet`.
   - **Choose File…** opens the system file picker for a JSON file made by Export Calendar.
     `CalendarImportViewModel.load(from:)` reads it and previews the import; nothing is saved yet.
   - **The preview** lists how many planned workouts will be added, how many are already in the

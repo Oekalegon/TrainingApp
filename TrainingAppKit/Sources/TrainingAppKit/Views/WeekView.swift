@@ -200,25 +200,23 @@ public struct WeekView: View {
                         viewModel.goToNextWeek()
                     }
                 }
+                // MVP2-109: one menu rather than four buttons, so the toolbar leaves room for the
+                // week title to show when the large title collapses.
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Today", systemImage: "calendar") {
-                        goToToday()
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Select Date", systemImage: "calendar.badge.clock") {
-                        pickedDate = viewModel.displayedWeekStart
-                        isShowingDatePicker = true
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Export Calendar", systemImage: "square.and.arrow.up") {
-                        isShowingCalendarExport = true
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Import Calendar", systemImage: "square.and.arrow.down") {
-                        isShowingCalendarImport = true
+                    Menu("More Actions", systemImage: "ellipsis") {
+                        Button("Today", systemImage: "calendar") {
+                            goToToday()
+                        }
+                        Button("Select Date", systemImage: "calendar.badge.clock") {
+                            pickedDate = viewModel.displayedWeekStart
+                            isShowingDatePicker = true
+                        }
+                        Button("Export Calendar", systemImage: "square.and.arrow.up") {
+                            isShowingCalendarExport = true
+                        }
+                        Button("Import Calendar", systemImage: "square.and.arrow.down") {
+                            isShowingCalendarImport = true
+                        }
                     }
                 }
             }
