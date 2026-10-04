@@ -295,6 +295,21 @@ remember or restore which tab was last active.
     the sheet deletes the file, since it holds health data.
   - **Reads the stores directly,** so it doesn't disturb the loaded weeks.
     `CalendarExportViewModel` holds the logic and is tested.
+- **Import Calendar** (MVP2-103): a button (`square.and.arrow.down`) in the toolbar, beside Export
+  Calendar, opens `CalendarImportSheet`.
+  - **Choose File…** opens the system file picker for a JSON file made by Export Calendar.
+    `CalendarImportViewModel.load(from:)` reads it and previews the import; nothing is saved yet.
+  - **The preview** lists how many planned workouts will be added, how many are already in the
+    calendar (the same workout on the same day), how many are before today (skipped), and how many
+    completed activities the file holds (not imported: they come from Health, and the file has no
+    heart-rate data). Entries that can't be imported are listed with the reason.
+  - **The checkmark** imports (`TrainingModel.importCalendar`); it is disabled when nothing would be
+    added, so importing the same file twice is harmless. The sheet then shows the result, and Done
+    closes it. A file that isn't an export, or comes from a newer version of the app, shows a message
+    and offers choosing again.
+  - Daily fitness numbers in the file are never imported: they are recalculated. A TRIMP that was
+    edited in the file, or was an override, becomes the plan's load override. Imported plans aren't
+    scheduled in WorkoutKit yet (MVP2-55).
 - **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated

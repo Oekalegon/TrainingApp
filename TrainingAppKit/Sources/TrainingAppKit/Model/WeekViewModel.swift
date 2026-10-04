@@ -791,6 +791,12 @@ public final class WeekViewModel {
         CalendarExportViewModel(model: model)
     }
 
+    /// The view model for the week view's "Import Calendar" sheet (MVP2-103), opened from the
+    /// toolbar's import button.
+    public func calendarImportViewModel() -> CalendarImportViewModel {
+        CalendarImportViewModel(model: model)
+    }
+
     /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
     public func plannedWorkoutDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
         PlannedWorkoutDetailViewModel(model: model, plan: plan)
