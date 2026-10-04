@@ -203,7 +203,7 @@ public struct WeekView: View {
                 // MVP2-109: one menu rather than four buttons, so the toolbar leaves room for the
                 // week title to show when the large title collapses.
                 ToolbarItem(placement: .primaryAction) {
-                    Menu("More", systemImage: "ellipsis") {
+                    Menu("More Actions", systemImage: "ellipsis") {
                         Button("Today", systemImage: "calendar") {
                             goToToday()
                         }
