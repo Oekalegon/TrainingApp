@@ -15,21 +15,54 @@ import TrainingCore
 /// Reads every plan from the store rather than `TrainingModel.plans`, which holds only the range the
 /// week view loaded: removing entries for plans that aren't listed would otherwise remove entries
 /// for plans outside that range.
+///
+/// Also tracks whether the athlete declined permission, for the week view's banner (MVP2-117):
+/// see ``showsPermissionDeniedBanner``.
+@Observable
 @MainActor
 public final class WatchScheduleSync {
+    private static let bannerDismissedKey = "watchSync.permissionDeniedBannerDismissed"
+
     private let model: TrainingModel
     private let scheduler: any PlannedWorkoutScheduling
-    private var isSyncing = false
+    private let defaults: UserDefaults
+    @ObservationIgnored private var isSyncing = false
     /// Set when a sync is requested while one runs; that run then goes round once more, so a plan
     /// saved after it read the store still ends up on the Watch.
-    private var needsRerun = false
+    @ObservationIgnored private var needsRerun = false
+
+    /// Whether the athlete declined permission to schedule workouts, as of the last sync. `false`
+    /// until a sync has run, and when permission was never asked for or the device can't schedule
+    /// workouts.
+    public private(set) var isPermissionDenied = false
+
+    /// Whether the athlete dismissed the permission banner. Kept in `UserDefaults`, so the banner
+    /// stays away across launches; cleared once permission is granted, so declining again later
+    /// brings it back.
+    private var isBannerDismissed: Bool
+
+    /// Whether the week view shows the banner explaining that planned workouts won't reach the
+    /// Watch and how to allow it in Settings (MVP2-117): permission is denied and the athlete
+    /// hasn't dismissed the banner.
+    public var showsPermissionDeniedBanner: Bool {
+        isPermissionDenied && !isBannerDismissed
+    }
 
     /// - Parameters:
     ///   - model: Supplies the stores and the athlete's time zone.
     ///   - scheduler: The Watch; `WorkoutKitBridge` in the app, a fake in tests.
-    public init(model: TrainingModel, scheduler: any PlannedWorkoutScheduling) {
+    ///   - defaults: Where the banner's dismissal is kept; tests pass their own suite.
+    public init(model: TrainingModel, scheduler: any PlannedWorkoutScheduling, defaults: UserDefaults = .standard) {
         self.model = model
         self.scheduler = scheduler
+        self.defaults = defaults
+        self.isBannerDismissed = defaults.bool(forKey: Self.bannerDismissedKey)
+    }
+
+    /// Hides the permission banner until permission is granted and later declined again.
+    public func dismissPermissionDeniedBanner() {
+        isBannerDismissed = true
+        defaults.set(true, forKey: Self.bannerDismissedKey)
     }
 
     /// The live sync, or `nil` where WorkoutKit isn't available.
@@ -53,7 +86,8 @@ public final class WatchScheduleSync {
     /// Asks for permission to schedule workouts the first time there's a plan to send, so a new
     /// athlete isn't asked before they've planned anything. Does nothing when permission is declined
     /// or not yet asked for, the device can't schedule workouts, or the stores can't be read. A plan
-    /// that fails to schedule is skipped and tried again on the next run.
+    /// that fails to schedule is skipped and tried again on the next run. Each run that reads the
+    /// stores also records whether permission is denied, for ``showsPermissionDeniedBanner``.
     ///
     /// A call made while a run is in progress returns at once and makes that run go round again
     /// when it finishes: the running pass may have read the store before the change that prompted
@@ -90,19 +124,29 @@ public final class WatchScheduleSync {
             return (try? scheduler.validate(workout)) != nil
         }
 
-        let isAuthorized: Bool
+        let authorization: WatchSchedulingAuthorization
         if result.toSchedule.isEmpty {
-            isAuthorized = await scheduler.isAuthorized()
+            authorization = await scheduler.authorizationStatus()
         } else {
-            isAuthorized = await scheduler.requestAuthorizationIfNeeded()
+            authorization = await scheduler.requestAuthorizationIfNeeded()
         }
-        guard isAuthorized else { return }
+        record(authorization)
+        guard authorization.isAuthorized else { return }
 
         // Removals first, so the slots they free are there for the new entries.
         await scheduler.unscheduleAll(except: result.keep)
         for plan in result.toSchedule {
             guard let workout = workoutsByID[plan.workoutID] else { continue }
             try? await scheduler.schedule(plan, workout: workout, calendar: calendar)
+        }
+    }
+
+    /// Updates ``isPermissionDenied``, and forgets a dismissed banner once permission is granted.
+    private func record(_ authorization: WatchSchedulingAuthorization) {
+        isPermissionDenied = authorization == .denied
+        if authorization == .authorized, isBannerDismissed {
+            isBannerDismissed = false
+            defaults.removeObject(forKey: Self.bannerDismissedKey)
         }
     }
 }

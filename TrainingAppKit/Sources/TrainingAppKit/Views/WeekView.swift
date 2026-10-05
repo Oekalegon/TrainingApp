@@ -166,6 +166,15 @@ public struct WeekView: View {
             // DayActivitiesSection's pills/timeline (recessed relative to this) and its activity
             // cards (elevated relative to this) both have something to visually contrast against.
             .background(weekViewBackground.ignoresSafeArea())
+            // MVP2-117: an inset rather than an overlay, so the last day row can still scroll clear
+            // of the banner; at the bottom, so the large title and the week swipe aren't touched.
+            .safeAreaInset(edge: .bottom) {
+                if viewModel.showsWatchPermissionBanner {
+                    WatchPermissionBanner { viewModel.dismissWatchPermissionBanner() }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.default, value: viewModel.showsWatchPermissionBanner)
             // Covers the empty-state -> week-content swap once `hasNoActivities` flips (e.g. after
             // "Connect Health Data" completes): that happens asynchronously, well after the button's
             // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` —

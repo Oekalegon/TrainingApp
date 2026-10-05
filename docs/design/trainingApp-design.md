@@ -594,6 +594,12 @@ the foreground, which also moves the window on after midnight.
 - **Permission.** The first run with a plan to send asks for WorkoutKit permission, so a new athlete
   isn't asked before planning anything. Declined, not yet asked, or on a device that can't schedule
   workouts, the sync does nothing.
+- **Permission denied (MVP2-117).** Each run records whether the athlete declined. While they have,
+  `WeekView` shows a `WatchPermissionBanner` at the bottom of the screen, explaining that planned
+  workouts won't reach the Watch, with an "Open Settings" button to the app's settings page. The
+  banner can be dismissed; the dismissal is kept in `UserDefaults` and cleared once permission is
+  granted, so declining again later brings the banner back. Allowing it in Settings hides the
+  banner on its own, since the sync runs again when the app becomes active.
 - **When else it runs.** `WeekViewModel` runs it again after the planned-workout sheet saves, the
   detail sheet deletes, or a calendar import succeeds (`onPlansChanged`), and after anything that can
   link or unlink a plan (MVP2-116): a HealthKit import (pull-to-refresh, Connect Health, Force Full
@@ -605,10 +611,10 @@ the foreground, which also moves the window on after midnight.
   window has its entry removed. Deleting a plan removes its entry. Both removals are best-effort,
   since the next sync catches anything left behind.
 
-Not done yet: a banner when permission is denied (MVP2-117), a settings switch (MVP2-118), a
-"sent to Watch" mark on plan cards (MVP2-119), linking an imported workout to its plan by the
-plan id it was started from (MVP2-120), and HealthKit background delivery, so a workout done while
-the app is closed is imported and linked without a pull-to-refresh (MVP2-121).
+Not done yet: a settings switch (MVP2-118), a "sent to Watch" mark on plan cards (MVP2-119), linking
+an imported workout to its plan by the plan id it was started from (MVP2-120), and HealthKit
+background delivery, so a workout done while the app is closed is imported and linked without a
+pull-to-refresh (MVP2-121).
 
 ---
 

@@ -6,7 +6,7 @@ import TrainingCore
 /// `WorkoutKitBridge` (whose `WorkoutScheduler` crashes outside a genuine app bundle).
 final actor FakeScheduler: PlannedWorkoutScheduling {
     private let scheduleShouldFail: Bool
-    private let authorized: Bool
+    private var authorization: WatchSchedulingAuthorization
     nonisolated let maxScheduledCount: Int
     /// Workouts `validate` rejects, by id.
     nonisolated let invalidWorkoutIDs: Set<UUID>
@@ -22,12 +22,12 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
 
     init(
         scheduleShouldFail: Bool = false,
-        isAuthorized: Bool = true,
+        authorization: WatchSchedulingAuthorization = .authorized,
         maxScheduledCount: Int = 15,
         invalidWorkoutIDs: Set<UUID> = []
     ) {
         self.scheduleShouldFail = scheduleShouldFail
-        self.authorized = isAuthorized
+        self.authorization = authorization
         self.maxScheduledCount = maxScheduledCount
         self.invalidWorkoutIDs = invalidWorkoutIDs
     }
@@ -69,13 +69,18 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
         duringFirstUnscheduleAll = hook
     }
 
-    func requestAuthorizationIfNeeded() async -> Bool {
-        callLog.append("authorize")
-        return authorized
+    /// Changes the answer later calls get, as when the athlete changes it in Settings.
+    func setAuthorization(_ authorization: WatchSchedulingAuthorization) {
+        self.authorization = authorization
     }
 
-    func isAuthorized() async -> Bool {
-        callLog.append("isAuthorized")
-        return authorized
+    func requestAuthorizationIfNeeded() async -> WatchSchedulingAuthorization {
+        callLog.append("authorize")
+        return authorization
+    }
+
+    func authorizationStatus() async -> WatchSchedulingAuthorization {
+        callLog.append("authorizationStatus")
+        return authorization
     }
 }

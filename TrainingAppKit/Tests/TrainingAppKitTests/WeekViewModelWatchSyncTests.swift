@@ -11,6 +11,8 @@ import TrainingCore
 @MainActor
 @Suite("WeekViewModel Watch sync (MVP2-116)")
 struct WeekViewModelWatchSyncTests {
+    private let scratch = ScratchDefaults()
+
     private struct StubImporter: ActivityImporting {
         let activities: [Activity]
         func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
@@ -47,9 +49,11 @@ struct WeekViewModelWatchSyncTests {
         try await model.load(in: day(0)...day(6), asOf: today)
         let run = Activity(source: .healthKit(UUID()), sport: .running, start: today, duration: 1800)
         try await model.importActivities(from: StubImporter(activities: [run] + extra), asOf: today)
+        let defaults = scratch.defaults
         let viewModel = WeekViewModel(
             model: model, refresher: refresher,
-            watchSync: scheduler.map { WatchScheduleSync(model: model, scheduler: $0) }, today: today
+            watchSync: scheduler.map { WatchScheduleSync(model: model, scheduler: $0, defaults: defaults) },
+            today: today
         )
         let linked = try #require(model.activities.first { $0.linkedPlanID == plan.id })
         return (viewModel, plan, linked)
@@ -57,7 +61,7 @@ struct WeekViewModelWatchSyncTests {
 
     /// The sync ran and kept `plan`'s entry as done, without scheduling it again.
     private func expectKeptAsDone(_ plan: PlannedActivity, by scheduler: FakeScheduler) async {
-        #expect(await scheduler.callLog == ["isAuthorized", "unscheduleAll"])
+        #expect(await scheduler.callLog == ["authorizationStatus", "unscheduleAll"])
         #expect(await scheduler.keptPlanIDs == [[plan.id]])
     }
 
@@ -223,5 +227,26 @@ struct WeekViewModelWatchSyncTests {
 
         #expect(viewModel.pendingWatchSync == nil)
         #expect(viewModel.model.activities.isEmpty)
+    }
+
+    // MARK: Permission banner (MVP2-117)
+
+    @Test("shows the Watch permission banner after a sync finds permission denied, until dismissed")
+    func permissionBanner() async throws {
+        let (viewModel, _, _) = try await makeViewModel(scheduler: nil)
+        #expect(!viewModel.showsWatchPermissionBanner)
+
+        let sync = WatchScheduleSync(
+            model: viewModel.model, scheduler: FakeScheduler(authorization: .denied), defaults: scratch.defaults
+        )
+        let withSync = WeekViewModel(
+            model: viewModel.model, refresher: FakeRefresher(), watchSync: sync, today: today
+        )
+        #expect(!withSync.showsWatchPermissionBanner)
+        await sync.sync(asOf: today)
+        #expect(withSync.showsWatchPermissionBanner)
+
+        withSync.dismissWatchPermissionBanner()
+        #expect(!withSync.showsWatchPermissionBanner)
     }
 }
