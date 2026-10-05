@@ -25,6 +25,8 @@ private let weekSwipeCoordinateSpace = "WeekView.weekSwipe"
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
 public struct WeekView: View {
     let viewModel: WeekViewModel
+    /// Opens the Athlete tab's Apple Watch section, from the Watch permission banner (MVP2-117).
+    let onShowWatchSettings: () -> Void
     #if os(iOS)
     @Environment(\.colorScheme) private var colorScheme
     #endif
@@ -126,8 +128,12 @@ public struct WeekView: View {
     /// previous week rather than springing back.
     private static let commitThreshold: CGFloat = 0.3
 
-    public init(viewModel: WeekViewModel) {
+    /// - Parameters:
+    ///   - viewModel: The week view's model.
+    ///   - onShowWatchSettings: Opens the Athlete tab, from the Watch permission banner's button.
+    public init(viewModel: WeekViewModel, onShowWatchSettings: @escaping () -> Void = {}) {
         self.viewModel = viewModel
+        self.onShowWatchSettings = onShowWatchSettings
     }
 
     #if os(iOS)
@@ -170,7 +176,10 @@ public struct WeekView: View {
             // of the banner; at the bottom, so the large title and the week swipe aren't touched.
             .safeAreaInset(edge: .bottom) {
                 if viewModel.showsWatchPermissionBanner {
-                    WatchPermissionBanner { viewModel.dismissWatchPermissionBanner() }
+                    WatchPermissionBanner(
+                        onShowWatchSettings: onShowWatchSettings,
+                        onDismiss: { viewModel.dismissWatchPermissionBanner() }
+                    )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }

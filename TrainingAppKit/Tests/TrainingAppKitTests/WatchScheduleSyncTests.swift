@@ -227,4 +227,44 @@ struct WatchScheduleSyncTests {
         await sync.sync(asOf: day(0))
         #expect(sync.showsPermissionDeniedBanner)
     }
+
+    // MARK: Athlete tab (MVP2-117)
+
+    @Test("refreshing reads the permission without asking or syncing")
+    func refreshAuthorizationDoesNotPrompt() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler(authorization: .denied)
+        let sync = makeSync(model, scheduler)
+        #expect(sync.authorization == nil)
+
+        await sync.refreshAuthorization()
+
+        #expect(sync.authorization == .denied)
+        #expect(sync.showsPermissionDeniedBanner)
+        #expect(await scheduler.callLog == ["authorizationStatus"])
+    }
+
+    @Test("allowing from the Athlete tab asks, then syncs once granted")
+    func requestPermissionSyncsWhenGranted() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler(authorization: .authorized)
+        let sync = makeSync(model, scheduler)
+
+        await sync.requestPermission(asOf: day(0))
+
+        #expect(sync.authorization == .authorized)
+        #expect(await scheduler.callLog == ["authorize", "authorize", "unscheduleAll", "schedule"])
+    }
+
+    @Test("allowing from the Athlete tab doesn't sync when permission stays declined")
+    func requestPermissionDeclined() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler(authorization: .denied)
+        let sync = makeSync(model, scheduler)
+
+        await sync.requestPermission(asOf: day(0))
+
+        #expect(sync.authorization == .denied)
+        #expect(await scheduler.callLog == ["authorize"])
+    }
 }

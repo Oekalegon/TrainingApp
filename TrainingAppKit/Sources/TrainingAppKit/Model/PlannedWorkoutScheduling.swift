@@ -1,6 +1,7 @@
 import Foundation
 import TrainingCore
 #if canImport(WorkoutKit)
+import OSLog
 import TrainingWorkoutKit
 import WorkoutKit
 #endif
@@ -44,7 +45,8 @@ public enum WatchSchedulingAuthorization: Sendable, Equatable {
     case authorized
     /// The athlete hasn't been asked yet.
     case notDetermined
-    /// The athlete declined; only the Settings app can change that.
+    /// The athlete declined, at the prompt or later in the Watch app's Workout settings. iOS doesn't
+    /// ask again; only those settings can turn it back on.
     case denied
     /// The device can't schedule workouts, or a restriction the athlete can't lift prevents it.
     case unavailable
@@ -73,21 +75,35 @@ extension WorkoutKitBridge: PlannedWorkoutScheduling {
     }
 
     public func requestAuthorizationIfNeeded() async -> WatchSchedulingAuthorization {
-        guard WorkoutScheduler.isSupported else { return .unavailable }
+        guard WorkoutScheduler.isSupported else { return Self.unsupported() }
         let state = await WorkoutKitAuthorization.state
-        guard state == .notDetermined else { return Self.authorization(from: state) }
-        return Self.authorization(from: await WorkoutKitAuthorization.requestAuthorization())
+        guard state == .notDetermined else { return Self.authorization(from: state, after: "check") }
+        return Self.authorization(from: await WorkoutKitAuthorization.requestAuthorization(), after: "prompt")
     }
 
     public func authorizationStatus() async -> WatchSchedulingAuthorization {
-        guard WorkoutScheduler.isSupported else { return .unavailable }
-        return Self.authorization(from: await WorkoutKitAuthorization.state)
+        guard WorkoutScheduler.isSupported else { return Self.unsupported() }
+        return Self.authorization(from: await WorkoutKitAuthorization.state, after: "check")
+    }
+
+    /// Logs what WorkoutKit reported, so a banner that doesn't show (MVP2-117) can be traced on a
+    /// device: filter Xcode's console on the "WatchSync" category. Debug level, so it isn't kept
+    /// in the device's log store.
+    private static let logger = Logger(subsystem: "TrainingApp", category: "WatchSync")
+
+    private static func unsupported() -> WatchSchedulingAuthorization {
+        logger.debug("WorkoutScheduler.isSupported is false: scheduling unavailable")
+        return .unavailable
     }
 
     /// `.restricted` (and any state added later) counts as unavailable: the athlete can't change it
-    /// in Settings, so there's nothing for the banner to tell them.
-    private static func authorization(from state: WorkoutScheduler.AuthorizationState) -> WatchSchedulingAuthorization {
-        switch state {
+    /// in the Watch app, so there's nothing for the banner to tell them.
+    private static func authorization(
+        from state: WorkoutScheduler.AuthorizationState, after source: String
+    ) -> WatchSchedulingAuthorization {
+        let description = String(describing: state)
+        logger.debug("WorkoutKit authorization after \(source, privacy: .public): \(description, privacy: .public)")
+        return switch state {
         case .authorized: .authorized
         case .notDetermined: .notDetermined
         case .denied: .denied

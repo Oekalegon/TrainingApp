@@ -69,7 +69,7 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
         duringFirstUnscheduleAll = hook
     }
 
-    /// Changes the answer later calls get, as when the athlete changes it in Settings.
+    /// Changes the answer later calls get, as when the athlete changes it in the Watch app's Workout settings.
     func setAuthorization(_ authorization: WatchSchedulingAuthorization) {
         self.authorization = authorization
     }
