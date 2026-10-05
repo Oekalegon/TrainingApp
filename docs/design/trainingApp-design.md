@@ -74,7 +74,7 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 
 ### 2.0 Top-level navigation
 
-`AppTabView` is the app's root: a bottom tab bar with three tabs, "Week" (§2.1), "Library"
+`AppTabView` is the app's root: a bottom tab bar with three tabs plus a search tab (§2.4), "Week" (§2.1), "Library"
 (§2.4, MVP2-21) and "Athlete" (§2.3) — all built from the same `WeekViewModel` instance
 (`AthleteView` reads it via `WeekViewModel.athleteViewModel`, the Library tab via
 `WeekViewModel.workoutLibraryViewModel()`), owned by `AppTabView` and constructed once for the
@@ -583,6 +583,12 @@ browsing. MVP 5's plan builder will live in this tab too.
 - **Plan This Workout** opens the "Create Planned Workout" sheet (§2.1) with the template already
   picked and today as the date. It uses the Watch setting at that moment (MVP2-118) and runs the
   Watch sync after saving, like the week view's sheet.
+
+**Search**: a separate search tab (`Tab(role: .search)`) sits apart at the trailing end of the
+tab bar and turns into the search field when tapped, as in Mail. Results update as the athlete
+types (`WorkoutLibraryViewModel.sections(matching:)`): a template matches when its name, default
+title or sport contains every typed word, ignoring case and diacritics; an empty field shows the
+whole library, and no match shows the standard "No Results" view. Results push the same detail.
 
 A template's plans are found through their workouts' `templateID`, across every plan in the store
 (`PlanStore.plans(in:)` over all dates): `TrainingModel.plans` only holds the week view's loaded

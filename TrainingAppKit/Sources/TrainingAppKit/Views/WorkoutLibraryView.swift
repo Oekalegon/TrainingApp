@@ -10,33 +10,65 @@ struct WorkoutLibraryView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if let loadError = viewModel.loadError {
-                    Text(loadError)
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(viewModel.sections()) { section in
-                    Section(section.sport.displayName) {
-                        ForEach(section.entries) { entry in
-                            NavigationLink(value: entry.id) {
-                                WorkoutTemplateRow(entry: entry)
-                            }
+            WorkoutLibraryList(viewModel: viewModel, query: "")
+                .navigationTitle("Library")
+        }
+    }
+}
+
+/// The search tab (design doc §2.4): instant results from the library as the athlete types in the
+/// tab bar's search field, which `AppTabView` attaches with `.searchable`. With an empty field it
+/// shows the whole library, like the Library tab.
+struct WorkoutSearchView: View {
+    let viewModel: WorkoutLibraryViewModel
+    let query: String
+
+    var body: some View {
+        NavigationStack {
+            WorkoutLibraryList(viewModel: viewModel, query: query)
+                .navigationTitle("Search")
+        }
+    }
+}
+
+/// The templates matching `query`, grouped by sport, each pushing ``WorkoutTemplateDetailView`` —
+/// shared by the Library and search tabs, inside their own `NavigationStack`s.
+private struct WorkoutLibraryList: View {
+    let viewModel: WorkoutLibraryViewModel
+    let query: String
+
+    var body: some View {
+        let sections = viewModel.sections(matching: query)
+        List {
+            if let loadError = viewModel.loadError {
+                Text(loadError)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(sections) { section in
+                Section(section.sport.displayName) {
+                    ForEach(section.entries) { entry in
+                        NavigationLink(value: entry.id) {
+                            WorkoutTemplateRow(entry: entry)
                         }
                     }
                 }
             }
-            .navigationTitle("Library")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            // By id, not by entry: the detail reads its entry live, so a plan saved from it updates
-            // the counts there too.
-            .navigationDestination(for: UUID.self) { templateID in
-                WorkoutTemplateDetailView(viewModel: viewModel, templateID: templateID)
-            }
-            // Each time the tab appears: plans made on the week view since count too.
-            .task { await viewModel.reload() }
         }
+        .overlay {
+            if sections.isEmpty, !query.isEmpty {
+                ContentUnavailableView.search(text: query)
+            }
+        }
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        // By id, not by entry: the detail reads its entry live, so a plan saved from it updates
+        // the counts there too.
+        .navigationDestination(for: UUID.self) { templateID in
+            WorkoutTemplateDetailView(viewModel: viewModel, templateID: templateID)
+        }
+        // Each time the tab appears: plans made on the week view since count too.
+        .task { await viewModel.reload() }
     }
 }
 

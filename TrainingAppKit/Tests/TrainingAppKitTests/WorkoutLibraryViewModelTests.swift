@@ -56,6 +56,25 @@ struct WorkoutLibraryViewModelTests {
         #expect(sections[1].entries.map(\.id) == [ride.id])
     }
 
+    @Test("search matches every word against the name, default title and sport, ignoring case")
+    func searchFiltersEntries() async {
+        let (_, model) = await makeModel()
+        let viewModel = makeViewModel(model: model)
+        func ids(_ query: String) -> [UUID] {
+            viewModel.sections(matching: query, asOf: day(0)).flatMap(\.entries).map(\.id)
+        }
+
+        #expect(ids("") == BuiltInWorkoutTemplates.all.map(\.id))
+        #expect(ids("EASY") == [BuiltInWorkoutTemplates.easyRun.id])
+        // By default title ("20 km Long Run") and across words in any order.
+        #expect(ids("km long") == [BuiltInWorkoutTemplates.longRun.id])
+        #expect(ids("run long") == [BuiltInWorkoutTemplates.longRun.id])
+        // By sport.
+        #expect(ids("running").count == BuiltInWorkoutTemplates.all.count)
+        #expect(ids("swim").isEmpty)
+        #expect(viewModel.sections(matching: "swim", asOf: day(0)).isEmpty)
+    }
+
     @Test("an entry has the default title, the default steps and an estimated load")
     func entryShowsDefaults() async throws {
         let (_, model) = await makeModel()

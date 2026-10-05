@@ -3,7 +3,8 @@ import TrainingCore
 
 /// The app's top-level screen (design doc §2.0): a bottom tab bar switching between the week view
 /// ("Week"), the workout library ("Library", MVP2-21) and the athlete account screen ("Athlete") —
-/// replacing the week view's former "Athlete" toolbar button + sheet.
+/// replacing the week view's former "Athlete" toolbar button + sheet — plus a search tab whose
+/// field sits in the tab bar and searches the workout library as the athlete types.
 ///
 /// Owns the single `WeekViewModel` for the app's lifetime so both tabs share it: `WeekView` reads
 /// it directly, and `AthleteView` reads it via `WeekViewModel.athleteViewModel` — that coupling is
@@ -18,6 +19,7 @@ public struct AppTabView: View {
         case week
         case library
         case athlete
+        case search
     }
 
     @State private var viewModel: WeekViewModel
@@ -27,6 +29,8 @@ public struct AppTabView: View {
     /// The visible tab. Kept so the week view's Watch permission banner (MVP2-117) can open the
     /// Athlete tab; not remembered across launches.
     @State private var selectedTab = AppTab.week
+    /// The tab bar's search field (MVP2-21), searching the workout library as the athlete types.
+    @State private var searchText = ""
     @Environment(\.scenePhase) private var scenePhase
     private let watchSync: WatchScheduleSync?
 
@@ -49,46 +53,47 @@ public struct AppTabView: View {
         let overlapReviewItems = viewModel.overlapReviewItems
 
         TabView(selection: $selectedTab) {
-            WeekView(viewModel: viewModel, onShowWatchSettings: { selectedTab = .athlete })
-                .tabItem {
-                    Label("Week", systemImage: "calendar")
-                }
-                .tag(AppTab.week)
-
-            WorkoutLibraryView(viewModel: libraryViewModel)
-                .tabItem {
-                    Label("Library", systemImage: "books.vertical")
-                }
-                .tag(AppTab.library)
-
-            AthleteView(
-                viewModel: viewModel.athleteViewModel,
-                isResyncing: viewModel.isResyncing,
-                onResync: { Task { await viewModel.resyncActivities() } },
-                isDeduplicating: viewModel.isDeduplicating,
-                onDeduplicate: { Task { await viewModel.deduplicateActivities() } },
-                overlapReviewItems: overlapReviewItems,
-                athleteTimeZone: viewModel.athleteTimeZone,
-                activityDetailViewModel: { viewModel.activityDetailViewModel(for: $0) },
-                onResolveOverlap: { await viewModel.resolveOverlap(deleting: $0) },
-                onDeleteActivity: { await viewModel.deleteActivity($0) },
-                onJoinActivities: { await viewModel.joinActivities($0, with: $1) },
-                onUnjoinActivity: { await viewModel.unjoinActivity($0) },
-                loadJoinedComponents: { await viewModel.joinedComponents(of: $0) },
-                onLinkPlan: { await viewModel.linkActivity($0, toPlan: $1) },
-                onUnlinkPlan: { await viewModel.unlinkActivity($0) },
-                watchSync: watchSync
-            )
-            .tabItem {
-                Label("Athlete", systemImage: "person.circle")
+            Tab("Week", systemImage: "calendar", value: AppTab.week) {
+                WeekView(viewModel: viewModel, onShowWatchSettings: { selectedTab = .athlete })
             }
-            .tag(AppTab.athlete)
+
+            Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
+                WorkoutLibraryView(viewModel: libraryViewModel)
+            }
+
+            Tab("Athlete", systemImage: "person.circle", value: AppTab.athlete) {
+                AthleteView(
+                    viewModel: viewModel.athleteViewModel,
+                    isResyncing: viewModel.isResyncing,
+                    onResync: { Task { await viewModel.resyncActivities() } },
+                    isDeduplicating: viewModel.isDeduplicating,
+                    onDeduplicate: { Task { await viewModel.deduplicateActivities() } },
+                    overlapReviewItems: overlapReviewItems,
+                    athleteTimeZone: viewModel.athleteTimeZone,
+                    activityDetailViewModel: { viewModel.activityDetailViewModel(for: $0) },
+                    onResolveOverlap: { await viewModel.resolveOverlap(deleting: $0) },
+                    onDeleteActivity: { await viewModel.deleteActivity($0) },
+                    onJoinActivities: { await viewModel.joinActivities($0, with: $1) },
+                    onUnjoinActivity: { await viewModel.unjoinActivity($0) },
+                    loadJoinedComponents: { await viewModel.joinedComponents(of: $0) },
+                    onLinkPlan: { await viewModel.linkActivity($0, toPlan: $1) },
+                    onUnlinkPlan: { await viewModel.unlinkActivity($0) },
+                    watchSync: watchSync
+                )
+            }
             // Same live count `OverlapWarningBanner` shows on the Athlete screen itself (MVP1-67)
             // — both update together whenever an overlap is resolved, since they read the same
             // `WeekViewModel.overlapReviewItems`. `.badge(0)` hides the badge on its own, so no
             // extra `nil`-vs-count branch is needed here.
             .badge(overlapReviewItems.count)
+
+            // The search role puts this tab apart at the trailing end of the tab bar, where it
+            // turns into the search field when selected — as in Mail (MVP2-21).
+            Tab(value: AppTab.search, role: .search) {
+                WorkoutSearchView(viewModel: libraryViewModel, query: searchText)
+            }
         }
+        .searchable(text: $searchText, prompt: "Workouts")
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             watchSync?.requestSync()

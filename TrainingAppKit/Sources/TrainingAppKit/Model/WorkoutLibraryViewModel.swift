@@ -112,7 +112,22 @@ public final class WorkoutLibraryViewModel {
     ///
     /// - Parameter today: Decides which plans count as upcoming for ``Entry/nextPlannedDate``.
     public func sections(asOf today: Date = .now) -> [SportSection] {
-        let entries = self.entries(asOf: today)
+        sections(matching: "", asOf: today)
+    }
+
+    /// The templates matching `query`, grouped as in ``sections(asOf:)``, for the search tab's
+    /// instant results. A template matches when its name, its default title or its sport's name
+    /// contains every word of `query`, ignoring case and diacritics; an empty query matches all.
+    ///
+    /// - Parameters:
+    ///   - query: What the athlete typed.
+    ///   - today: Decides which plans count as upcoming for ``Entry/nextPlannedDate``.
+    public func sections(matching query: String, asOf today: Date = .now) -> [SportSection] {
+        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        let entries = self.entries(asOf: today).filter { entry in
+            let haystacks = [entry.template.name, entry.defaultTitle, entry.template.sport.displayName]
+            return words.allSatisfy { word in haystacks.contains { $0.localizedStandardContains(word) } }
+        }
         var sports: [Sport] = []
         for entry in entries where !sports.contains(entry.template.sport) {
             sports.append(entry.template.sport)
