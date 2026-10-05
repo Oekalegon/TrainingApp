@@ -16,9 +16,9 @@ struct WorkoutLibraryView: View {
     }
 }
 
-/// The search tab (design doc §2.4): instant results from the library as the athlete types in the
-/// tab bar's search field, which `AppTabView` attaches with `.searchable`. With an empty field it
-/// shows the whole library, like the Library tab.
+/// The search tab (design doc §2.4): instant results from the workout templates as the athlete
+/// types in the tab bar's search field, which `AppTabView` attaches with `.searchable` and shows
+/// only from the Library tab. With an empty field it shows every template, like the Library tab.
 struct WorkoutSearchView: View {
     let viewModel: WorkoutLibraryViewModel
     let query: String

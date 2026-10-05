@@ -3,8 +3,9 @@ import TrainingCore
 
 /// The app's top-level screen (design doc §2.0): a bottom tab bar switching between the week view
 /// ("Week"), the workout library ("Library", MVP2-21) and the athlete account screen ("Athlete") —
-/// replacing the week view's former "Athlete" toolbar button + sheet — plus a search tab whose
-/// field sits in the tab bar and searches the workout library as the athlete types.
+/// replacing the week view's former "Athlete" toolbar button + sheet — plus, while the Library tab
+/// is open, a search tab whose field sits in the tab bar and searches the workout templates as the
+/// athlete types.
 ///
 /// Owns the single `WeekViewModel` for the app's lifetime so both tabs share it: `WeekView` reads
 /// it directly, and `AthleteView` reads it via `WeekViewModel.athleteViewModel` — that coupling is
@@ -29,7 +30,7 @@ public struct AppTabView: View {
     /// The visible tab. Kept so the week view's Watch permission banner (MVP2-117) can open the
     /// Athlete tab; not remembered across launches.
     @State private var selectedTab = AppTab.week
-    /// The tab bar's search field (MVP2-21), searching the workout library as the athlete types.
+    /// The tab bar's search field (MVP2-21), searching the workout templates as the athlete types.
     @State private var searchText = ""
     @Environment(\.scenePhase) private var scenePhase
     private let watchSync: WatchScheduleSync?
@@ -88,12 +89,16 @@ public struct AppTabView: View {
             .badge(overlapReviewItems.count)
 
             // The search role puts this tab apart at the trailing end of the tab bar, where it
-            // turns into the search field when selected — as in Mail (MVP2-21).
-            Tab(value: AppTab.search, role: .search) {
-                WorkoutSearchView(viewModel: libraryViewModel, query: searchText)
+            // turns into the search field when selected — as in Mail (MVP2-21). It searches only
+            // the workout templates, so it's there only from the Library tab, and stays while its
+            // results are up; switching to Week or Athlete hides it again.
+            if selectedTab == .library || selectedTab == .search {
+                Tab(value: AppTab.search, role: .search) {
+                    WorkoutSearchView(viewModel: libraryViewModel, query: searchText)
+                }
             }
         }
-        .searchable(text: $searchText, prompt: "Workouts")
+        .searchable(text: $searchText, prompt: "Workout Templates")
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             watchSync?.requestSync()
