@@ -233,8 +233,9 @@ remember or restore which tab was last active.
   a glance, not a separate muted color scheme. Its headline has the linked workout's sport icon,
   the workout's name, and the expected Load (the plan's `expectedLoadOverride`, else the estimator's
   figure); its second line shows only the one measure the workout actually defines — distance for
-  a workout made solely of distance steps, estimated duration otherwise — never a converted
-  counterpart (see MVP2-35). Plans already matched to a completed activity get no row at all
+  a workout made solely of distance steps, expected duration otherwise (forecast from the athlete's
+  paces for distance and open steps, see "Pace forecasts" below) — never a converted counterpart,
+  which would put a guess next to a real figure on a small card. Plans already matched to a completed activity get no row at all
   (`WeekViewModel.pendingPlans(on:)`). Tapping it opens the planned-workout detail sheet (below).
 - **Intensity** (MVP2-43). Each card is tinted by the session's intensity — very low, low, medium or
   high, from `TrainingModel.intensity(of:)`, which classifies from sustained time in heart-rate zones
@@ -249,8 +250,8 @@ remember or restore which tab was last active.
   TRIMP after a slash in a tertiary colour ("85 / 90"), and a third line under the duration/distance
   line shows the plan's expected duration and distance in the same layout, so each sits directly
   under the actual value it compares with. Both are shown whichever the workout is defined by: the
-  other is projected from the athlete's pace model (`StatisticsCalculator.projection`), so a
-  distance is absent when no zone settings are recorded. Monospaced digits keep the columns aligned.
+  other is forecast from the athlete's earlier workouts (see "Pace forecasts" below; only
+  activities before this one count), so a distance is absent when no zone settings are recorded. Monospaced digits keep the columns aligned.
 - **Missed plans.** A plan on a day before today that no completed activity matched is drawn as an
   outline only: the plain view background, a hairline secondary border, secondary text, no expected
   Load (it never became training load) and no intensity colour. A plan for today stays hatched until
@@ -263,8 +264,9 @@ remember or restore which tab was last active.
   race: Marathon". The daily-load chart has no race marker yet.
 - `DayActivitiesSection` takes one closure per card kind (`WeekViewModel.activityCardContent(for:)`,
   `plannedCardContent(for:asOf:)`) returning everything the card shows. Those values are cached per
-  item against the inputs they depend on — a plan's load override, its workout's steps, an activity's
-  link and heart-rate data — and dropped when the athlete or intensity thresholds change, because the
+  item against the inputs they depend on — a plan's load override, its workout's steps and date, an
+  activity's link and heart-rate data, and the pace history planned durations and distances are
+  forecast from — and dropped when the athlete or intensity thresholds change, because the
   list re-renders on every frame of the week-swipe drag and an id- or count-keyed cache would go
   stale on an in-place edit.
 - The week view sits on its own light (dark in dark mode) grey background, distinct from the plain
@@ -408,15 +410,39 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   (MVP1-64) and won't reappear on the next resync either way.
 
 Tapping a *planned* (not-yet-completed) activity (MVP2-38) opens a small read-only sheet
-(`PlannedWorkoutDetailSheet`): the workout's sport icon, name and date; its expected duration (always
-estimable), distance (only for a workout made solely of distance steps — no converted guess, see
-MVP2-35) and load; and a plain step list, one line per block (`4 × Work 8:00, Recovery 400 m`).
+(`PlannedWorkoutDetailSheet`): the workout's sport icon, name and date; its expected duration,
+distance and load, a forecast value marked "Forecast" and the section's footer saying how many
+similar workouts it came from (see "Pace forecasts" below); and a plain step list, one line per block (`4 × Work 8:00, Recovery 400 m`).
 Richer per-step targets/zones are deferred. A pencil in the toolbar opens `PlannedWorkoutSheet` in
 edit mode (date, load override, and — for a workout built from a template, which records its template id and parameter values — those parameters, e.g. an easy run's duration; changing one instantiates a new workout for this plan and removes the old one if no other plan uses it, so a workout shared with other plans is never altered; a workout without a recorded template keeps a read-only definition), and a
 Delete button at the bottom behind a confirmation alert removes only the plan
 (`TrainingModel.deletePlan`), never the library workout, and its WorkoutKit entry best-effort (§3.5).
 
 The Name field of `PlannedWorkoutSheet` (MVP2-110) is a default title the athlete can always change. When creating, it starts as the template's generated title ("40min Easy Run", "23 km Long Run", "10x8sec Hill Sprints", from TrainingKit's `WorkoutTemplate.defaultTitle`; a steady run's time includes its warmup and cooldown) and follows the parameter controls until the athlete edits it by hand; picking another template starts over; a cleared field saves the generated title. When editing, the field starts as the saved name and follows parameter changes only if that name is still exactly the generated title. A new name saves as a new workout, like a parameter change, so a workout shared with other plans is never renamed under them; a cleared field keeps the saved name. Distances are written in km/m or miles/yards by the device's measurement system (`PlannedWorkoutSheetViewModel.distanceSystem`).
+
+#### Pace forecasts (MVP2-35, MVP2-111)
+
+A planned workout defines either time or distance per step, so the other — and the length of an
+open step such as the run to the hill — has to be forecast. TrainingKit forecasts it from the
+athlete's own earlier, similar workouts rather than from `AthleteProfile.paceModel` alone (see
+"Pace forecasts" in TrainingKit's design doc): per heart-rate zone, kept slower in lower zones;
+per step kind and zone, so a recovery jog isn't forecast at steady pace; and open steps from the
+median time they took in earlier runs of the same workout or template.
+
+- `WeekViewModel.refreshPaceHistoryIfNeeded(asOf:force:)` has `TrainingModel.refreshPaceHistory(in:)`
+  read the last 180 days of activities from the store into `TrainingModel.paceHistory`. It runs with
+  the week caches: when the athlete, the library or the day changed, and always after an import,
+  resync, dedup, link, join or delete (`refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`). It
+  doesn't run on week navigation, which changes the loaded weeks but not the 180-day history. The
+  card and stats caches are only invalidated when the history it read is actually different.
+- The planned card's duration, a linked activity's planned line (from activities before that one
+  only), the detail sheet and the week's planned totals all pass that history to
+  `StatisticsCalculator` (`projection(for:athlete:paceHistory:before:excluding:)`,
+  `periodStatsSplit(…paceHistory:)`), so they agree. With no history the figures are the pace
+  model's.
+- The detail sheet reads `TrainingModel.paceHistory` live, so a history that lands while it's open
+  updates it. It marks forecast values "Forecast" and its footer says how many earlier workouts they
+  came from.
 
 ### 2.3 Athlete account
 

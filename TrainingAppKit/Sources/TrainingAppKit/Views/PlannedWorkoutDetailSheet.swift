@@ -52,17 +52,30 @@ struct PlannedWorkoutDetailSheet: View {
                     }
                 }
 
-                Section("Expected") {
-                    if let duration = viewModel.expectedDuration {
-                        LabeledContent("Duration", value: Duration.seconds(duration).formatted(.time(pattern: .hourMinuteSecond)))
+                // Read once: each read runs the forecast.
+                let expected = viewModel.expected
+                Section {
+                    if let duration = expected?.duration {
+                        LabeledContent("Duration") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(Duration.seconds(duration).formatted(.time(pattern: .hourMinuteSecond)))
+                                // Distance and open steps take as long as the athlete's pace makes
+                                // them — a forecast, so it says so.
+                                if expected?.isDurationForecast == true {
+                                    Text("Forecast")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
-                    if let meters = viewModel.expectedDistanceMeters {
+                    if let meters = expected?.distanceMeters {
                         LabeledContent("Distance") {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(Measurement(value: meters, unit: UnitLength.meters).formatted(Self.measurementFormat))
-                                // A duration-based workout has no distance of its own — this is the
-                                // pace model's estimate, so it says so.
-                                if viewModel.isDistanceForecast {
+                                // A duration-based workout has no distance of its own — this is a
+                                // forecast from the athlete's paces, so it says so.
+                                if expected?.isDistanceForecast == true {
                                     Text("Forecast")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -77,6 +90,12 @@ struct PlannedWorkoutDetailSheet: View {
                                 Text("\(load.formatted(Self.loadFormat)) TRIMP")
                             }
                         }
+                    }
+                } header: {
+                    Text("Expected")
+                } footer: {
+                    if let basis = expected?.basis {
+                        Text(basis)
                     }
                 }
 
