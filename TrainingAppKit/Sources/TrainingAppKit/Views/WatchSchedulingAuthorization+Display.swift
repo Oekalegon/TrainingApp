@@ -1,9 +1,9 @@
 extension WatchSchedulingAuthorization {
-    /// The Athlete tab's Apple Watch status (MVP2-117), e.g. "Not allowed".
+    /// The Athlete tab's Watch Permission row (MVP2-117), e.g. "Not allowed".
     var statusText: String {
         switch self {
         case .authorized: "Allowed"
-        case .notDetermined: "Not set up"
+        case .notDetermined: "Not asked yet"
         case .denied: "Not allowed"
         case .unavailable: "Unavailable"
         }
@@ -11,8 +11,15 @@ extension WatchSchedulingAuthorization {
 
     /// The footer under that status: what it means, and for `.denied` where to turn it back on,
     /// since iOS doesn't ask again and the app can't turn it on itself.
-    var explanation: String {
-        switch self {
+    ///
+    /// - Parameter isEnabled: Whether the athlete has the app's "Send Planned Workouts to Apple
+    ///   Watch" switch on (MVP2-118). While it's off, the footer says so instead, whatever the
+    ///   permission; a device that can't schedule workouts shows no switch, so it keeps its own text.
+    func explanation(isEnabled: Bool) -> String {
+        if !isEnabled, self != .unavailable {
+            return "Planned workouts aren't sent to your Apple Watch. Turn this on to have each planned workout ready in the Workout app on the day it's due."
+        }
+        return switch self {
         case .authorized:
             "The next 7 days of planned workouts are kept in the Workout app on your Apple Watch, each ready on the day it's due."
         case .notDetermined:

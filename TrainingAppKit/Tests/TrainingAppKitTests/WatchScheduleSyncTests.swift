@@ -267,4 +267,108 @@ struct WatchScheduleSyncTests {
         #expect(sync.authorization == .denied)
         #expect(await scheduler.callLog == ["authorize"])
     }
+
+    // MARK: Send to Apple Watch switch (MVP2-118)
+
+    @Test("sending is on by default")
+    func enabledByDefault() async throws {
+        let (_, model) = try await makeModel()
+        let sync = makeSync(model, FakeScheduler())
+
+        #expect(sync.isEnabled)
+        #expect(sync.editingScheduler != nil)
+    }
+
+    @Test("turning sending off removes every entry and keeps the plans off the Watch")
+    func turningOffRemovesEntries() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler()
+        let sync = makeSync(model, scheduler)
+
+        await sync.setEnabled(false, asOf: day(0)).value
+        await sync.sync(asOf: day(0))
+
+        #expect(!sync.isEnabled)
+        #expect(sync.editingScheduler == nil)
+        #expect(await scheduler.callLog == [
+            "authorizationStatus", "unscheduleAll",
+            "authorizationStatus", "unscheduleAll",
+        ])
+        #expect(await scheduler.keptPlanIDs == [[], []])
+        #expect(await scheduler.scheduledPlans.isEmpty)
+    }
+
+    @Test("turned off, a sync never asks for permission")
+    func turnedOffDoesNotPrompt() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler(authorization: .notDetermined)
+        let sync = makeSync(model, scheduler)
+
+        await sync.setEnabled(false, asOf: day(0)).value
+
+        #expect(await scheduler.callLog == ["authorizationStatus"])
+        #expect(sync.authorization == .notDetermined)
+    }
+
+    @Test("the switch is remembered across launches")
+    func enabledPersists() async throws {
+        let (_, model) = try await makeModel()
+        let scheduler = FakeScheduler()
+        await makeSync(model, scheduler).setEnabled(false, asOf: day(0)).value
+
+        #expect(!makeSync(model, scheduler).isEnabled)
+    }
+
+    @Test("turning sending back on asks for permission if needed, then schedules the plans")
+    func turningOnSyncs() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler()
+        let sync = makeSync(model, scheduler)
+        await sync.setEnabled(false, asOf: day(0)).value
+
+        await sync.setEnabled(true, asOf: day(0)).value
+
+        #expect(sync.isEnabled)
+        #expect(await scheduler.callLog.suffix(4) == ["authorize", "authorize", "unscheduleAll", "schedule"])
+        #expect(await scheduler.scheduledPlans.count == 1)
+    }
+
+    @Test("setting the switch to what it already is does nothing")
+    func unchangedSwitchIsNoOp() async throws {
+        let (_, model) = try await makeModel()
+        let scheduler = FakeScheduler()
+
+        await makeSync(model, scheduler).setEnabled(true, asOf: day(0)).value
+
+        #expect(await scheduler.callLog.isEmpty)
+    }
+
+    @Test("turning sending off during a sync removes what that sync was about to add")
+    func turningOffDuringSync() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler()
+        let sync = makeSync(model, scheduler)
+        let now = day(0)
+        await scheduler.setDuringFirstUnscheduleAll {
+            await sync.setEnabled(false, asOf: now).value
+        }
+
+        await sync.sync(asOf: now)
+
+        #expect(await scheduler.scheduledPlans.isEmpty)
+        #expect(await scheduler.keptPlanIDs.last == Set<UUID>())
+    }
+
+    @Test("no permission banner while sending is turned off")
+    func noBannerWhenTurnedOff() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let sync = makeSync(model, FakeScheduler(authorization: .denied))
+        await sync.sync(asOf: day(0))
+        #expect(sync.showsPermissionDeniedBanner)
+
+        await sync.setEnabled(false, asOf: day(0)).value
+
+        #expect(sync.isPermissionDenied)
+        #expect(!sync.showsPermissionDeniedBanner)
+    }
 }

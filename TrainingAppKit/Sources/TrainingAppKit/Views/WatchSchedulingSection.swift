@@ -1,11 +1,16 @@
 import SwiftUI
 
-/// The Athlete tab's Apple Watch section (MVP2-117): whether the app may put planned workouts on
-/// the Watch, an Allow button while the athlete hasn't been asked, and where to turn it back on
-/// once declined. The week view's ``WatchPermissionBanner`` opens the Athlete tab to show this.
+/// The Athlete tab's Apple Watch section (MVP2-117, MVP2-118): a "Send Planned Workouts to Apple
+/// Watch" switch, whether the app may put planned workouts on the Watch, an Allow button while the
+/// athlete hasn't been asked, and where to turn it back on once declined. The week view's
+/// ``WatchPermissionBanner`` opens the Athlete tab to show this.
 ///
-/// iOS asks only once, so for a declined permission this can only point to the Watch app's
-/// Workout settings; ``WatchScheduleSync/requestPermission(asOf:)`` wouldn't show the prompt again.
+/// The switch is the app's own setting (``WatchScheduleSync/isEnabled``) and works on top of iOS's
+/// permission: turning it off removes the app's workouts from the Watch without touching the
+/// permission. iOS asks only once, so for a declined permission this can only point to the Watch
+/// app's Workout settings; neither the switch nor ``WatchScheduleSync/requestPermission(asOf:)``
+/// shows the prompt again. On a device that can't schedule workouts, only the status shows.
+///
 /// Reads the permission when it appears, so it's current before any sync has run; the sync that
 /// runs when the app becomes active updates it after a change in the Watch app.
 struct WatchSchedulingSection: View {
@@ -15,8 +20,14 @@ struct WatchSchedulingSection: View {
 
     var body: some View {
         Section {
-            LabeledContent("Planned Workouts", value: sync.authorization?.statusText ?? "Checking…")
-            if sync.authorization == .notDetermined {
+            if sync.authorization != .unavailable {
+                Toggle(
+                    "Send Planned Workouts to Apple Watch",
+                    isOn: Binding(get: { sync.isEnabled }, set: { sync.setEnabled($0) })
+                )
+            }
+            LabeledContent("Watch Permission", value: sync.authorization?.statusText ?? "Checking…")
+            if sync.isEnabled, sync.authorization == .notDetermined {
                 Button {
                     isRequesting = true
                     Task {
@@ -38,7 +49,7 @@ struct WatchSchedulingSection: View {
             Text("Apple Watch")
         } footer: {
             if let authorization = sync.authorization {
-                Text(authorization.explanation)
+                Text(authorization.explanation(isEnabled: sync.isEnabled))
             }
         }
         .task {

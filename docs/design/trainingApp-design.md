@@ -480,16 +480,25 @@ imported biometric data looks right. The only app settings here are the Apple Wa
 - Pace model's threshold pace (`paceModel.thresholdPaceSecondsPerKilometer`), shown as min/km.
 - Week-starts-on, time zone — minor, but confirms the app is bucketing days the way the athlete
   expects.
-- **Apple Watch** (MVP2-117, `WatchSchedulingSection`), just below name and sex so the week view's
-  Watch permission banner (§3.5), which opens this tab, lands on it: whether the app may put
-  planned workouts on the Watch ("Allowed", "Not set up", "Not allowed", "Unavailable"). While the
-  athlete hasn't been asked, an "Allow Sending to Apple Watch" button shows the WorkoutKit prompt
-  and syncs once it's granted (`WatchScheduleSync.requestPermission(asOf:)`). Once declined, iOS
-  won't ask again, so the footer says where to turn it back on: the Watch app on the iPhone, under
-  Workout. The section reads the permission when it appears (`refreshAuthorization()`), and the
-  sync that runs when the app becomes active updates it. Hidden where WorkoutKit isn't available.
-  The banner switches tabs without scrolling, so a list left scrolled further down keeps that
-  position and the section may be off-screen; scrolling to it is a possible later improvement.
+- **Apple Watch** (MVP2-117, MVP2-118, `WatchSchedulingSection`), just below name and sex so the
+  week view's Watch permission banner (§3.5), which opens this tab, lands on it:
+  - A **"Send Planned Workouts to Apple Watch"** switch (MVP2-118, `WatchScheduleSync.isEnabled`),
+    on by default and kept in `UserDefaults` on this device. It's the app's own setting, on top of
+    iOS's permission: turning it off removes the app's workouts from the Watch and stops the sync
+    and the planned-workout sheets from scheduling (§3.5), without changing the permission.
+    Turning it on asks for permission if the athlete hasn't been asked yet, then syncs. Hidden on a
+    device that can't schedule workouts.
+  - A **Watch Permission** row: "Allowed", "Not asked yet", "Not allowed" or "Unavailable". While
+    the switch is on and the athlete hasn't been asked, an "Allow Sending to Apple Watch" button
+    shows the WorkoutKit prompt and syncs once it's granted
+    (`WatchScheduleSync.requestPermission(asOf:)`). Once declined, iOS won't ask again, so the
+    footer says where to turn it back on: the Watch app on the iPhone, under Workout. With the
+    switch off, the footer says planned workouts aren't sent instead.
+
+  The section reads the permission when it appears (`refreshAuthorization()`), and the sync that
+  runs when the app becomes active updates it. Hidden where WorkoutKit isn't available. The banner
+  switches tabs without scrolling, so a list left scrolled further down keeps that position and the
+  section may be off-screen; scrolling to it is a possible later improvement.
 
 `heartRateZoneHistory` beyond the current entry is not shown in MVP 1 (no history/timeline UI —
 just "what's in effect now"). No editing, no HealthKit-write-back; this screen only reads what
@@ -605,8 +614,15 @@ the foreground, which also moves the window on after midnight.
 - **Permission.** The first run with a plan to send asks for WorkoutKit permission, so a new athlete
   isn't asked before planning anything. Declined, not yet asked, or on a device that can't schedule
   workouts, the sync does nothing.
+- **Turned off (MVP2-118).** With the Athlete tab's "Send Planned Workouts to Apple Watch" switch
+  off (`WatchScheduleSync.isEnabled`), each run removes every entry the app put on the Watch
+  (`unscheduleAll(except: [])`) instead of scheduling, and never asks for permission. Turning the
+  switch off runs that sync straight away; a run already in progress checks the switch before
+  adding entries and goes round again to remove them. The planned-workout sheets get no scheduler
+  while it's off (`WeekViewModel.plannedWorkoutScheduler`), so saving a plan neither checks the
+  workout against the Watch nor schedules it. The permission banner doesn't show while it's off.
 - **Permission denied (MVP2-117).** Each run records the permission (`WatchScheduleSync.authorization`).
-  While it's denied, `WeekView` shows a yellow `WatchPermissionBanner` at the bottom of the screen,
+  While it's denied and sending is on, `WeekView` shows a yellow `WatchPermissionBanner` at the bottom of the screen,
   explaining that planned workouts won't reach the Watch, with an "Open Athlete Tab" button to the
   Athlete tab's Apple Watch section (§2.3). The banner can be dismissed; the dismissal is kept in
   `UserDefaults` and cleared once permission is granted, so declining again later brings the banner
@@ -624,10 +640,9 @@ the foreground, which also moves the window on after midnight.
   window has its entry removed. Deleting a plan removes its entry. Both removals are best-effort,
   since the next sync catches anything left behind.
 
-Not done yet: a settings switch (MVP2-118), a "sent to Watch" mark on plan cards (MVP2-119), linking
-an imported workout to its plan by the plan id it was started from (MVP2-120), and HealthKit
-background delivery, so a workout done while the app is closed is imported and linked without a
-pull-to-refresh (MVP2-121).
+Not done yet: a "sent to Watch" mark on plan cards (MVP2-119), linking an imported workout to its
+plan by the plan id it was started from (MVP2-120), and HealthKit background delivery, so a workout
+done while the app is closed is imported and linked without a pull-to-refresh (MVP2-121).
 
 ---
 

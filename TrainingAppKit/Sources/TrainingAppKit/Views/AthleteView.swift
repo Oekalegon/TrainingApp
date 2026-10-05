@@ -5,8 +5,8 @@ import TrainingCore
 /// editing of the profile itself, no `heartRateZoneHistory` timeline, just what's currently in
 /// effect. Its actions don't edit the profile: "Force Full Resync" re-imports activities from
 /// scratch, for recovering from a mapping fix that already-imported activities wouldn't otherwise
-/// pick up (design doc §2.3), and the Apple Watch section (MVP2-117) asks for permission to put
-/// planned workouts on the Watch.
+/// pick up (design doc §2.3), and the Apple Watch section (MVP2-117, MVP2-118) turns sending planned
+/// workouts to the Watch on or off and asks for permission to do so.
 struct AthleteView: View {
     let viewModel: AthleteViewModel
     let isResyncing: Bool
