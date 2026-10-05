@@ -26,10 +26,9 @@ extension WeekViewModel {
     /// What the plan `activity` is linked to expected, or `nil` when it has no linked plan among the
     /// loaded ones or that plan's workout is gone.
     ///
-    /// Both duration and distance, unlike ``plannedCardSummary(for:)``, which shows only the one a
-    /// workout is defined by: on an activity's card the planned values sit under the actual ones, so
-    /// each actual value needs its counterpart. The forecast uses only activities from before this
-    /// one, so the plan's expectation isn't informed by how the athlete actually ran it. Cached per
+    /// Both duration and distance, like ``plannedCardSummary(for:)``: on an activity's card the
+    /// planned values sit under the actual ones, so each actual value needs its counterpart. Unlike
+    /// that summary, the forecast uses only activities from before this one, so the plan's expectation isn't informed by how the athlete actually ran it. Cached per
     /// plan against its load override, its workout's steps and the pace history, and dropped when
     /// the athlete's zones or pace model change — the forecast depends on all of them.
     public func linkedPlanExpectation(for activity: Activity) -> LinkedPlanExpectation? {

@@ -444,10 +444,9 @@ public final class WeekViewModel {
 
     /// Everything a planned activity's card shows (MVP2-37), derived from the plan and its workout.
     public struct PlannedCardSummary: Equatable, Sendable {
-        /// The one measure a workout is defined by — never both: the other one is a forecast from
-        /// the athlete's paces (see ``WeekViewModel/paceHistory``), and showing a guess next to a real
-        /// figure on the small card would undercut it. The detail sheet shows both, the forecast
-        /// labelled as such.
+        /// The one measure a workout is defined by, for places with room for a single figure (the
+        /// activity sheet's plan-link options). The card shows both ``duration`` and
+        /// ``distanceMeters``, the forecast one marked with a "~".
         public enum Extent: Equatable, Sendable {
             case duration(TimeInterval)
             case distance(meters: Double)
@@ -468,12 +467,23 @@ public final class WeekViewModel {
         /// duration when the workout has distance or open steps. A distance is never forecast here,
         /// and a duration made only of time steps is the workout's target.
         public let isExtentEstimated: Bool
+        /// Expected duration: the sum of the steps' times for a workout of time steps only, else
+        /// forecast from the athlete's paces. `nil` when the workout is missing.
+        public let duration: TimeInterval?
+        /// Expected distance: the sum of the steps' distances for a workout of distance steps only,
+        /// else forecast from the athlete's paces. `nil` when the workout is missing, when it can't be
+        /// forecast (no heart-rate zone settings recorded) or when it comes to nothing.
+        public let distanceMeters: Double?
+        /// Whether ``duration`` is a forecast, shown with a "~" (MVP2-8).
+        public let isDurationEstimated: Bool
+        /// Whether ``distanceMeters`` is a forecast, shown with a "~" (MVP2-8).
+        public let isDistanceEstimated: Bool
 
         /// The summary for `plan` given its `workout` (`nil` when no longer in the library). Shared by
         /// the day list's card and ``PlannedWorkoutDetailViewModel``, so both always show the same
         /// numbers. A workout made up solely of distance-goal steps gets its distance as ``extent``;
-        /// every other workout its expected duration, forecast from `history` for any distance or
-        /// open steps it has (MVP2-35, MVP2-111; see
+        /// every other workout its expected duration. Whatever the steps don't set is forecast from
+        /// `history` (MVP2-35, MVP2-111; see
         /// `StatisticsCalculator.projection(for:athlete:paceHistory:before:excluding:)`).
         static func make(
             plan: PlannedActivity, workout: StructuredWorkout?, athlete: AthleteProfile,
@@ -482,7 +492,8 @@ public final class WeekViewModel {
             guard let workout else {
                 return PlannedCardSummary(
                     sport: .running, name: nil, load: plan.expectedLoadOverride, isLoadEstimated: false,
-                    extent: nil, isExtentEstimated: false
+                    extent: nil, isExtentEstimated: false, duration: nil, distanceMeters: nil,
+                    isDurationEstimated: false, isDistanceEstimated: false
                 )
             }
             let load = plan.expectedLoadOverride
@@ -501,16 +512,19 @@ public final class WeekViewModel {
                     }
                 }
             }
+            let projection = calculator.projection(
+                for: workout, athlete: athlete, paceHistory: history, before: plan.date
+            )
             // Requires at least one distance step, so a workout with no steps at all isn't shown as
             // "0 m".
             let extent: Extent
+            let expectedDistance: Double?
             if sawDistanceStep && !sawOtherStep {
                 extent = .distance(meters: distanceMeters)
+                expectedDistance = distanceMeters
             } else {
-                let projection = calculator.projection(
-                    for: workout, athlete: athlete, paceHistory: history, before: plan.date
-                )
                 extent = .duration(projection.duration)
+                expectedDistance = projection.distanceMeters
             }
 
             let isExtentEstimated: Bool
@@ -521,14 +535,15 @@ public final class WeekViewModel {
             }
             return PlannedCardSummary(
                 sport: workout.sport, name: workout.name, load: load, isLoadEstimated: plan.isExpectedLoadEstimated,
-                extent: extent, isExtentEstimated: isExtentEstimated
+                extent: extent, isExtentEstimated: isExtentEstimated,
+                duration: projection.duration, distanceMeters: expectedDistance.flatMap { $0 > 0 ? $0 : nil },
+                isDurationEstimated: workout.isDurationForecast, isDistanceEstimated: workout.isDistanceForecast
             )
         }
     }
 
-    /// The card content for `plan` (MVP2-37). A workout made up solely of distance-goal steps is
-    /// shown by its distance; every other workout by its expected duration, forecast from
-    /// ``paceHistory``.
+    /// The card content for `plan` (MVP2-37): its expected duration and distance, whichever the
+    /// steps don't set forecast from ``paceHistory``.
     public func plannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
         refreshCardCachesIfNeeded()
         let workout = workout(for: plan)

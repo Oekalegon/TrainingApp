@@ -118,7 +118,7 @@ struct ActivityCard: View {
     /// group each part's own text/icon without implying they're one continuous phrase; climb alone
     /// also gets a leading mountain icon (via `Text(Image(...))` concatenation) to set it apart
     /// from the plain duration/distance numbers next to it.
-    private static let partSpacing = "   "
+    private static let partSpacing = TimelineCardStyle.partSpacing
 
     private var durationString: String {
         TimelineCardStyle.durationText(activity.duration)

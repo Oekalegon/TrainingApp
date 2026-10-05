@@ -24,6 +24,10 @@ enum TimelineCardStyle {
     /// — past the intensity marker slot and the sport icon, not tied to either's actual glyph size.
     static let secondLineIndent: CGFloat = intensityMarkerWidth + iconSpacing + iconWidth + iconSpacing
 
+    /// The gap between the duration, distance and climb on a card's second line: extra spacing
+    /// rather than a separator character.
+    static let partSpacing = "   "
+
     static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
     static let measurementFormat = Measurement<UnitLength>.FormatStyle.measurement(width: .abbreviated)
 

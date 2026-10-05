@@ -78,7 +78,7 @@ public final class PlannedWorkoutDetailViewModel {
     /// The athlete's timezone — the sheet formats ``plan``'s date with this.
     public var timeZone: TimeZone { model.athlete.timeZone }
 
-    /// Sport, name, load and the one measure the workout defines — the same numbers the day list's
+    /// Sport, name, load, duration and distance — the same numbers the day list's
     /// card shows.
     public var summary: WeekViewModel.PlannedCardSummary {
         WeekViewModel.PlannedCardSummary.make(

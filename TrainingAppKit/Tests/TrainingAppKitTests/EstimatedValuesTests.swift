@@ -154,6 +154,33 @@ struct EstimatedValuesTests {
         let orphan = viewModel.plannedCardSummary(for: PlannedActivity(workoutID: UUID(), date: day(3)))
         #expect(!orphan.isLoadEstimated)
         #expect(!orphan.isExtentEstimated)
+        #expect(orphan.duration == nil)
+        #expect(orphan.distanceMeters == nil)
+    }
+
+    @Test("a planned card shows both duration and distance, the one the steps don't set marked as a forecast")
+    func plannedCardShowsBoth() async throws {
+        let (viewModel, model, _) = makeViewModel()
+        func summary(_ workout: StructuredWorkout) async throws -> WeekViewModel.PlannedCardSummary {
+            try await model.add(workout, asOf: day(2))
+            let plan = PlannedActivity(workoutID: workout.id, date: day(3))
+            try await model.add(plan, asOf: day(2))
+            return viewModel.plannedCardSummary(for: plan)
+        }
+
+        // A 20-minute easy run: the duration is its target, the distance a forecast.
+        let timed = try await summary(workout([.time(1200)]))
+        #expect(timed.duration == 1200)
+        #expect(!timed.isDurationEstimated)
+        #expect((timed.distanceMeters ?? 0) > 0)
+        #expect(timed.isDistanceEstimated)
+
+        // A 5 km run: the distance is its target, the duration a forecast.
+        let distance = try await summary(workout([.distance(5000)]))
+        #expect(distance.distanceMeters == 5000)
+        #expect(!distance.isDistanceEstimated)
+        #expect((distance.duration ?? 0) > 0)
+        #expect(distance.isDurationEstimated)
     }
 
     @Test("a linked card marks the plan's forecast figure and estimated load, not its targets")
