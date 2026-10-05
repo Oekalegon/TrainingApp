@@ -14,7 +14,9 @@ import WorkoutKit
 /// Each Watch entry belongs to one plan and carries that plan's id, so nothing about it is stored in
 /// the app: scheduling a plan again replaces its entry, wherever it was.
 public protocol PlannedWorkoutScheduling: Sendable {
-    /// Throws if `workout` can't be put on the Watch (an unsupported sport, goal or alert).
+    /// Throws if `workout` can't be put on the Watch (an unsupported sport, goal or alert). The real
+    /// bridge throws a ``WatchIncompatibility`` whose message says why, for the planned-workout
+    /// cards' warning (MVP2-119) and the sheet's save error.
     func validate(_ workout: StructuredWorkout) throws
 
     /// Puts `workout` on the Watch on `plan`'s day, replacing whatever was scheduled for `plan`
@@ -37,6 +39,19 @@ public protocol PlannedWorkoutScheduling: Sendable {
 
     /// How many entries the app may hold on the Watch at once.
     var maxScheduledCount: Int { get }
+}
+
+/// Why a workout can't go on the Watch (MVP2-119), thrown by ``PlannedWorkoutScheduling/validate(_:)``:
+/// a sentence for the athlete, e.g. "Apple Watch doesn't support this alert for cycling."
+public struct WatchIncompatibility: LocalizedError, Equatable, Sendable {
+    /// The sentence shown on the planned-workout card and in the sheet's save error.
+    public let reason: String
+
+    public init(reason: String) {
+        self.reason = reason
+    }
+
+    public var errorDescription: String? { reason }
 }
 
 /// Whether the app may put planned workouts on the Watch (MVP2-55, MVP2-117).
@@ -71,7 +86,28 @@ public enum PlannedWorkoutSchedulers {
 #if canImport(WorkoutKit)
 extension WorkoutKitBridge: PlannedWorkoutScheduling {
     public func validate(_ workout: StructuredWorkout) throws {
-        _ = try customWorkout(from: workout)
+        do throws(WorkoutKitMappingError) {
+            _ = try customWorkout(from: workout)
+        } catch {
+            throw WatchIncompatibility(reason: Self.reason(for: error, sport: workout.sport))
+        }
+    }
+
+    /// The athlete-facing sentence for why `customWorkout(from:)` refused a workout (MVP2-119).
+    /// Named after the workout's sport rather than the HealthKit activity type in the error, so it
+    /// reads like the rest of the app.
+    static func reason(for error: WorkoutKitMappingError, sport: Sport) -> String {
+        let sportName = sport.displayName.lowercased()
+        return switch error {
+        case .unsupportedActivity:
+            "Apple Watch can't run structured \(sportName) workouts."
+        case .unsupportedGoal, .unsupportedGoalForActivity:
+            "Apple Watch doesn't support one of this workout's step goals for \(sportName)."
+        case .unsupportedAlertForActivity:
+            "Apple Watch doesn't support this alert for \(sportName)."
+        case .unsupportedWorkoutKind:
+            "Apple Watch can't run this kind of workout."
+        }
     }
 
     public func requestAuthorizationIfNeeded() async -> WatchSchedulingAuthorization {

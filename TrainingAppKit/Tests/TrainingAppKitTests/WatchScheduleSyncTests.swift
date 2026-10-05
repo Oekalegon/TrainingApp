@@ -387,4 +387,60 @@ struct WatchScheduleSyncTests {
         #expect(sync.isPermissionDenied)
         #expect(!sync.showsPermissionDeniedBanner)
     }
+
+    // MARK: Card status (MVP2-119)
+
+    @Test("remembers the plans it sent, and why workouts can't go on the Watch")
+    func recordsSentPlansAndUnsupportedWorkouts() async throws {
+        let (store, model) = try await makeModel()
+        let good = workout()
+        let bad = workout()
+        try await store.upsert([good, bad])
+        let goodPlan = PlannedActivity(workoutID: good.id, date: day(1))
+        let badPlan = PlannedActivity(workoutID: bad.id, date: day(2))
+        let later = PlannedActivity(workoutID: good.id, date: day(20))
+        try await store.upsert([goodPlan, badPlan, later])
+        let sync = makeSync(model, FakeScheduler(invalidWorkoutIDs: [bad.id]))
+
+        await sync.sync(asOf: day(0))
+
+        #expect(sync.sentPlanIDs == [goodPlan.id])
+        #expect(sync.unsupportedWorkouts == [bad.id: FakeScheduler.unsupportedReason])
+    }
+
+    @Test("a plan that fails to schedule isn't counted as sent")
+    func failedScheduleIsNotSent() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let sync = makeSync(model, FakeScheduler(scheduleShouldFail: true))
+
+        await sync.sync(asOf: day(0))
+
+        #expect(sync.sentPlanIDs.isEmpty)
+    }
+
+    @Test("without permission nothing counts as sent, but unsupported workouts are still found")
+    func notAuthorizedSendsNothing() async throws {
+        let (store, model) = try await makeModel()
+        let bad = workout()
+        try await store.upsert([bad])
+        try await store.upsert([PlannedActivity(workoutID: bad.id, date: day(1))])
+        let sync = makeSync(model, FakeScheduler(authorization: .denied, invalidWorkoutIDs: [bad.id]))
+
+        await sync.sync(asOf: day(0))
+
+        #expect(sync.sentPlanIDs.isEmpty)
+        #expect(sync.unsupportedWorkouts.keys.contains(bad.id))
+    }
+
+    @Test("turning sending off forgets the plans it sent")
+    func turningOffClearsSentPlans() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let sync = makeSync(model, FakeScheduler())
+        await sync.sync(asOf: day(0))
+        #expect(sync.sentPlanIDs.count == 1)
+
+        await sync.setEnabled(false, asOf: day(0)).value
+
+        #expect(sync.sentPlanIDs.isEmpty)
+    }
 }

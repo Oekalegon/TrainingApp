@@ -15,6 +15,11 @@ import TrainingCore
 /// secondary text, no expected load, and no intensity marker — what was planned but didn't happen,
 /// not something still to do.
 ///
+/// A plan the Watch sync sent to the Apple Watch shows a small Watch symbol at the trailing end of
+/// the second row, under the expected load, and one
+/// whose workout can't go on the Watch shows a warning line with the reason (MVP2-119,
+/// `PlannedCardContent.watchStatus`). Neither shows on a missed plan or while sending is off.
+///
 /// Tapping it (MVP2-38) presents the planned-workout detail sheet — see `WeekView`'s
 /// `.sheet(item: $selectedPlan)`. Expected values are shown plainly (no "~"), since the marker
 /// already says "planned".
@@ -33,6 +38,9 @@ struct PlannedActivityCard: View {
     /// outlined card on the plain view background, with secondary text and no expected load: what
     /// was planned but didn't happen, not something still to do. Ignores `intensity`.
     private var isMissed: Bool { content.isMissed }
+    /// Whether the Watch sync sent this plan to the Apple Watch (MVP2-119): a Watch symbol at the
+    /// trailing end of the second row.
+    private var isOnWatch: Bool { content.watchStatus == .onWatch }
 
     var body: some View {
         if plan.completedActivityID == nil {
@@ -70,11 +78,34 @@ struct PlannedActivityCard: View {
                         }
                     }
                     .font(.subheadline)
-                    if let extentText {
-                        extentText
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.leading, TimelineCardStyle.secondLineIndent)
+                    // The duration or distance, with the Watch mark at the trailing end, under the
+                    // expected load.
+                    if extentText != nil || isOnWatch {
+                        HStack {
+                            extentText
+                            Spacer()
+                            if isOnWatch {
+                                // Spoken in `accessibilityLabel` below.
+                                Image(systemName: "applewatch")
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, TimelineCardStyle.secondLineIndent)
+                    }
+                    if case .unsupported(let reason) = content.watchStatus {
+                        // Orange only on the symbol: orange caption text is too faint on the card's
+                        // light background.
+                        Label {
+                            Text(reason)
+                                .foregroundStyle(.secondary)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .font(.caption)
+                        .padding(.leading, TimelineCardStyle.secondLineIndent)
                     }
                 }
                 .padding(TimelineCardStyle.contentPadding)
@@ -129,6 +160,14 @@ struct PlannedActivityCard: View {
             parts.append(intensity.category.displayName.lowercased() + " intensity")
         }
         parts.append(isMissed ? "not done" : "not yet done")
+        switch content.watchStatus {
+        case .onWatch:
+            parts.append("on Apple Watch")
+        case .unsupported(let reason):
+            parts.append("can't go on Apple Watch: \(reason)")
+        case nil:
+            break
+        }
         return parts.joined(separator: ", ")
     }
 }

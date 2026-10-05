@@ -256,6 +256,15 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
   outline only: the plain view background, a hairline secondary border, secondary text, no expected
   Load (it never became training load) and no intensity colour. A plan for today stays hatched until
   the day ends. This deliberately adds a third card state to the two above.
+- **Apple Watch status on planned cards** (MVP2-119, `PlannedCardContent.watchStatus`). A plan the
+  Watch sync sent (§3.5) shows a small Watch symbol at the trailing end of the second row, under
+  the expected Load. A plan whose workout can't go
+  on the Watch shows a warning line under the duration or distance instead: an orange warning
+  symbol and the reason in secondary text, e.g. "Apple Watch doesn't support this alert for
+  cycling." Neither shows on a missed plan, or while the athlete has turned sending off (§2.3);
+  VoiceOver reads them as "on Apple Watch" or "can't go on Apple Watch: …". Both come from the
+  last sync, looked up per card (`WeekViewModel.watchStatus(for:)`), so the cards redraw after
+  each sync without touching the card caches.
 - **Race cards** (MVP2-104). A race on a day is drawn as a `RaceCard` above that day's activities,
   laid out like an activity card's headline: a lettered circle for the priority (A primary, B
   secondary, C tertiary) where the activity card has its intensity marker, a flag icon and the race
@@ -641,9 +650,19 @@ the foreground, which also moves the window on after midnight.
   window has its entry removed. Deleting a plan removes its entry. Both removals are best-effort,
   since the next sync catches anything left behind.
 
-Not done yet: a "sent to Watch" mark on plan cards (MVP2-119), linking an imported workout to its
-plan by the plan id it was started from (MVP2-120), and HealthKit background delivery, so a workout
-done while the app is closed is imported and linked without a pull-to-refresh (MVP2-121).
+- **What the cards show (MVP2-119).** Each run that reads the stores checks the workouts of plans
+  dated from a week ago on against the Watch (`validate`; the whole library would grow with every
+  plan made) and keeps the reasons for those that fail
+  (`WatchScheduleSync.unsupportedWorkouts`); the planner skips their plans. It also keeps the ids
+  of the plans it scheduled without an error (`sentPlanIDs`); empty without permission or with
+  sending off. That's what the app sent, not a read of the Watch, which WorkoutKit doesn't offer
+  cheaply; the next run corrects it. The reasons come from `WorkoutKitBridge.validate`, which turns
+  TrainingKit's `WorkoutKitMappingError` into a `WatchIncompatibility` sentence named after the
+  workout's sport; the planned-workout sheet's save error uses the same sentence.
+
+Not done yet: linking an imported workout to its plan by the plan id it was started from
+(MVP2-120), and HealthKit background delivery, so a workout done while the app is closed is
+imported and linked without a pull-to-refresh (MVP2-121).
 
 ---
 
