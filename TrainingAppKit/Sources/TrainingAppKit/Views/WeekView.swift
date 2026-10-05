@@ -601,6 +601,7 @@ public struct WeekView: View {
                             isToday: viewModel.isToday(day),
                             showsConnector: true,
                             metrics: viewModel.metrics(on: day),
+                            isFormProjected: viewModel.isFormProjected(on: day),
                             activities: viewModel.activities(on: day),
                             plans: viewModel.pendingPlans(on: day),
                             races: viewModel.races(on: day),

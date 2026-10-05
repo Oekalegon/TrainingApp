@@ -9,6 +9,9 @@ extension WeekViewModel {
         /// The activity's TRIMP — the headline number (MVP1-41); `nil` when no calculator could score
         /// it, in which case the card omits the number rather than showing a misleading "0".
         public let trainingLoad: Double?
+        /// Whether ``trainingLoad`` is an estimate — scored from perceived effort rather than heart
+        /// rate — shown with a "~" (MVP2-8).
+        public let isTrainingLoadEstimated: Bool
         /// The activity's overlap issue, if any (MVP1-63), shown as a warning badge.
         public let overlapWarning: OverlapRecommendation?
         /// The activity's intensity (MVP2-43), shown as a subdued background tint.
@@ -42,8 +45,10 @@ extension WeekViewModel {
 
     /// The card content for a completed `activity`.
     public func activityCardContent(for activity: Activity) -> ActivityCardContent {
-        ActivityCardContent(
-            trainingLoad: trainingLoad(for: activity),
+        let load = scoredLoad(for: activity)
+        return ActivityCardContent(
+            trainingLoad: load?.value,
+            isTrainingLoadEstimated: load?.method.isEstimate ?? false,
             overlapWarning: overlapWarning(for: activity),
             intensity: intensity(for: activity),
             planned: linkedPlanExpectation(for: activity)

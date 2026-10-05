@@ -3,7 +3,8 @@ import TrainingCore
 
 /// The sheet shown when a planned activity's card is tapped (MVP2-38): a read-only summary of the
 /// workout — name, sport, date, why it can't go on the Apple Watch if it can't (MVP2-122), expected
-/// duration/distance/load, a plain step list — with a pencil that opens ``PlannedWorkoutSheet`` in
+/// duration/distance/load (estimates marked with a "~" and a "Forecast"/"Estimate" caption, MVP2-8),
+/// a plain step list — with a pencil that opens ``PlannedWorkoutSheet`` in
 /// edit mode and a Delete button at the bottom behind a confirmation alert. Own `NavigationStack`,
 /// icon-only toolbar buttons, matching `PlannedWorkoutSheet`'s conventions.
 struct PlannedWorkoutDetailSheet: View {
@@ -70,7 +71,10 @@ struct PlannedWorkoutDetailSheet: View {
                     if let duration = expected?.duration {
                         LabeledContent("Duration") {
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text(Duration.seconds(duration).formatted(.time(pattern: .hourMinuteSecond)))
+                                let text = Duration.seconds(duration).formatted(.time(pattern: .hourMinuteSecond))
+                                // VoiceOver reads the caption below instead of the "~" (MVP2-8).
+                                Text(EstimateMarker.text(text, isEstimated: expected?.isDurationForecast == true))
+                                    .accessibilityLabel(text)
                                 // Distance and open steps take as long as the athlete's pace makes
                                 // them — a forecast, so it says so.
                                 if expected?.isDurationForecast == true {
@@ -84,7 +88,9 @@ struct PlannedWorkoutDetailSheet: View {
                     if let meters = expected?.distanceMeters {
                         LabeledContent("Distance") {
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text(Measurement(value: meters, unit: UnitLength.meters).formatted(Self.measurementFormat))
+                                let text = Measurement(value: meters, unit: UnitLength.meters).formatted(Self.measurementFormat)
+                                Text(EstimateMarker.text(text, isEstimated: expected?.isDistanceForecast == true))
+                                    .accessibilityLabel(text)
                                 // A duration-based workout has no distance of its own — this is a
                                 // forecast from the athlete's paces, so it says so.
                                 if expected?.isDistanceForecast == true {
@@ -97,9 +103,19 @@ struct PlannedWorkoutDetailSheet: View {
                     }
                     if let load = summary.load {
                         LabeledContent("Load") {
-                            HStack(spacing: 4) {
-                                Image(systemName: TrainingMetricKind.load.icon)
-                                Text("\(load.formatted(Self.loadFormat)) TRIMP")
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: TrainingMetricKind.load.icon)
+                                    let text = "\(load.formatted(Self.loadFormat)) TRIMP"
+                                    Text(EstimateMarker.text(text, isEstimated: summary.isLoadEstimated))
+                                        .accessibilityLabel(text)
+                                }
+                                // The estimator's figure, not one the athlete set (MVP2-8).
+                                if summary.isLoadEstimated {
+                                    Text("Estimate")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }

@@ -149,7 +149,12 @@ struct PlannedWorkoutFormFields: View {
                 if let expectedLoad = viewModel.expectedLoad {
                     HStack {
                         Image(systemName: TrainingMetricKind.load.icon)
-                        Text("\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP")
+                        // "~" unless the athlete set the load (MVP2-8).
+                        let text = EstimateMarker.text(
+                            "\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP", isEstimated: viewModel.isExpectedLoadEstimated
+                        )
+                        Text(text)
+                            .accessibilityLabel(EstimateMarker.spokenForm(of: text))
                     }
                 }
                 Toggle("Override estimate", isOn: Binding(
@@ -184,7 +189,12 @@ struct PlannedWorkoutFormFields: View {
                 if let expectedLoad = viewModel.expectedLoad {
                     HStack {
                         Image(systemName: TrainingMetricKind.load.icon)
-                        Text("\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP")
+                        // "~" unless the athlete set the load (MVP2-8).
+                        let text = EstimateMarker.text(
+                            "\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP", isEstimated: viewModel.isExpectedLoadEstimated
+                        )
+                        Text(text)
+                            .accessibilityLabel(EstimateMarker.spokenForm(of: text))
                     }
                 } else {
                     Text("Not available")

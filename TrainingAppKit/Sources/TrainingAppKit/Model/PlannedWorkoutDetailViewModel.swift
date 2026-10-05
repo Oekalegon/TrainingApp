@@ -124,24 +124,11 @@ public final class PlannedWorkoutDetailViewModel {
         let projection = statisticsCalculator.projection(
             for: workout, athlete: model.athlete, paceHistory: model.paceHistory, before: plan.date
         )
-        var hasDistanceStep = false
-        var hasOtherStep = false
-        for block in workout.blocks where block.repetitions > 0 {
-            for step in block.steps {
-                switch step.goal {
-                case .distance: hasDistanceStep = true
-                case .time, .open: hasOtherStep = true
-                }
-            }
-        }
-        let hasOpenStep = workout.blocks.contains { block in
-            block.repetitions > 0 && block.steps.contains { $0.goal == .open }
-        }
         return Expected(
             duration: projection.duration,
             distanceMeters: projection.distanceMeters,
-            isDurationForecast: hasDistanceStep || hasOpenStep,
-            isDistanceForecast: projection.distanceMeters != nil && !(hasDistanceStep && !hasOtherStep),
+            isDurationForecast: workout.isDurationForecast,
+            isDistanceForecast: projection.distanceMeters != nil && workout.isDistanceForecast,
             activityCount: projection.matchedActivityCount
         )
     }

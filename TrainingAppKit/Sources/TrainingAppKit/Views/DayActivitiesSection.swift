@@ -56,6 +56,9 @@ struct DayActivitiesSection: View {
     /// This day's CTL/ATL/TSB, shown as pills beside the weekday pill (MVP1-40) — `nil` before
     /// the first load, in which case no pill row renders (rather than a row of placeholder zeros).
     let metrics: FitnessMetrics?
+    /// Whether this day's Form is an estimate, shown with a "~" (MVP2-8) — see
+    /// `WeekViewModel.isFormProjected(on:)`.
+    let isFormProjected: Bool
     let activities: [Activity]
     /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.
     let plans: [PlannedActivity]
@@ -105,7 +108,10 @@ struct DayActivitiesSection: View {
                 WeekdayPillView(date: date, isToday: isToday, timeZone: timeZone)
                     .frame(width: WeekdayPillView.columnWidth)
                 if let metrics {
-                    DayMetricsPillRow(metrics: metrics, showsOnlyForm: activities.isEmpty, onSelectMetric: onSelectMetric)
+                    DayMetricsPillRow(
+                        metrics: metrics, isFormProjected: isFormProjected, showsOnlyForm: activities.isEmpty,
+                        onSelectMetric: onSelectMetric
+                    )
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 } else {
                     Spacer()
@@ -255,6 +261,8 @@ struct WeekdayPillView: View {
 /// how `FitnessChartView`'s legend pairs the same icons with each series' name.
 private struct DayMetricsPillRow: View {
     let metrics: FitnessMetrics
+    /// Whether Form is an estimate: it follows the previous day's metrics, not this day's (MVP2-8).
+    let isFormProjected: Bool
     /// `true` on a day with no completed activities — Load/Fitness/Fatigue describe that day's
     /// training input, which has nothing to say on a day nothing happened, so only Form (TSB, a
     /// trend that moves whether or not the athlete trained that day) is worth showing.
@@ -278,15 +286,24 @@ private struct DayMetricsPillRow: View {
     var body: some View {
         HStack(spacing: 0) {
             if !showsOnlyForm {
-                MetricPillView(kind: .load, value: metrics.load.formatted(Self.unsignedFormat), onSelect: onSelectMetric)
+                MetricPillView(kind: .load, value: text(metrics.load, Self.unsignedFormat), onSelect: onSelectMetric)
                 Spacer().frame(width: Self.loadGroupSpacing)
-                MetricPillView(kind: .fitness, value: metrics.ctl.formatted(Self.unsignedFormat), onSelect: onSelectMetric)
+                MetricPillView(kind: .fitness, value: text(metrics.ctl, Self.unsignedFormat), onSelect: onSelectMetric)
                 Spacer().frame(width: Self.metricSpacing)
-                MetricPillView(kind: .fatigue, value: metrics.atl.formatted(Self.unsignedFormat), onSelect: onSelectMetric)
+                MetricPillView(kind: .fatigue, value: text(metrics.atl, Self.unsignedFormat), onSelect: onSelectMetric)
                 Spacer().frame(width: Self.metricSpacing)
             }
-            MetricPillView(kind: .form, value: metrics.tsb.formatted(Self.signedFormat), onSelect: onSelectMetric)
+            MetricPillView(
+                kind: .form, value: text(metrics.tsb, Self.signedFormat, isEstimated: isFormProjected),
+                onSelect: onSelectMetric
+            )
         }
+    }
+
+    /// `value` formatted, with a "~" when it's an estimate: by default on a projected day, whose
+    /// figures come from planned workouts' estimated load rather than completed activities (MVP2-8).
+    private func text(_ value: Double, _ format: FloatingPointFormatStyle<Double>, isEstimated: Bool? = nil) -> String {
+        EstimateMarker.text(value.formatted(format), isEstimated: isEstimated ?? metrics.isProjected)
     }
 }
 
@@ -330,7 +347,7 @@ private struct MetricPillView: View {
         // giving it an explicit label makes this read as "Fitness, 42" instead of two
         // disconnected fragments ("42", then "battery 100 percent").
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(kind.name), \(value)")
+        .accessibilityLabel("\(kind.name), \(EstimateMarker.spokenForm(of: value))")
         .accessibilityHint("Opens an explanation of \(kind.name)")
     }
 }

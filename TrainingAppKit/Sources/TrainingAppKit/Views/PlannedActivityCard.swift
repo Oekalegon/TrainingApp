@@ -21,8 +21,10 @@ import TrainingCore
 /// `PlannedCardContent.watchStatus`). Neither shows on a missed plan or while sending is off.
 ///
 /// Tapping it (MVP2-38) presents the planned-workout detail sheet — see `WeekView`'s
-/// `.sheet(item: $selectedPlan)`. Expected values are shown plainly (no "~"), since the marker
-/// already says "planned".
+/// `.sheet(item: $selectedPlan)`. A value the workout sets (a target duration or distance, a load
+/// the athlete typed in) is shown plainly, since the marker already says "planned"; only an
+/// estimate — the estimator's load, a duration forecast from the athlete's paces — carries a "~"
+/// (MVP2-8).
 struct PlannedActivityCard: View {
     let plan: PlannedActivity
     /// The card's summary, intensity and missed state, from `WeekViewModel.plannedCardContent(for:)`.
@@ -72,7 +74,9 @@ struct PlannedActivityCard: View {
                         if !isMissed, let load = summary.load, load.rounded() > 0 {
                             HStack(spacing: 2) {
                                 Image(systemName: TrainingMetricKind.load.icon)
-                                Text(load.formatted(TimelineCardStyle.loadFormat))
+                                Text(EstimateMarker.text(
+                                    load.formatted(TimelineCardStyle.loadFormat), isEstimated: summary.isLoadEstimated
+                                ))
                             }
                             .foregroundStyle(.secondary)
                         }
@@ -135,9 +139,9 @@ struct PlannedActivityCard: View {
     private var extentText: Text? {
         switch summary.extent {
         case .duration(let seconds):
-            Text(TimelineCardStyle.durationText(seconds))
+            Text(EstimateMarker.text(TimelineCardStyle.durationText(seconds), isEstimated: summary.isExtentEstimated))
         case .distance(let meters):
-            Text(TimelineCardStyle.distanceText(meters: meters))
+            Text(EstimateMarker.text(TimelineCardStyle.distanceText(meters: meters), isEstimated: summary.isExtentEstimated))
         case nil:
             nil
         }
@@ -146,13 +150,13 @@ struct PlannedActivityCard: View {
     private var accessibilityLabel: String {
         var parts = ["\(isMissed ? "Missed" : "Planned"): \(summary.name ?? "Planned workout")"]
         if !isMissed, let load = summary.load, load.rounded() > 0 {
-            parts.append("load \(load.formatted(TimelineCardStyle.loadFormat))")
+            parts.append("load " + EstimateMarker.spoken(load.formatted(TimelineCardStyle.loadFormat), isEstimated: summary.isLoadEstimated))
         }
         switch summary.extent {
         case .duration(let seconds):
-            parts.append(TimelineCardStyle.spokenDuration(seconds))
+            parts.append(EstimateMarker.spoken(TimelineCardStyle.spokenDuration(seconds), isEstimated: summary.isExtentEstimated))
         case .distance(let meters):
-            parts.append(TimelineCardStyle.spokenDistance(meters: meters))
+            parts.append(EstimateMarker.spoken(TimelineCardStyle.spokenDistance(meters: meters), isEstimated: summary.isExtentEstimated))
         case nil:
             break
         }

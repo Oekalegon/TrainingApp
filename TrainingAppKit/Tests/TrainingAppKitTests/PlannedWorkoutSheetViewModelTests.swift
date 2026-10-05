@@ -583,12 +583,16 @@ struct PlannedWorkoutSheetViewModelTests {
         let (plan, _) = try await makeEditablePlan(model: model, on: day(3))
         let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
         let estimate = try #require(viewModel.expectedLoad?.value)
+        #expect(viewModel.isExpectedLoadEstimated)
 
         viewModel.loadOverride = estimate + 100
         #expect(viewModel.expectedLoad?.value == estimate + 100)
+        // The athlete's own figure is a target, not an estimate (MVP2-8).
+        #expect(!viewModel.isExpectedLoadEstimated)
 
         viewModel.loadOverride = nil
         #expect(viewModel.expectedLoad?.value == estimate)
+        #expect(viewModel.isExpectedLoadEstimated)
     }
 
     @Test("saving an edit that changes only the override updates the plan in place and never touches WorkoutKit")

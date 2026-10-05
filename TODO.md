@@ -14,7 +14,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 
 ## MVP2: Structured & Planned Workouts
 
-- [ ] **MVP2-8** Label TRIMP as "estimated" vs "measured" everywhere it's shown (planned/no-HR activities)
+- [x] **MVP2-8** Mark estimated values everywhere they're shown (planned TRIMP, pace forecasts, perceived-effort loads, projected days) with a "~"; measured values and a plan's targets (incl. a load override) stay plain (done 2026-10-05)
 - [ ] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later)
 - [x] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`) (done 2026-10-05, TrainingKit#75, #81)
   - TrainingKit's `PaceHistory` and `HistoricalPaceEstimator` forecast from similar earlier workouts, per zone and per step, for the cards and the week's totals alike. Planned cards still show only the measure the workout defines; the detail sheet and linked cards show both.

@@ -137,35 +137,46 @@ struct ActivityCard: View {
         return load
     }
 
-    /// "85 / 90": the actual TRIMP, then the expected one after a slash in a tertiary colour (a dash
-    /// stands in for an actual that couldn't be scored). Each piece carries its own monospaced
-    /// digits so the pair reads as one figure.
+    /// "85 / ~90": the actual TRIMP, then the expected one after a slash in a tertiary colour (a dash
+    /// stands in for an actual that couldn't be scored). Either carries a "~" when it's an estimate
+    /// (MVP2-8): the actual one when scored from perceived effort, the expected one unless the
+    /// athlete set it. Each piece carries its own monospaced digits so the pair reads as one figure.
     private var loadText: Text {
         let format = TimelineCardStyle.loadFormat
-        let actual = Text(actualLoad?.formatted(format) ?? "–").monospacedDigit()
+        let actualString = actualLoad.map {
+            EstimateMarker.text($0.formatted(format), isEstimated: content.isTrainingLoadEstimated)
+        }
+        let actual = Text(actualString ?? "–").monospacedDigit()
         guard let plannedLoad else { return actual }
+        let plannedString = EstimateMarker.text(plannedLoad.formatted(format), isEstimated: planned?.isLoadEstimated ?? false)
         // Interpolating styled `Text`s rather than `+`, which is deprecated on the iOS 26 SDK.
-        let expected = Text(" / \(plannedLoad.formatted(format))").monospacedDigit().foregroundStyle(.tertiary)
+        let expected = Text(" / \(plannedString)").monospacedDigit().foregroundStyle(.tertiary)
         return Text("\(actual)\(expected)")
     }
 
     private var loadAccessibilityLabel: String {
         let format = TimelineCardStyle.loadFormat
-        var label = actualLoad.map { "Load \($0.formatted(format))" } ?? "Load not scored"
+        var label = actualLoad.map {
+            "Load " + EstimateMarker.spoken($0.formatted(format), isEstimated: content.isTrainingLoadEstimated)
+        } ?? "Load not scored"
         if let plannedLoad {
-            label += ", planned \(plannedLoad.formatted(format))"
+            label += ", planned " + EstimateMarker.spoken(plannedLoad.formatted(format), isEstimated: planned?.isLoadEstimated ?? false)
         }
         return label
     }
 
     /// The linked plan's expected duration and distance — both, whichever the workout is defined
-    /// by (the other is projected from the athlete's pace) — in the same "duration   distance"
-    /// layout as `secondLineText`, so each lands directly under the actual value it compares with.
-    /// Monospaced digits keep a duration's width equal to the actual duration's, which is what
-    /// lines the distance column up.
+    /// by (the other is projected from the athlete's pace, and carries a "~", MVP2-8) — in the same
+    /// "duration   distance" layout as `secondLineText`, so each lands directly under the actual
+    /// value it compares with. Monospaced digits keep a duration's width equal to the actual
+    /// duration's, which is what lines the distance column up.
     private var plannedExtentText: Text? {
-        let duration = planned?.duration.map(TimelineCardStyle.durationText)
-        let distance = planned?.distanceMeters.map { TimelineCardStyle.distanceText(meters: $0) }
+        let duration = planned?.duration.map {
+            EstimateMarker.text(TimelineCardStyle.durationText($0), isEstimated: planned?.isDurationEstimated ?? false)
+        }
+        let distance = planned?.distanceMeters.map {
+            EstimateMarker.text(TimelineCardStyle.distanceText(meters: $0), isEstimated: planned?.isDistanceEstimated ?? false)
+        }
         switch (duration, distance) {
         case (let duration?, let distance?):
             return Text("\(duration)\(Self.partSpacing)\(distance)").foregroundStyle(.tertiary)
@@ -181,10 +192,12 @@ struct ActivityCard: View {
     private var plannedExtentAccessibilityLabel: String {
         var parts: [String] = []
         if let duration = planned?.duration {
-            parts.append("duration " + TimelineCardStyle.spokenDuration(duration))
+            let spoken = TimelineCardStyle.spokenDuration(duration)
+            parts.append("duration " + EstimateMarker.spoken(spoken, isEstimated: planned?.isDurationEstimated ?? false))
         }
         if let distance = planned?.distanceMeters {
-            parts.append("distance " + TimelineCardStyle.spokenDistance(meters: distance))
+            let spoken = TimelineCardStyle.spokenDistance(meters: distance)
+            parts.append("distance " + EstimateMarker.spoken(spoken, isEstimated: planned?.isDistanceEstimated ?? false))
         }
         return "Planned " + parts.joined(separator: ", ")
     }

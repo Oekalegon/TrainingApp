@@ -200,10 +200,22 @@ struct MetricDetailView: View {
         return values.reduce(0, +) / Double(values.count)
     }
 
+    /// With a "~" when any of the subject's values is estimated from planned workouts rather than
+    /// completed activities (MVP2-8).
     private var subjectValueText: String {
         guard let subjectValue else { return "–" }
         let format = kind == .form ? Self.signedValueFormat : Self.unsignedValueFormat
-        return subjectValue.formatted(format)
+        return EstimateMarker.text(subjectValue.formatted(format), isEstimated: isSubjectValueProjected)
+    }
+
+    /// Whether any of the subject's days has a projected value for `kind`: its own metrics for
+    /// Load/Fitness/Fatigue, the previous day's for Form (see
+    /// `FitnessMetrics.isFormProjected(on:in:calendar:)`).
+    private var isSubjectValueProjected: Bool {
+        guard kind == .form else { return subjectMetrics.contains(where: \.isProjected) }
+        return subjectMetrics.contains {
+            FitnessMetrics.isFormProjected(on: $0.day, in: displayedMetrics, calendar: chartContext.calendar)
+        }
     }
 
     /// "Average", shown above the value for a `.week` subject only -- a week's own value is a

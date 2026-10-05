@@ -14,6 +14,13 @@ extension WeekViewModel {
         /// earlier paces for time and open steps; `nil` when the forecast can't be made (no heart-rate
         /// zone settings recorded).
         public let distanceMeters: Double?
+        /// Whether ``load`` is the estimator's figure rather than the plan's override (MVP2-8).
+        public let isLoadEstimated: Bool
+        /// Whether ``duration`` is forecast rather than the sum of the workout's time steps (MVP2-8).
+        public let isDurationEstimated: Bool
+        /// Whether ``distanceMeters`` is forecast rather than the sum of the workout's distance
+        /// steps (MVP2-8).
+        public let isDistanceEstimated: Bool
     }
 
     /// What the plan `activity` is linked to expected, or `nil` when it has no linked plan among the
@@ -38,10 +45,14 @@ extension WeekViewModel {
                 for: workout, athlete: model.athlete, paceHistory: paceHistory,
                 before: activity.start, excluding: activity.id
             )
+            let summary = plannedCardSummary(for: plan)
             return LinkedPlanExpectation(
-                load: plannedCardSummary(for: plan).load,
+                load: summary.load,
                 duration: projection.duration,
-                distanceMeters: projection.distanceMeters
+                distanceMeters: projection.distanceMeters,
+                isLoadEstimated: summary.isLoadEstimated,
+                isDurationEstimated: workout.isDurationForecast,
+                isDistanceEstimated: workout.isDistanceForecast
             )
         }
     }

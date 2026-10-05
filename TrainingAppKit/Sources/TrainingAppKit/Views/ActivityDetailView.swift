@@ -128,7 +128,17 @@ struct ActivityDetailView: View {
 
             Section("Load") {
                 if viewModel.summary.load.confidence > 0 {
-                    LabeledContent("Training Load (TRIMP)", value: loadText)
+                    LabeledContent("Training Load (TRIMP)") {
+                        Text(loadText)
+                            .accessibilityLabel(EstimateMarker.spokenForm(of: loadText))
+                    }
+                    // Says what the "~" stands for (MVP2-8): the load comes from how hard the
+                    // athlete said it felt, not from heart rate.
+                    if viewModel.summary.load.method == .durationRPE {
+                        Text("Estimated from perceived effort rather than heart rate.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 } else {
                     Text("Load could not be computed for this activity.")
                         .foregroundStyle(.secondary)
@@ -227,10 +237,11 @@ struct ActivityDetailView: View {
                 Button {
                     changePlanLink { await onLinkPlan(option.id) }
                 } label: {
-                    LabeledContent(
-                        context.linkedPlan == nil ? "Link to \(option.title)" : "Switch to \(option.title)",
-                        value: extentText(option.extent)
-                    )
+                    let extent = EstimateMarker.text(extentText(option.extent), isEstimated: option.isExtentEstimated)
+                    LabeledContent(context.linkedPlan == nil ? "Link to \(option.title)" : "Switch to \(option.title)") {
+                        Text(extent)
+                            .accessibilityLabel(EstimateMarker.spokenForm(of: extent))
+                    }
                 }
             }
             if context.linkedPlan != nil {
@@ -281,7 +292,8 @@ struct ActivityDetailView: View {
     }
 
     private var loadText: String {
-        viewModel.summary.load.value.formatted(.number.precision(.fractionLength(0)))
+        let load = viewModel.summary.load
+        return EstimateMarker.text(load.value.formatted(.number.precision(.fractionLength(0))), isEstimated: load.method.isEstimate)
     }
 
     private func zoneText(seconds: TimeInterval, zone: Int) -> String {
