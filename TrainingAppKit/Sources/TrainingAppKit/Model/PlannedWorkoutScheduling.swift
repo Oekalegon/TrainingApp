@@ -28,15 +28,29 @@ public protocol PlannedWorkoutScheduling: Sendable {
     @discardableResult
     func unscheduleAll(except planIDs: Set<UUID>) async -> Int
 
-    /// Whether the app may schedule workouts, asking the athlete the first time. `false` when the
-    /// device doesn't support scheduled workouts or the athlete declined.
-    func requestAuthorizationIfNeeded() async -> Bool
+    /// Whether the app may schedule workouts, asking the athlete the first time.
+    func requestAuthorizationIfNeeded() async -> WatchSchedulingAuthorization
 
     /// Whether the app may schedule workouts, without asking.
-    func isAuthorized() async -> Bool
+    func authorizationStatus() async -> WatchSchedulingAuthorization
 
     /// How many entries the app may hold on the Watch at once.
     var maxScheduledCount: Int { get }
+}
+
+/// Whether the app may put planned workouts on the Watch (MVP2-55, MVP2-117).
+public enum WatchSchedulingAuthorization: Sendable, Equatable {
+    /// The athlete allowed it.
+    case authorized
+    /// The athlete hasn't been asked yet.
+    case notDetermined
+    /// The athlete declined; only the Settings app can change that.
+    case denied
+    /// The device can't schedule workouts, or a restriction the athlete can't lift prevents it.
+    case unavailable
+
+    /// Whether the app may schedule workouts.
+    public var isAuthorized: Bool { self == .authorized }
 }
 
 /// Where the app's real ``PlannedWorkoutScheduling`` comes from.
@@ -58,21 +72,27 @@ extension WorkoutKitBridge: PlannedWorkoutScheduling {
         _ = try customWorkout(from: workout)
     }
 
-    public func requestAuthorizationIfNeeded() async -> Bool {
-        guard WorkoutScheduler.isSupported else { return false }
-        switch await WorkoutKitAuthorization.state {
-        case .authorized:
-            return true
-        case .notDetermined:
-            return await WorkoutKitAuthorization.requestAuthorization() == .authorized
-        default:
-            return false
-        }
+    public func requestAuthorizationIfNeeded() async -> WatchSchedulingAuthorization {
+        guard WorkoutScheduler.isSupported else { return .unavailable }
+        let state = await WorkoutKitAuthorization.state
+        guard state == .notDetermined else { return Self.authorization(from: state) }
+        return Self.authorization(from: await WorkoutKitAuthorization.requestAuthorization())
     }
 
-    public func isAuthorized() async -> Bool {
-        guard WorkoutScheduler.isSupported else { return false }
-        return await WorkoutKitAuthorization.state == .authorized
+    public func authorizationStatus() async -> WatchSchedulingAuthorization {
+        guard WorkoutScheduler.isSupported else { return .unavailable }
+        return Self.authorization(from: await WorkoutKitAuthorization.state)
+    }
+
+    /// `.restricted` (and any state added later) counts as unavailable: the athlete can't change it
+    /// in Settings, so there's nothing for the banner to tell them.
+    private static func authorization(from state: WorkoutScheduler.AuthorizationState) -> WatchSchedulingAuthorization {
+        switch state {
+        case .authorized: .authorized
+        case .notDetermined: .notDetermined
+        case .denied: .denied
+        default: .unavailable
+        }
     }
 
     public var maxScheduledCount: Int { WorkoutScheduler.maxAllowedScheduledWorkoutCount }

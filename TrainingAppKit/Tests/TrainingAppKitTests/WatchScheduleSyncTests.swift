@@ -90,7 +90,7 @@ struct WatchScheduleSyncTests {
 
         await WatchScheduleSync(model: model, scheduler: scheduler).sync(asOf: day(0))
 
-        #expect(await scheduler.callLog == ["isAuthorized", "unscheduleAll"])
+        #expect(await scheduler.callLog == ["authorizationStatus", "unscheduleAll"])
         #expect(await scheduler.keptPlanIDs == [[]])
     }
 
@@ -122,7 +122,7 @@ struct WatchScheduleSyncTests {
         let steady = workout()
         try await store.upsert([steady])
         try await store.upsert([PlannedActivity(workoutID: steady.id, date: day(1))])
-        let scheduler = FakeScheduler(isAuthorized: false)
+        let scheduler = FakeScheduler(authorization: .denied)
 
         await WatchScheduleSync(model: model, scheduler: scheduler).sync(asOf: day(0))
 
@@ -143,5 +143,92 @@ struct WatchScheduleSyncTests {
         await WatchScheduleSync(model: model, scheduler: scheduler).sync(asOf: day(0))
 
         #expect(await scheduler.callLog == ["authorize", "unscheduleAll", "schedule", "schedule"])
+    }
+
+    // MARK: Permission banner (MVP2-117)
+
+    /// A fresh `UserDefaults` suite, so the banner's dismissal doesn't leak between tests.
+    private func makeDefaults() -> UserDefaults {
+        let name = "WatchScheduleSyncTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    /// A model with one plan tomorrow, so a sync asks for permission.
+    private func makeModelWithUpcomingPlan() async throws -> TrainingModel {
+        let (store, model) = try await makeModel()
+        let steady = workout()
+        try await store.upsert([steady])
+        try await store.upsert([PlannedActivity(workoutID: steady.id, date: day(1))])
+        return model
+    }
+
+    @Test("shows the banner once a sync finds permission denied", arguments: [
+        (WatchSchedulingAuthorization.denied, true),
+        (WatchSchedulingAuthorization.authorized, false),
+        (WatchSchedulingAuthorization.notDetermined, false),
+        (WatchSchedulingAuthorization.unavailable, false),
+    ])
+    func bannerFollowsAuthorization(authorization: WatchSchedulingAuthorization, showsBanner: Bool) async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let sync = WatchScheduleSync(
+            model: model, scheduler: FakeScheduler(authorization: authorization), defaults: makeDefaults()
+        )
+        #expect(!sync.showsPermissionDeniedBanner)
+
+        await sync.sync(asOf: day(0))
+
+        #expect(sync.isPermissionDenied == showsBanner)
+        #expect(sync.showsPermissionDeniedBanner == showsBanner)
+    }
+
+    @Test("shows the banner when denied even without a plan to send")
+    func bannerWithoutUpcomingPlans() async throws {
+        let (_, model) = try await makeModel()
+        let scheduler = FakeScheduler(authorization: .denied)
+        let sync = WatchScheduleSync(model: model, scheduler: scheduler, defaults: makeDefaults())
+
+        await sync.sync(asOf: day(0))
+
+        #expect(await scheduler.callLog == ["authorizationStatus"])
+        #expect(sync.showsPermissionDeniedBanner)
+    }
+
+    @Test("a dismissed banner stays away, also for a new sync object on the same defaults")
+    func dismissalPersists() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let defaults = makeDefaults()
+        let scheduler = FakeScheduler(authorization: .denied)
+        let sync = WatchScheduleSync(model: model, scheduler: scheduler, defaults: defaults)
+        await sync.sync(asOf: day(0))
+
+        sync.dismissPermissionDeniedBanner()
+        #expect(!sync.showsPermissionDeniedBanner)
+        await sync.sync(asOf: day(0))
+        #expect(!sync.showsPermissionDeniedBanner)
+
+        let relaunched = WatchScheduleSync(model: model, scheduler: scheduler, defaults: defaults)
+        await relaunched.sync(asOf: day(0))
+        #expect(relaunched.isPermissionDenied)
+        #expect(!relaunched.showsPermissionDeniedBanner)
+    }
+
+    @Test("allowing permission hides the banner, and declining again later brings it back")
+    func grantingResetsDismissal() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler(authorization: .denied)
+        let sync = WatchScheduleSync(model: model, scheduler: scheduler, defaults: makeDefaults())
+        await sync.sync(asOf: day(0))
+        sync.dismissPermissionDeniedBanner()
+
+        await scheduler.setAuthorization(.authorized)
+        await sync.sync(asOf: day(0))
+        #expect(!sync.isPermissionDenied)
+        #expect(!sync.showsPermissionDeniedBanner)
+
+        await scheduler.setAuthorization(.denied)
+        await sync.sync(asOf: day(0))
+        #expect(sync.showsPermissionDeniedBanner)
     }
 }

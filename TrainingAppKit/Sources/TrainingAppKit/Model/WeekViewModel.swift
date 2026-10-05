@@ -860,6 +860,17 @@ public final class WeekViewModel {
         pendingWatchSync = watchSync.requestSync(asOf: today)
     }
 
+    /// Whether the week view shows the banner saying planned workouts won't reach the Watch because
+    /// the athlete declined permission (MVP2-117). `false` without a sync.
+    public var showsWatchPermissionBanner: Bool {
+        watchSync?.showsPermissionDeniedBanner ?? false
+    }
+
+    /// Hides the Watch permission banner until permission is granted and later declined again.
+    func dismissWatchPermissionBanner() {
+        watchSync?.dismissPermissionDeniedBanner()
+    }
+
     /// The view model for the athlete account screen, presented from the week view's toolbar.
     public var athleteViewModel: AthleteViewModel {
         AthleteViewModel(athlete: model.athlete)

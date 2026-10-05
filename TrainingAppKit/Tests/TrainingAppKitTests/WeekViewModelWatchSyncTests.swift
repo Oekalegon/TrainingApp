@@ -57,7 +57,7 @@ struct WeekViewModelWatchSyncTests {
 
     /// The sync ran and kept `plan`'s entry as done, without scheduling it again.
     private func expectKeptAsDone(_ plan: PlannedActivity, by scheduler: FakeScheduler) async {
-        #expect(await scheduler.callLog == ["isAuthorized", "unscheduleAll"])
+        #expect(await scheduler.callLog == ["authorizationStatus", "unscheduleAll"])
         #expect(await scheduler.keptPlanIDs == [[plan.id]])
     }
 
@@ -223,5 +223,27 @@ struct WeekViewModelWatchSyncTests {
 
         #expect(viewModel.pendingWatchSync == nil)
         #expect(viewModel.model.activities.isEmpty)
+    }
+
+    // MARK: Permission banner (MVP2-117)
+
+    @Test("shows the Watch permission banner after a sync finds permission denied, until dismissed")
+    func permissionBanner() async throws {
+        let suiteName = "WeekViewModelWatchSyncTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let (viewModel, _, _) = try await makeViewModel(scheduler: nil)
+        #expect(!viewModel.showsWatchPermissionBanner)
+
+        let sync = WatchScheduleSync(
+            model: viewModel.model, scheduler: FakeScheduler(authorization: .denied), defaults: defaults
+        )
+        let withSync = WeekViewModel(model: viewModel.model, refresher: FakeRefresher(), watchSync: sync, today: today)
+        #expect(!withSync.showsWatchPermissionBanner)
+        await sync.sync(asOf: today)
+        #expect(withSync.showsWatchPermissionBanner)
+
+        withSync.dismissWatchPermissionBanner()
+        #expect(!withSync.showsWatchPermissionBanner)
     }
 }
