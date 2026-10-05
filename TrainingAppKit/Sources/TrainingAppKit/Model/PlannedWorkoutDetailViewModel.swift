@@ -20,8 +20,9 @@ public final class PlannedWorkoutDetailViewModel {
     /// Called after the plan is deleted or edited, so the Watch sync can run again (MVP2-55).
     @ObservationIgnored
     public var onPlansChanged: (@MainActor () -> Void)?
-    /// Looks up a plan's Apple Watch status, set by `WeekViewModel` to its own `watchStatus(for:)`
-    /// so the sheet and the plan's card always agree (MVP2-122); `nil` shows no status.
+    /// Looks up a plan's Apple Watch status, set by `WeekViewModel` to its own
+    /// `watchStatus(for:asOf:)`, with the day the sheet opened, so the sheet and the plan's card
+    /// always agree (MVP2-122); `nil` shows no status.
     @ObservationIgnored
     public var watchStatus: (@MainActor (PlannedActivity) -> WeekViewModel.PlannedWatchStatus?)?
     private let statisticsCalculator = StatisticsCalculator()
