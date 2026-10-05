@@ -22,7 +22,8 @@ public final class PlannedWorkoutSheetViewModel {
     /// `nil` on a platform without WorkoutKit (e.g. macOS, per `Package.swift`'s doc comment on why
     /// `TrainingAppKit` still declares that platform) or in a test that passed `nil` explicitly to
     /// avoid the real `WorkoutScheduler`, which requires a genuine app bundle context — see
-    /// ``PlannedWorkoutScheduling``'s own doc comment. `save(asOf:)` skips the validate/schedule step
+    /// ``PlannedWorkoutScheduling``'s own doc comment — or while the athlete has turned sending to
+    /// the Watch off (MVP2-118, `WeekViewModel.plannedWorkoutScheduler`). `save(asOf:)` skips the validate/schedule step
     /// entirely when this is `nil`, rather than only skipping `schedule` — a plan that was never
     /// scheduled is a consistent, if incomplete, state to save, which ``WatchScheduleSync`` fills
     /// in later.
@@ -191,7 +192,8 @@ public final class PlannedWorkoutSheetViewModel {
     ///     same ``TRIMPPlanEstimator`` `TrainingModel` itself uses, so the preview agrees with what
     ///     the fitness chart will show once this workout is scheduled.
     ///   - scheduler: Validates the instantiated workout and schedules it on WorkoutKit; defaults to a real
-    ///     `WorkoutKitBridge` where available, `nil` otherwise. Tests pass `nil` explicitly to skip
+    ///     `WorkoutKitBridge` where available, `nil` otherwise. `WeekViewModel` passes `nil` while
+    ///     sending to the Watch is turned off (MVP2-118). Tests pass `nil` explicitly to skip
     ///     WorkoutKit entirely, since the real bridge's `schedule` crashes outside a genuine app
     ///     bundle context.
     public init(

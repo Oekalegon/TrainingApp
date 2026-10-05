@@ -486,8 +486,9 @@ imported biometric data looks right. The only app settings here are the Apple Wa
     on by default and kept in `UserDefaults` on this device. It's the app's own setting, on top of
     iOS's permission: turning it off removes the app's workouts from the Watch and stops the sync
     and the planned-workout sheets from scheduling (§3.5), without changing the permission.
-    Turning it on asks for permission if the athlete hasn't been asked yet, then syncs. Hidden on a
-    device that can't schedule workouts.
+    Turning it on asks for permission if the athlete hasn't been asked yet, then syncs. With the
+    permission refused, the switch stays on but nothing is sent; the footer and the week view's
+    banner say why. Hidden on a device that can't schedule workouts.
   - A **Watch Permission** row: "Allowed", "Not asked yet", "Not allowed" or "Unavailable". While
     the switch is on and the athlete hasn't been asked, an "Allow Sending to Apple Watch" button
     shows the WorkoutKit prompt and syncs once it's granted

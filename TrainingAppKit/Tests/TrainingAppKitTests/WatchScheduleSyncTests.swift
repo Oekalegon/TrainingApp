@@ -343,7 +343,7 @@ struct WatchScheduleSyncTests {
         #expect(await scheduler.callLog.isEmpty)
     }
 
-    @Test("turning sending off during a sync removes what that sync was about to add")
+    @Test("turning sending off during a sync stops it scheduling, then clears the Watch")
     func turningOffDuringSync() async throws {
         let model = try await makeModelWithUpcomingPlan()
         let scheduler = FakeScheduler()
@@ -357,6 +357,22 @@ struct WatchScheduleSyncTests {
 
         #expect(await scheduler.scheduledPlans.isEmpty)
         #expect(await scheduler.keptPlanIDs.last == Set<UUID>())
+    }
+
+    @Test("turning sending back on during the turn-off sync puts the plans back")
+    func turningOnDuringTurnOff() async throws {
+        let model = try await makeModelWithUpcomingPlan()
+        let scheduler = FakeScheduler()
+        let sync = makeSync(model, scheduler)
+        let now = day(0)
+        await scheduler.setDuringFirstUnscheduleAll {
+            await sync.setEnabled(true, asOf: now).value
+        }
+
+        await sync.setEnabled(false, asOf: now).value
+
+        #expect(sync.isEnabled)
+        #expect(await scheduler.scheduledPlans.count == 1)
     }
 
     @Test("no permission banner while sending is turned off")
