@@ -87,11 +87,12 @@ extension WorkoutKitBridge: PlannedWorkoutScheduling {
     }
 
     /// Logs what WorkoutKit reported, so a banner that doesn't show (MVP2-117) can be traced on a
-    /// device: filter Console or Xcode's log on the "WatchSync" category.
+    /// device: filter Xcode's console on the "WatchSync" category. Debug level, so it isn't kept
+    /// in the device's log store.
     private static let logger = Logger(subsystem: "TrainingApp", category: "WatchSync")
 
     private static func unsupported() -> WatchSchedulingAuthorization {
-        logger.notice("WorkoutScheduler.isSupported is false: scheduling unavailable")
+        logger.debug("WorkoutScheduler.isSupported is false: scheduling unavailable")
         return .unavailable
     }
 
@@ -101,7 +102,7 @@ extension WorkoutKitBridge: PlannedWorkoutScheduling {
         from state: WorkoutScheduler.AuthorizationState, after source: String
     ) -> WatchSchedulingAuthorization {
         let description = String(describing: state)
-        logger.notice("WorkoutKit authorization after \(source, privacy: .public): \(description, privacy: .public)")
+        logger.debug("WorkoutKit authorization after \(source, privacy: .public): \(description, privacy: .public)")
         return switch state {
         case .authorized: .authorized
         case .notDetermined: .notDetermined

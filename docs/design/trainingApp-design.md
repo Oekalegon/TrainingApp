@@ -447,9 +447,10 @@ median time they took in earlier runs of the same workout or template.
 ### 2.3 Athlete account
 
 Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0).
-Read-only display of `TrainingModel.athlete: AthleteProfile` — **not editable in MVP 1**, since
-there's no save/write path back through `TrainingModel` yet and this is meant to confirm the
-imported biometric data looks right, not to be a settings screen:
+Display of `TrainingModel.athlete: AthleteProfile` — the profile is **not editable in MVP 1**,
+since there's no save/write path back through `TrainingModel` yet and it's shown to confirm the
+imported biometric data looks right. The only app settings here are the Apple Watch section's
+(MVP2-117):
 
 - **Avatar**: an initials monogram derived from `athlete.name` — no photo. There's no public API
   for "the iCloud account's photo" (`CKDiscoverUserIdentity` gives a name at best, never an
@@ -487,6 +488,8 @@ imported biometric data looks right, not to be a settings screen:
   won't ask again, so the footer says where to turn it back on: the Watch app on the iPhone, under
   Workout. The section reads the permission when it appears (`refreshAuthorization()`), and the
   sync that runs when the app becomes active updates it. Hidden where WorkoutKit isn't available.
+  The banner switches tabs without scrolling, so a list left scrolled further down keeps that
+  position and the section may be off-screen; scrolling to it is a possible later improvement.
 
 `heartRateZoneHistory` beyond the current entry is not shown in MVP 1 (no history/timeline UI —
 just "what's in effect now"). No editing, no HealthKit-write-back; this screen only reads what
@@ -498,8 +501,8 @@ from HealthKit from scratch, via `TrainingModel.resyncActivities(from:asOf:)` �
 the athlete profile; it exists because `Sport` (and other per-activity fields) is resolved once at
 import time and persisted, not recomputed on read, so an app update that fixes a mapping (e.g. a
 `HKWorkoutActivityType` that used to fall back to `Sport.other`) doesn't retroactively fix
-activities imported before the fix. This is a recovery action, not a settings toggle — the screen
-otherwise stays read-only as described above.
+activities imported before the fix. This is a recovery action, not a settings toggle — the
+profile otherwise stays read-only as described above.
 
 ---
 
