@@ -1,6 +1,7 @@
 import Foundation
 import TrainingCore
 #if canImport(WorkoutKit)
+import OSLog
 import TrainingWorkoutKit
 import WorkoutKit
 #endif
@@ -73,21 +74,34 @@ extension WorkoutKitBridge: PlannedWorkoutScheduling {
     }
 
     public func requestAuthorizationIfNeeded() async -> WatchSchedulingAuthorization {
-        guard WorkoutScheduler.isSupported else { return .unavailable }
+        guard WorkoutScheduler.isSupported else { return Self.unsupported() }
         let state = await WorkoutKitAuthorization.state
-        guard state == .notDetermined else { return Self.authorization(from: state) }
-        return Self.authorization(from: await WorkoutKitAuthorization.requestAuthorization())
+        guard state == .notDetermined else { return Self.authorization(from: state, after: "check") }
+        return Self.authorization(from: await WorkoutKitAuthorization.requestAuthorization(), after: "prompt")
     }
 
     public func authorizationStatus() async -> WatchSchedulingAuthorization {
-        guard WorkoutScheduler.isSupported else { return .unavailable }
-        return Self.authorization(from: await WorkoutKitAuthorization.state)
+        guard WorkoutScheduler.isSupported else { return Self.unsupported() }
+        return Self.authorization(from: await WorkoutKitAuthorization.state, after: "check")
+    }
+
+    /// Logs what WorkoutKit reported, so a banner that doesn't show (MVP2-117) can be traced on a
+    /// device: filter Console or Xcode's log on the "WatchSync" category.
+    private static let logger = Logger(subsystem: "TrainingApp", category: "WatchSync")
+
+    private static func unsupported() -> WatchSchedulingAuthorization {
+        logger.notice("WorkoutScheduler.isSupported is false: scheduling unavailable")
+        return .unavailable
     }
 
     /// `.restricted` (and any state added later) counts as unavailable: the athlete can't change it
     /// in Settings, so there's nothing for the banner to tell them.
-    private static func authorization(from state: WorkoutScheduler.AuthorizationState) -> WatchSchedulingAuthorization {
-        switch state {
+    private static func authorization(
+        from state: WorkoutScheduler.AuthorizationState, after source: String
+    ) -> WatchSchedulingAuthorization {
+        let description = String(describing: state)
+        logger.notice("WorkoutKit authorization after \(source, privacy: .public): \(description, privacy: .public)")
+        return switch state {
         case .authorized: .authorized
         case .notDetermined: .notDetermined
         case .denied: .denied
