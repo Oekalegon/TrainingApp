@@ -492,6 +492,21 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(await scheduler.callLog.isEmpty)
     }
 
+    @Test("save() refuses a workout that can't go on the Watch, and the error says why (MVP2-119)")
+    func saveReportsWatchIncompatibility() async {
+        let (_, model) = await makeModel()
+        let scheduler = FakeScheduler(validateShouldFail: true)
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: scheduler)
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+
+        let didSave = await viewModel.save(asOf: day(0))
+
+        #expect(!didSave)
+        #expect(viewModel.saveError?.contains(FakeScheduler.unsupportedReason) == true)
+        #expect(model.workouts.isEmpty)
+        #expect(model.plans.isEmpty)
+    }
+
     @Test("save() persists nothing when schedule() fails, rather than leaving an orphaned library workout")
     func saveLeavesNoOrphanWhenScheduleFails() async {
         let (_, model) = await makeModel()

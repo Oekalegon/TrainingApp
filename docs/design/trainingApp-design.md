@@ -650,8 +650,9 @@ the foreground, which also moves the window on after midnight.
   window has its entry removed. Deleting a plan removes its entry. Both removals are best-effort,
   since the next sync catches anything left behind.
 
-- **What the cards show (MVP2-119).** Each run that reads the stores checks every workout in the
-  library against the Watch (`validate`) and keeps the reasons for those that fail
+- **What the cards show (MVP2-119).** Each run that reads the stores checks the workouts of plans
+  dated from a week ago on against the Watch (`validate`; the whole library would grow with every
+  plan made) and keeps the reasons for those that fail
   (`WatchScheduleSync.unsupportedWorkouts`); the planner skips their plans. It also keeps the ids
   of the plans it scheduled without an error (`sentPlanIDs`); empty without permission or with
   sending off. That's what the app sent, not a read of the Watch, which WorkoutKit doesn't offer

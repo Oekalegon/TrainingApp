@@ -66,8 +66,9 @@ public final class WatchScheduleSync {
     public private(set) var sentPlanIDs: Set<UUID> = []
 
     /// Why each workout that can't go on the Watch can't (MVP2-119), by workout id, from
-    /// ``PlannedWorkoutScheduling/validate(_:)``: the planned-workout cards' warning. Checked for
-    /// every workout in the library on each run that reads the stores, whatever the permission.
+    /// ``PlannedWorkoutScheduling/validate(_:)``: the planned-workout cards' warning. Checked on each
+    /// run that reads the stores, whatever the permission, for the workouts of plans dated from a
+    /// week ago on; older plans are missed or done and show no status.
     public private(set) var unsupportedWorkouts: [UUID: String] = [:]
 
     /// Whether the athlete dismissed the permission banner. Kept in `UserDefaults`, so the banner
@@ -207,20 +208,27 @@ public final class WatchScheduleSync {
         else { return }
 
         let workoutsByID = Dictionary(workouts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = model.athlete.timeZone
+        // Only workouts of plans from a week ago on: what the planner can keep or schedule, and
+        // what the cards show a status for. The library gains a workout with every plan made, so
+        // checking all of it would grow without bound.
+        let todayStart = calendar.startOfDay(for: now)
+        let windowStart = calendar.date(byAdding: .day, value: -7, to: todayStart) ?? todayStart
+        let recentWorkoutIDs = Set(plans.filter { $0.date >= windowStart }.map(\.workoutID))
         var unsupported: [UUID: String] = [:]
-        for workout in workoutsByID.values {
+        for id in recentWorkoutIDs {
+            guard let workout = workoutsByID[id] else { continue }
             do {
                 try scheduler.validate(workout)
             } catch {
-                unsupported[workout.id] = error.localizedDescription
+                unsupported[id] = error.localizedDescription
             }
         }
         // Assigned only on a change, so an unchanged run doesn't redraw every planned card.
         if unsupported != unsupportedWorkouts {
             unsupportedWorkouts = unsupported
         }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = model.athlete.timeZone
         let scheduler = scheduler
         let result = WatchSchedulePlanner.plan(
             plans, asOf: now, calendar: calendar, cap: scheduler.maxScheduledCount

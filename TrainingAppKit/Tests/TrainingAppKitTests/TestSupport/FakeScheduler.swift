@@ -12,6 +12,8 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
     static let unsupportedReason = "Not supported in this test."
     /// Workouts `validate` rejects, by id.
     nonisolated let invalidWorkoutIDs: Set<UUID>
+    /// Whether `validate` rejects every workout, for a sheet test whose workout gets a fresh id.
+    nonisolated let validateShouldFail: Bool
     private(set) var scheduledPlans: [PlannedActivity] = []
     private(set) var unscheduledPlans: [PlannedActivity] = []
     /// The `planIDs` each `unscheduleAll(except:)` call was given.
@@ -26,16 +28,18 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
         scheduleShouldFail: Bool = false,
         authorization: WatchSchedulingAuthorization = .authorized,
         maxScheduledCount: Int = 15,
-        invalidWorkoutIDs: Set<UUID> = []
+        invalidWorkoutIDs: Set<UUID> = [],
+        validateShouldFail: Bool = false
     ) {
         self.scheduleShouldFail = scheduleShouldFail
         self.authorization = authorization
         self.maxScheduledCount = maxScheduledCount
         self.invalidWorkoutIDs = invalidWorkoutIDs
+        self.validateShouldFail = validateShouldFail
     }
 
     nonisolated func validate(_ workout: StructuredWorkout) throws {
-        if invalidWorkoutIDs.contains(workout.id) {
+        if validateShouldFail || invalidWorkoutIDs.contains(workout.id) {
             throw WatchIncompatibility(reason: Self.unsupportedReason)
         }
     }
