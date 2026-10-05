@@ -846,11 +846,19 @@ public final class WeekViewModel {
     }
 
     /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
-    public func plannedWorkoutDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
+    ///
+    /// - Parameters:
+    ///   - plan: The plan whose card was tapped.
+    ///   - today: Decides whether the plan was missed, for its Apple Watch status (MVP2-122); fixed
+    ///     when the sheet opens.
+    public func plannedWorkoutDetailViewModel(
+        for plan: PlannedActivity, asOf today: Date = .now
+    ) -> PlannedWorkoutDetailViewModel {
         let viewModel = PlannedWorkoutDetailViewModel(
             model: model, plan: plan, scheduler: plannedWorkoutScheduler
         )
         viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        viewModel.watchStatus = { [weak self] in self?.watchStatus(for: $0, asOf: today) }
         return viewModel
     }
 

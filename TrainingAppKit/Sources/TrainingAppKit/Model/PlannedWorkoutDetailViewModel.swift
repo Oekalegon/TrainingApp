@@ -20,6 +20,10 @@ public final class PlannedWorkoutDetailViewModel {
     /// Called after the plan is deleted or edited, so the Watch sync can run again (MVP2-55).
     @ObservationIgnored
     public var onPlansChanged: (@MainActor () -> Void)?
+    /// Looks up a plan's Apple Watch status, set by `WeekViewModel` to its own `watchStatus(for:)`
+    /// so the sheet and the plan's card always agree (MVP2-122); `nil` shows no status.
+    @ObservationIgnored
+    public var watchStatus: (@MainActor (PlannedActivity) -> WeekViewModel.PlannedWatchStatus?)?
     private let statisticsCalculator = StatisticsCalculator()
 
     /// Set when ``delete()`` fails; the sheet shows it as an alert.
@@ -58,6 +62,16 @@ public final class PlannedWorkoutDetailViewModel {
     /// The plan's workout, if it's still in the library.
     public var workout: StructuredWorkout? {
         model.workouts.first { $0.id == plan.workoutID }
+    }
+
+    /// Why the plan's workout can't go on the Apple Watch, e.g. "Apple Watch doesn't support this
+    /// alert for cycling." (MVP2-122): the same reason the plan's card shows, for the sheet's Apple
+    /// Watch section. `nil` when it can, or when the card would show nothing either: a missed or
+    /// done plan, or sending to the Watch turned off. Reads the current ``plan``, so it follows an
+    /// edit once the Watch sync has run again.
+    public var watchIncompatibility: String? {
+        guard case .unsupported(let reason)? = watchStatus?(plan) else { return nil }
+        return reason
     }
 
     /// The athlete's timezone — the sheet formats ``plan``'s date with this.
