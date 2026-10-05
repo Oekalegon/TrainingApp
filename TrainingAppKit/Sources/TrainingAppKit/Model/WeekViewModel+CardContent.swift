@@ -88,13 +88,12 @@ extension WeekViewModel {
 
     /// Whether `plan`'s day has passed without a completed activity matching it.
     private func isMissed(_ plan: PlannedActivity, asOf today: Date) -> Bool {
-        Self.isMissed(plan, asOf: today, calendar: calendar)
+        plan.completedActivityID == nil && isPast(plan.date, asOf: today)
     }
 
-    /// Whether `plan`'s day, in `calendar`'s timezone, is before `today`'s and no completed
-    /// activity matches it. The one rule for "missed", shared by the cards and the search tab's
-    /// plan results (MVP2-21), so the two always agree.
+    /// ``isMissed(_:asOf:)``'s rule for any `calendar` — the search tab's plan results use it
+    /// (MVP2-21), so a result and its card agree. Both go through `isPast`'s one day comparison.
     static func isMissed(_ plan: PlannedActivity, asOf today: Date, calendar: Calendar) -> Bool {
-        plan.completedActivityID == nil && calendar.startOfDay(for: plan.date) < calendar.startOfDay(for: today)
+        plan.completedActivityID == nil && isPast(plan.date, asOf: today, calendar: calendar)
     }
 }

@@ -937,6 +937,12 @@ public final class WeekViewModel {
     /// affordance disables itself (MVP2-15) on a day this returns `true` for, rather than opening
     /// a sheet for a day that's already happened.
     public func isPast(_ day: Date, asOf today: Date = .now) -> Bool {
+        Self.isPast(day, asOf: today, calendar: calendar)
+    }
+
+    /// ``isPast(_:asOf:)`` for any `calendar`, so code without a `WeekViewModel`'s own calendar
+    /// (the search tab's missed plans, MVP2-21) applies the same rule.
+    static func isPast(_ day: Date, asOf today: Date, calendar: Calendar) -> Bool {
         calendar.startOfDay(for: day) < calendar.startOfDay(for: today)
     }
 
