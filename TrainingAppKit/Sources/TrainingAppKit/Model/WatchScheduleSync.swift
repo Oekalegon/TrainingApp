@@ -31,10 +31,16 @@ public final class WatchScheduleSync {
     /// saved after it read the store still ends up on the Watch.
     @ObservationIgnored private var needsRerun = false
 
-    /// Whether the athlete declined permission to schedule workouts, as of the last sync. `false`
-    /// until a sync has run, and when permission was never asked for or the device can't schedule
-    /// workouts.
-    public private(set) var isPermissionDenied = false
+    /// Whether the app may schedule workouts, as of the last sync or check: what the Athlete tab's
+    /// Apple Watch section shows. `nil` until one has run.
+    public private(set) var authorization: WatchSchedulingAuthorization?
+
+    /// Whether the athlete declined permission to schedule workouts, as of the last sync or check.
+    /// `false` until one has run, and when permission was never asked for or the device can't
+    /// schedule workouts.
+    public var isPermissionDenied: Bool {
+        authorization == .denied
+    }
 
     /// Whether the athlete dismissed the permission banner. Kept in `UserDefaults`, so the banner
     /// stays away across launches; cleared once permission is granted, so declining again later
@@ -42,8 +48,8 @@ public final class WatchScheduleSync {
     private var isBannerDismissed: Bool
 
     /// Whether the week view shows the banner explaining that planned workouts won't reach the
-    /// Watch and how to allow it in Settings (MVP2-117): permission is denied and the athlete
-    /// hasn't dismissed the banner.
+    /// Watch, with a button to the Athlete tab's Apple Watch section (MVP2-117): permission is
+    /// denied and the athlete hasn't dismissed the banner.
     public var showsPermissionDeniedBanner: Bool {
         isPermissionDenied && !isBannerDismissed
     }
@@ -63,6 +69,28 @@ public final class WatchScheduleSync {
     public func dismissPermissionDeniedBanner() {
         isBannerDismissed = true
         defaults.set(true, forKey: Self.bannerDismissedKey)
+    }
+
+    /// Reads the current permission without asking, for the Athlete tab's Apple Watch section to
+    /// show when it appears, before any sync has run.
+    public func refreshAuthorization() async {
+        record(await scheduler.authorizationStatus())
+    }
+
+    /// Asks for permission to schedule workouts, from the Athlete tab's Allow button, and syncs
+    /// once it's granted.
+    ///
+    /// iOS asks only once: when permission was declined before, this returns at once with
+    /// ``authorization`` still `.denied`, and only the Workout settings in the Watch app can turn
+    /// it back on.
+    ///
+    /// - Parameter now: The current time, passed on to ``sync(asOf:)``.
+    public func requestPermission(asOf now: Date = .now) async {
+        let authorization = await scheduler.requestAuthorizationIfNeeded()
+        record(authorization)
+        if authorization.isAuthorized {
+            await sync(asOf: now)
+        }
     }
 
     /// The live sync, or `nil` where WorkoutKit isn't available.
@@ -141,9 +169,9 @@ public final class WatchScheduleSync {
         }
     }
 
-    /// Updates ``isPermissionDenied``, and forgets a dismissed banner once permission is granted.
+    /// Updates ``authorization``, and forgets a dismissed banner once permission is granted.
     private func record(_ authorization: WatchSchedulingAuthorization) {
-        isPermissionDenied = authorization == .denied
+        self.authorization = authorization
         if authorization == .authorized, isBannerDismissed {
             isBannerDismissed = false
             defaults.removeObject(forKey: Self.bannerDismissedKey)

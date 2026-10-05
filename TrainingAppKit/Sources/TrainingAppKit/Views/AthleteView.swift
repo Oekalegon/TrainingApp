@@ -3,9 +3,10 @@ import TrainingCore
 
 /// The read-only athlete account screen (design doc §2.3): everything here is display-only — no
 /// editing of the profile itself, no `heartRateZoneHistory` timeline, just what's currently in
-/// effect. The one action this screen offers, "Force Full Resync", doesn't edit the profile — it
-/// re-imports activities from scratch, for recovering from a mapping fix that already-imported
-/// activities wouldn't otherwise pick up (design doc §2.3).
+/// effect. Its actions don't edit the profile: "Force Full Resync" re-imports activities from
+/// scratch, for recovering from a mapping fix that already-imported activities wouldn't otherwise
+/// pick up (design doc §2.3), and the Apple Watch section (MVP2-117) asks for permission to put
+/// planned workouts on the Watch.
 struct AthleteView: View {
     let viewModel: AthleteViewModel
     let isResyncing: Bool
@@ -26,6 +27,9 @@ struct AthleteView: View {
     let loadJoinedComponents: (Activity) async -> [Activity]
     let onLinkPlan: (Activity, UUID) async -> Bool
     let onUnlinkPlan: (Activity) async -> Bool
+    /// Backs the Apple Watch section (MVP2-117); `nil` where WorkoutKit isn't available, which
+    /// hides the section.
+    let watchSync: WatchScheduleSync?
     @State private var isConfirmingResync = false
     @State private var isConfirmingDeduplicate = false
     /// Whether the overlap-review sheet (MVP1-67), opened by tapping ``OverlapWarningBanner``, is
@@ -65,6 +69,12 @@ struct AthleteView: View {
                 Section {
                     LabeledContent("Name", value: viewModel.displayName)
                     LabeledContent("Sex", value: viewModel.athlete.sex.displayName)
+                }
+
+                // Near the top, so the week view's Watch permission banner (MVP2-117), which opens
+                // this tab, lands where the section is visible without scrolling.
+                if let watchSync {
+                    WatchSchedulingSection(sync: watchSync)
                 }
 
                 if let settings = viewModel.currentHeartRateZoneSettings {

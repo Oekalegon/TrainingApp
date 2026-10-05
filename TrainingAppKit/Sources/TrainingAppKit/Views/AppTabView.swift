@@ -10,9 +10,19 @@ import TrainingCore
 /// why `WeekViewModel` is constructed once here rather than inside `WeekView` itself.
 ///
 /// Also puts the next 7 days of planned workouts on the Watch each time the app becomes active
-/// (MVP2-55, ``WatchScheduleSync``).
+/// (MVP2-55, ``WatchScheduleSync``), and switches to the Athlete tab when the week view's Watch
+/// permission banner asks for it (MVP2-117).
 public struct AppTabView: View {
+    /// The app's tabs, for `TabView`'s selection.
+    private enum AppTab: Hashable {
+        case week
+        case athlete
+    }
+
     @State private var viewModel: WeekViewModel
+    /// The visible tab. Kept so the week view's Watch permission banner (MVP2-117) can open the
+    /// Athlete tab; not remembered across launches.
+    @State private var selectedTab = AppTab.week
     @Environment(\.scenePhase) private var scenePhase
     private let watchSync: WatchScheduleSync?
 
@@ -32,11 +42,12 @@ public struct AppTabView: View {
         // `overlapReviewItems` derives from exactly that.
         let overlapReviewItems = viewModel.overlapReviewItems
 
-        TabView {
-            WeekView(viewModel: viewModel)
+        TabView(selection: $selectedTab) {
+            WeekView(viewModel: viewModel, onShowWatchSettings: { selectedTab = .athlete })
                 .tabItem {
                     Label("Week", systemImage: "calendar")
                 }
+                .tag(AppTab.week)
 
             AthleteView(
                 viewModel: viewModel.athleteViewModel,
@@ -53,11 +64,13 @@ public struct AppTabView: View {
                 onUnjoinActivity: { await viewModel.unjoinActivity($0) },
                 loadJoinedComponents: { await viewModel.joinedComponents(of: $0) },
                 onLinkPlan: { await viewModel.linkActivity($0, toPlan: $1) },
-                onUnlinkPlan: { await viewModel.unlinkActivity($0) }
+                onUnlinkPlan: { await viewModel.unlinkActivity($0) },
+                watchSync: watchSync
             )
             .tabItem {
                 Label("Athlete", systemImage: "person.circle")
             }
+            .tag(AppTab.athlete)
             // Same live count `OverlapWarningBanner` shows on the Athlete screen itself (MVP1-67)
             // — both update together whenever an overlap is resolved, since they read the same
             // `WeekViewModel.overlapReviewItems`. `.badge(0)` hides the badge on its own, so no

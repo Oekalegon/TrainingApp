@@ -77,8 +77,8 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 `AppTabView` is the app's root: a bottom tab bar with two tabs, "Week" (§2.1) and "Athlete"
 (§2.3) — both built from the same `WeekViewModel` instance (`AthleteView` reads it via
 `WeekViewModel.athleteViewModel`), owned by `AppTabView` and constructed once for the app's
-lifetime. There's no tab-selection state beyond `TabView`'s own default — MVP 1 doesn't need to
-remember or restore which tab was last active.
+lifetime. `AppTabView` holds the selected tab only so the week view's Watch permission banner can
+open the Athlete tab (MVP2-117); it isn't remembered or restored across launches.
 
 ### 2.1 Week view
 
@@ -479,6 +479,14 @@ imported biometric data looks right, not to be a settings screen:
 - Pace model's threshold pace (`paceModel.thresholdPaceSecondsPerKilometer`), shown as min/km.
 - Week-starts-on, time zone — minor, but confirms the app is bucketing days the way the athlete
   expects.
+- **Apple Watch** (MVP2-117, `WatchSchedulingSection`), just below name and sex so the week view's
+  Watch permission banner (§3.5), which opens this tab, lands on it: whether the app may put
+  planned workouts on the Watch ("Allowed", "Not set up", "Not allowed", "Unavailable"). While the
+  athlete hasn't been asked, an "Allow Sending to Apple Watch" button shows the WorkoutKit prompt
+  and syncs once it's granted (`WatchScheduleSync.requestPermission(asOf:)`). Once declined, iOS
+  won't ask again, so the footer says where to turn it back on: the Watch app on the iPhone, under
+  Workout. The section reads the permission when it appears (`refreshAuthorization()`), and the
+  sync that runs when the app becomes active updates it. Hidden where WorkoutKit isn't available.
 
 `heartRateZoneHistory` beyond the current entry is not shown in MVP 1 (no history/timeline UI —
 just "what's in effect now"). No editing, no HealthKit-write-back; this screen only reads what
@@ -594,12 +602,14 @@ the foreground, which also moves the window on after midnight.
 - **Permission.** The first run with a plan to send asks for WorkoutKit permission, so a new athlete
   isn't asked before planning anything. Declined, not yet asked, or on a device that can't schedule
   workouts, the sync does nothing.
-- **Permission denied (MVP2-117).** Each run records whether the athlete declined. While they have,
-  `WeekView` shows a `WatchPermissionBanner` at the bottom of the screen, explaining that planned
-  workouts won't reach the Watch, with an "Open Settings" button to the app's settings page. The
-  banner can be dismissed; the dismissal is kept in `UserDefaults` and cleared once permission is
-  granted, so declining again later brings the banner back. Allowing it in Settings hides the
-  banner on its own, since the sync runs again when the app becomes active.
+- **Permission denied (MVP2-117).** Each run records the permission (`WatchScheduleSync.authorization`).
+  While it's denied, `WeekView` shows a yellow `WatchPermissionBanner` at the bottom of the screen,
+  explaining that planned workouts won't reach the Watch, with an "Open Athlete Tab" button to the
+  Athlete tab's Apple Watch section (§2.3). The banner can be dismissed; the dismissal is kept in
+  `UserDefaults` and cleared once permission is granted, so declining again later brings the banner
+  back. iOS asks only once: after "Don't Allow", or after the athlete turns the app off in the Watch
+  app's Workout settings, only those settings can turn it back on. Doing so hides the banner on its
+  own, since the sync runs again when the app becomes active.
 - **When else it runs.** `WeekViewModel` runs it again after the planned-workout sheet saves, the
   detail sheet deletes, or a calendar import succeeds (`onPlansChanged`), and after anything that can
   link or unlink a plan (MVP2-116): a HealthKit import (pull-to-refresh, Connect Health, Force Full

@@ -45,7 +45,8 @@ public enum WatchSchedulingAuthorization: Sendable, Equatable {
     case authorized
     /// The athlete hasn't been asked yet.
     case notDetermined
-    /// The athlete declined; only the Settings app can change that.
+    /// The athlete declined, at the prompt or later in the Watch app's Workout settings. iOS doesn't
+    /// ask again; only those settings can turn it back on.
     case denied
     /// The device can't schedule workouts, or a restriction the athlete can't lift prevents it.
     case unavailable
@@ -95,7 +96,7 @@ extension WorkoutKitBridge: PlannedWorkoutScheduling {
     }
 
     /// `.restricted` (and any state added later) counts as unavailable: the athlete can't change it
-    /// in Settings, so there's nothing for the banner to tell them.
+    /// in the Watch app, so there's nothing for the banner to tell them.
     private static func authorization(
         from state: WorkoutScheduler.AuthorizationState, after source: String
     ) -> WatchSchedulingAuthorization {
