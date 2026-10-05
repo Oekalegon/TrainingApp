@@ -257,7 +257,8 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
   Load (it never became training load) and no intensity colour. A plan for today stays hatched until
   the day ends. This deliberately adds a third card state to the two above.
 - **Apple Watch status on planned cards** (MVP2-119, `PlannedCardContent.watchStatus`). A plan the
-  Watch sync sent (§3.5) shows a small Watch symbol after its name. A plan whose workout can't go
+  Watch sync sent (§3.5) shows a small Watch symbol at the trailing end of the second row, under
+  the expected Load. A plan whose workout can't go
   on the Watch shows a warning line under the duration or distance instead: an orange warning
   symbol and the reason in secondary text, e.g. "Apple Watch doesn't support this alert for
   cycling." Neither shows on a missed plan, or while the athlete has turned sending off (§2.3);
