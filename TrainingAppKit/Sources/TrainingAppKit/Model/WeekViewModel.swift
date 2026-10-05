@@ -40,9 +40,11 @@ public final class WeekViewModel {
     /// calendar day shifts every week's own change-vs-previous-week percentages; a plan or its
     /// workout can change independently of `model.activities`, e.g. saving a new planned workout
     /// via `PlannedWorkoutSheet`). The athlete is part of the key too: a changed max or resting
-    /// heart rate rescores every activity's load (MVP2-56).
+    /// heart rate rescores every activity's load (MVP2-56). So is ``plansFingerprint()``: editing a
+    /// plan's load override, date or workout changes no count but does change the planned totals and
+    /// which of them are estimates (MVP2-8).
     @ObservationIgnored
-    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int)?
+    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int, plans: Int)?
 
     /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
     /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
@@ -72,9 +74,11 @@ public final class WeekViewModel {
     /// ``dailyLoadSplitCaches`` was populated — three counts, not just `activityCount` the way
     /// ``sportStatsPagesCachesKey`` does, since a plan or its workout can change independently of
     /// `model.activities` (e.g. saving a new planned workout via `PlannedWorkoutSheet`), plus the
-    /// athlete, whose heart-rate settings every activity's load is scored with (MVP2-56).
+    /// athlete, whose heart-rate settings every activity's load is scored with (MVP2-56), plus
+    /// ``plansFingerprint()``, since an edited override, date or workout moves a planned bar without
+    /// changing any count.
     @ObservationIgnored
-    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date)?
+    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, plans: Int)?
 
     /// The card caches: ``plannedCardSummary(for:)``, ``linkedPlanExpectation(for:)`` and
     /// ``intensity(for:)-(Activity)``/``intensity(for:)-(PlannedActivity)`` results. The day list
@@ -297,13 +301,15 @@ public final class WeekViewModel {
     /// ``sportStatsPages(for:asOf:)``/``heartRateHistogram(for:)`` already have.
     func dailyLoadSplit(for weekStart: Date, asOf today: Date = .now) -> DailyLoadSplit {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
+        let plans = plansFingerprint()
         let keyIsCurrent = dailyLoadSplitCachesKey.map {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
                 && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
+                && $0.plans == plans
         } ?? false
         if !keyIsCurrent {
             dailyLoadSplitCaches.removeAll()
-            dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today)
+            dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today, plans)
         }
         if let cached = dailyLoadSplitCaches[weekStart] {
             return cached
@@ -444,10 +450,9 @@ public final class WeekViewModel {
 
     /// Everything a planned activity's card shows (MVP2-37), derived from the plan and its workout.
     public struct PlannedCardSummary: Equatable, Sendable {
-        /// The one measure a workout is defined by — never both: the other one is a forecast from
-        /// the athlete's paces (see ``WeekViewModel/paceHistory``), and showing a guess next to a real
-        /// figure on the small card would undercut it. The detail sheet shows both, the forecast
-        /// labelled as such.
+        /// The one measure a workout is defined by, for places with room for a single figure (the
+        /// activity sheet's plan-link options). The card shows both ``duration`` and
+        /// ``distanceMeters``, the forecast one marked with a "~".
         public enum Extent: Equatable, Sendable {
             case duration(TimeInterval)
             case distance(meters: Double)
@@ -460,56 +465,94 @@ public final class WeekViewModel {
         /// ``PlannedActivity/expectedLoadOverride``, else the estimator's figure; `nil` when the
         /// workout is missing.
         public let load: Double?
+        /// Whether ``load`` is the estimator's figure, shown with a "~" (MVP2-8); `false` for the
+        /// athlete's own override, which is a target.
+        public let isLoadEstimated: Bool
         public let extent: Extent?
+        /// Expected duration: the sum of the steps' times for a workout of time steps only, else
+        /// forecast from the athlete's paces. `nil` when the workout is missing.
+        public let duration: TimeInterval?
+        /// Expected distance: the sum of the steps' distances for a workout of distance steps only,
+        /// else forecast from the athlete's paces. `nil` when the workout is missing, when it can't be
+        /// forecast (no heart-rate zone settings recorded) or when it comes to nothing.
+        public let distanceMeters: Double?
+        /// Whether ``duration`` is a forecast, shown with a "~" (MVP2-8): the workout has a distance
+        /// or open step (`StructuredWorkout.isDurationForecast`).
+        public let isDurationEstimated: Bool
+        /// Whether ``distanceMeters`` is a forecast, shown with a "~" (MVP2-8): the workout isn't made
+        /// solely of distance steps (`StructuredWorkout.isDistanceForecast`).
+        public let isDistanceEstimated: Bool
+        /// How many earlier activities the forecast came from; `0` for the pace model alone. The
+        /// detail sheet's footer says so.
+        public let forecastActivityCount: Int
+
+        /// Whether ``extent`` is a forecast: the duration's flag for a duration, never for a distance
+        /// (only a workout of distance steps alone is shown by its distance).
+        public var isExtentEstimated: Bool {
+            switch extent {
+            case .duration?: isDurationEstimated
+            case .distance?, nil: false
+            }
+        }
 
         /// The summary for `plan` given its `workout` (`nil` when no longer in the library). Shared by
         /// the day list's card and ``PlannedWorkoutDetailViewModel``, so both always show the same
         /// numbers. A workout made up solely of distance-goal steps gets its distance as ``extent``;
-        /// every other workout its expected duration, forecast from `history` for any distance or
-        /// open steps it has (MVP2-35, MVP2-111; see
+        /// every other workout its expected duration. Whatever the steps don't set is forecast from
+        /// `history` (MVP2-35, MVP2-111; see
         /// `StatisticsCalculator.projection(for:athlete:paceHistory:before:excluding:)`).
+        ///
+        /// "Distance steps alone" uses the same rule as the estimate flags
+        /// (`StructuredWorkout.isDistanceForecast`, which skips blocks repeated zero times), so a
+        /// distance shown as the workout's target is never one taken from the forecast.
         static func make(
             plan: PlannedActivity, workout: StructuredWorkout?, athlete: AthleteProfile,
             calculator: StatisticsCalculator, history: PaceHistory = .empty
         ) -> PlannedCardSummary {
             guard let workout else {
-                return PlannedCardSummary(sport: .running, name: nil, load: plan.expectedLoadOverride, extent: nil)
+                return PlannedCardSummary(
+                    sport: .running, name: nil, load: plan.expectedLoadOverride, isLoadEstimated: false,
+                    extent: nil, duration: nil, distanceMeters: nil,
+                    isDurationEstimated: false, isDistanceEstimated: false, forecastActivityCount: 0
+                )
             }
             let load = plan.expectedLoadOverride
                 ?? calculator.estimator.estimatedLoad(for: workout, athlete: athlete).value
+            let projection = calculator.projection(
+                for: workout, athlete: athlete, paceHistory: history, before: plan.date
+            )
 
-            var distanceMeters = 0.0
-            var sawDistanceStep = false
-            var sawOtherStep = false
-            for block in workout.blocks {
-                for step in block.steps {
-                    if case .distance(let meters) = step.goal {
-                        distanceMeters += meters * Double(block.repetitions)
-                        sawDistanceStep = true
-                    } else {
-                        sawOtherStep = true
-                    }
-                }
-            }
-            // Requires at least one distance step, so a workout with no steps at all isn't shown as
-            // "0 m".
+            // `isDistanceForecast` is `true` for a workout with no steps at all, so it's never shown
+            // as "0 m".
             let extent: Extent
-            if sawDistanceStep && !sawOtherStep {
-                extent = .distance(meters: distanceMeters)
-            } else {
-                let projection = calculator.projection(
-                    for: workout, athlete: athlete, paceHistory: history, before: plan.date
-                )
+            let expectedDistance: Double?
+            if workout.isDistanceForecast {
                 extent = .duration(projection.duration)
+                expectedDistance = projection.distanceMeters
+            } else {
+                let stepDistance = workout.blocks.reduce(0.0) { total, block in
+                    let blockDistance = block.steps.reduce(0.0) { sum, step in
+                        if case .distance(let meters) = step.goal { return sum + meters }
+                        return sum
+                    }
+                    return total + blockDistance * Double(block.repetitions)
+                }
+                extent = .distance(meters: stepDistance)
+                expectedDistance = stepDistance
             }
 
-            return PlannedCardSummary(sport: workout.sport, name: workout.name, load: load, extent: extent)
+            return PlannedCardSummary(
+                sport: workout.sport, name: workout.name, load: load, isLoadEstimated: plan.isExpectedLoadEstimated,
+                extent: extent, duration: projection.duration,
+                distanceMeters: expectedDistance.flatMap { $0 > 0 ? $0 : nil },
+                isDurationEstimated: workout.isDurationForecast, isDistanceEstimated: workout.isDistanceForecast,
+                forecastActivityCount: projection.matchedActivityCount
+            )
         }
     }
 
-    /// The card content for `plan` (MVP2-37). A workout made up solely of distance-goal steps is
-    /// shown by its distance; every other workout by its expected duration, forecast from
-    /// ``paceHistory``.
+    /// The card content for `plan` (MVP2-37): its expected duration and distance, whichever the
+    /// steps don't set forecast from ``paceHistory``.
     public func plannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
         refreshCardCachesIfNeeded()
         let workout = workout(for: plan)
@@ -529,6 +572,25 @@ public final class WeekViewModel {
     /// the first frame, before `.task` runs). Used by the day list's CTL/ATL/TSB pills (MVP1-40).
     public func metrics(on day: Date) -> FitnessMetrics? {
         model.metrics.first { calendar.isDate($0.day, inSameDayAs: day) }
+    }
+
+    /// `day`'s metrics (see ``metrics(on:)``) and whether its Form (TSB) pill shows an estimate
+    /// (MVP2-8; see `FitnessMetrics.isFormProjected(on:in:calendar:)` — Load, Fitness and Fatigue
+    /// follow `day`'s own ``FitnessMetrics/isProjected`` instead), for the day list's pill row.
+    ///
+    /// One scan of `model.metrics` for both: every day row calls this on each week-swipe frame. The
+    /// series is one entry per day in order, so the previous day is normally the entry before
+    /// `day`'s; anything else falls back to a lookup.
+    public func dayMetrics(on day: Date) -> (metrics: FitnessMetrics?, isFormProjected: Bool) {
+        let series = model.metrics
+        guard let index = series.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: day) }) else {
+            return (nil, false)
+        }
+        if index > 0, let previousDay = calendar.date(byAdding: .day, value: -1, to: day),
+           calendar.isDate(series[index - 1].day, inSameDayAs: previousDay) {
+            return (series[index], series[index - 1].isProjected)
+        }
+        return (series[index], FitnessMetrics.isFormProjected(on: day, in: series, calendar: calendar))
     }
 
     /// One page per sport for the week view's stats pager (MVP1-52; design doc: "a weekly overview
@@ -566,14 +628,15 @@ public final class WeekViewModel {
     /// time are forecast from it.
     public func sportStatsPages(for weekStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
+        let plans = plansFingerprint()
         let keyIsCurrent = sportStatsPagesCachesKey.map {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
                 && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
-                && $0.paceHistoryGeneration == paceHistoryGeneration
+                && $0.paceHistoryGeneration == paceHistoryGeneration && $0.plans == plans
         } ?? false
         if !keyIsCurrent {
             sportStatsPagesCaches.removeAll()
-            sportStatsPagesCachesKey = (key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration)
+            sportStatsPagesCachesKey = (key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration, plans)
         }
         if let cached = sportStatsPagesCaches[weekStart] {
             return cached
@@ -581,6 +644,20 @@ public final class WeekViewModel {
         let pages = computeSportStatsPages(weekStart: weekStart, asOf: today)
         sportStatsPagesCaches[weekStart] = pages
         return pages
+    }
+
+    /// A hash of what each plan contributes to the week's totals — its id, date, workout and load
+    /// override — for the stats and daily-load cache keys. The counts alone miss an edit in place.
+    /// Cheap enough for the swipe path: a handful of fields per loaded plan, no statistics.
+    private func plansFingerprint() -> Int {
+        var hasher = Hasher()
+        for plan in model.plans {
+            hasher.combine(plan.id)
+            hasher.combine(plan.date)
+            hasher.combine(plan.workoutID)
+            hasher.combine(plan.expectedLoadOverride)
+        }
+        return hasher.finalize()
     }
 
     private func computeSportStatsPages(weekStart: Date, asOf today: Date) -> [SportStatsPage] {
@@ -610,6 +687,7 @@ public final class WeekViewModel {
         // performed-so-far-plus-still-planned total, and a week further out compares against the
         // week before it's own still-fully-planned total.
         let previousExpectedTotalLoad = previousTotalLoad + previousPlannedTotalLoad
+        let estimates = weekEstimates(weekStart: weekStart, asOf: today)
         let loadChangeFraction = Self.changeFraction(currentTotalLoad - previousExpectedTotalLoad, of: previousExpectedTotalLoad)
         let expectedLoadChangeFraction = Self.changeFraction(
             (currentTotalLoad + plannedTotalLoad) - previousExpectedTotalLoad, of: previousExpectedTotalLoad
@@ -646,9 +724,58 @@ public final class WeekViewModel {
                 expectedTimeChangeFraction: Self.changeFraction(
                     (currentActual.time + currentPlanned.time) - previousExpectedTime, of: previousExpectedTime
                 ),
-                expectedLoadChangeFraction: expectedLoadChangeFraction
+                expectedLoadChangeFraction: expectedLoadChangeFraction,
+                isLoadEstimated: estimates.performedLoad,
+                isExpectedDistanceEstimated: estimates.plannedDistanceSports.contains(sport),
+                isExpectedTimeEstimated: estimates.plannedTimeSports.contains(sport),
+                isExpectedLoadEstimated: estimates.performedLoad || estimates.plannedLoad
             )
         }
+    }
+
+    /// Which of a week's stats-bar totals include an estimate (MVP2-8), from the same activities and
+    /// plans `StatisticsCalculator.periodStatsSplit` counts: activities up to and including today,
+    /// plans from today on whose workout is still in the library.
+    private struct WeekEstimates {
+        /// An activity's load was scored from perceived effort rather than heart rate.
+        var performedLoad = false
+        /// A plan's load is the estimator's figure rather than one the athlete set.
+        var plannedLoad = false
+        /// Sports with a plan whose distance is forecast from the athlete's paces.
+        var plannedDistanceSports: Set<Sport> = []
+        /// Sports with a plan whose duration is forecast from the athlete's paces.
+        var plannedTimeSports: Set<Sport> = []
+    }
+
+    private func weekEstimates(weekStart: Date, asOf today: Date) -> WeekEstimates {
+        let todayStart = calendar.startOfDay(for: today)
+        let rangeStart = calendar.startOfDay(for: weekStart)
+        let rangeEnd = calendar.date(byAdding: .day, value: 6, to: rangeStart) ?? rangeStart
+        var estimates = WeekEstimates()
+
+        estimates.performedLoad = model.activities.contains { activity in
+            let day = calendar.startOfDay(for: activity.start)
+            guard day >= rangeStart, day <= rangeEnd, day <= todayStart else { return false }
+            return scoredLoad(for: activity)?.method.isEstimate ?? false
+        }
+
+        let workoutsByID = Dictionary(model.workouts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for plan in model.plans {
+            let day = calendar.startOfDay(for: plan.date)
+            guard day >= rangeStart, day <= rangeEnd, day >= todayStart,
+                  let workout = workoutsByID[plan.workoutID]
+            else { continue }
+            if plan.isExpectedLoadEstimated {
+                estimates.plannedLoad = true
+            }
+            if workout.isDistanceForecast {
+                estimates.plannedDistanceSports.insert(workout.sport)
+            }
+            if workout.isDurationForecast {
+                estimates.plannedTimeSports.insert(workout.sport)
+            }
+        }
+        return estimates
     }
 
     /// Descriptive totals (every sport, not just one), performed and planned independently, for
@@ -687,8 +814,15 @@ public final class WeekViewModel {
     /// when no calculator could score the activity (`confidence == 0`), so the card shows nothing
     /// rather than a misleading "0".
     public func trainingLoad(for activity: Activity) -> Double? {
+        scoredLoad(for: activity)?.value
+    }
+
+    /// ``trainingLoad(for:)`` with how it was computed, so a card can mark a load scored from
+    /// perceived effort rather than heart rate as an estimate (MVP2-8). `nil` when no calculator
+    /// could score the activity.
+    func scoredLoad(for activity: Activity) -> TrainingLoad? {
         let summary = statisticsCalculator.summary(for: activity, athlete: model.athlete)
-        return summary.load.confidence > 0 ? summary.load.value : nil
+        return summary.load.confidence > 0 ? summary.load : nil
     }
 
     /// `weekStart`'s heart-rate histogram, for the graph panel's "Heart Rate Histogram" page

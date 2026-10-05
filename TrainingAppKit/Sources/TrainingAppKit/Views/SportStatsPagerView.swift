@@ -187,26 +187,32 @@ private struct StatsPageView: View {
         Duration.seconds(page.time).formatted(.time(pattern: .hourMinuteSecond))
     }
 
+    /// "~" when the week's load includes one scored from perceived effort (MVP2-8).
     private var loadString: String {
-        page.load.formatted(Self.loadFormat)
+        EstimateMarker.text(page.load.formatted(Self.loadFormat), isEstimated: page.isLoadEstimated)
     }
 
     /// `nil` when nothing's still planned for this figure (expected == performed already), so
     /// `statItem` falls back to its plain "–" placeholder instead of showing the same number twice.
+    /// Each expected figure carries a "~" when a plan's part of it is an estimate rather than
+    /// something the workout sets (MVP2-8).
     private var expectedDistanceString: String? {
         guard page.plannedDistanceMeters > 0 else { return nil }
         let expected = page.distanceMeters + page.plannedDistanceMeters
-        return Measurement(value: expected, unit: UnitLength.meters).formatted(Self.distanceFormat)
+        let text = Measurement(value: expected, unit: UnitLength.meters).formatted(Self.distanceFormat)
+        return EstimateMarker.text(text, isEstimated: page.isExpectedDistanceEstimated)
     }
 
     private var expectedDurationString: String? {
         guard page.plannedTime > 0 else { return nil }
-        return Duration.seconds(page.time + page.plannedTime).formatted(.time(pattern: .hourMinuteSecond))
+        let text = Duration.seconds(page.time + page.plannedTime).formatted(.time(pattern: .hourMinuteSecond))
+        return EstimateMarker.text(text, isEstimated: page.isExpectedTimeEstimated)
     }
 
     private var expectedLoadString: String? {
         guard page.plannedLoad > 0 else { return nil }
-        return (page.load + page.plannedLoad).formatted(Self.loadFormat)
+        let text = (page.load + page.plannedLoad).formatted(Self.loadFormat)
+        return EstimateMarker.text(text, isEstimated: page.isExpectedLoadEstimated)
     }
 
     private var lowIntensityFractionString: String {
@@ -281,7 +287,9 @@ private struct StatsPageView: View {
         let percentText = Text(percentString(changeFraction))
             .font(.caption2)
             .foregroundStyle(.secondary)
+        // Spoken with "estimated" rather than "tilde" (MVP2-8).
         return Text("\(value) \(percentText)")
+            .accessibilityLabel(Text("\(EstimateMarker.spokenForm(of: value)) \(percentString(changeFraction))"))
     }
 
     /// - Parameters:

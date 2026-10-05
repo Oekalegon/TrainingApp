@@ -64,4 +64,16 @@ public struct SportStatsPage: Identifiable, Hashable {
     /// week's performed total — the same value on every page, matching `load`'s own whole-week
     /// convention.
     public let expectedLoadChangeFraction: Double
+    /// Whether ``load`` includes an estimate — an activity scored from perceived effort rather than
+    /// heart rate — and so is shown with a "~" (MVP2-8). The same value on every page.
+    public let isLoadEstimated: Bool
+    /// Whether the expected distance (performed + planned) includes a distance forecast from the
+    /// athlete's paces rather than one a workout sets, and so is shown with a "~" (MVP2-8).
+    public let isExpectedDistanceEstimated: Bool
+    /// Whether the expected time (performed + planned) includes a duration forecast from the
+    /// athlete's paces rather than one a workout sets, and so is shown with a "~" (MVP2-8).
+    public let isExpectedTimeEstimated: Bool
+    /// Whether the expected load (performed + planned) includes an estimate: ``isLoadEstimated``,
+    /// or a plan whose load the athlete didn't set (MVP2-8). The same value on every page.
+    public let isExpectedLoadEstimated: Bool
 }

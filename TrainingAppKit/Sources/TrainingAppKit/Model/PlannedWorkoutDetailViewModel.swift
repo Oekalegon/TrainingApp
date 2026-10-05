@@ -78,7 +78,7 @@ public final class PlannedWorkoutDetailViewModel {
     /// The athlete's timezone — the sheet formats ``plan``'s date with this.
     public var timeZone: TimeZone { model.athlete.timeZone }
 
-    /// Sport, name, load and the one measure the workout defines — the same numbers the day list's
+    /// Sport, name, load, duration and distance — the same numbers the day list's
     /// card shows.
     public var summary: WeekViewModel.PlannedCardSummary {
         WeekViewModel.PlannedCardSummary.make(
@@ -114,35 +114,23 @@ public final class PlannedWorkoutDetailViewModel {
         }
     }
 
-    /// The workout's forecast duration and distance from the athlete's earlier, similar workouts in
-    /// `TrainingModel.paceHistory` — the same forecast as the day list's card and the week's
-    /// statistics (`StatisticsCalculator.projection(for:athlete:paceHistory:before:excluding:)`).
-    /// Reads the history live, so a history that lands while the sheet is open updates it. `nil`
-    /// when the workout is gone.
+    /// The workout's expected duration and distance, forecast from the athlete's earlier, similar
+    /// workouts in `TrainingModel.paceHistory` where the steps don't set them. Taken from
+    /// ``summary``, so the sheet shows exactly what the plan's card shows. Reads the history live,
+    /// so a history that lands while the sheet is open updates it. `nil` when the workout is gone.
     public var expected: Expected? {
-        guard let workout else { return nil }
-        let projection = statisticsCalculator.projection(
-            for: workout, athlete: model.athlete, paceHistory: model.paceHistory, before: plan.date
-        )
-        var hasDistanceStep = false
-        var hasOtherStep = false
-        for block in workout.blocks where block.repetitions > 0 {
-            for step in block.steps {
-                switch step.goal {
-                case .distance: hasDistanceStep = true
-                case .time, .open: hasOtherStep = true
-                }
-            }
-        }
-        let hasOpenStep = workout.blocks.contains { block in
-            block.repetitions > 0 && block.steps.contains { $0.goal == .open }
-        }
+        expected(from: summary)
+    }
+
+    /// ``expected`` from a ``summary`` already read, so the sheet runs the forecast once per render.
+    public func expected(from summary: WeekViewModel.PlannedCardSummary) -> Expected? {
+        guard let duration = summary.duration else { return nil }
         return Expected(
-            duration: projection.duration,
-            distanceMeters: projection.distanceMeters,
-            isDurationForecast: hasDistanceStep || hasOpenStep,
-            isDistanceForecast: projection.distanceMeters != nil && !(hasDistanceStep && !hasOtherStep),
-            activityCount: projection.matchedActivityCount
+            duration: duration,
+            distanceMeters: summary.distanceMeters,
+            isDurationForecast: summary.isDurationEstimated,
+            isDistanceForecast: summary.distanceMeters != nil && summary.isDistanceEstimated,
+            activityCount: summary.forecastActivityCount
         )
     }
 

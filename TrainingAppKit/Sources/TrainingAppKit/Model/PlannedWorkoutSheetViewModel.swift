@@ -95,6 +95,12 @@ public final class PlannedWorkoutSheetViewModel {
             recomputeGuardrails()
         }
     }
+
+    /// Whether ``expectedLoad`` is the estimator's figure, shown with a "~" (MVP2-8): `false` only
+    /// while editing with ``loadOverride`` set, when it's the athlete's own target.
+    public var isExpectedLoadEstimated: Bool {
+        !(isEditing && loadOverride != nil)
+    }
     public var selectedTemplate: WorkoutTemplate? {
         didSet {
             guard selectedTemplate?.id != oldValue?.id else { return }

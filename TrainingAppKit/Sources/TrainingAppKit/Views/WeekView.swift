@@ -596,11 +596,13 @@ public struct WeekView: View {
             Section {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(dates.enumerated()), id: \.element) { index, day in
+                        let dayMetrics = viewModel.dayMetrics(on: day)
                         DayActivitiesSection(
                             date: day,
                             isToday: viewModel.isToday(day),
                             showsConnector: true,
-                            metrics: viewModel.metrics(on: day),
+                            metrics: dayMetrics.metrics,
+                            isFormProjected: dayMetrics.isFormProjected,
                             activities: viewModel.activities(on: day),
                             plans: viewModel.pendingPlans(on: day),
                             races: viewModel.races(on: day),

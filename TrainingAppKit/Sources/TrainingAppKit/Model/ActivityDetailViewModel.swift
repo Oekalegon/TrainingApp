@@ -11,6 +11,17 @@ import TrainingCore
 public struct ActivityDetailViewModel {
     public let activity: Activity
     public let summary: ActivitySummary
+
+    /// Whether the load is an estimate rather than measured, shown with a "~" (MVP2-8).
+    public var isLoadEstimated: Bool {
+        summary.load.method.isEstimate
+    }
+
+    /// Whether the load was scored from perceived effort rather than heart rate — the sheet says so
+    /// under the load, explaining its "~" (MVP2-8).
+    public var isLoadFromPerceivedEffort: Bool {
+        summary.load.method == .durationRPE
+    }
     /// The athlete's timezone — the view formats every date with this, not the device's default.
     public let timeZone: TimeZone
     /// This activity's overlap issue, if any (MVP1-63) — see `WeekViewModel.overlapContext(for:)`.

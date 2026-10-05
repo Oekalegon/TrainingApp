@@ -232,10 +232,11 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
   `ActivityCard`'s own elevated fill, with no border — the hatch is what reads as "not done yet" at
   a glance, not a separate muted color scheme. Its headline has the linked workout's sport icon,
   the workout's name, and the expected Load (the plan's `expectedLoadOverride`, else the estimator's
-  figure); its second line shows only the one measure the workout actually defines — distance for
-  a workout made solely of distance steps, expected duration otherwise (forecast from the athlete's
-  paces for distance and open steps, see "Pace forecasts" below) — never a converted counterpart,
-  which would put a guess next to a real figure on a small card. Plans already matched to a completed activity get no row at all
+  figure); its second line shows the expected duration and distance in the same layout and
+  monospaced digits as a completed card's, whichever the workout is defined by: what the steps
+  don't set is forecast from the athlete's paces (see "Pace forecasts" below) and marked with a "~"
+  (see "Estimated values" below), so a guess next to a real figure stays recognisable as one. The
+  distance is left out when it can't be forecast (no zone settings recorded). Plans already matched to a completed activity get no row at all
   (`WeekViewModel.pendingPlans(on:)`). Tapping it opens the planned-workout detail sheet (below).
 - **Intensity** (MVP2-43). Each card is tinted by the session's intensity — very low, low, medium or
   high, from `TrainingModel.intensity(of:)`, which classifies from sustained time in heart-rate zones
@@ -247,19 +248,55 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
   to a plan is classified against that plan (heart rate checks whether the planned hard steps were
   performed); any other activity from its heart rate alone. VoiceOver announces the category.
 - **Planned vs. actual on a linked activity's card.** Its TRIMP is followed by the plan's expected
-  TRIMP after a slash in a tertiary colour ("85 / 90"), and a third line under the duration/distance
+  TRIMP after a slash in a tertiary colour ("85 / ~90", the "~" marking an estimate, see
+  "Estimated values" below), and a third line under the duration/distance
   line shows the plan's expected duration and distance in the same layout, so each sits directly
   under the actual value it compares with. Both are shown whichever the workout is defined by: the
   other is forecast from the athlete's earlier workouts (see "Pace forecasts" below; only
-  activities before this one count), so a distance is absent when no zone settings are recorded. Monospaced digits keep the columns aligned.
+  activities before this one count), so a distance is absent when no zone settings are recorded. Monospaced digits keep the columns aligned, and both lines reserve a marker slot in front
+  of each column, clear unless the value is estimated, so a "~" never shifts a planned value off the
+  actual one above it.
 - **Missed plans.** A plan on a day before today that no completed activity matched is drawn as an
   outline only: the plain view background, a hairline secondary border, secondary text, no expected
   Load (it never became training load) and no intensity colour. A plan for today stays hatched until
   the day ends. This deliberately adds a third card state to the two above.
+- **Estimated values** (MVP2-8). A value a model made up carries a "~" directly in front of it
+  ("~65"); a measured value and a target a plan sets are shown plainly, so the marker stays rare
+  and means one thing. Three kinds of number, then: *measured* (an activity's duration, distance,
+  heart-rate TRIMP), *target* (a time-step workout's duration, a distance-step workout's distance,
+  a load the athlete typed in as `expectedLoadOverride`) and *estimated* (the estimator's planned
+  load, a duration or distance forecast from the athlete's paces, a load scored from perceived
+  effort — `LoadMethod.durationRPE` — and a projected day's fitness figures). A planned card
+  already reads as planned, so a target needs no marker there. Where it applies:
+  - Planned card: the expected Load unless overridden; the duration when the workout has distance
+    or open steps, the distance unless it's made solely of distance steps
+    (`PlannedCardSummary.isLoadEstimated`/`isDurationEstimated`/`isDistanceEstimated`).
+  - Linked activity's card: "85 / ~90", and whichever of the planned duration and distance is the
+    forecast one (`LinkedPlanExpectation`'s `is…Estimated` flags); the actual TRIMP too when it was
+    scored from perceived effort (`ActivityCardContent.isTrainingLoadEstimated`).
+  - Stats bar: the performed Load when an activity that week was scored from perceived effort; each
+    expected (performed + planned) figure when a plan's part of it is an estimate
+    (`SportStatsPage.is…Estimated`, from the same activities and plans
+    `StatisticsCalculator.periodStatsSplit` counts). The stats and daily-load caches are keyed on each
+    plan's id, date, workout and override as well as the counts, so editing an override updates the
+    totals and their marks at once.
+  - Day-row pills and the metric detail header: a projected day's values
+    (`FitnessMetrics.isProjected`). Form follows the *previous* day instead, since TSB is yesterday's
+    CTL minus ATL: today's Form is known before today's workout is done
+    (`FitnessMetrics.isFormProjected(on:in:calendar:)`).
+  - Detail sheets: the planned-workout sheet takes its duration, distance and marks from the same
+    `PlannedCardSummary` as the card (`PlannedWorkoutDetailViewModel.expected(from:)`), keeps its "Forecast" captions and adds "Estimate" under
+    an estimated load; the activity sheet explains a perceived-effort load in a footnote; the plan
+    editor's "Expected Load" carries the marker unless overridden; plan-link options mark a forecast
+    duration.
+  - Charts are left as they are: planned load bars are already muted and projected Form lines dashed.
+
+  VoiceOver says "estimated" instead of the "~" (`EstimateMarker.spoken`/`spokenForm(of:)`), or reads
+  the "Forecast"/"Estimate" caption where there is one.
 - **Apple Watch status on planned cards** (MVP2-119, `PlannedCardContent.watchStatus`). A plan the
   Watch sync sent (§3.5) shows a small Watch symbol at the trailing end of the second row, under
   the expected Load. A plan whose workout can't go
-  on the Watch shows a warning line under the duration or distance instead: an orange warning
+  on the Watch shows a warning line under the duration and distance instead: an orange warning
   symbol and the reason in secondary text, e.g. "Apple Watch doesn't support this alert for
   cycling." The detail sheet repeats the reason (§2.2, MVP2-122). Neither shows on a missed plan, or
   while the athlete has turned sending off (§2.3);
@@ -424,7 +461,8 @@ Tapping a *planned* (not-yet-completed) activity (MVP2-38) opens a small read-on
 with the reason its workout can't go on the Watch, when the plan's card shows that warning
 (MVP2-122, `PlannedWorkoutDetailViewModel.watchIncompatibility`, from the same
 `WeekViewModel.watchStatus(for:asOf:)` as the card, so the two always agree); its expected duration,
-distance and load, a forecast value marked "Forecast" and the section's footer saying how many
+distance and load, a forecast value marked with a "~" and "Forecast" (an estimated load with a "~"
+and "Estimate", MVP2-8) and the section's footer saying how many
 similar workouts it came from (see "Pace forecasts" below); and a plain step list, one line per block (`4 × Work 8:00, Recovery 400 m`).
 Richer per-step targets/zones are deferred. A pencil in the toolbar opens `PlannedWorkoutSheet` in
 edit mode (date, load override, and — for a workout built from a template, which records its template id and parameter values — those parameters, e.g. an easy run's duration; changing one instantiates a new workout for this plan and removes the old one if no other plan uses it, so a workout shared with other plans is never altered; a workout without a recorded template keeps a read-only definition), and a
@@ -448,7 +486,7 @@ median time they took in earlier runs of the same workout or template.
   resync, dedup, link, join or delete (`refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`). It
   doesn't run on week navigation, which changes the loaded weeks but not the 180-day history. The
   card and stats caches are only invalidated when the history it read is actually different.
-- The planned card's duration, a linked activity's planned line (from activities before that one
+- The planned card's duration and distance, a linked activity's planned line (from activities before that one
   only), the detail sheet and the week's planned totals all pass that history to
   `StatisticsCalculator` (`projection(for:athlete:paceHistory:before:excluding:)`,
   `periodStatsSplit(…paceHistory:)`), so they agree. With no history the figures are the pace

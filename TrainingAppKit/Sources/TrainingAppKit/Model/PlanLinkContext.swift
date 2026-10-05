@@ -12,6 +12,8 @@ public struct PlanLinkContext: Equatable {
         public let title: String
         /// The workout's headline figure (duration or distance), if known.
         public let extent: WeekViewModel.PlannedCardSummary.Extent?
+        /// Whether ``extent`` is forecast from the athlete's paces, shown with a "~" (MVP2-8).
+        public let isExtentEstimated: Bool
     }
 
     /// The plan this activity currently completes, if any.

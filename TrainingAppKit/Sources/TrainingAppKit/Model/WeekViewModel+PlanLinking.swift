@@ -59,7 +59,8 @@ extension WeekViewModel {
     private func planOption(_ plan: PlannedActivity) -> PlanLinkContext.PlanOption {
         let summary = plannedCardSummary(for: plan)
         return PlanLinkContext.PlanOption(
-            id: plan.id, title: summary.name ?? summary.sport.displayName, extent: summary.extent
+            id: plan.id, title: summary.name ?? summary.sport.displayName, extent: summary.extent,
+            isExtentEstimated: summary.isExtentEstimated
         )
     }
 }
