@@ -262,23 +262,12 @@ private struct ParameterRow: View {
         return declaredRange
     }
 
-    private var formattedValue: String {
-        switch parameter.unit {
-        case .minutes:
-            Duration.seconds(value).formatted(.time(pattern: .minuteSecond))
-        case .meters:
-            Measurement(value: value, unit: UnitLength.meters).formatted(.measurement(width: .abbreviated))
-        case .count:
-            value.formatted(.number.precision(.fractionLength(0)))
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(parameter.name)
                 Spacer()
-                Text(formattedValue)
+                Text(parameter.formatted(value))
                     .foregroundStyle(.secondary)
             }
             Slider(value: $value, in: range)

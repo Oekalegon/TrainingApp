@@ -74,11 +74,13 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 
 ### 2.0 Top-level navigation
 
-`AppTabView` is the app's root: a bottom tab bar with two tabs, "Week" (§2.1) and "Athlete"
-(§2.3) — both built from the same `WeekViewModel` instance (`AthleteView` reads it via
-`WeekViewModel.athleteViewModel`), owned by `AppTabView` and constructed once for the app's
-lifetime. `AppTabView` holds the selected tab only so the week view's Watch permission banner can
-open the Athlete tab (MVP2-117); it isn't remembered or restored across launches.
+`AppTabView` is the app's root: a bottom tab bar with three tabs, "Week" (§2.1), "Library" (§2.4,
+MVP2-21) and "Athlete" (§2.3), plus a search tab (§2.5). All are built from the same
+`WeekViewModel` instance (`AthleteView` reads it via `WeekViewModel.athleteViewModel`, the Library
+and search tabs via `WeekViewModel.workoutLibraryViewModel()` and `searchViewModel(library:)`),
+owned by `AppTabView` and constructed once for the app's lifetime, as are the Library and search
+tabs' view models. `AppTabView` holds the selected tab only so the week view's Watch permission
+banner can open the Athlete tab (MVP2-117); it isn't remembered or restored across launches.
 
 ### 2.1 Week view
 
@@ -564,6 +566,65 @@ import time and persisted, not recomputed on read, so an app update that fixes a
 `HKWorkoutActivityType` that used to fall back to `Sport.other`) doesn't retroactively fix
 activities imported before the fix. This is a recovery action, not a settings toggle — the
 profile otherwise stays read-only as described above.
+
+### 2.4 Workout library (MVP2-21)
+
+The "Library" tab (`WorkoutLibraryView`, driven by `WorkoutLibraryViewModel`) lists the workout
+templates the athlete can plan, grouped by sport in the order of `BuiltInWorkoutTemplates.all`.
+It lists templates, not `TrainingModel.workouts`: saving a planned workout instantiates a workout
+of its own (MVP2-15), so the stored workouts are per-plan copies rather than a library worth
+browsing. MVP 5's plan builder will live in this tab too.
+
+- **Row**: the sport symbol, the template's name, its default title at the default values
+  (MVP2-110, e.g. "40min Easy Run") and, once used, "Planned N times".
+- **Detail** (pushed): the parameters with their defaults and ranges, the steps at the default
+  values (the same step lines as the planned-workout detail sheet), the estimated load at the
+  default values, marked "~" (MVP2-8), and "In Your Plan": how many plans use the template and
+  the next one due that isn't done yet.
+- **Plan This Workout** opens the "Create Planned Workout" sheet (§2.1) with the template already
+  picked and today as the date. It uses the Watch setting at that moment (MVP2-118) and runs the
+  Watch sync after saving, like the week view's sheet.
+
+A template's plans are found through their workouts' `templateID`, across every plan in the store
+(`PlanStore.plans(in:)` over all dates): `TrainingModel.plans` only holds the week view's loaded
+window. The view model reloads them each time the tab appears and after a plan is saved from it.
+
+Not yet: custom workouts and editing templates (the Structured Workout creator), and the rest of
+the roadmap's 14-workout library (MVP2-106).
+
+### 2.5 Search (MVP2-21)
+
+A search tab (`Tab(role: .search)`, `SearchView` driven by `SearchViewModel`) sits apart at the
+trailing end of the tab bar on every tab and turns into the search field when tapped, as in Mail.
+Results update as the athlete types, in three sections:
+
+- **Workout Templates**: name, default title or sport (`WorkoutLibraryViewModel.entries(matching:)`);
+  a result pushes the library's template detail (§2.4).
+- **Planned Workouts**: the workout's name, sport or date; a result opens the planned-workout
+  detail sheet (§2.1). The subtitle says "Done" or "Missed", by the week view's missed rule
+  (`WeekViewModel.isMissed(_:asOf:calendar:)`), so a result and its card always agree.
+- **Activities**: sport, date, or the name of the planned workout they're linked to; a result
+  opens the activity detail (§2.2).
+
+Every typed word must match one of a result's fields, ignoring case and diacritics (`SearchQuery`);
+dates match as written in the athlete's timezone and locale ("Saturday, September 20, 2025",
+"Sep 20"), so "september" or "2025" work. Plans and activities are newest first. A blank field
+shows a prompt; no match shows the standard "No Results" view.
+
+Plans and activities are read from the stores over all dates each time the tab appears, since
+`TrainingModel` only holds the week view's window, and again when a detail sheet closes after it
+changed something (an edit, delete, link or join). Each result's searchable text, dates included,
+is written once at that reload, so typing only compares strings. A reload that finishes after a
+later one started is dropped, in this tab and the Library tab alike. Activities are kept as light
+results without their samples; the full activity is fetched when one is opened. The fetch still
+decodes every activity with its samples on the way, until TrainingKit has a summary query
+(MVP2-129).
+
+The detail sheets read `TrainingModel`, so before one opens, `WeekViewModel.ensureLoaded(around:)`
+loads the weeks around the result's day together with the displayed ones. Without that, an older
+plan's sheet wouldn't follow an edit and an older activity's sheet would miss its plan link and
+overlaps. A tap while another result is opening is ignored; an activity that can't be read shows
+an alert.
 
 ---
 

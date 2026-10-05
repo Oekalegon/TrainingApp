@@ -937,6 +937,12 @@ public final class WeekViewModel {
     /// affordance disables itself (MVP2-15) on a day this returns `true` for, rather than opening
     /// a sheet for a day that's already happened.
     public func isPast(_ day: Date, asOf today: Date = .now) -> Bool {
+        Self.isPast(day, asOf: today, calendar: calendar)
+    }
+
+    /// ``isPast(_:asOf:)`` for any `calendar`, so code without a `WeekViewModel`'s own calendar
+    /// (the search tab's missed plans, MVP2-21) applies the same rule.
+    static func isPast(_ day: Date, asOf today: Date, calendar: Calendar) -> Bool {
         calendar.startOfDay(for: day) < calendar.startOfDay(for: today)
     }
 
@@ -955,6 +961,26 @@ public final class WeekViewModel {
             model: model, date: date, scheduler: plannedWorkoutScheduler
         )
         viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
+    }
+
+    /// The view model for the Library tab (MVP2-21). A plan made from the tab uses the Watch
+    /// setting at the time (MVP2-118) and runs the Watch sync afterwards.
+    public func workoutLibraryViewModel() -> WorkoutLibraryViewModel {
+        // `nil` while sending to the Watch is off, so no fallback to the live bridge here.
+        let viewModel = WorkoutLibraryViewModel(model: model) { [weak self] in
+            guard let self else { return nil }
+            return self.plannedWorkoutScheduler
+        }
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
+    }
+
+    /// The view model for the search tab (MVP2-21), sharing `library` with the Library tab. Opening
+    /// a result first loads this model around its day (``ensureLoaded(around:asOf:)``).
+    public func searchViewModel(library: WorkoutLibraryViewModel) -> SearchViewModel {
+        let viewModel = SearchViewModel(model: model, library: library)
+        viewModel.prepareDetail = { [weak self] date in await self?.ensureLoaded(around: date) }
         return viewModel
     }
 
@@ -1050,6 +1076,20 @@ public final class WeekViewModel {
     /// for an arbitrary date rather than today's.
     public func goToWeek(containing date: Date) {
         displayedWeekStart = Self.weekStart(containing: date, calendar: calendar)
+    }
+
+    /// Loads the weeks around `date` into `model` as well as the displayed ones, so a detail sheet
+    /// opened from the search tab (MVP2-21) for a plan or activity outside the week view's window
+    /// finds its plan, workout, link and overlaps in `model`, and follows an edit made in it.
+    /// Loads the *union* with the current window, for the same reason as ``metrics(in:asOf:)``.
+    /// A failed load leaves `model` as it was, and the sheet opens anyway.
+    public func ensureLoaded(around date: Date, asOf today: Date = .now) async {
+        let range = Self.loadRange(for: Self.weekStart(containing: date, calendar: calendar), calendar: calendar)
+        let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
+        if currentLoadRange.contains(range.lowerBound), currentLoadRange.contains(range.upperBound) { return }
+        let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
+        try? await model.load(in: unionRange, asOf: today)
+        await refreshWeekCachesIfNeeded(asOf: today)
     }
 
     /// Loads ``loadRange(for:calendar:)`` for ``displayedWeekStart`` from the stores into `model`
