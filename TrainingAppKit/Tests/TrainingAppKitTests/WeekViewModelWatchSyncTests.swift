@@ -3,13 +3,13 @@ import Testing
 import TrainingCore
 @testable import TrainingAppKit
 
-/// The Watch sync runs again after anything that can link or unlink a plan (MVP2-114), as of the
+/// The Watch sync runs again after anything that can link or unlink a plan (MVP2-116), as of the
 /// action's injected day.
 ///
 /// The plan sits on day 2, which is also "today", so it's inside the 7-day window: linking decides
 /// whether it's scheduled or only kept as done.
 @MainActor
-@Suite("WeekViewModel Watch sync (MVP2-114)")
+@Suite("WeekViewModel Watch sync (MVP2-116)")
 struct WeekViewModelWatchSyncTests {
     private struct StubImporter: ActivityImporting {
         let activities: [Activity]

@@ -67,35 +67,98 @@ public final class PlannedWorkoutDetailViewModel {
     /// card shows.
     public var summary: WeekViewModel.PlannedCardSummary {
         WeekViewModel.PlannedCardSummary.make(
-            plan: plan, workout: workout, athlete: model.athlete, calculator: statisticsCalculator
+            plan: plan, workout: workout, athlete: model.athlete, calculator: statisticsCalculator,
+            history: model.paceHistory
         )
     }
 
-    /// The workout's projected duration and distance — the same projection the week's statistics use
-    /// (``StatisticsCalculator/projection(for:athlete:)``), `nil` when the workout is gone.
-    private var projection: WorkoutProjection? {
-        workout.map { statisticsCalculator.projection(for: $0, athlete: model.athlete) }
+    /// The "Expected" section's values, worked out together so the forecast runs once per read.
+    public struct Expected: Equatable, Sendable {
+        /// The workout's expected duration.
+        public let duration: TimeInterval
+        /// Its expected distance; `nil` when the athlete has no heart-rate zone settings to derive
+        /// paces from.
+        public let distanceMeters: Double?
+        /// `true` when ``duration`` is a forecast rather than the sum of the steps' times: the
+        /// workout has a distance or open step.
+        public let isDurationForecast: Bool
+        /// `true` when ``distanceMeters`` is a forecast rather than something the workout defines:
+        /// the workout isn't made solely of distance steps.
+        public let isDistanceForecast: Bool
+        /// How many earlier activities the forecast came from; `0` for the pace model alone.
+        public let activityCount: Int
+
+        /// What the forecast is based on, for the section's footer; `nil` when nothing is a forecast.
+        public var basis: String? {
+            guard isDurationForecast || isDistanceForecast else { return nil }
+            switch activityCount {
+            case 0: return "Forecast from your pace model; no similar workouts yet."
+            case 1: return "Forecast from your pace in 1 similar workout."
+            case let count: return "Forecast from your paces in \(count) similar workouts."
+            }
+        }
     }
 
-    /// The workout's estimated duration.
+    /// The workout's forecast duration and distance from the athlete's earlier, similar workouts in
+    /// `TrainingModel.paceHistory` — the same forecast as the day list's card and the week's
+    /// statistics (`StatisticsCalculator.projection(for:athlete:paceHistory:before:excluding:)`).
+    /// Reads the history live, so a history that lands while the sheet is open updates it. `nil`
+    /// when the workout is gone.
+    public var expected: Expected? {
+        guard let workout else { return nil }
+        let projection = statisticsCalculator.projection(
+            for: workout, athlete: model.athlete, paceHistory: model.paceHistory, before: plan.date
+        )
+        var hasDistanceStep = false
+        var hasOtherStep = false
+        for block in workout.blocks where block.repetitions > 0 {
+            for step in block.steps {
+                switch step.goal {
+                case .distance: hasDistanceStep = true
+                case .time, .open: hasOtherStep = true
+                }
+            }
+        }
+        let hasOpenStep = workout.blocks.contains { block in
+            block.repetitions > 0 && block.steps.contains { $0.goal == .open }
+        }
+        return Expected(
+            duration: projection.duration,
+            distanceMeters: projection.distanceMeters,
+            isDurationForecast: hasDistanceStep || hasOpenStep,
+            isDistanceForecast: projection.distanceMeters != nil && !(hasDistanceStep && !hasOtherStep),
+            activityCount: projection.matchedActivityCount
+        )
+    }
+
+    /// The workout's expected duration (see ``expected``).
     public var expectedDuration: TimeInterval? {
-        projection?.duration
+        expected?.duration
     }
 
-    /// The workout's expected distance: exact for a distance-based workout, a pace-model estimate for
-    /// a duration-based one (see ``StatisticsCalculator/projection(for:athlete:)``). `nil` when the
-    /// athlete has no heart-rate zone settings to derive paces from.
+    /// The workout's expected distance (see ``expected``).
     public var expectedDistanceMeters: Double? {
-        projection?.distanceMeters
+        expected?.distanceMeters
     }
 
-    /// `true` when ``expectedDistanceMeters`` is a pace-model estimate rather than something the
-    /// workout defines — i.e. whenever the workout isn't made solely of distance steps. The sheet
-    /// labels such a distance "Forecast".
+    /// How many earlier activities the forecast came from (see ``expected``).
+    public var forecastActivityCount: Int {
+        expected?.activityCount ?? 0
+    }
+
+    /// What the forecast is based on (see ``Expected/basis``).
+    public var forecastBasis: String? {
+        expected?.basis
+    }
+
+    /// Whether the duration is a forecast (see ``Expected/isDurationForecast``).
+    public var isDurationForecast: Bool {
+        expected?.isDurationForecast ?? false
+    }
+
+    /// Whether the distance is a forecast (see ``Expected/isDistanceForecast``).
     public var isDistanceForecast: Bool {
-        guard expectedDistanceMeters != nil else { return false }
-        if case .distance? = summary.extent { return false }
-        return true
+        expected?.isDistanceForecast ?? false
     }
 
     /// One line per block, e.g. `"Warm-up 10:00"` or `"4 × Work 8:00, Recovery 2:00"`. Empty when the

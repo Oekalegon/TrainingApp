@@ -63,7 +63,7 @@ extension WeekViewModel {
             maxHeartRateUpdateFailed = true
             return
         }
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today)
     }
 
     /// Records `suggestion`'s activity as declined, so it isn't suggested again, and dismisses

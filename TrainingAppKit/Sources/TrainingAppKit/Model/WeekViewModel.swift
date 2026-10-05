@@ -42,7 +42,7 @@ public final class WeekViewModel {
     /// via `PlannedWorkoutSheet`). The athlete is part of the key too: a changed max or resting
     /// heart rate rescores every activity's load (MVP2-56).
     @ObservationIgnored
-    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date)?
+    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int)?
 
     /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
     /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
@@ -103,6 +103,13 @@ public final class WeekViewModel {
     @ObservationIgnored
     var cardCacheCounts: [Int]?
 
+    /// Bumped whenever ``paceHistory`` is replaced, so the card and stats caches that project
+    /// workouts with it recompute. Observed, so cards on screen re-read once a history lands.
+    var paceHistoryGeneration = 0
+    /// What ``paceHistory`` was built from, for `refreshPaceHistoryIfNeeded(asOf:force:)`.
+    @ObservationIgnored
+    var paceHistoryKey: PaceHistoryKey?
+
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
     public private(set) var displayedWeekStart: Date
@@ -142,7 +149,7 @@ public final class WeekViewModel {
     ///   - maxHeartRatePromptHistory: What the athlete already said about max heart rate
     ///     suggestions; defaults to the app's `UserDefaults`-backed record.
     ///   - watchSync: Run again after anything that changes plans or their links (MVP2-55,
-    ///     MVP2-114); `nil` skips it.
+    ///     MVP2-116); `nil` skips it.
     ///   - today: The day whose week is shown first.
     public init(
         model: TrainingModel,
@@ -322,7 +329,7 @@ public final class WeekViewModel {
         let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
         try? await model.load(in: unionRange, asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today)
         return computeDailyLoadSplit(in: range, asOf: today)
     }
 
@@ -437,9 +444,10 @@ public final class WeekViewModel {
 
     /// Everything a planned activity's card shows (MVP2-37), derived from the plan and its workout.
     public struct PlannedCardSummary: Equatable, Sendable {
-        /// The one measure a workout is defined by — never both, since converting one to the other
-        /// needs a pace assumption that MVP2-35 hasn't settled yet, and showing a guess next to a
-        /// real figure would undercut it.
+        /// The one measure a workout is defined by — never both: the other one is a forecast from
+        /// the athlete's paces (see ``WeekViewModel/paceHistory``), and showing a guess next to a real
+        /// figure on the small card would undercut it. The detail sheet shows both, the forecast
+        /// labelled as such.
         public enum Extent: Equatable, Sendable {
             case duration(TimeInterval)
             case distance(meters: Double)
@@ -457,10 +465,12 @@ public final class WeekViewModel {
         /// The summary for `plan` given its `workout` (`nil` when no longer in the library). Shared by
         /// the day list's card and ``PlannedWorkoutDetailViewModel``, so both always show the same
         /// numbers. A workout made up solely of distance-goal steps gets its distance as ``extent``;
-        /// every other workout its estimated duration.
+        /// every other workout its expected duration, forecast from `history` for any distance or
+        /// open steps it has (MVP2-35, MVP2-111; see
+        /// `StatisticsCalculator.projection(for:athlete:paceHistory:before:excluding:)`).
         static func make(
             plan: PlannedActivity, workout: StructuredWorkout?, athlete: AthleteProfile,
-            calculator: StatisticsCalculator
+            calculator: StatisticsCalculator, history: PaceHistory = .empty
         ) -> PlannedCardSummary {
             guard let workout else {
                 return PlannedCardSummary(sport: .running, name: nil, load: plan.expectedLoadOverride, extent: nil)
@@ -483,27 +493,35 @@ public final class WeekViewModel {
             }
             // Requires at least one distance step, so a workout with no steps at all isn't shown as
             // "0 m".
-            let extent: Extent = sawDistanceStep && !sawOtherStep
-                ? .distance(meters: distanceMeters)
-                : .duration(calculator.durationEstimator.duration(for: workout, athlete: athlete))
+            let extent: Extent
+            if sawDistanceStep && !sawOtherStep {
+                extent = .distance(meters: distanceMeters)
+            } else {
+                let projection = calculator.projection(
+                    for: workout, athlete: athlete, paceHistory: history, before: plan.date
+                )
+                extent = .duration(projection.duration)
+            }
 
             return PlannedCardSummary(sport: workout.sport, name: workout.name, load: load, extent: extent)
         }
     }
 
     /// The card content for `plan` (MVP2-37). A workout made up solely of distance-goal steps is
-    /// shown by its distance; every other workout by its estimated duration.
+    /// shown by its distance; every other workout by its expected duration, forecast from
+    /// ``paceHistory``.
     public func plannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
         refreshCardCachesIfNeeded()
         let workout = workout(for: plan)
-        return plannedSummaryCache.value(for: plan.id, inputs: cardInputs(for: plan, workout: workout)) {
+        return plannedSummaryCache.value(for: plan.id, inputs: projectionInputs(for: plan, workout: workout)) {
             computePlannedCardSummary(for: plan)
         }
     }
 
     private func computePlannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
         PlannedCardSummary.make(
-            plan: plan, workout: workout(for: plan), athlete: model.athlete, calculator: statisticsCalculator
+            plan: plan, workout: workout(for: plan), athlete: model.athlete, calculator: statisticsCalculator,
+            history: paceHistory
         )
     }
 
@@ -544,16 +562,18 @@ public final class WeekViewModel {
     /// `model.activities`/`model.plans`/`model.workouts`' counts or `today`'s calendar day changes
     /// — any of those can shift every cached week's own figures at once, and a plan/workout can
     /// change independently of `model.activities` (e.g. saving a new planned workout via
-    /// `PlannedWorkoutSheet`).
+    /// `PlannedWorkoutSheet`). A new ``paceHistory`` invalidates it too: the planned distance and
+    /// time are forecast from it.
     public func sportStatsPages(for weekStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
         let keyIsCurrent = sportStatsPagesCachesKey.map {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
                 && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
+                && $0.paceHistoryGeneration == paceHistoryGeneration
         } ?? false
         if !keyIsCurrent {
             sportStatsPagesCaches.removeAll()
-            sportStatsPagesCachesKey = (key.0, key.1, key.2, model.athlete, today)
+            sportStatsPagesCachesKey = (key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration)
         }
         if let cached = sportStatsPagesCaches[weekStart] {
             return cached
@@ -642,7 +662,8 @@ public final class WeekViewModel {
             workouts: model.workouts,
             athlete: model.athlete,
             range: weekStart...weekEnd,
-            asOf: today
+            asOf: today,
+            paceHistory: paceHistory
         )
     }
 
@@ -710,7 +731,13 @@ public final class WeekViewModel {
     /// shows one (very briefly) outdated frame rather than a spurious empty one — never a
     /// user-visible difference in practice, since the underlying activities rarely change whichever
     /// week's own histogram they'd affect this dramatically between one frame and the next.
-    public func refreshWeekCachesIfNeeded() async {
+    ///
+    /// - Parameters:
+    ///   - today: The day the pace history is read up to (see ``refreshPaceHistoryIfNeeded(asOf:force:)``).
+    ///   - activitiesChanged: `true` after an import, resync, dedup, link, join or delete, which can
+    ///     change the stored activities the pace history is built from without anything the week
+    ///     view itself keys on changing; forces a pace-history refresh.
+    public func refreshWeekCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
         let activityCount = model.activities.count
         let inputsChanged = weekGraphCachesActivityCount != activityCount
             || weekGraphCachesAthlete != model.athlete
@@ -730,6 +757,7 @@ public final class WeekViewModel {
             && (inputsChanged || weekGraphCaches[weekStart] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
+        await refreshPaceHistoryIfNeeded(asOf: today, force: activitiesChanged)
     }
 
     /// Computes one week's heart-rate histogram off the main actor and stores it in
@@ -823,7 +851,7 @@ public final class WeekViewModel {
     }
 
     /// Runs the Watch sync (MVP2-55) after a plan is saved, deleted or imported, or a plan's link to
-    /// an activity may have changed (MVP2-114): a linked plan's entry is kept as done, and an
+    /// an activity may have changed (MVP2-116): a linked plan's entry is kept as done, and an
     /// unlinked one in the window goes back on the Watch. A no-op without a sync.
     ///
     /// - Parameter today: The action's injected day, so the sync's 7-day window matches it.
@@ -865,7 +893,7 @@ public final class WeekViewModel {
     /// guarantee), so there's nothing for the view to reconcile; MVP 1 has no load-failure UI.
     public func load(asOf today: Date = .now) async {
         try? await model.load(in: Self.loadRange(for: displayedWeekStart, calendar: calendar), asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today)
     }
 
     /// `model.metrics` restricted to `range`, in day order — for the metrics detail view's period
@@ -880,7 +908,7 @@ public final class WeekViewModel {
         let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
         try? await model.load(in: unionRange, asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today)
         return model.metrics.filter { range.contains($0.day) }.sorted { $0.day < $1.day }
     }
 
@@ -889,13 +917,13 @@ public final class WeekViewModel {
     /// (``chartRange``, assuming ``load(asOf:)`` already ran once for it), so nothing further is
     /// needed here. Failures fail silently back to the pre-refresh state (design doc §3.4).
     ///
-    /// Then requests a Watch sync (MVP2-114), since an import can link or unlink a plan. It does so
+    /// Then requests a Watch sync (MVP2-116), since an import can link or unlink a plan. It does so
     /// even when the import fails: the sync is idempotent, and still moves the window on.
     public func refresh(asOf today: Date = .now) async {
         isRefreshing = true
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
@@ -904,7 +932,7 @@ public final class WeekViewModel {
     /// then runs the same import ``refresh(asOf:)`` does. Failures fail silently, same as
     /// ``refresh(asOf:)`` — MVP 1 has no error UI, and the empty state simply stays empty.
     ///
-    /// Then requests a Watch sync (MVP2-114) once the import succeeded, since it can link plans.
+    /// Then requests a Watch sync (MVP2-116) once the import succeeded, since it can link plans.
     public func connectHealthData(asOf today: Date = .now) async {
         isRefreshing = true
         defer { isRefreshing = false }
@@ -914,7 +942,7 @@ public final class WeekViewModel {
         } catch {
             return
         }
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
@@ -926,13 +954,13 @@ public final class WeekViewModel {
     /// not recomputed on read. Failures fail silently, same as ``refresh(asOf:)`` — MVP 1 has no
     /// error UI.
     ///
-    /// Then requests a Watch sync (MVP2-114), since an import can link or unlink a plan. Like
+    /// Then requests a Watch sync (MVP2-116), since an import can link or unlink a plan. Like
     /// ``refresh(asOf:)``, it does so even when the import fails.
     public func resyncActivities(asOf today: Date = .now) async {
         isResyncing = true
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
@@ -945,12 +973,12 @@ public final class WeekViewModel {
     /// dependency. Failures fail silently, same as ``resyncActivities(asOf:)`` — MVP 1 has no
     /// error UI.
     ///
-    /// Then requests a Watch sync (MVP2-114), since the change can link or unlink a plan.
+    /// Then requests a Watch sync (MVP2-116), since the change can link or unlink a plan.
     public func deduplicateActivities(asOf today: Date = .now) async {
         isDeduplicating = true
         defer { isDeduplicating = false }
         try? await model.deduplicateActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
     }
 
