@@ -249,4 +249,17 @@ struct WeekViewModelWatchSyncTests {
         withSync.dismissWatchPermissionBanner()
         #expect(!withSync.showsWatchPermissionBanner)
     }
+
+    // MARK: Send to Apple Watch switch (MVP2-118)
+
+    @Test("the planned-workout sheets don't schedule while sending to the Watch is off")
+    func sheetsSkipSchedulingWhenTurnedOff() async throws {
+        let scheduler = FakeScheduler()
+        let (viewModel, _, _) = try await makeViewModel(scheduler: scheduler)
+        #expect(viewModel.plannedWorkoutScheduler is FakeScheduler)
+
+        await viewModel.watchSync?.setEnabled(false, asOf: today).value
+
+        #expect(viewModel.plannedWorkoutScheduler == nil)
+    }
 }

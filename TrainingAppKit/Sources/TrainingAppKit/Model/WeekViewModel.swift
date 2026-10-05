@@ -817,7 +817,9 @@ public final class WeekViewModel {
     /// The view model for the "Create Planned Workout" sheet (MVP2-15), opened from a day row's
     /// add affordance — `date` defaults the sheet to that day, still editable inside it.
     public func plannedWorkoutSheetViewModel(date: Date) -> PlannedWorkoutSheetViewModel {
-        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: date)
+        let viewModel = PlannedWorkoutSheetViewModel(
+            model: model, date: date, scheduler: plannedWorkoutScheduler
+        )
         viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
         return viewModel
     }
@@ -845,9 +847,20 @@ public final class WeekViewModel {
 
     /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
     public func plannedWorkoutDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
-        let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan)
+        let viewModel = PlannedWorkoutDetailViewModel(
+            model: model, plan: plan, scheduler: plannedWorkoutScheduler
+        )
         viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
         return viewModel
+    }
+
+    /// What the planned-workout sheets schedule a saved plan with: the Watch sync's scheduler, or
+    /// none while the athlete has turned sending to the Watch off (MVP2-118), so a save neither
+    /// checks the workout against the Watch nor schedules it. Without a sync (WorkoutKit
+    /// unavailable, or a test that didn't pass one) it's the default, as before.
+    var plannedWorkoutScheduler: (any PlannedWorkoutScheduling)? {
+        guard let watchSync else { return PlannedWorkoutSchedulers.live }
+        return watchSync.editingScheduler
     }
 
     /// Runs the Watch sync (MVP2-55) after a plan is saved, deleted or imported, or a plan's link to
