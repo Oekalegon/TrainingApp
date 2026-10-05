@@ -95,6 +95,8 @@ extension WeekViewModel {
     /// on success rather than looking as if a refused join (pieces of different sports, or one
     /// already joined elsewhere) had worked.
     ///
+    /// Then requests a Watch sync (MVP2-114), since the change can link or unlink a plan.
+    ///
     /// - Returns: `true` if the activities were joined.
     @discardableResult
     public func joinActivities(_ activity: Activity, with other: Activity, asOf today: Date = .now) async -> Bool {
@@ -104,11 +106,13 @@ extension WeekViewModel {
             return false
         }
         await refreshWeekCachesIfNeeded()
-        requestWatchSync()
+        requestWatchSync(asOf: today)
         return true
     }
 
     /// Splits the joined `activity` back into the pieces it was built from (MVP1-80).
+    ///
+    /// Then requests a Watch sync (MVP2-114), since the change can link or unlink a plan.
     ///
     /// - Returns: `true` if the activity was unjoined.
     @discardableResult
@@ -119,7 +123,7 @@ extension WeekViewModel {
             return false
         }
         await refreshWeekCachesIfNeeded()
-        requestWatchSync()
+        requestWatchSync(asOf: today)
         return true
     }
 
@@ -133,6 +137,8 @@ extension WeekViewModel {
     /// overlap — e.g. a bad HealthKit import the athlete just wants gone, not something
     /// ``TrainingModel/overlapAdvice`` flagged. The view gates this behind its own confirmation
     /// alert before calling it; this method itself performs the delete unconditionally.
+    ///
+    /// Then requests a Watch sync (MVP2-114), since the change can link or unlink a plan.
     public func deleteActivity(_ activity: Activity, asOf today: Date = .now) async {
         await deleteActivity(id: activity.id, asOf: today)
     }
@@ -144,6 +150,6 @@ extension WeekViewModel {
     private func deleteActivity(id: UUID, asOf today: Date) async {
         try? await model.deleteActivity(id: id, asOf: today)
         await refreshWeekCachesIfNeeded()
-        requestWatchSync()
+        requestWatchSync(asOf: today)
     }
 }

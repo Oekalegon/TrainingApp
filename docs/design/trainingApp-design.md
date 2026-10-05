@@ -580,8 +580,9 @@ the foreground, which also moves the window on after midnight.
   since the next sync catches anything left behind.
 
 Not done yet: a banner when permission is denied (MVP2-115), a settings switch (MVP2-116), a
-"sent to Watch" mark on plan cards (MVP2-117), and linking an imported workout to its plan by the
-plan id it was started from (MVP2-118).
+"sent to Watch" mark on plan cards (MVP2-117), linking an imported workout to its plan by the
+plan id it was started from (MVP2-118), and HealthKit background delivery, so a workout done while
+the app is closed is imported and linked without a pull-to-refresh (MVP2-119).
 
 ---
 

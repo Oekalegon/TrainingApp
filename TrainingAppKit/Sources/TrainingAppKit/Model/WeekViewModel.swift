@@ -15,7 +15,11 @@ public final class WeekViewModel {
     /// Keeps the Watch's scheduled workouts in step with the plans (MVP2-55); `nil` in tests and
     /// where WorkoutKit isn't available.
     let watchSync: WatchScheduleSync?
-    /// The Watch sync ``requestWatchSync()`` last started, so tests can wait for it.
+    /// The Watch sync ``requestWatchSync(asOf:)`` last started, so tests can wait for it.
+    ///
+    /// When a request lands while a sync is already running, this becomes a task that finishes at
+    /// once, and the running sync does the extra round on its own; so wait on it only after a single
+    /// request.
     @ObservationIgnored
     private(set) var pendingWatchSync: Task<Void, Never>?
     private let refresher: any ActivityRefreshing
@@ -821,9 +825,11 @@ public final class WeekViewModel {
     /// Runs the Watch sync (MVP2-55) after a plan is saved, deleted or imported, or a plan's link to
     /// an activity may have changed (MVP2-114): a linked plan's entry is kept as done, and an
     /// unlinked one in the window goes back on the Watch. A no-op without a sync.
-    func requestWatchSync() {
+    ///
+    /// - Parameter today: The action's injected day, so the sync's 7-day window matches it.
+    func requestWatchSync(asOf today: Date = .now) {
         guard let watchSync else { return }
-        pendingWatchSync = watchSync.requestSync()
+        pendingWatchSync = watchSync.requestSync(asOf: today)
     }
 
     /// The view model for the athlete account screen, presented from the week view's toolbar.
@@ -882,18 +888,23 @@ public final class WeekViewModel {
     /// already reloads `activities` and recomputes `metrics` for whatever range was last loaded
     /// (``chartRange``, assuming ``load(asOf:)`` already ran once for it), so nothing further is
     /// needed here. Failures fail silently back to the pre-refresh state (design doc §3.4).
+    ///
+    /// Then requests a Watch sync (MVP2-114), since an import can link or unlink a plan. It does so
+    /// even when the import fails: the sync is idempotent, and still moves the window on.
     public func refresh(asOf today: Date = .now) async {
         isRefreshing = true
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
-        requestWatchSync()
+        requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
     /// The empty-state "Connect Health data" action (design doc §2.1): requests authorization,
     /// then runs the same import ``refresh(asOf:)`` does. Failures fail silently, same as
     /// ``refresh(asOf:)`` — MVP 1 has no error UI, and the empty state simply stays empty.
+    ///
+    /// Then requests a Watch sync (MVP2-114) once the import succeeded, since it can link plans.
     public func connectHealthData(asOf today: Date = .now) async {
         isRefreshing = true
         defer { isRefreshing = false }
@@ -904,7 +915,7 @@ public final class WeekViewModel {
             return
         }
         await refreshWeekCachesIfNeeded()
-        requestWatchSync()
+        requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -914,12 +925,15 @@ public final class WeekViewModel {
     /// already imported before the fix — `Sport` is resolved once at import time and persisted,
     /// not recomputed on read. Failures fail silently, same as ``refresh(asOf:)`` — MVP 1 has no
     /// error UI.
+    ///
+    /// Then requests a Watch sync (MVP2-114), since an import can link or unlink a plan. Like
+    /// ``refresh(asOf:)``, it does so even when the import fails.
     public func resyncActivities(asOf today: Date = .now) async {
         isResyncing = true
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
-        requestWatchSync()
+        requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -930,12 +944,14 @@ public final class WeekViewModel {
     /// rather than `refresher`, since this is a plain store cleanup with no `ActivityImporting`
     /// dependency. Failures fail silently, same as ``resyncActivities(asOf:)`` — MVP 1 has no
     /// error UI.
+    ///
+    /// Then requests a Watch sync (MVP2-114), since the change can link or unlink a plan.
     public func deduplicateActivities(asOf today: Date = .now) async {
         isDeduplicating = true
         defer { isDeduplicating = false }
         try? await model.deduplicateActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
-        requestWatchSync()
+        requestWatchSync(asOf: today)
     }
 
     static func calendar(for athlete: AthleteProfile) -> Calendar {
