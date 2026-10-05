@@ -74,7 +74,7 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 
 ### 2.0 Top-level navigation
 
-`AppTabView` is the app's root: a bottom tab bar with three tabs plus, from the Library tab, a search tab (§2.4), "Week" (§2.1), "Library"
+`AppTabView` is the app's root: a bottom tab bar with three tabs plus a search tab (§2.5), "Week" (§2.1), "Library"
 (§2.4, MVP2-21) and "Athlete" (§2.3) — all built from the same `WeekViewModel` instance
 (`AthleteView` reads it via `WeekViewModel.athleteViewModel`, the Library tab via
 `WeekViewModel.workoutLibraryViewModel()`), owned by `AppTabView` and constructed once for the
@@ -584,20 +584,34 @@ browsing. MVP 5's plan builder will live in this tab too.
   picked and today as the date. It uses the Watch setting at that moment (MVP2-118) and runs the
   Watch sync after saving, like the week view's sheet.
 
-**Search**: a separate search tab (`Tab(role: .search)`) sits apart at the trailing end of the
-tab bar and turns into the search field when tapped, as in Mail. It searches only the workout
-templates, so it appears only while the Library tab (or its own results) is open; Week and
-Athlete hide it. Results update as the athlete
-types (`WorkoutLibraryViewModel.sections(matching:)`): a template matches when its name, default
-title or sport contains every typed word, ignoring case and diacritics; an empty field shows the
-whole library, and no match shows the standard "No Results" view. Results push the same detail.
-
 A template's plans are found through their workouts' `templateID`, across every plan in the store
 (`PlanStore.plans(in:)` over all dates): `TrainingModel.plans` only holds the week view's loaded
 window. The view model reloads them each time the tab appears and after a plan is saved from it.
 
 Not yet: custom workouts and editing templates (the Structured Workout creator), and the rest of
 the roadmap's 14-workout library (MVP2-106).
+
+### 2.5 Search (MVP2-21)
+
+A search tab (`Tab(role: .search)`, `SearchView` driven by `SearchViewModel`) sits apart at the
+trailing end of the tab bar on every tab and turns into the search field when tapped, as in Mail.
+Results update as the athlete types, in three sections:
+
+- **Workout Templates**: name, default title or sport (`WorkoutLibraryViewModel.entries(matching:)`);
+  a result pushes the library's template detail (§2.4).
+- **Planned Workouts**: the workout's name, sport or date; a result opens the planned-workout
+  detail sheet (§2.1). Done plans say so.
+- **Activities**: sport, date, or the name of the planned workout they're linked to; a result
+  opens the activity detail (§2.2).
+
+Every typed word must match one of a result's fields, ignoring case and diacritics (`SearchQuery`);
+dates match as written in the athlete's timezone and locale ("Saturday, September 20, 2025",
+"Sep 20"), so "september" or "2025" work. Plans and activities are newest first. A blank field
+shows a prompt; no match shows the standard "No Results" view.
+
+Plans and activities are read from the stores over all dates each time the tab appears and after a
+detail sheet closes, since `TrainingModel` only holds the week view's window. Activities are kept
+as light results without their samples; the full activity is fetched when one is opened.
 
 ---
 

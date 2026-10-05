@@ -112,22 +112,7 @@ public final class WorkoutLibraryViewModel {
     ///
     /// - Parameter today: Decides which plans count as upcoming for ``Entry/nextPlannedDate``.
     public func sections(asOf today: Date = .now) -> [SportSection] {
-        sections(matching: "", asOf: today)
-    }
-
-    /// The templates matching `query`, grouped as in ``sections(asOf:)``, for the search tab's
-    /// instant results. A template matches when its name, its default title or its sport's name
-    /// contains every word of `query`, ignoring case and diacritics; an empty query matches all.
-    ///
-    /// - Parameters:
-    ///   - query: What the athlete typed.
-    ///   - today: Decides which plans count as upcoming for ``Entry/nextPlannedDate``.
-    public func sections(matching query: String, asOf today: Date = .now) -> [SportSection] {
-        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
-        let entries = self.entries(asOf: today).filter { entry in
-            let haystacks = [entry.template.name, entry.defaultTitle, entry.template.sport.displayName]
-            return words.allSatisfy { word in haystacks.contains { $0.localizedStandardContains(word) } }
-        }
+        let entries = self.entries(asOf: today)
         var sports: [Sport] = []
         for entry in entries where !sports.contains(entry.template.sport) {
             sports.append(entry.template.sport)
@@ -135,6 +120,20 @@ public final class WorkoutLibraryViewModel {
         return sports.map { sport in
             SportSection(sport: sport, entries: entries.filter { $0.template.sport == sport })
         }
+    }
+
+    /// The entries matching `query`, in ``templates``' order, for the search tab (MVP2-21). A
+    /// template matches when its name, its default title or its sport's name contains every word
+    /// of `query`, ignoring case and diacritics; an empty query matches all.
+    ///
+    /// - Parameters:
+    ///   - query: What the athlete typed.
+    ///   - today: Decides which plans count as upcoming for ``Entry/nextPlannedDate``.
+    public func entries(matching query: String, asOf today: Date = .now) -> [Entry] {
+        let search = SearchQuery(query)
+        let entries = self.entries(asOf: today)
+        guard !search.isEmpty else { return entries }
+        return entries.filter { search.matches([$0.template.name, $0.defaultTitle, $0.template.sport.displayName]) }
     }
 
     /// Every template's entry, in ``templates``' order.

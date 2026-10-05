@@ -10,41 +10,23 @@ struct WorkoutLibraryView: View {
 
     var body: some View {
         NavigationStack {
-            WorkoutLibraryList(viewModel: viewModel, query: "")
+            WorkoutLibraryList(viewModel: viewModel)
                 .navigationTitle("Library")
         }
     }
 }
 
-/// The search tab (design doc §2.4): instant results from the workout templates as the athlete
-/// types in the tab bar's search field, which `AppTabView` attaches with `.searchable` and shows
-/// only from the Library tab. With an empty field it shows every template, like the Library tab.
-struct WorkoutSearchView: View {
-    let viewModel: WorkoutLibraryViewModel
-    let query: String
-
-    var body: some View {
-        NavigationStack {
-            WorkoutLibraryList(viewModel: viewModel, query: query)
-                .navigationTitle("Search")
-        }
-    }
-}
-
-/// The templates matching `query`, grouped by sport, each pushing ``WorkoutTemplateDetailView`` —
-/// shared by the Library and search tabs, inside their own `NavigationStack`s.
+/// Every template, grouped by sport, each pushing ``WorkoutTemplateDetailView``.
 private struct WorkoutLibraryList: View {
     let viewModel: WorkoutLibraryViewModel
-    let query: String
 
     var body: some View {
-        let sections = viewModel.sections(matching: query)
         List {
             if let loadError = viewModel.loadError {
                 Text(loadError)
                     .foregroundStyle(.secondary)
             }
-            ForEach(sections) { section in
+            ForEach(viewModel.sections()) { section in
                 Section(section.sport.displayName) {
                     ForEach(section.entries) { entry in
                         NavigationLink(value: entry.id) {
@@ -52,11 +34,6 @@ private struct WorkoutLibraryList: View {
                         }
                     }
                 }
-            }
-        }
-        .overlay {
-            if sections.isEmpty, !query.isEmpty {
-                ContentUnavailableView.search(text: query)
             }
         }
         #if os(iOS)
@@ -72,8 +49,9 @@ private struct WorkoutLibraryList: View {
     }
 }
 
-/// One template's row: its sport symbol, name, default title and how often it's planned.
-private struct WorkoutTemplateRow: View {
+/// One template's row: its sport symbol, name, default title and how often it's planned. Also
+/// used for the search tab's template results.
+struct WorkoutTemplateRow: View {
     let entry: WorkoutLibraryViewModel.Entry
 
     var body: some View {

@@ -61,7 +61,7 @@ struct WorkoutLibraryViewModelTests {
         let (_, model) = await makeModel()
         let viewModel = makeViewModel(model: model)
         func ids(_ query: String) -> [UUID] {
-            viewModel.sections(matching: query, asOf: day(0)).flatMap(\.entries).map(\.id)
+            viewModel.entries(matching: query, asOf: day(0)).map(\.id)
         }
 
         #expect(ids("") == BuiltInWorkoutTemplates.all.map(\.id))
@@ -72,7 +72,6 @@ struct WorkoutLibraryViewModelTests {
         // By sport.
         #expect(ids("running").count == BuiltInWorkoutTemplates.all.count)
         #expect(ids("swim").isEmpty)
-        #expect(viewModel.sections(matching: "swim", asOf: day(0)).isEmpty)
     }
 
     @Test("an entry has the default title, the default steps and an estimated load")
