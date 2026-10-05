@@ -18,24 +18,30 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later)
 - [ ] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`)
 - [ ] **MVP2-54** Check that the stats values (stats bar, daily-load chart, CTL/ATL/TSB pills) update **immediately** when a planned or completed activity is added or deleted, without switching weeks; MVP2-53 found the same staleness for plan links. Also confirm that missed planned workouts are not counted anywhere. Add tests for any gap found.
-- [ ] **MVP2-55** Register planned workouts for the coming days in Apple Fitness, so each structured workout is available on the Watch on the day it's due, ideally first in the list.
+- [x] **MVP2-55** Register planned workouts for the coming days in Apple Fitness, so each structured workout is available on the Watch on the day it's due, ideally first in the list. (done 2026-10-04, TrainingKit#74, #80; follow-ups MVP2-114 to MVP2-118)
   - [x] ~~Today a workout is scheduled only once, when its plan is saved (MVP2-15/39), through `WorkoutKitBridge.schedule`. Its doc says callers should schedule lazily within the ±7-day window the Watch shows, but nothing does that yet.~~ No longer true: `WatchScheduleSync` keeps the 7-day window scheduled (2026-10-04, #80).
   - [x] Needed: a rolling sync, on launch or foreground, that schedules plans in the window, keeps within `WorkoutScheduler`'s scheduled-workout limit, and unschedules entries for plans that moved or were deleted. (done 2026-10-04, #80)
   - [x] ~~**No duplicates:**~~ superseded by per-plan ids (TrainingKit#74): each entry carries its plan's id, so scheduling a plan again replaces its entry. Was: before scheduling, check `WorkoutScheduler.shared.scheduledWorkouts`. Skip a plan whose workout is already scheduled that day, matching by `workoutKitID` and also by equivalent steps, in case the same workout was added under another id.
-  - Find out whether WorkoutKit lets us control the order in the Workout app's list.
+  - [x] Find out whether WorkoutKit lets us control the order in the Workout app's list. Not needed: the Workout app lists scheduled workouts by date, like a calendar (checked on device 2026-10-05).
 - [x] **MVP2-112** MVP2-55 (app): adopt per-plan Watch scheduling from TrainingKit. (done 2026-10-04, #80; the cleanup runs on every sync, not just once)
   - [x] Update callers: `unschedule(_:workout:calendar:)` becomes `unschedule(_:)`.
   - [x] Moving a plan or editing its workout now needs only `schedule`; remove the `unschedule` call before it.
   - [x] After upgrading, call `unscheduleAll(except:)` once with every plan ID in the store, so entries scheduled under the old IDs leave the Watch.
   - [x] Replace `sync(_:)` with `customWorkout(from:)` (via `PlannedWorkoutScheduling.validate`).
-- [ ] **MVP2-113** MVP2-55 (app): keep the Watch in sync with the plans. Builds on MVP2-112.
+- [x] **MVP2-113** MVP2-55 (app): keep the Watch in sync with the plans. Builds on MVP2-112. (done 2026-10-05, #80; the rest moved to MVP2-114 to MVP2-118)
   - [x] Re-sync when the app opens or becomes active again: `WatchScheduleSync` puts the next 7 days on the Watch (2026-10-04, #80).
   - [x] Re-sync after a plan is saved, deleted or imported from a calendar (2026-10-04, #80).
-  - Re-sync after plan linking, after a HealthKit workout arrives, and on background refresh.
-  - [x] Ask for Watch permission (on the first sync with a plan to send, 2026-10-04, #80). Still to do: a banner when it's denied.
+  - [x] Re-sync on background refresh (works, checked on device 2026-10-05).
+  - Re-sync after plan linking and after a HealthKit workout arrives: moved to MVP2-114.
+  - [x] Ask for Watch permission (on the first sync with a plan to send, 2026-10-04, #80). A banner when it's denied: moved to MVP2-115.
   - [x] Turn it on by default (2026-10-04, #80): it runs whenever permission is granted.
-  - A settings switch to turn it off.
-  - A "sent to Watch" mark on plan cards.
+  - A settings switch to turn it off: moved to MVP2-116.
+  - A "sent to Watch" mark on plan cards: moved to MVP2-117.
+- [ ] **MVP2-114** Re-run the Watch sync (`WatchScheduleSync.requestSync()`) after a plan is linked to or unlinked from an activity, and after a HealthKit workout arrives (import or background delivery), so a done plan's entry is kept and the window stays current. Today it runs on becoming active and after a plan is saved, deleted or imported from a calendar (MVP2-113).
+- [ ] **MVP2-115** A dismissible banner when WorkoutKit permission is denied, explaining that planned workouts won't reach the Watch and how to allow it in Settings; the same kind of banner the roadmap describes for revoked HealthKit access.
+- [ ] **MVP2-116** A settings switch, "Send planned workouts to Apple Watch", on by default. Turning it off stops `WatchScheduleSync` and removes the app's scheduled entries; turning it on asks for permission if needed and syncs. Hide it when the device can't schedule workouts (`WorkoutScheduler.isSupported`).
+- [ ] **MVP2-117** A "sent to Watch" mark on planned-workout cards for plans that are on the Watch, and a warning on a plan whose workout can't go on the Watch, with the reason ("Watch doesn't support this alert for cycling", from `validate`).
+- [ ] **MVP2-118** Link an imported HealthKit workout to its plan by the `WorkoutPlan` id it was started from: with per-plan ids that id is the `PlannedActivity`'s, so it's an exact match ahead of `PlanReconciler`'s same-day heuristic. Needs TrainingKit work (the importer reads the plan id and carries it on `Activity`). The research note counts this as part of MVP2-55 (TrainingKit `docs/research/mvp2-55-workoutkit-scheduling.md` §4.4).
 - [ ] **MVP2-?** `Goal` model: a non-event target (e.g. "sub-20 5k") with no date and no calendar presence
 - [ ] **MVP2-?** Structured Workout creator: create, edit, duplicate
 - [ ] **MVP2-?** Extend `SessionType` to match the 14-workout library
