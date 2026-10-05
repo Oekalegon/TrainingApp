@@ -261,7 +261,8 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
   the expected Load. A plan whose workout can't go
   on the Watch shows a warning line under the duration or distance instead: an orange warning
   symbol and the reason in secondary text, e.g. "Apple Watch doesn't support this alert for
-  cycling." Neither shows on a missed plan, or while the athlete has turned sending off (§2.3);
+  cycling." The detail sheet repeats the reason (§2.2, MVP2-122). Neither shows on a missed plan, or
+  while the athlete has turned sending off (§2.3);
   VoiceOver reads them as "on Apple Watch" or "can't go on Apple Watch: …". Both come from the
   last sync, looked up per card (`WeekViewModel.watchStatus(for:)`), so the cards redraw after
   each sync without touching the card caches.
@@ -419,7 +420,10 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   (MVP1-64) and won't reappear on the next resync either way.
 
 Tapping a *planned* (not-yet-completed) activity (MVP2-38) opens a small read-only sheet
-(`PlannedWorkoutDetailSheet`): the workout's sport icon, name and date; its expected duration,
+(`PlannedWorkoutDetailSheet`): the workout's sport icon, name and date; an "Apple Watch" section
+with the reason its workout can't go on the Watch, when the plan's card shows that warning
+(MVP2-122, `PlannedWorkoutDetailViewModel.watchIncompatibility`, from the same
+`WeekViewModel.watchStatus(for:asOf:)` as the card, so the two always agree); its expected duration,
 distance and load, a forecast value marked "Forecast" and the section's footer saying how many
 similar workouts it came from (see "Pace forecasts" below); and a plain step list, one line per block (`4 × Work 8:00, Recovery 400 m`).
 Richer per-step targets/zones are deferred. A pencil in the toolbar opens `PlannedWorkoutSheet` in

@@ -321,4 +321,38 @@ struct WeekViewModelWatchSyncTests {
 
         #expect(viewModel.plannedCardContent(for: upcoming, asOf: today).watchStatus == nil)
     }
+
+    // MARK: Detail sheet (MVP2-122)
+
+    @Test("the detail sheet shows the same reason as the card for a workout that can't go on the Watch")
+    func detailSheetShowsUnsupportedReason() async throws {
+        let scheduler = FakeScheduler(invalidWorkoutIDs: [UUID()])
+        let (viewModel, upcoming, missed) = try await makeCardViewModel(scheduler: scheduler)
+
+        #expect(
+            viewModel.plannedWorkoutDetailViewModel(for: upcoming, asOf: today).watchIncompatibility
+                == FakeScheduler.unsupportedReason
+        )
+        // Like the card: nothing on a missed plan.
+        #expect(viewModel.plannedWorkoutDetailViewModel(for: missed, asOf: today).watchIncompatibility == nil)
+    }
+
+    @Test("the detail sheet shows no reason for a workout that can go on the Watch")
+    func detailSheetShowsNothingWhenSupported() async throws {
+        let (viewModel, upcoming, _) = try await makeCardViewModel(scheduler: FakeScheduler())
+
+        #expect(viewModel.plannedWorkoutDetailViewModel(for: upcoming, asOf: today).watchIncompatibility == nil)
+    }
+
+    @Test("the detail sheet shows no reason while sending to the Watch is off")
+    func detailSheetShowsNothingWhenTurnedOff() async throws {
+        let scheduler = FakeScheduler(invalidWorkoutIDs: [UUID()])
+        let (viewModel, upcoming, _) = try await makeCardViewModel(scheduler: scheduler)
+        let detail = viewModel.plannedWorkoutDetailViewModel(for: upcoming, asOf: today)
+        #expect(detail.watchIncompatibility != nil)
+
+        await viewModel.watchSync?.setEnabled(false, asOf: today).value
+
+        #expect(detail.watchIncompatibility == nil)
+    }
 }

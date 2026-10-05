@@ -52,26 +52,37 @@ extension WeekViewModel {
 
     /// The card content for a planned activity, with `today` deciding whether it was missed.
     public func plannedCardContent(for plan: PlannedActivity, asOf today: Date = .now) -> PlannedCardContent {
-        let isMissed = plan.completedActivityID == nil && isPast(plan.date, asOf: today)
-        return PlannedCardContent(
+        PlannedCardContent(
             summary: plannedCardSummary(for: plan),
             intensity: intensity(for: plan),
-            isMissed: isMissed,
-            watchStatus: isMissed ? nil : watchStatus(for: plan)
+            isMissed: isMissed(plan, asOf: today),
+            watchStatus: watchStatus(for: plan, asOf: today)
         )
     }
 
-    /// `plan`'s Apple Watch status (MVP2-119), from what the last Watch sync found: a warning when
-    /// its workout can't go on the Watch, else the mark when the sync sent it. `nil` without a sync
-    /// or while the athlete has turned sending off (MVP2-118), since the Watch doesn't matter then.
+    /// `plan`'s Apple Watch status (MVP2-119): a warning when its workout can't go on the Watch,
+    /// else the mark when the last Watch sync sent it. The planned card and the planned-workout
+    /// detail sheet (MVP2-122) both show it from here. `nil` on a missed or done plan, without a
+    /// sync, or while the athlete has turned sending off (MVP2-118), since the Watch doesn't matter
+    /// then.
     ///
     /// Two dictionary and set lookups, cheap enough for the card closures the week swipe calls on
     /// every frame; reading the sync's observed properties redraws the cards after each sync.
-    func watchStatus(for plan: PlannedActivity) -> PlannedWatchStatus? {
+    ///
+    /// - Parameters:
+    ///   - plan: The plan to look up.
+    ///   - today: Decides whether `plan` was missed.
+    func watchStatus(for plan: PlannedActivity, asOf today: Date = .now) -> PlannedWatchStatus? {
+        guard plan.completedActivityID == nil, !isMissed(plan, asOf: today) else { return nil }
         guard let watchSync, watchSync.isEnabled else { return nil }
         if let reason = watchSync.unsupportedWorkouts[plan.workoutID] {
             return .unsupported(reason: reason)
         }
         return watchSync.sentPlanIDs.contains(plan.id) ? .onWatch : nil
+    }
+
+    /// Whether `plan`'s day has passed without a completed activity matching it.
+    private func isMissed(_ plan: PlannedActivity, asOf today: Date) -> Bool {
+        plan.completedActivityID == nil && isPast(plan.date, asOf: today)
     }
 }

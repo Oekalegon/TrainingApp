@@ -2,10 +2,10 @@ import SwiftUI
 import TrainingCore
 
 /// The sheet shown when a planned activity's card is tapped (MVP2-38): a read-only summary of the
-/// workout — name, sport, date, expected duration/distance/load, a plain step list — with a pencil
-/// that opens ``PlannedWorkoutSheet`` in edit mode and a Delete button at the bottom behind a
-/// confirmation alert. Own `NavigationStack`, icon-only toolbar buttons, matching
-/// `PlannedWorkoutSheet`'s conventions.
+/// workout — name, sport, date, why it can't go on the Apple Watch if it can't (MVP2-122), expected
+/// duration/distance/load, a plain step list — with a pencil that opens ``PlannedWorkoutSheet`` in
+/// edit mode and a Delete button at the bottom behind a confirmation alert. Own `NavigationStack`,
+/// icon-only toolbar buttons, matching `PlannedWorkoutSheet`'s conventions.
 struct PlannedWorkoutDetailSheet: View {
     @State private var viewModel: PlannedWorkoutDetailViewModel
     @Environment(\.dismiss) private var dismiss
@@ -48,6 +48,18 @@ struct PlannedWorkoutDetailSheet: View {
                             Text(dateText)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // MVP2-122: the reason the plan's card shows, spelled out where there's room.
+                if let reason = viewModel.watchIncompatibility {
+                    Section("Apple Watch") {
+                        Label {
+                            Text(reason)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
                         }
                     }
                 }
