@@ -262,4 +262,63 @@ struct WeekViewModelWatchSyncTests {
 
         #expect(viewModel.plannedWorkoutScheduler == nil)
     }
+
+    // MARK: Card status (MVP2-119)
+
+    /// A week view model with an unlinked plan tomorrow and one yesterday, both of the same
+    /// workout, and a Watch sync that has run once.
+    private func makeCardViewModel(
+        scheduler: FakeScheduler
+    ) async throws -> (WeekViewModel, upcoming: PlannedActivity, missed: PlannedActivity) {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store
+        )
+        let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
+        let workout = StructuredWorkout(
+            id: scheduler.invalidWorkoutIDs.first ?? UUID(),
+            name: "Steady", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800))])]
+        )
+        try await model.add(workout, asOf: today)
+        let upcoming = PlannedActivity(workoutID: workout.id, date: day(3))
+        let missed = PlannedActivity(workoutID: workout.id, date: day(1))
+        try await model.add(upcoming, asOf: today)
+        try await model.add(missed, asOf: today)
+        try await model.load(in: day(0)...day(6), asOf: today)
+        let sync = WatchScheduleSync(model: model, scheduler: scheduler, defaults: scratch.defaults)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), watchSync: sync, today: today)
+        await sync.sync(asOf: today)
+        return (viewModel, upcoming, missed)
+    }
+
+    @Test("an upcoming plan the sync sent shows the Watch mark; a missed one shows nothing")
+    func cardShowsOnWatch() async throws {
+        let (viewModel, upcoming, missed) = try await makeCardViewModel(scheduler: FakeScheduler())
+
+        #expect(viewModel.plannedCardContent(for: upcoming, asOf: today).watchStatus == .onWatch)
+        #expect(viewModel.plannedCardContent(for: missed, asOf: today).watchStatus == nil)
+    }
+
+    @Test("a plan whose workout can't go on the Watch shows the reason, unless it was missed")
+    func cardShowsUnsupportedReason() async throws {
+        let scheduler = FakeScheduler(invalidWorkoutIDs: [UUID()])
+        let (viewModel, upcoming, missed) = try await makeCardViewModel(scheduler: scheduler)
+
+        #expect(
+            viewModel.plannedCardContent(for: upcoming, asOf: today).watchStatus
+                == .unsupported(reason: FakeScheduler.unsupportedReason)
+        )
+        #expect(viewModel.plannedCardContent(for: missed, asOf: today).watchStatus == nil)
+    }
+
+    @Test("no Watch status on the cards while sending is turned off")
+    func cardShowsNothingWhenTurnedOff() async throws {
+        let (viewModel, upcoming, _) = try await makeCardViewModel(scheduler: FakeScheduler())
+
+        await viewModel.watchSync?.setEnabled(false, asOf: today).value
+
+        #expect(viewModel.plannedCardContent(for: upcoming, asOf: today).watchStatus == nil)
+    }
 }

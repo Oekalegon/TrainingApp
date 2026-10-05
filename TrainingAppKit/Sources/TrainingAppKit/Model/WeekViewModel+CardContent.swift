@@ -26,6 +26,18 @@ extension WeekViewModel {
         /// Whether the plan's day has passed without a completed activity matching it: drawn as an
         /// outlined card with secondary text and no expected load — planned but didn't happen.
         public let isMissed: Bool
+        /// Whether the plan is on the Apple Watch, or why its workout can't go there (MVP2-119);
+        /// `nil` for neither, and always `nil` on a missed plan.
+        public let watchStatus: PlannedWatchStatus?
+    }
+
+    /// A planned card's Apple Watch status (MVP2-119).
+    public enum PlannedWatchStatus: Equatable {
+        /// The Watch sync put the plan on the Watch: a small Watch mark on the card.
+        case onWatch
+        /// The plan's workout can't go on the Watch, with the reason, e.g. "Apple Watch doesn't
+        /// support this alert for cycling.": a warning line on the card.
+        case unsupported(reason: String)
     }
 
     /// The card content for a completed `activity`.
@@ -40,10 +52,26 @@ extension WeekViewModel {
 
     /// The card content for a planned activity, with `today` deciding whether it was missed.
     public func plannedCardContent(for plan: PlannedActivity, asOf today: Date = .now) -> PlannedCardContent {
-        PlannedCardContent(
+        let isMissed = plan.completedActivityID == nil && isPast(plan.date, asOf: today)
+        return PlannedCardContent(
             summary: plannedCardSummary(for: plan),
             intensity: intensity(for: plan),
-            isMissed: plan.completedActivityID == nil && isPast(plan.date, asOf: today)
+            isMissed: isMissed,
+            watchStatus: isMissed ? nil : watchStatus(for: plan)
         )
+    }
+
+    /// `plan`'s Apple Watch status (MVP2-119), from what the last Watch sync found: a warning when
+    /// its workout can't go on the Watch, else the mark when the sync sent it. `nil` without a sync
+    /// or while the athlete has turned sending off (MVP2-118), since the Watch doesn't matter then.
+    ///
+    /// Two dictionary and set lookups, cheap enough for the card closures the week swipe calls on
+    /// every frame; reading the sync's observed properties redraws the cards after each sync.
+    func watchStatus(for plan: PlannedActivity) -> PlannedWatchStatus? {
+        guard let watchSync, watchSync.isEnabled else { return nil }
+        if let reason = watchSync.unsupportedWorkouts[plan.workoutID] {
+            return .unsupported(reason: reason)
+        }
+        return watchSync.sentPlanIDs.contains(plan.id) ? .onWatch : nil
     }
 }

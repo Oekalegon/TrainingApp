@@ -8,6 +8,8 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
     private let scheduleShouldFail: Bool
     private var authorization: WatchSchedulingAuthorization
     nonisolated let maxScheduledCount: Int
+    /// The reason `validate` gives for a workout in ``invalidWorkoutIDs``.
+    static let unsupportedReason = "Not supported in this test."
     /// Workouts `validate` rejects, by id.
     nonisolated let invalidWorkoutIDs: Set<UUID>
     private(set) var scheduledPlans: [PlannedActivity] = []
@@ -34,8 +36,7 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
 
     nonisolated func validate(_ workout: StructuredWorkout) throws {
         if invalidWorkoutIDs.contains(workout.id) {
-            struct UnsupportedWorkout: Error {}
-            throw UnsupportedWorkout()
+            throw WatchIncompatibility(reason: Self.unsupportedReason)
         }
     }
 

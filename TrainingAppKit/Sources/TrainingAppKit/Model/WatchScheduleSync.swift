@@ -58,6 +58,18 @@ public final class WatchScheduleSync {
         isEnabled ? scheduler : nil
     }
 
+    /// The plans the last run put on (or kept on) the Watch, for the planned-workout cards' "on
+    /// Apple Watch" mark (MVP2-119): the upcoming plans it scheduled without an error. Empty until
+    /// a run has scheduled, and while sending is off or permission isn't granted. WorkoutKit has no
+    /// cheap way to list another app's view of the Watch, so this is what the app sent, not a read
+    /// of the Watch itself; the next run corrects it after a change made elsewhere.
+    public private(set) var sentPlanIDs: Set<UUID> = []
+
+    /// Why each workout that can't go on the Watch can't (MVP2-119), by workout id, from
+    /// ``PlannedWorkoutScheduling/validate(_:)``: the planned-workout cards' warning. Checked for
+    /// every workout in the library on each run that reads the stores, whatever the permission.
+    public private(set) var unsupportedWorkouts: [UUID: String] = [:]
+
     /// Whether the athlete dismissed the permission banner. Kept in `UserDefaults`, so the banner
     /// stays away across launches; cleared once permission is granted, so declining again later
     /// brings it back.
@@ -195,14 +207,25 @@ public final class WatchScheduleSync {
         else { return }
 
         let workoutsByID = Dictionary(workouts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var unsupported: [UUID: String] = [:]
+        for workout in workoutsByID.values {
+            do {
+                try scheduler.validate(workout)
+            } catch {
+                unsupported[workout.id] = error.localizedDescription
+            }
+        }
+        // Assigned only on a change, so an unchanged run doesn't redraw every planned card.
+        if unsupported != unsupportedWorkouts {
+            unsupportedWorkouts = unsupported
+        }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = model.athlete.timeZone
         let scheduler = scheduler
         let result = WatchSchedulePlanner.plan(
             plans, asOf: now, calendar: calendar, cap: scheduler.maxScheduledCount
         ) { plan in
-            guard let workout = workoutsByID[plan.workoutID] else { return false }
-            return (try? scheduler.validate(workout)) != nil
+            workoutsByID[plan.workoutID] != nil && unsupported[plan.workoutID] == nil
         }
 
         let authorization: WatchSchedulingAuthorization
@@ -212,23 +235,42 @@ public final class WatchScheduleSync {
             authorization = await scheduler.requestAuthorizationIfNeeded()
         }
         record(authorization)
-        guard authorization.isAuthorized else { return }
+        guard authorization.isAuthorized else {
+            setSentPlanIDs([])
+            return
+        }
 
         // Sending was turned off while this run awaited the stores or permission: the run that
         // turn-off requested removes everything, so don't add entries first.
         guard isEnabled else { return }
         // Removals first, so the slots they free are there for the new entries.
         await scheduler.unscheduleAll(except: result.keep)
+        var sent: Set<UUID> = []
         for plan in result.toSchedule {
             guard isEnabled else { return }
             guard let workout = workoutsByID[plan.workoutID] else { continue }
-            try? await scheduler.schedule(plan, workout: workout, calendar: calendar)
+            do {
+                try await scheduler.schedule(plan, workout: workout, calendar: calendar)
+                sent.insert(plan.id)
+            } catch {
+                // Tried again on the next run; no mark meanwhile.
+            }
+        }
+        setSentPlanIDs(sent)
+    }
+
+    /// Updates ``sentPlanIDs`` only on a change, so an unchanged run doesn't redraw every planned
+    /// card.
+    private func setSentPlanIDs(_ ids: Set<UUID>) {
+        if ids != sentPlanIDs {
+            sentPlanIDs = ids
         }
     }
 
     /// With sending off (MVP2-118): removes every entry the app put on the Watch. Still records the
     /// permission, so the Athlete tab stays current, and never asks for it.
     private func removeAllEntries() async {
+        setSentPlanIDs([])
         let authorization = await scheduler.authorizationStatus()
         record(authorization)
         guard authorization.isAuthorized else { return }
