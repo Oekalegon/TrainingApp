@@ -57,7 +57,7 @@ struct DayActivitiesSection: View {
     /// the first load, in which case no pill row renders (rather than a row of placeholder zeros).
     let metrics: FitnessMetrics?
     /// Whether this day's Form is an estimate, shown with a "~" (MVP2-8) — see
-    /// `WeekViewModel.isFormProjected(on:)`.
+    /// `WeekViewModel.dayMetrics(on:)`.
     let isFormProjected: Bool
     let activities: [Activity]
     /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.

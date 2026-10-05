@@ -22,7 +22,7 @@ extension WeekViewModel {
 
     /// What a planned activity's card shows beyond the plan itself.
     public struct PlannedCardContent: Equatable {
-        /// The name, sport, expected load and duration or distance (MVP2-37).
+        /// The name, sport, expected load, duration and distance (MVP2-37).
         public let summary: PlannedCardSummary
         /// The workout's intended intensity (MVP2-43), shown as the colour of the card's ring marker.
         public let intensity: IntensityAssessment?

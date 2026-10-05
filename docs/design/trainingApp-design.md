@@ -253,7 +253,9 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
   line shows the plan's expected duration and distance in the same layout, so each sits directly
   under the actual value it compares with. Both are shown whichever the workout is defined by: the
   other is forecast from the athlete's earlier workouts (see "Pace forecasts" below; only
-  activities before this one count), so a distance is absent when no zone settings are recorded. Monospaced digits keep the columns aligned.
+  activities before this one count), so a distance is absent when no zone settings are recorded. Monospaced digits keep the columns aligned, and both lines reserve a marker slot in front
+  of each column, clear unless the value is estimated, so a "~" never shifts a planned value off the
+  actual one above it.
 - **Missed plans.** A plan on a day before today that no completed activity matched is drawn as an
   outline only: the plain view background, a hairline secondary border, secondary text, no expected
   Load (it never became training load) and no intensity colour. A plan for today stays hatched until
@@ -275,12 +277,15 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
   - Stats bar: the performed Load when an activity that week was scored from perceived effort; each
     expected (performed + planned) figure when a plan's part of it is an estimate
     (`SportStatsPage.is…Estimated`, from the same activities and plans
-    `StatisticsCalculator.periodStatsSplit` counts).
+    `StatisticsCalculator.periodStatsSplit` counts). The stats and daily-load caches are keyed on each
+    plan's id, date, workout and override as well as the counts, so editing an override updates the
+    totals and their marks at once.
   - Day-row pills and the metric detail header: a projected day's values
     (`FitnessMetrics.isProjected`). Form follows the *previous* day instead, since TSB is yesterday's
     CTL minus ATL: today's Form is known before today's workout is done
     (`FitnessMetrics.isFormProjected(on:in:calendar:)`).
-  - Detail sheets: the planned-workout sheet keeps its "Forecast" captions and adds "Estimate" under
+  - Detail sheets: the planned-workout sheet takes its duration, distance and marks from the same
+    `PlannedCardSummary` as the card (`PlannedWorkoutDetailViewModel.expected(from:)`), keeps its "Forecast" captions and adds "Estimate" under
     an estimated load; the activity sheet explains a perceived-effort load in a footnote; the plan
     editor's "Expected Load" carries the marker unless overridden; plan-link options mark a forecast
     duration.
@@ -291,7 +296,7 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
 - **Apple Watch status on planned cards** (MVP2-119, `PlannedCardContent.watchStatus`). A plan the
   Watch sync sent (§3.5) shows a small Watch symbol at the trailing end of the second row, under
   the expected Load. A plan whose workout can't go
-  on the Watch shows a warning line under the duration or distance instead: an orange warning
+  on the Watch shows a warning line under the duration and distance instead: an orange warning
   symbol and the reason in secondary text, e.g. "Apple Watch doesn't support this alert for
   cycling." The detail sheet repeats the reason (§2.2, MVP2-122). Neither shows on a missed plan, or
   while the athlete has turned sending off (§2.3);

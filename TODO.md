@@ -14,7 +14,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 
 ## MVP2: Structured & Planned Workouts
 
-- [x] **MVP2-8** Mark estimated values everywhere they're shown (planned TRIMP, pace forecasts, perceived-effort loads, projected days) with a "~"; measured values and a plan's targets (incl. a load override) stay plain (done 2026-10-05)
+- [x] **MVP2-8** Mark estimated values everywhere they're shown (planned TRIMP, pace forecasts, perceived-effort loads, projected days) with a "~"; measured values and a plan's targets (incl. a load override) stay plain (done 2026-10-05, #89)
 - [ ] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later)
 - [x] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`) (done 2026-10-05, TrainingKit#75, #81)
   - TrainingKit's `PaceHistory` and `HistoricalPaceEstimator` forecast from similar earlier workouts, per zone and per step, for the cards and the week's totals alike. Planned cards still show only the measure the workout defines; the detail sheet and linked cards show both.
@@ -46,6 +46,8 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-120** Link an imported HealthKit workout to its plan by the `WorkoutPlan` id it was started from: with per-plan ids that id is the `PlannedActivity`'s, so it's an exact match ahead of `PlanReconciler`'s same-day heuristic. Needs TrainingKit work (the importer reads the plan id and carries it on `Activity`). The research note counts this as part of MVP2-55 (TrainingKit `docs/research/mvp2-55-workoutkit-scheduling.md` §4.4).
 - [ ] **MVP2-121** HealthKit background delivery for workouts: an `HKObserverQuery` with `enableBackgroundDelivery(for: .workoutType(), frequency: .immediate)` (and the background-delivery entitlement in `project.yml`) that imports a new workout as soon as Health saves it, then requests a Watch sync (MVP2-116). Today a workout done while the app is closed is only imported, and its plan linked, on the next pull-to-refresh, Connect Health or resync.
 - [x] **MVP2-122** (done 2026-10-05, #87) Show the "can't go on the Watch" reason in the planned-workout detail sheet too, as on the card (MVP2-119): `WatchScheduleSync.unsupportedWorkouts` has it by workout id. Hidden while sending is turned off, like on the card.
+- [ ] **MVP2-123** Mark a day row's Load pill with a "~" when one of that day's activities was scored from perceived effort (`LoadMethod.durationRPE`), as its card already is (MVP2-8). The pill only has the day's `FitnessMetrics`, whose `isProjected` is false for a performed day, so it needs a per-day flag from `WeekViewModel`, cached for the swipe path.
+- [ ] **MVP2-124** Cache `WeekViewModel.scoredLoad(for:)` per activity: `activityCardContent(for:)` and the stats bar's estimate flags (`weekEstimates`) each run a full `StatisticsCalculator.summary` per activity, on top of TrainingKit's own statistics pass (found in the #89 review).
 - [ ] **MVP2-?** `Goal` model: a non-event target (e.g. "sub-20 5k") with no date and no calendar presence
 - [ ] **MVP2-?** Structured Workout creator: create, edit, duplicate
 - [ ] **MVP2-?** Extend `SessionType` to match the 14-workout library

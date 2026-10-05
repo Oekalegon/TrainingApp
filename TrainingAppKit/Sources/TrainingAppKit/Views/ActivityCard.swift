@@ -94,6 +94,8 @@ struct ActivityCard: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .padding(.leading, TimelineCardStyle.secondLineIndent)
+                        // Spelled out, so the clear marker slots aren't read as "tilde".
+                        .accessibilityLabel(secondLineAccessibilityLabel)
                     if let plannedExtentText {
                         plannedExtentText
                             .font(.caption.monospacedDigit())
@@ -165,28 +167,54 @@ struct ActivityCard: View {
         return label
     }
 
+    /// Whether the card has the linked plan's line under its own, so both lines reserve a marker
+    /// slot in front of each column (see ``markerSlot(isEstimated:)``).
+    private var hasPlannedLine: Bool {
+        planned?.duration != nil || planned?.distanceMeters != nil
+    }
+
+    /// The "~" in front of a column on the two lines a linked card compares (MVP2-8): visible for an
+    /// estimate, clear otherwise. A "~" isn't a digit, so `.monospacedDigit()` doesn't make it a
+    /// digit's width; giving every column on both lines the same slot keeps each planned value
+    /// directly under the actual one it compares with, whichever of them is estimated.
+    private func markerSlot(isEstimated: Bool) -> Text {
+        let marker = Text(EstimateMarker.symbol)
+        return isEstimated ? marker : marker.foregroundStyle(.clear)
+    }
+
     /// The linked plan's expected duration and distance — both, whichever the workout is defined
     /// by (the other is projected from the athlete's pace, and carries a "~", MVP2-8) — in the same
     /// "duration   distance" layout as `secondLineText`, so each lands directly under the actual
     /// value it compares with. Monospaced digits keep a duration's width equal to the actual
-    /// duration's, which is what lines the distance column up.
+    /// duration's, and the marker slots keep the "~" from shifting either column.
     private var plannedExtentText: Text? {
         let duration = planned?.duration.map {
-            EstimateMarker.text(TimelineCardStyle.durationText($0), isEstimated: planned?.isDurationEstimated ?? false)
+            Text("\(markerSlot(isEstimated: planned?.isDurationEstimated ?? false))\(TimelineCardStyle.durationText($0))")
         }
         let distance = planned?.distanceMeters.map {
-            EstimateMarker.text(TimelineCardStyle.distanceText(meters: $0), isEstimated: planned?.isDistanceEstimated ?? false)
+            Text("\(markerSlot(isEstimated: planned?.isDistanceEstimated ?? false))\(TimelineCardStyle.distanceText(meters: $0))")
         }
         switch (duration, distance) {
         case (let duration?, let distance?):
             return Text("\(duration)\(Self.partSpacing)\(distance)").foregroundStyle(.tertiary)
         case (let duration?, nil):
-            return Text(duration).foregroundStyle(.tertiary)
+            return duration.foregroundStyle(.tertiary)
         case (nil, let distance?):
-            return Text(distance).foregroundStyle(.tertiary)
+            return distance.foregroundStyle(.tertiary)
         case (nil, nil):
             return nil
         }
+    }
+
+    private var secondLineAccessibilityLabel: String {
+        var parts = [TimelineCardStyle.spokenDuration(activity.duration)]
+        if let distanceMeters = activity.distanceMeters {
+            parts.append(TimelineCardStyle.spokenDistance(meters: distanceMeters))
+        }
+        if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
+            parts.append("climb " + TimelineCardStyle.spokenDistance(meters: gainMeters))
+        }
+        return parts.joined(separator: ", ")
     }
 
     private var plannedExtentAccessibilityLabel: String {
@@ -202,11 +230,15 @@ struct ActivityCard: View {
         return "Planned " + parts.joined(separator: ", ")
     }
 
+    /// The activity's own duration, distance and climb. Under a linked plan's line, the duration
+    /// and distance each get a clear marker slot, matching that line's (see
+    /// ``markerSlot(isEstimated:)``).
     private var secondLineText: Text {
-        var text = Text(durationString)
+        let slot = hasPlannedLine ? markerSlot(isEstimated: false) : Text("")
+        var text = Text("\(slot)\(durationString)")
         if let distanceMeters = activity.distanceMeters {
             let distanceString = TimelineCardStyle.distanceText(meters: distanceMeters)
-            text = Text("\(text)\(Self.partSpacing)\(distanceString)")
+            text = Text("\(text)\(Self.partSpacing)\(slot)\(distanceString)")
         }
         if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
             let gainString = TimelineCardStyle.distanceText(meters: gainMeters)

@@ -278,4 +278,148 @@ struct EstimatedValuesTests {
 
         #expect(!page.isExpectedLoadEstimated)
     }
+
+    @Test("the stats bar's flags count only activities up to today and plans from today on")
+    func statsBarBoundaries() async throws {
+        let (viewModel, _, store) = makeViewModel()
+        let weekStart = viewModel.displayedWeekStart
+        let today = weekStart.addingTimeInterval(2 * 86400)
+        let timed = workout([.time(1200)])
+        try await store.upsert([timed])
+        try await store.upsert([
+            // Before today: no longer counted as planned, so its estimated load doesn't mark anything.
+            PlannedActivity(workoutID: timed.id, date: weekStart),
+            // From today on, with a load the athlete set: counted, but a target.
+            PlannedActivity(workoutID: timed.id, date: today.addingTimeInterval(86400), expectedLoadOverride: 60),
+        ])
+        // After today: not counted as performed, so its perceived-effort load doesn't mark anything.
+        try await store.upsert([effortActivity(on: today.addingTimeInterval(2 * 86400))])
+        await viewModel.load(asOf: today)
+
+        let page = try #require(viewModel.sportStatsPages(asOf: today).first { $0.sport == .running })
+
+        #expect(!page.isLoadEstimated)
+        #expect(!page.isExpectedLoadEstimated)
+    }
+
+    @Test("editing a plan's override re-marks a cached stats page, though no count changed")
+    func statsBarOverrideEditRefreshes() async throws {
+        let (viewModel, model, store) = makeViewModel()
+        let today = viewModel.displayedWeekStart
+        let timed = workout([.time(1200)])
+        var plan = PlannedActivity(workoutID: timed.id, date: today.addingTimeInterval(86400))
+        try await store.upsert([timed])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: today)
+        let before = try #require(viewModel.sportStatsPages(asOf: today).first { $0.sport == .running })
+        #expect(before.isExpectedLoadEstimated)
+
+        plan.expectedLoadOverride = 60
+        try await model.add(plan, asOf: today)
+
+        #expect(model.plans.count == 1)
+        let after = try #require(viewModel.sportStatsPages(asOf: today).first { $0.sport == .running })
+        #expect(!after.isExpectedLoadEstimated)
+        #expect(after.plannedLoad == 60)
+    }
+
+    // MARK: - Day rows and metric detail
+
+    @Test("dayMetrics(on:) marks a day's Form by the previous day, matching the static rule")
+    func dayMetricsFormRule() async throws {
+        let (viewModel, _, store) = makeViewModel()
+        let today = viewModel.displayedWeekStart
+        let timed = workout([.time(1200)])
+        // An earlier activity anchors the series before today; nothing is done today, so today is
+        // projected and tomorrow's Form with it.
+        try await store.upsert([heartRateActivity(on: today.addingTimeInterval(-7 * 86400))])
+        try await store.upsert([timed])
+        try await store.upsert([PlannedActivity(workoutID: timed.id, date: today.addingTimeInterval(86400))])
+        await viewModel.load(asOf: today)
+
+        let todayRow = viewModel.dayMetrics(on: today)
+        let tomorrowRow = viewModel.dayMetrics(on: today.addingTimeInterval(86400))
+
+        #expect(todayRow.metrics?.isProjected == true)
+        #expect(!todayRow.isFormProjected)
+        #expect(tomorrowRow.metrics?.isProjected == true)
+        #expect(tomorrowRow.isFormProjected)
+    }
+
+    @Test("a metric detail subject is projected by its own days, and by the previous day for Form")
+    func metricDetailSubjectProjection() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        func metrics(_ offset: Int, projected: Bool) -> FitnessMetrics {
+            FitnessMetrics(
+                day: day(offset), load: 0, ctl: 0, atl: 0, tsb: 0,
+                monotony: .nan, strain: .nan, isProjected: projected, isWarmingUp: false
+            )
+        }
+        let all = [metrics(0, projected: false), metrics(1, projected: true), metrics(2, projected: true)]
+
+        #expect(!MetricDetailSubject.day(day(0)).isProjected(kind: .load, in: all, calendar: calendar))
+        #expect(MetricDetailSubject.day(day(1)).isProjected(kind: .fitness, in: all, calendar: calendar))
+        #expect(!MetricDetailSubject.day(day(1)).isProjected(kind: .form, in: all, calendar: calendar))
+        #expect(MetricDetailSubject.day(day(2)).isProjected(kind: .form, in: all, calendar: calendar))
+        // A week containing any projected day is an estimate.
+        #expect(MetricDetailSubject.week(day(0)...day(3)).isProjected(kind: .load, in: all, calendar: calendar))
+    }
+
+    @Test("the activity sheet flags a perceived-effort load as an estimate, a heart-rate one not")
+    func activityDetailLoad() {
+        let athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+
+        let effort = ActivityDetailViewModel(activity: effortActivity(on: day(2)), athlete: athlete)
+        #expect(effort.isLoadEstimated)
+        #expect(effort.isLoadFromPerceivedEffort)
+
+        let measured = ActivityDetailViewModel(activity: heartRateActivity(on: day(2)), athlete: athlete)
+        #expect(!measured.isLoadEstimated)
+        #expect(!measured.isLoadFromPerceivedEffort)
+    }
+
+    // MARK: - One source for card and sheet
+
+    @Test("a distance workout with a block repeated zero times is still shown by its target distance")
+    func zeroRepetitionBlockKeepsTargetDistance() async throws {
+        let (viewModel, model, _) = makeViewModel()
+        let workout = StructuredWorkout(
+            name: "Run", sport: .running,
+            blocks: [
+                WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .distance(5000), target: .heartRateZone(2))]),
+                WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(600), target: .heartRateZone(2))], repetitions: 0),
+            ]
+        )
+        try await model.add(workout, asOf: day(2))
+        let plan = PlannedActivity(workoutID: workout.id, date: day(3))
+        try await model.add(plan, asOf: day(2))
+
+        let summary = viewModel.plannedCardSummary(for: plan)
+
+        #expect(summary.extent == .distance(meters: 5000))
+        #expect(summary.distanceMeters == 5000)
+        #expect(!summary.isDistanceEstimated)
+        #expect(!summary.isExtentEstimated)
+    }
+
+    @Test("the planned-workout sheet shows the same duration, distance and marks as the card")
+    func sheetMatchesCard() async throws {
+        let (viewModel, model, _) = makeViewModel()
+        for goals in [[StepGoal.time(1200)], [.distance(5000)], [.time(600), .open]] {
+            let planned = workout(goals)
+            try await model.add(planned, asOf: day(2))
+            let plan = PlannedActivity(workoutID: planned.id, date: day(3))
+            try await model.add(plan, asOf: day(2))
+
+            let card = viewModel.plannedCardSummary(for: plan)
+            let expected = try #require(viewModel.plannedWorkoutDetailViewModel(for: plan).expected)
+
+            #expect(expected.duration == card.duration)
+            #expect(expected.distanceMeters == card.distanceMeters)
+            #expect(expected.isDurationForecast == card.isDurationEstimated)
+            #expect(expected.isDistanceForecast == card.isDistanceEstimated)
+            #expect(expected.activityCount == card.forecastActivityCount)
+        }
+    }
 }

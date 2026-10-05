@@ -114,22 +114,23 @@ public final class PlannedWorkoutDetailViewModel {
         }
     }
 
-    /// The workout's forecast duration and distance from the athlete's earlier, similar workouts in
-    /// `TrainingModel.paceHistory` — the same forecast as the day list's card and the week's
-    /// statistics (`StatisticsCalculator.projection(for:athlete:paceHistory:before:excluding:)`).
-    /// Reads the history live, so a history that lands while the sheet is open updates it. `nil`
-    /// when the workout is gone.
+    /// The workout's expected duration and distance, forecast from the athlete's earlier, similar
+    /// workouts in `TrainingModel.paceHistory` where the steps don't set them. Taken from
+    /// ``summary``, so the sheet shows exactly what the plan's card shows. Reads the history live,
+    /// so a history that lands while the sheet is open updates it. `nil` when the workout is gone.
     public var expected: Expected? {
-        guard let workout else { return nil }
-        let projection = statisticsCalculator.projection(
-            for: workout, athlete: model.athlete, paceHistory: model.paceHistory, before: plan.date
-        )
+        expected(from: summary)
+    }
+
+    /// ``expected`` from a ``summary`` already read, so the sheet runs the forecast once per render.
+    public func expected(from summary: WeekViewModel.PlannedCardSummary) -> Expected? {
+        guard let duration = summary.duration else { return nil }
         return Expected(
-            duration: projection.duration,
-            distanceMeters: projection.distanceMeters,
-            isDurationForecast: workout.isDurationForecast,
-            isDistanceForecast: projection.distanceMeters != nil && workout.isDistanceForecast,
-            activityCount: projection.matchedActivityCount
+            duration: duration,
+            distanceMeters: summary.distanceMeters,
+            isDurationForecast: summary.isDurationEstimated,
+            isDistanceForecast: summary.distanceMeters != nil && summary.isDistanceEstimated,
+            activityCount: summary.forecastActivityCount
         )
     }
 

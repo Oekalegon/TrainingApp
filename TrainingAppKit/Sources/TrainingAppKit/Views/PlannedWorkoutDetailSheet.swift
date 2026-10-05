@@ -65,8 +65,8 @@ struct PlannedWorkoutDetailSheet: View {
                     }
                 }
 
-                // Read once: each read runs the forecast.
-                let expected = viewModel.expected
+                // From the summary read above: each read of either runs the forecast.
+                let expected = viewModel.expected(from: summary)
                 Section {
                     if let duration = expected?.duration {
                         LabeledContent("Duration") {

@@ -134,7 +134,7 @@ struct ActivityDetailView: View {
                     }
                     // Says what the "~" stands for (MVP2-8): the load comes from how hard the
                     // athlete said it felt, not from heart rate.
-                    if viewModel.summary.load.method == .durationRPE {
+                    if viewModel.isLoadFromPerceivedEffort {
                         Text("Estimated from perceived effort rather than heart rate.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -292,8 +292,8 @@ struct ActivityDetailView: View {
     }
 
     private var loadText: String {
-        let load = viewModel.summary.load
-        return EstimateMarker.text(load.value.formatted(.number.precision(.fractionLength(0))), isEstimated: load.method.isEstimate)
+        let text = viewModel.summary.load.value.formatted(.number.precision(.fractionLength(0)))
+        return EstimateMarker.text(text, isEstimated: viewModel.isLoadEstimated)
     }
 
     private func zoneText(seconds: TimeInterval, zone: Int) -> String {

@@ -34,6 +34,16 @@ enum MetricDetailSubject: Hashable {
         }
     }
 
+    /// Whether this subject's value for `kind` is an estimate, shown with a "~" (MVP2-8): any of its
+    /// days is projected (from planned workouts rather than completed activities). Form follows the
+    /// previous day instead (see `FitnessMetrics.isFormProjected(on:in:calendar:)`), looked up in
+    /// `all`.
+    func isProjected(kind: TrainingMetricKind, in all: [FitnessMetrics], calendar: Calendar) -> Bool {
+        let own = metrics(in: all, calendar: calendar)
+        guard kind == .form else { return own.contains(where: \.isProjected) }
+        return own.contains { FitnessMetrics.isFormProjected(on: $0.day, in: all, calendar: calendar) }
+    }
+
     /// This subject's own date text for `MetricDetailView`'s header: a full "weekday, month day,
     /// year" for a `.day` subject, or a plain "Sep 14 – Sep 20, 2026" range for a `.week` one — a
     /// full "weekday, month day, year" format applied to both ends of a week that doesn't cross a

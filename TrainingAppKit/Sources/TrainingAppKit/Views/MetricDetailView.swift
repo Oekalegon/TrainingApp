@@ -205,17 +205,8 @@ struct MetricDetailView: View {
     private var subjectValueText: String {
         guard let subjectValue else { return "–" }
         let format = kind == .form ? Self.signedValueFormat : Self.unsignedValueFormat
-        return EstimateMarker.text(subjectValue.formatted(format), isEstimated: isSubjectValueProjected)
-    }
-
-    /// Whether any of the subject's days has a projected value for `kind`: its own metrics for
-    /// Load/Fitness/Fatigue, the previous day's for Form (see
-    /// `FitnessMetrics.isFormProjected(on:in:calendar:)`).
-    private var isSubjectValueProjected: Bool {
-        guard kind == .form else { return subjectMetrics.contains(where: \.isProjected) }
-        return subjectMetrics.contains {
-            FitnessMetrics.isFormProjected(on: $0.day, in: displayedMetrics, calendar: chartContext.calendar)
-        }
+        let isProjected = chartContext.subject.isProjected(kind: kind, in: displayedMetrics, calendar: chartContext.calendar)
+        return EstimateMarker.text(subjectValue.formatted(format), isEstimated: isProjected)
     }
 
     /// "Average", shown above the value for a `.week` subject only -- a week's own value is a
@@ -288,6 +279,8 @@ struct MetricDetailView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(subjectValueText)
                     .font(.system(size: 40, weight: .bold, design: .rounded))
+                    // "estimated 42" rather than "tilde 42" (MVP2-8).
+                    .accessibilityLabel(EstimateMarker.spokenForm(of: subjectValueText))
                 // The subject's own TSB zone, at the same size the Form value's own unit would be
                 // if it had one, but `.primary` -- naming the zone is as central to reading Form's
                 // value as the number itself, not a secondary annotation.
