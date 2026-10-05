@@ -74,10 +74,11 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 
 ### 2.0 Top-level navigation
 
-`AppTabView` is the app's root: a bottom tab bar with two tabs, "Week" (§2.1) and "Athlete"
-(§2.3) — both built from the same `WeekViewModel` instance (`AthleteView` reads it via
-`WeekViewModel.athleteViewModel`), owned by `AppTabView` and constructed once for the app's
-lifetime. `AppTabView` holds the selected tab only so the week view's Watch permission banner can
+`AppTabView` is the app's root: a bottom tab bar with three tabs, "Week" (§2.1), "Library"
+(§2.4, MVP2-21) and "Athlete" (§2.3) — all built from the same `WeekViewModel` instance
+(`AthleteView` reads it via `WeekViewModel.athleteViewModel`, the Library tab via
+`WeekViewModel.workoutLibraryViewModel()`), owned by `AppTabView` and constructed once for the
+app's lifetime, as is the Library tab's view model. `AppTabView` holds the selected tab only so the week view's Watch permission banner can
 open the Athlete tab (MVP2-117); it isn't remembered or restored across launches.
 
 ### 2.1 Week view
@@ -564,6 +565,31 @@ import time and persisted, not recomputed on read, so an app update that fixes a
 `HKWorkoutActivityType` that used to fall back to `Sport.other`) doesn't retroactively fix
 activities imported before the fix. This is a recovery action, not a settings toggle — the
 profile otherwise stays read-only as described above.
+
+### 2.4 Workout library (MVP2-21)
+
+The "Library" tab (`WorkoutLibraryView`, driven by `WorkoutLibraryViewModel`) lists the workout
+templates the athlete can plan, grouped by sport in the order of `BuiltInWorkoutTemplates.all`.
+It lists templates, not `TrainingModel.workouts`: saving a planned workout instantiates a workout
+of its own (MVP2-15), so the stored workouts are per-plan copies rather than a library worth
+browsing. MVP 5's plan builder will live in this tab too.
+
+- **Row**: the sport symbol, the template's name, its default title at the default values
+  (MVP2-110, e.g. "40min Easy Run") and, once used, "Planned N times".
+- **Detail** (pushed): the parameters with their defaults and ranges, the steps at the default
+  values (the same step lines as the planned-workout detail sheet), the estimated load at the
+  default values, marked "~" (MVP2-8), and "In Your Plan": how many plans use the template and
+  the next one due that isn't done yet.
+- **Plan This Workout** opens the "Create Planned Workout" sheet (§2.1) with the template already
+  picked and today as the date. It uses the Watch setting at that moment (MVP2-118) and runs the
+  Watch sync after saving, like the week view's sheet.
+
+A template's plans are found through their workouts' `templateID`, across every plan in the store
+(`PlanStore.plans(in:)` over all dates): `TrainingModel.plans` only holds the week view's loaded
+window. The view model reloads them each time the tab appears and after a plan is saved from it.
+
+Not yet: custom workouts and editing templates (the Structured Workout creator), and the rest of
+the roadmap's 14-workout library (MVP2-106).
 
 ---
 

@@ -958,6 +958,18 @@ public final class WeekViewModel {
         return viewModel
     }
 
+    /// The view model for the Library tab (MVP2-21). A plan made from the tab uses the Watch
+    /// setting at the time (MVP2-118) and runs the Watch sync afterwards.
+    public func workoutLibraryViewModel() -> WorkoutLibraryViewModel {
+        // `nil` while sending to the Watch is off, so no fallback to the live bridge here.
+        let viewModel = WorkoutLibraryViewModel(model: model) { [weak self] in
+            guard let self else { return nil }
+            return self.plannedWorkoutScheduler
+        }
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
+    }
+
     /// The view model for the "Add Race" sheet (MVP2-17), opened from a day row's add affordance
     /// alongside ``plannedWorkoutSheetViewModel(date:)`` — `date` defaults the sheet to that day,
     /// still editable inside it.

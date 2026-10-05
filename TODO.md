@@ -15,7 +15,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 ## MVP2: Structured & Planned Workouts
 
 - [x] **MVP2-8** Mark estimated values everywhere they're shown (planned TRIMP, pace forecasts, perceived-effort loads, projected days) with a "~"; measured values and a plan's targets (incl. a load override) stay plain (done 2026-10-05, #89)
-- [ ] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later)
+- [x] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later) (done 2026-10-05): lists the built-in templates by sport, with a detail screen and "Plan This Workout"
 - [x] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`) (done 2026-10-05, TrainingKit#75, #81)
   - TrainingKit's `PaceHistory` and `HistoricalPaceEstimator` forecast from similar earlier workouts, per zone and per step, for the cards and the week's totals alike. Planned cards still show only the measure the workout defines; the detail sheet and linked cards show both.
 - [ ] **MVP2-54** Check that the stats values (stats bar, daily-load chart, CTL/ATL/TSB pills) update **immediately** when a planned or completed activity is added or deleted, without switching weeks; MVP2-53 found the same staleness for plan links. Also confirm that missed planned workouts are not counted anywhere. Add tests for any gap found.

@@ -2,8 +2,8 @@ import SwiftUI
 import TrainingCore
 
 /// The app's top-level screen (design doc §2.0): a bottom tab bar switching between the week view
-/// ("Week") and the read-only athlete account screen ("Athlete") — replacing the week view's
-/// former "Athlete" toolbar button + sheet.
+/// ("Week"), the workout library ("Library", MVP2-21) and the athlete account screen ("Athlete") —
+/// replacing the week view's former "Athlete" toolbar button + sheet.
 ///
 /// Owns the single `WeekViewModel` for the app's lifetime so both tabs share it: `WeekView` reads
 /// it directly, and `AthleteView` reads it via `WeekViewModel.athleteViewModel` — that coupling is
@@ -16,10 +16,14 @@ public struct AppTabView: View {
     /// The app's tabs, for `TabView`'s selection.
     private enum AppTab: Hashable {
         case week
+        case library
         case athlete
     }
 
     @State private var viewModel: WeekViewModel
+    /// The Library tab's view model (MVP2-21), kept for the app's lifetime so its plan counts
+    /// survive switching tabs.
+    @State private var libraryViewModel: WorkoutLibraryViewModel
     /// The visible tab. Kept so the week view's Watch permission banner (MVP2-117) can open the
     /// Athlete tab; not remembered across launches.
     @State private var selectedTab = AppTab.week
@@ -31,7 +35,9 @@ public struct AppTabView: View {
     ///   - refresher: Imports activities from HealthKit.
     ///   - watchSync: Run on launch and every time the app becomes active again; `nil` skips it.
     public init(model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil) {
-        _viewModel = State(initialValue: WeekViewModel(model: model, refresher: refresher, watchSync: watchSync))
+        let viewModel = WeekViewModel(model: model, refresher: refresher, watchSync: watchSync)
+        _viewModel = State(initialValue: viewModel)
+        _libraryViewModel = State(initialValue: viewModel.workoutLibraryViewModel())
         self.watchSync = watchSync
     }
 
@@ -48,6 +54,12 @@ public struct AppTabView: View {
                     Label("Week", systemImage: "calendar")
                 }
                 .tag(AppTab.week)
+
+            WorkoutLibraryView(viewModel: libraryViewModel)
+                .tabItem {
+                    Label("Library", systemImage: "books.vertical")
+                }
+                .tag(AppTab.library)
 
             AthleteView(
                 viewModel: viewModel.athleteViewModel,
