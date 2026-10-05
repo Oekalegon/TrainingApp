@@ -23,6 +23,8 @@ extension WeekViewModel {
     /// Links `activity` to the plan `planID` (replacing its current link), or confirms the current
     /// one when they're the same.
     ///
+    /// Then requests a Watch sync (MVP2-116), since the change can link or unlink a plan.
+    ///
     /// - Returns: `true` if the link was made. `false` (nothing changed) if the plan isn't on the
     ///   activity's day or a store failed — the sheet stays open with a message, like a refused join.
     @discardableResult
@@ -33,10 +35,13 @@ extension WeekViewModel {
             return false
         }
         await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        requestWatchSync(asOf: today)
         return true
     }
 
     /// Removes `activity`'s link to its plan. It isn't matched again automatically afterwards.
+    ///
+    /// Then requests a Watch sync (MVP2-116), since the change can link or unlink a plan.
     ///
     /// - Returns: `true` if the link was removed.
     @discardableResult
@@ -47,6 +52,7 @@ extension WeekViewModel {
             return false
         }
         await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        requestWatchSync(asOf: today)
         return true
     }
 
