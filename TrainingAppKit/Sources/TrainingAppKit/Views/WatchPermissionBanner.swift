@@ -20,7 +20,7 @@ struct WatchPermissionBanner: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Planned workouts won't reach your Apple Watch")
                     .font(.subheadline.weight(.semibold))
-                Text("TrainingApp isn't allowed to schedule workouts. Allow it in Settings to have each planned workout ready in the Workout app on the day it's due.")
+                Text("This app isn't allowed to schedule workouts. Allow it in Settings to have each planned workout ready in the Workout app on the day it's due.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -35,11 +35,17 @@ struct WatchPermissionBanner: View {
                 #endif
             }
             Spacer(minLength: 0)
-            Button("Dismiss", systemImage: "xmark", action: onDismiss)
+            // A 44 pt hit area around the small glyph, pulled into the banner's padding so the
+            // banner doesn't grow to fit it.
+            Button("Dismiss Watch Permission Notice", systemImage: "xmark", action: onDismiss)
                 .labelStyle(.iconOnly)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
                 .buttonStyle(.plain)
+                .padding(.top, -12)
+                .padding(.trailing, -12)
         }
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

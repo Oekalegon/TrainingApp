@@ -86,9 +86,8 @@ public final class WatchScheduleSync {
     /// Asks for permission to schedule workouts the first time there's a plan to send, so a new
     /// athlete isn't asked before they've planned anything. Does nothing when permission is declined
     /// or not yet asked for, the device can't schedule workouts, or the stores can't be read. A plan
-    /// that fails to schedule is skipped and tried again on the next run.
-    /// Each run that reads the stores also records whether permission is denied, for
-    /// ``showsPermissionDeniedBanner``.
+    /// that fails to schedule is skipped and tried again on the next run. Each run that reads the
+    /// stores also records whether permission is denied, for ``showsPermissionDeniedBanner``.
     ///
     /// A call made while a run is in progress returns at once and makes that run go round again
     /// when it finishes: the running pass may have read the store before the change that prompted
