@@ -7,7 +7,8 @@ import TrainingCore
 /// WorkoutKit never wakes the app, so the window only moves forward when the app runs. `AppTabView`
 /// calls ``requestSync()`` whenever the app becomes active, which covers launch and the window
 /// rolling over at midnight, and `WeekViewModel` calls it after a plan is saved, deleted or
-/// imported. Each run compares what should be on the Watch with what is, so it can run any number
+/// imported, and after anything that can link or unlink a plan: a HealthKit import, linking by
+/// hand, or deleting, joining or unjoining an activity (MVP2-114). Each run compares what should be on the Watch with what is, so it can run any number
 /// of times: scheduling an unchanged plan is a no-op.
 ///
 /// Reads every plan from the store rather than `TrainingModel.plans`, which holds only the range the
@@ -36,7 +37,11 @@ public final class WatchScheduleSync {
     }
 
     /// Starts ``sync(asOf:)`` without waiting for it, for callers that aren't `async`.
-    public func requestSync() {
+    ///
+    /// - Returns: The started task, for a caller (or test) that wants to wait for it. A request made
+    ///   while a run is in progress finishes at once; the running pass does the extra round.
+    @discardableResult
+    public func requestSync() -> Task<Void, Never> {
         Task { await sync() }
     }
 

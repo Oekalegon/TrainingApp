@@ -33,6 +33,7 @@ extension WeekViewModel {
             return false
         }
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
         return true
     }
 
@@ -47,6 +48,7 @@ extension WeekViewModel {
             return false
         }
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
         return true
     }
 

@@ -104,6 +104,7 @@ extension WeekViewModel {
             return false
         }
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
         return true
     }
 
@@ -118,6 +119,7 @@ extension WeekViewModel {
             return false
         }
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
         return true
     }
 
@@ -142,5 +144,6 @@ extension WeekViewModel {
     private func deleteActivity(id: UUID, asOf today: Date) async {
         try? await model.deleteActivity(id: id, asOf: today)
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
     }
 }

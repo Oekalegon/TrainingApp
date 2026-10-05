@@ -15,6 +15,9 @@ public final class WeekViewModel {
     /// Keeps the Watch's scheduled workouts in step with the plans (MVP2-55); `nil` in tests and
     /// where WorkoutKit isn't available.
     let watchSync: WatchScheduleSync?
+    /// The Watch sync ``requestWatchSync()`` last started, so tests can wait for it.
+    @ObservationIgnored
+    private(set) var pendingWatchSync: Task<Void, Never>?
     private let refresher: any ActivityRefreshing
     private let calendar: Calendar
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
@@ -134,7 +137,8 @@ public final class WeekViewModel {
     ///   - refresher: Runs HealthKit imports for pull-to-refresh.
     ///   - maxHeartRatePromptHistory: What the athlete already said about max heart rate
     ///     suggestions; defaults to the app's `UserDefaults`-backed record.
-    ///   - watchSync: Run again after a plan is saved, deleted or imported (MVP2-55); `nil` skips it.
+    ///   - watchSync: Run again after anything that changes plans or their links (MVP2-55,
+    ///     MVP2-114); `nil` skips it.
     ///   - today: The day whose week is shown first.
     public init(
         model: TrainingModel,
@@ -814,9 +818,12 @@ public final class WeekViewModel {
         return viewModel
     }
 
-    /// Runs the Watch sync (MVP2-55) after a plan is saved, deleted or imported. A no-op without one.
-    private func requestWatchSync() {
-        watchSync?.requestSync()
+    /// Runs the Watch sync (MVP2-55) after a plan is saved, deleted or imported, or a plan's link to
+    /// an activity may have changed (MVP2-114): a linked plan's entry is kept as done, and an
+    /// unlinked one in the window goes back on the Watch. A no-op without a sync.
+    func requestWatchSync() {
+        guard let watchSync else { return }
+        pendingWatchSync = watchSync.requestSync()
     }
 
     /// The view model for the athlete account screen, presented from the week view's toolbar.
@@ -880,6 +887,7 @@ public final class WeekViewModel {
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -896,6 +904,7 @@ public final class WeekViewModel {
             return
         }
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -910,6 +919,7 @@ public final class WeekViewModel {
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -925,6 +935,7 @@ public final class WeekViewModel {
         defer { isDeduplicating = false }
         try? await model.deduplicateActivities(asOf: today)
         await refreshWeekCachesIfNeeded()
+        requestWatchSync()
     }
 
     static func calendar(for athlete: AthleteProfile) -> Calendar {
