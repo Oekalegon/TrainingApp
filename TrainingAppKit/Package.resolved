@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Oekalegon/TrainingKit.git",
       "state" : {
-        "branch" : "claude/vibrant-pascal-tk8z7m",
-        "revision" : "6751d87e99bb087a3e78e8d34b9e2fa70415d721"
+        "branch" : "develop",
+        "revision" : "cde9bf261f7cfc1510fa8f0ce3e8d6c49d460806"
       }
     }
   ],
