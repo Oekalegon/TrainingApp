@@ -32,6 +32,9 @@ public final class WorkoutLibraryViewModel {
     /// The reload started after a plan is saved from the tab; tests await it.
     @ObservationIgnored
     private(set) var pendingReload: Task<Void, Never>?
+    /// Counts ``reload()`` calls, so a reload that finishes after a later one started (the tab's
+    /// `.task` and ``pendingReload`` can overlap) drops its older snapshot.
+    @ObservationIgnored private var reloadGeneration = 0
 
     /// The templates the library offers — the built-in library only, as in the planned-workout
     /// sheet's picker; custom templates come with the Structured Workout creator.
@@ -95,14 +98,18 @@ public final class WorkoutLibraryViewModel {
 
     /// Reads every plan and workout from the store, for the plan counts.
     public func reload() async {
+        reloadGeneration += 1
+        let generation = reloadGeneration
         do {
             let stores = model.stores
             let plans = try await stores.planStore.plans(in: Date.distantPast...Date.distantFuture)
             let workouts = try await stores.workoutStore.workouts()
+            guard generation == reloadGeneration else { return }
             self.plans = plans
             self.workouts = workouts
             loadError = nil
         } catch {
+            guard generation == reloadGeneration else { return }
             loadError = "Couldn't load your plans: \(error.localizedDescription)"
         }
     }

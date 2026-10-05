@@ -970,6 +970,14 @@ public final class WeekViewModel {
         return viewModel
     }
 
+    /// The view model for the search tab (MVP2-21), sharing `library` with the Library tab. Opening
+    /// a result first loads this model around its day (``ensureLoaded(around:asOf:)``).
+    public func searchViewModel(library: WorkoutLibraryViewModel) -> SearchViewModel {
+        let viewModel = SearchViewModel(model: model, library: library)
+        viewModel.prepareDetail = { [weak self] date in await self?.ensureLoaded(around: date) }
+        return viewModel
+    }
+
     /// The view model for the "Add Race" sheet (MVP2-17), opened from a day row's add affordance
     /// alongside ``plannedWorkoutSheetViewModel(date:)`` — `date` defaults the sheet to that day,
     /// still editable inside it.
@@ -1062,6 +1070,20 @@ public final class WeekViewModel {
     /// for an arbitrary date rather than today's.
     public func goToWeek(containing date: Date) {
         displayedWeekStart = Self.weekStart(containing: date, calendar: calendar)
+    }
+
+    /// Loads the weeks around `date` into `model` as well as the displayed ones, so a detail sheet
+    /// opened from the search tab (MVP2-21) for a plan or activity outside the week view's window
+    /// finds its plan, workout, link and overlaps in `model`, and follows an edit made in it.
+    /// Loads the *union* with the current window, for the same reason as ``metrics(in:asOf:)``.
+    /// A failed load leaves `model` as it was, and the sheet opens anyway.
+    public func ensureLoaded(around date: Date, asOf today: Date = .now) async {
+        let range = Self.loadRange(for: Self.weekStart(containing: date, calendar: calendar), calendar: calendar)
+        let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
+        if currentLoadRange.contains(range.lowerBound), currentLoadRange.contains(range.upperBound) { return }
+        let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
+        try? await model.load(in: unionRange, asOf: today)
+        await refreshWeekCachesIfNeeded(asOf: today)
     }
 
     /// Loads ``loadRange(for:calendar:)`` for ``displayedWeekStart`` from the stores into `model`

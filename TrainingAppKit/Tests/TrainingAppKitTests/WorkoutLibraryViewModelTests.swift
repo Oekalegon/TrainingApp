@@ -137,4 +137,32 @@ struct WorkoutLibraryViewModelTests {
         #expect(easy?.planCount == 1)
         #expect(easy?.nextPlannedDate == day(1))
     }
+
+    // MARK: Watch setting (MVP2-118)
+
+    private let scratch = ScratchDefaults()
+
+    @Test("a plan made from the tab goes to the Watch only while sending is on")
+    func plannerFollowsWatchSetting() async throws {
+        let (_, model) = await makeModel()
+        let scheduler = FakeScheduler()
+        let sync = WatchScheduleSync(model: model, scheduler: scheduler, defaults: scratch.defaults)
+        let week = WeekViewModel(model: model, refresher: FakeRefresher(), watchSync: sync, today: day(0))
+        let library = week.workoutLibraryViewModel()
+
+        await sync.setEnabled(false, asOf: day(0)).value
+        let off = library.makePlanner(for: BuiltInWorkoutTemplates.easyRun, date: day(0))
+        #expect(await off.save(asOf: day(0)))
+        #expect(await scheduler.scheduledPlans.isEmpty)
+
+        // Asked again when the next sheet opens, so turning sending back on takes effect at once.
+        await sync.setEnabled(true, asOf: day(0)).value
+        let on = library.makePlanner(for: BuiltInWorkoutTemplates.recoveryRun, date: day(0))
+        #expect(await on.save(asOf: day(0)))
+        let recoveryPlanIDs = Set(model.plans.filter { plan in
+            model.workouts.first { $0.id == plan.workoutID }?.templateID == BuiltInWorkoutTemplates.recoveryRun.id
+        }.map(\.id))
+        #expect(recoveryPlanIDs.count == 1)
+        #expect(await scheduler.scheduledPlans.contains { recoveryPlanIDs.contains($0.id) })
+    }
 }

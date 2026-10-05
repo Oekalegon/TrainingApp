@@ -29,7 +29,7 @@ private struct WorkoutLibraryList: View {
             ForEach(viewModel.sections()) { section in
                 Section(section.sport.displayName) {
                     ForEach(section.entries) { entry in
-                        NavigationLink(value: entry.id) {
+                        NavigationLink(value: TemplateRoute(id: entry.id)) {
                             WorkoutTemplateRow(entry: entry)
                         }
                     }
@@ -41,8 +41,8 @@ private struct WorkoutLibraryList: View {
         #endif
         // By id, not by entry: the detail reads its entry live, so a plan saved from it updates
         // the counts there too.
-        .navigationDestination(for: UUID.self) { templateID in
-            WorkoutTemplateDetailView(viewModel: viewModel, templateID: templateID)
+        .navigationDestination(for: TemplateRoute.self) { route in
+            WorkoutTemplateDetailView(viewModel: viewModel, templateID: route.id)
         }
         // Each time the tab appears: plans made on the week view since count too.
         .task { await viewModel.reload() }
@@ -132,9 +132,13 @@ struct WorkoutTemplateDetailView: View {
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(parameter.formatted(parameter.defaultValue))
                                     if let range = parameter.range {
-                                        Text("\(parameter.formatted(range.lowerBound)) – \(parameter.formatted(range.upperBound))")
+                                        let low = parameter.formatted(range.lowerBound)
+                                        let high = parameter.formatted(range.upperBound)
+                                        Text("\(low) – \(high)")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
+                                            // Read as a range, not as two clock times.
+                                            .accessibilityLabel("from \(low) to \(high)")
                                     }
                                 }
                             }

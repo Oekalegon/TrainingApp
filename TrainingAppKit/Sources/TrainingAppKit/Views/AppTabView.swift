@@ -46,7 +46,7 @@ public struct AppTabView: View {
         _viewModel = State(initialValue: viewModel)
         let libraryViewModel = viewModel.workoutLibraryViewModel()
         _libraryViewModel = State(initialValue: libraryViewModel)
-        _searchViewModel = State(initialValue: SearchViewModel(model: model, library: libraryViewModel))
+        _searchViewModel = State(initialValue: viewModel.searchViewModel(library: libraryViewModel))
         self.watchSync = watchSync
     }
 

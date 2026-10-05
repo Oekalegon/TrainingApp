@@ -15,7 +15,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 ## MVP2: Structured & Planned Workouts
 
 - [x] **MVP2-8** Mark estimated values everywhere they're shown (planned TRIMP, pace forecasts, perceived-effort loads, projected days) with a "~"; measured values and a plan's targets (incl. a load override) stay plain (done 2026-10-05, #89)
-- [x] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later) (done 2026-10-05): lists the built-in templates by sport, with a detail screen and "Plan This Workout"
+- [x] **MVP2-21** Workout library tab (also hosts MVP5's plan builder later) (done 2026-10-05, #91): Library tab with the built-in templates by sport, a detail screen and "Plan This Workout"; a tab-bar search on every tab across templates, planned workouts and activities
 - [x] **MVP2-35** Decide the pace assumption for converting duration ↔ distance on planned cards (see `WeekViewModel.swift`) (done 2026-10-05, TrainingKit#75, #81)
   - TrainingKit's `PaceHistory` and `HistoricalPaceEstimator` forecast from similar earlier workouts, per zone and per step, for the cards and the week's totals alike. Planned cards still show only the measure the workout defines; the detail sheet and linked cards show both.
 - [ ] **MVP2-54** Check that the stats values (stats bar, daily-load chart, CTL/ATL/TSB pills) update **immediately** when a planned or completed activity is added or deleted, without switching weeks; MVP2-53 found the same staleness for plan links. Also confirm that missed planned workouts are not counted anywhere. Add tests for any gap found.
@@ -59,6 +59,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-126** Apple Health row in Connected Services (MVP2-123): what it shows. HealthKit doesn't reveal whether read access was granted (only whether the prompt was shown), so it can say "Connected" after authorization and offer the import actions, but not which data types were allowed. Decide with MVP2-123.
 - [ ] **MVP2-127** Mark a day row's Load pill with a "~" when one of that day's activities was scored from perceived effort (`LoadMethod.durationRPE`), as its card already is (MVP2-8). The pill only has the day's `FitnessMetrics`, whose `isProjected` is false for a performed day, so it needs a per-day flag from `WeekViewModel`, cached for the swipe path.
 - [ ] **MVP2-128** Cache `WeekViewModel.scoredLoad(for:)` per activity: `activityCardContent(for:)` and the stats bar's estimate flags (`weekEstimates`) each run a full `StatisticsCalculator.summary` per activity, on top of TrainingKit's own statistics pass (found in the #89 review).
+- [ ] **MVP2-129** Search (MVP2-21) reads every activity with its heart-rate and speed samples to build its results, then drops the samples. Needs a TrainingKit summary query (e.g. `ActivityStore.activitySummaries(in:)`: id, sport, start, duration, distance, linked plan) so opening the search tab stays fast with years of history (found in the #91 review).
 - [ ] **MVP2-?** `Goal` model: a non-event target (e.g. "sub-20 5k") with no date and no calendar presence
 - [ ] **MVP2-?** Structured Workout creator: create, edit, duplicate
 - [ ] **MVP2-?** Extend `SessionType` to match the 14-workout library
