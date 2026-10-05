@@ -10,7 +10,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 
 ## In progress
 
-- [ ] Verify MVP2-53 in the app after the next real workout: finish an activity that has a planned workout, sync, and check the week view shows one linked card without switching weeks
+- [x] Verify MVP2-53 in the app after the next real workout: finish an activity that has a planned workout, sync, and check the week view shows one linked card without switching weeks (done 2026-10-05, verified on device)
 
 ## MVP2: Structured & Planned Workouts
 
