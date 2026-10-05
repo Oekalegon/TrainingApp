@@ -103,7 +103,7 @@ extension WeekViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         return true
     }
 
@@ -117,7 +117,7 @@ extension WeekViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         return true
     }
 
@@ -141,6 +141,6 @@ extension WeekViewModel {
     /// every other store-mutating action here — MVP 1 has no error UI.
     private func deleteActivity(id: UUID, asOf today: Date) async {
         try? await model.deleteActivity(id: id, asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
     }
 }

@@ -264,8 +264,9 @@ remember or restore which tab was last active.
   race: Marathon". The daily-load chart has no race marker yet.
 - `DayActivitiesSection` takes one closure per card kind (`WeekViewModel.activityCardContent(for:)`,
   `plannedCardContent(for:asOf:)`) returning everything the card shows. Those values are cached per
-  item against the inputs they depend on — a plan's load override, its workout's steps, an activity's
-  link and heart-rate data — and dropped when the athlete or intensity thresholds change, because the
+  item against the inputs they depend on — a plan's load override, its workout's steps and date, an
+  activity's link and heart-rate data, and the pace history planned durations and distances are
+  forecast from — and dropped when the athlete or intensity thresholds change, because the
   list re-renders on every frame of the week-swipe drag and an id- or count-keyed cache would go
   stale on an in-place edit.
 - The week view sits on its own light (dark in dark mode) grey background, distinct from the plain
@@ -428,17 +429,20 @@ athlete's own earlier, similar workouts rather than from `AthleteProfile.paceMod
 per step kind and zone, so a recovery jog isn't forecast at steady pace; and open steps from the
 median time they took in earlier runs of the same workout or template.
 
-- `WeekViewModel.refreshPaceHistoryIfNeeded(asOf:)` has `TrainingModel.refreshPaceHistory(in:)` read
-  the last 180 days of activities from the store into `TrainingModel.paceHistory`. It runs with the
-  week caches (after loads, imports and link changes) and only when the activities, links, library,
-  athlete or day changed.
+- `WeekViewModel.refreshPaceHistoryIfNeeded(asOf:force:)` has `TrainingModel.refreshPaceHistory(in:)`
+  read the last 180 days of activities from the store into `TrainingModel.paceHistory`. It runs with
+  the week caches: when the athlete, the library or the day changed, and always after an import,
+  resync, dedup, link, join or delete (`refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`). It
+  doesn't run on week navigation, which changes the loaded weeks but not the 180-day history. The
+  card and stats caches are only invalidated when the history it read is actually different.
 - The planned card's duration, a linked activity's planned line (from activities before that one
   only), the detail sheet and the week's planned totals all pass that history to
   `StatisticsCalculator` (`projection(for:athlete:paceHistory:before:excluding:)`,
   `periodStatsSplit(…paceHistory:)`), so they agree. With no history the figures are the pace
   model's.
-- The detail sheet marks forecast values "Forecast" and its footer says how many similar workouts
-  they came from.
+- The detail sheet reads `TrainingModel.paceHistory` live, so a history that lands while it's open
+  updates it. It marks forecast values "Forecast" and its footer says how many earlier workouts they
+  came from.
 
 ### 2.3 Athlete account
 

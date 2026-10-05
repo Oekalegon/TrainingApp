@@ -32,7 +32,7 @@ extension WeekViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         return true
     }
 
@@ -46,7 +46,7 @@ extension WeekViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         return true
     }
 

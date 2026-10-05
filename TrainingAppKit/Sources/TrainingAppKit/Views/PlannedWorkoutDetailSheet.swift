@@ -52,14 +52,16 @@ struct PlannedWorkoutDetailSheet: View {
                     }
                 }
 
+                // Read once: each read runs the forecast.
+                let expected = viewModel.expected
                 Section {
-                    if let duration = viewModel.expectedDuration {
+                    if let duration = expected?.duration {
                         LabeledContent("Duration") {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(Duration.seconds(duration).formatted(.time(pattern: .hourMinuteSecond)))
                                 // Distance and open steps take as long as the athlete's pace makes
                                 // them — a forecast, so it says so.
-                                if viewModel.isDurationForecast {
+                                if expected?.isDurationForecast == true {
                                     Text("Forecast")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -67,13 +69,13 @@ struct PlannedWorkoutDetailSheet: View {
                             }
                         }
                     }
-                    if let meters = viewModel.expectedDistanceMeters {
+                    if let meters = expected?.distanceMeters {
                         LabeledContent("Distance") {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(Measurement(value: meters, unit: UnitLength.meters).formatted(Self.measurementFormat))
                                 // A duration-based workout has no distance of its own — this is a
                                 // forecast from the athlete's paces, so it says so.
-                                if viewModel.isDistanceForecast {
+                                if expected?.isDistanceForecast == true {
                                     Text("Forecast")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -92,7 +94,7 @@ struct PlannedWorkoutDetailSheet: View {
                 } header: {
                     Text("Expected")
                 } footer: {
-                    if let basis = viewModel.forecastBasis {
+                    if let basis = expected?.basis {
                         Text(basis)
                     }
                 }

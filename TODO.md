@@ -55,6 +55,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [ ] **MVP2-111** Estimate a planned workout's likely duration from previous workouts made with the same template. Open-ended steps (the run to the hill in the hill-sprint template) are ignored in default titles and count as a fixed 10 minutes in planned-duration estimates (`WorkoutDurationEstimator`), so the two can disagree; the median of earlier linked activities would be closer. Related to the TRIMP refinement item above.
   - Implemented on `claude/vibrant-pascal-tk8z7m` (not merged): open steps take the median time they took in earlier linked runs of the same workout or template.
 - [ ] **MVP2-112** After the TrainingKit MVP2-35/111 PR merges, point `TrainingAppKit/Package.swift` back at TrainingKit's `develop` and pin `Package.resolved` to the merge commit (the branch currently depends on TrainingKit's `claude/vibrant-pascal-tk8z7m`).
+- [ ] **MVP2-113** Unify how a planned step's zone is chosen: `WorkoutDurationEstimator` assumes zone 3 for a distance step without a `.heartRateZone` target, while the projector, the TRIMP estimator and the pace forecast use `HeartRateZoneModel.intensityRatio` (zone 4 for a `.pace`/`.power` target). Found in the MVP2-35/111 review; changing it moves existing load and duration estimates, so it needs its own PR in TrainingKit.
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
 ## MVP3: Calibration

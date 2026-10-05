@@ -99,7 +99,7 @@ public final class WeekViewModel {
     /// Bumped whenever ``paceHistory`` is replaced, so the card and stats caches that project
     /// workouts with it recompute. Observed, so cards on screen re-read once a history lands.
     var paceHistoryGeneration = 0
-    /// What ``paceHistory`` was built from, for `refreshPaceHistoryIfNeeded(asOf:)`.
+    /// What ``paceHistory`` was built from, for `refreshPaceHistoryIfNeeded(asOf:force:)`.
     @ObservationIgnored
     var paceHistoryKey: PaceHistoryKey?
 
@@ -321,7 +321,7 @@ public final class WeekViewModel {
         let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
         try? await model.load(in: unionRange, asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today)
         return computeDailyLoadSplit(in: range, asOf: today)
     }
 
@@ -723,7 +723,13 @@ public final class WeekViewModel {
     /// shows one (very briefly) outdated frame rather than a spurious empty one — never a
     /// user-visible difference in practice, since the underlying activities rarely change whichever
     /// week's own histogram they'd affect this dramatically between one frame and the next.
-    public func refreshWeekCachesIfNeeded() async {
+    ///
+    /// - Parameters:
+    ///   - today: The day the pace history is read up to (see ``refreshPaceHistoryIfNeeded(asOf:force:)``).
+    ///   - activitiesChanged: `true` after an import, resync, dedup, link, join or delete, which can
+    ///     change the stored activities the pace history is built from without anything the week
+    ///     view itself keys on changing; forces a pace-history refresh.
+    public func refreshWeekCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
         let activityCount = model.activities.count
         let inputsChanged = weekGraphCachesActivityCount != activityCount
             || weekGraphCachesAthlete != model.athlete
@@ -743,7 +749,7 @@ public final class WeekViewModel {
             && (inputsChanged || weekGraphCaches[weekStart] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
-        await refreshPaceHistoryIfNeeded()
+        await refreshPaceHistoryIfNeeded(asOf: today, force: activitiesChanged)
     }
 
     /// Computes one week's heart-rate histogram off the main actor and stores it in
@@ -831,7 +837,7 @@ public final class WeekViewModel {
 
     /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
     public func plannedWorkoutDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
-        let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan, paceHistory: paceHistory)
+        let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan)
         viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
         return viewModel
     }
@@ -874,7 +880,7 @@ public final class WeekViewModel {
     /// guarantee), so there's nothing for the view to reconcile; MVP 1 has no load-failure UI.
     public func load(asOf today: Date = .now) async {
         try? await model.load(in: Self.loadRange(for: displayedWeekStart, calendar: calendar), asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today)
     }
 
     /// `model.metrics` restricted to `range`, in day order — for the metrics detail view's period
@@ -889,7 +895,7 @@ public final class WeekViewModel {
         let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
         try? await model.load(in: unionRange, asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today)
         return model.metrics.filter { range.contains($0.day) }.sorted { $0.day < $1.day }
     }
 
@@ -901,7 +907,7 @@ public final class WeekViewModel {
         isRefreshing = true
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -917,7 +923,7 @@ public final class WeekViewModel {
         } catch {
             return
         }
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -931,7 +937,7 @@ public final class WeekViewModel {
         isResyncing = true
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -946,7 +952,7 @@ public final class WeekViewModel {
         isDeduplicating = true
         defer { isDeduplicating = false }
         try? await model.deduplicateActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
     }
 
     static func calendar(for athlete: AthleteProfile) -> Calendar {
