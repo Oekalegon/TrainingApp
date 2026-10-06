@@ -510,9 +510,12 @@ median time they took in earlier runs of the same workout or template.
 Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0). A settings-style list of groups
 (MVP2-123), each opening its own screen on the tab's `NavigationStack`, whose path (`[AthleteRoute]`)
 `AppTabView` owns so a screen can be opened from another tab. Display of
-`TrainingModel.athlete: AthleteProfile` — the profile is **not editable in MVP 1**, since there's no
-save/write path back through `TrainingModel` yet and it's shown to confirm the imported biometric data
-looks right. The only app settings are the Apple Watch ones (MVP2-117, MVP2-118).
+`TrainingModel.athlete: AthleteProfile`, shown to confirm the imported biometric data looks right, and
+(MVP2-132) editable where the athlete knows better than Health: the name, heart-rate settings, threshold
+pace, week start and time zone. Sex and age come from Health and aren't edited. Every edit goes through
+`TrainingModel.updateAthlete(asOf:_:)` (`WeekViewModel+AthleteEditing`): it saves before it assigns, so a
+failed save changes nothing and the screen says so, and it invalidates the fitness-metrics cache from the
+earliest changed date. The other app settings are the Apple Watch ones (MVP2-117, MVP2-118).
 
 The list itself (`AthleteView`):
 
@@ -537,11 +540,12 @@ The list itself (`AthleteView`):
 
 The screens:
 
-- **Personal Information** (`PersonalInformationView`): the avatar, name, biological sex, and age
+- **Personal Information** (`PersonalInformationView`): the avatar, name (tap the row to change it; an
+  empty name shows as "Athlete"), biological sex, and age
   (MVP2-124: whole years in the athlete's time zone, shown once `AthleteProfile.dateOfBirth` is on
   record; `AthleteProfile.merging(_:asOf:)` fills it from HealthKit on each import and never wipes it
   when a read fails), then two rows:
-  - **Heart Rate Zones** (`HeartRateZonesView`): the current heart-rate zone settings
+  - **Heart Rate Zones** (`HeartRateZonesView`, MVP2-132 editing): the current heart-rate zone settings
     (`athlete.currentHeartRateZoneSettings`): resting HR, maximum HR with its value on the title's own
     row and a second row saying where it came from (MVP2-56,
     `AthleteViewModel.maxHeartRateSourceDescription`: "Estimated from age", or "Measured in a workout
@@ -551,9 +555,34 @@ The screens:
     (`HeartRateZone.color`), as the activity detail sheet's zone list does (MVP1-70). The table is
     omitted when there are no settings on record yet, or when the current method can't resolve a zone
     (`.lactateThreshold` with no LTHR set).
-  - **Pace Zones** (`PaceZonesView`): the pace model's threshold pace
+
+    Editing is dated, like the history it edits. The "+" button (or a tap on a history row) opens
+    `HeartRateSettingsSheet`: the date the settings take effect, resting and maximum heart rate, an
+    optional lactate threshold and the zone method, checked by `HeartRateSettingsDraft` (resting 25–120,
+    maximum 100–230 and at least 20 above resting, a lactate threshold between them, and one when the
+    method needs it). Saving records an entry from the start of that day in the athlete's time zone,
+    replacing the day's entry if there is one (`AthleteProfile.recordingHeartRateSettings`); activities
+    from then on are scored with it, earlier ones keep theirs. A "History" section lists the entries,
+    newest first, and a swipe deletes one (never the last). A maximum the athlete changes is stored with
+    the source `.manual` ("Set by you on …"); one left alone keeps its source.
+
+    While Apple Health is connected (an import has happened), a switch, "Resting Heart Rate from Apple
+    Health" (`AthleteProfile.usesHealthKitRestingHeartRate`, on by default), decides who owns the
+    resting heart rate. On, HealthKit's reading is merged on each import and the field can't be edited
+    (the sheet shows it locked); off, the athlete's own entries stand and HealthKit's reading is ignored.
+    Turning it on imports straight away. The maximum is **never** changed for the athlete: the HealthKit
+    merge only seeds the very first entry from the age estimate, a workout-measured maximum still has to
+    be accepted (MVP2-56), and when the age estimate later differs by at least 2 bpm while the current
+    maximum is itself an estimate, a "Use Age Estimate (N bpm)" button offers it
+    (`AthleteViewModel.offeredMaxHeartRateEstimate(asOf:)`).
+  - **Pace Zones** (`PaceZonesView`, MVP2-132 editing): the pace model's threshold pace
     (`paceModel.thresholdPaceSecondsPerKilometer`), shown as min/km, and a note that the zones
-    themselves aren't available yet (MVP8).
+    themselves aren't available yet (MVP8). Threshold pace is dated too (`AthleteProfile.paceHistory`):
+    the "+" button or a history row opens `ThresholdPaceSheet` (date, minutes and seconds, 2:00–20:00 per
+    kilometer, `PaceDraft`), saving replaces the day's entry and keeps the zone multipliers, and the
+    history lists newest first with swipe to delete (never the last). A pace stored before the history
+    existed shows as "Since the start", and editing it records a new entry from today. Planning uses the
+    latest entry, like the heart-rate settings.
 - **Connected Services** (`ConnectedServicesView`):
   - **Apple Health** (`AppleHealthView`, MVP2-126): what the app reads from Health, "Import Now" (the
     pull-to-refresh import) and, while nothing has ever been imported, "Connect Apple Health" (the
@@ -581,8 +610,12 @@ The screens:
     The section reads the permission when it appears (`refreshAuthorization()`), and the sync that
     runs when the app becomes active updates it. The week view's Watch permission banner opens the
     tab with this screen already pushed (`AthleteRoute.watchSettings`).
-- **Calendar** (`CalendarSettingsView`): week-starts-on and time zone — minor, but confirms the app
-  is bucketing days the way the athlete expects.
+- **Calendar** (`CalendarSettingsView`, MVP2-132 editing): week-starts-on (a picker) and time zone (a
+  searchable list of every identifier, `TimeZonePickerView`). Both are single values that apply to all
+  history, so changing either regroups every day and week and rebuilds the fitness history once; the
+  footer says so. `WeekViewModel` rebuilds its calendar when either changes, keeps the displayed week on
+  the day it showed (`setWeekStartsOn`/`setTimeZone`) and reloads. A dated time-zone history was
+  considered and left out.
 - **Developer** (`DeveloperView`): **Force Full Resync** and **Deduplicate Activities**, moved here
   from the bottom of the old single screen. Force Full Resync re-imports every activity from HealthKit
   from scratch, via `TrainingModel.resyncActivities(from:asOf:)` — a full import (cleared
@@ -593,9 +626,7 @@ The screens:
   activities imported before the fix. It's a recovery action, not a settings toggle. Each asks for
   confirmation, and neither runs while the other does.
 
-`heartRateZoneHistory` beyond the current entry is not shown in MVP 1 (no history/timeline UI —
-just "what's in effect now"). No editing, no HealthKit-write-back; these screens only read what
-`TrainingHealthKit`/`TrainingPersistence` have already populated.
+No HealthKit write-back: nothing the athlete edits here is written to Health.
 
 ### 2.4 Workout library (MVP2-21)
 
@@ -836,8 +867,7 @@ HealthKit or CloudKit involved.
   it.
 - **Cycle/plan viewing screen** — deferred until MVP 2's plan assistant gives it a reason to
   exist beyond a static list.
-- **Editing the athlete account** — MVP 1's athlete screen is read-only; editing biometric data
-  needs a write path through `TrainingModel` that doesn't exist yet.
+- **Editing the athlete account** — done in MVP2-132 (§2.3).
 - iPad layout, watchOS companion, manual activity entry, plan editing.
 
 ---

@@ -164,3 +164,59 @@ struct AthleteViewModelTests {
         #expect(viewModel.maxHeartRateSourceDescription == "Measured in a workout on \(date)")
     }
 }
+
+@Suite("AthleteViewModel editing support (MVP2-132)")
+struct AthleteViewModelEditingTests {
+    private let today = Date(timeIntervalSince1970: 1_700_000_000)
+
+    @Test("a manually entered max says when it was set")
+    func manualMaxDescription() {
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        athlete = athlete.recordingHeartRateSettings(
+            HeartRateZoneSettings(effectiveDate: today, restingHeartRateBPM: 50, maxHeartRateBPM: 186, maxHeartRateSource: .manual)
+        )
+
+        #expect(AthleteViewModel(athlete: athlete).maxHeartRateSourceDescription?.hasPrefix("Set by you on") == true)
+    }
+
+    @Test("both histories list newest first")
+    func historiesNewestFirst() {
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        athlete = athlete
+            .recordingHeartRateSettings(HeartRateZoneSettings(effectiveDate: today, restingHeartRateBPM: 48, maxHeartRateBPM: 186))
+            .recordingPaceModel(PaceModel(thresholdPaceSecondsPerKilometer: 260), from: today)
+        let viewModel = AthleteViewModel(athlete: athlete)
+
+        #expect(viewModel.heartRateHistory.map(\.restingHeartRateBPM) == [48, 50])
+        #expect(viewModel.paceHistory.map(\.paceModel.thresholdPaceSecondsPerKilometer) == [260, 300])
+    }
+
+    @Test("an entry effective since the beginning of time is edited as a new one from today")
+    func editingDateForTheFirstEntry() {
+        #expect(AthleteViewModel.editingDate(for: .distantPast, asOf: today) == today)
+        #expect(AthleteViewModel.editingDate(for: today.addingTimeInterval(-86400), asOf: today) == today.addingTimeInterval(-86400))
+    }
+
+    @Test("the age estimate is offered only while the max is itself an estimate, and only when it differs enough")
+    func offeredEstimate() {
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        athlete.dateOfBirth = today.addingTimeInterval(-40 * 365.2425 * 86400)
+        // 208 - 0.7 * 40 = 180: ten above the stored 190 estimate.
+        #expect(AthleteViewModel(athlete: athlete).offeredMaxHeartRateEstimate(asOf: today) == 180)
+
+        // Within tolerance: nothing to offer.
+        let close = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 179)
+        var closeWithBirth = close
+        closeWithBirth.dateOfBirth = athlete.dateOfBirth
+        #expect(AthleteViewModel(athlete: closeWithBirth).offeredMaxHeartRateEstimate(asOf: today) == nil)
+
+        // The athlete's own max isn't compared with a formula.
+        let manual = athlete.recordingHeartRateSettings(
+            HeartRateZoneSettings(effectiveDate: today, restingHeartRateBPM: 50, maxHeartRateBPM: 200, maxHeartRateSource: .manual)
+        )
+        #expect(AthleteViewModel(athlete: manual).offeredMaxHeartRateEstimate(asOf: today) == nil)
+
+        // No date of birth, no estimate.
+        #expect(AthleteViewModel(athlete: AthleteProfile.fixture()).offeredMaxHeartRateEstimate(asOf: today) == nil)
+    }
+}

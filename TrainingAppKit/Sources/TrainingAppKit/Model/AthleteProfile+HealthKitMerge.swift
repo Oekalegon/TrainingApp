@@ -15,21 +15,23 @@ extension AthleteProfile {
 
     /// Merges a `HealthKitAthleteReader` snapshot into this profile.
     ///
-    /// `sex` and `dateOfBirth` are replaced whenever HealthKit reports one (a biological-sex change is rare enough,
-    /// and cheap enough to just overwrite, that no history is kept for it — unlike heart-rate
-    /// zones below). A new `HeartRateZoneSettings` entry is appended only when both resting and
-    /// estimated max heart rate are available *and* differ from ``currentHeartRateZoneSettings``
-    /// by more than ``heartRateChangeToleranceBPM``, so a routine pull-to-refresh with
-    /// essentially-unchanged readings doesn't pile up near-duplicate rows in
-    /// `heartRateZoneHistory` — MVP 1's athlete screen only shows the current entry, but the
-    /// history still feeds recomputing *past* activities' load correctly (design doc's own note on
-    /// `heartRateZoneHistory` recomputation), so keeping it free of noise matters. A new entry
-    /// carries over the existing entry's `lactateThresholdHeartRateBPM`/`zoneMethod`, since
-    /// HealthKit never reports either — only resting/max HR and biological sex.
+    /// `sex` and `dateOfBirth` are replaced whenever HealthKit reports one (a biological-sex change is
+    /// rare enough, and cheap enough to just overwrite, that no history is kept for it — unlike
+    /// heart-rate zones below).
     ///
-    /// A max heart rate measured in a workout (`maxHeartRateSource` `.workout`, MVP2-56) is never
-    /// replaced by a lower formula estimate: the measured value is a lower bound on the true max,
-    /// while the estimate is only a guess from age. See ``mergedMaxHeartRate(estimate:current:)``.
+    /// The resting heart rate follows HealthKit only while ``usesHealthKitRestingHeartRate`` is on
+    /// (MVP2-132); with it off the athlete's own entries stand and HealthKit's reading is ignored. When
+    /// it's on, a new `HeartRateZoneSettings` entry is appended only when the reading differs from
+    /// ``currentHeartRateZoneSettings`` by at least ``heartRateChangeToleranceBPM``, so a routine
+    /// pull-to-refresh with essentially-unchanged readings doesn't pile up near-duplicate rows in
+    /// `heartRateZoneHistory` — the history feeds recomputing *past* activities' load correctly (design
+    /// doc's own note on `heartRateZoneHistory` recomputation), so keeping it free of noise matters.
+    ///
+    /// The maximum heart rate is never changed here. A new entry carries over the current entry's max
+    /// (with its source), lactate threshold and zone method, since HealthKit reports none of them; and
+    /// the age estimate only seeds the very first entry. Later estimates, which drift as the athlete
+    /// ages, are offered for the athlete to accept (``AthleteViewModel/offeredMaxHeartRateEstimate(asOf:)``)
+    /// rather than applied.
     ///
     /// - Parameters:
     ///   - snapshot: What `HealthKitAthleteReader.snapshot(asOf:)` could read; any field may be
@@ -44,41 +46,25 @@ extension AthleteProfile {
         if let dateOfBirth = snapshot.dateOfBirth {
             merged.dateOfBirth = dateOfBirth
         }
-        if let resting = snapshot.restingHeartRateBPM, let estimate = snapshot.estimatedMaxHeartRateBPM {
-            let current = merged.currentHeartRateZoneSettings
-            let max = Self.mergedMaxHeartRate(estimate: estimate, current: current)
-            let tolerance = Self.heartRateChangeToleranceBPM
-            let restingUnchanged = current.map { abs($0.restingHeartRateBPM - resting) < tolerance } ?? false
-            let maxUnchanged = current.map { abs($0.maxHeartRateBPM - max.bpm) < tolerance } ?? false
-            if !(restingUnchanged && maxUnchanged) {
-                merged.heartRateZoneHistory.append(
-                    HeartRateZoneSettings(
-                        effectiveDate: today,
-                        restingHeartRateBPM: resting,
-                        maxHeartRateBPM: max.bpm,
-                        maxHeartRateSource: max.source,
-                        lactateThresholdHeartRateBPM: current?.lactateThresholdHeartRateBPM,
-                        zoneMethod: current?.zoneMethod ?? .karvonen
-                    )
-                )
+        guard usesHealthKitRestingHeartRate, let resting = snapshot.restingHeartRateBPM else { return merged }
+        if let current = merged.currentHeartRateZoneSettings {
+            if abs(current.restingHeartRateBPM - resting) >= Self.heartRateChangeToleranceBPM {
+                var entry = current
+                entry.effectiveDate = today
+                entry.restingHeartRateBPM = resting
+                merged.heartRateZoneHistory.append(entry)
             }
+        } else if let estimate = snapshot.estimatedMaxHeartRateBPM {
+            merged.heartRateZoneHistory.append(
+                HeartRateZoneSettings(
+                    effectiveDate: today,
+                    restingHeartRateBPM: resting,
+                    maxHeartRateBPM: estimate,
+                    maxHeartRateSource: .formula,
+                    zoneMethod: .karvonen
+                )
+            )
         }
         return merged
-    }
-
-    /// The max heart rate a merged entry should carry: HealthKit's formula `estimate`, unless
-    /// `current` holds a measured max at least as high, which is kept with its source.
-    ///
-    /// - Parameters:
-    ///   - estimate: The age-formula estimate from HealthKit's date of birth, in bpm.
-    ///   - current: The settings currently in effect, if any.
-    /// - Returns: The max heart rate to record and where it came from.
-    static func mergedMaxHeartRate(
-        estimate: Double, current: HeartRateZoneSettings?
-    ) -> (bpm: Double, source: MaxHeartRateSource) {
-        if let current, current.maxHeartRateSource != .formula, current.maxHeartRateBPM >= estimate {
-            return (current.maxHeartRateBPM, current.maxHeartRateSource)
-        }
-        return (estimate, .formula)
     }
 }

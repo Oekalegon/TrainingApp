@@ -23,7 +23,20 @@ public final class WeekViewModel {
     @ObservationIgnored
     private(set) var pendingWatchSync: Task<Void, Never>?
     private let refresher: any ActivityRefreshing
-    private let calendar: Calendar
+    /// The calendar of the athlete's time zone and week start, rebuilt only when either changes
+    /// (MVP2-132), since the athlete can now edit both. Read through ``calendar``.
+    @ObservationIgnored
+    private var calendarCache: (timeZone: TimeZone, weekStartsOn: Weekday, calendar: Calendar)
+    /// The athlete's calendar: ``Calendar`` for their time zone with their week start applied. Built
+    /// once and reused, so the week-swipe path doesn't create one per access; a changed time zone or
+    /// week start gets a new one on the next access.
+    private var calendar: Calendar {
+        let athlete = model.athlete
+        if calendarCache.timeZone != athlete.timeZone || calendarCache.weekStartsOn != athlete.weekStartsOn {
+            calendarCache = (athlete.timeZone, athlete.weekStartsOn, Self.calendar(for: athlete))
+        }
+        return calendarCache.calendar
+    }
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
     /// uses, so a card's headline Load number always agrees with the detail sheet's own figure.
     /// Not `private` only because `WeekViewModel+LinkedPlan.swift` projects workouts with it too.
@@ -171,7 +184,7 @@ public final class WeekViewModel {
         self.watchSync = watchSync
         self.maxHeartRatePromptHistory = maxHeartRatePromptHistory ?? UserDefaultsMaxHeartRatePromptHistory()
         let calendar = Self.calendar(for: model.athlete)
-        self.calendar = calendar
+        self.calendarCache = (model.athlete.timeZone, model.athlete.weekStartsOn, calendar)
         self.displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
     }
 
