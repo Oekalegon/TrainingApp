@@ -75,6 +75,7 @@ public struct AppTabView: View {
             Tab("Athlete", systemImage: "person.circle", value: AppTab.athlete) {
                 AthleteView(
                     viewModel: viewModel.athleteViewModel,
+                    weekViewModel: viewModel,
                     path: $athletePath,
                     isResyncing: viewModel.isResyncing,
                     onResync: { Task { await viewModel.resyncActivities() } },

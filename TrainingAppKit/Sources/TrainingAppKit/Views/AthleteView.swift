@@ -1,10 +1,12 @@
+import ImageIO
 import SwiftUI
 import TrainingCore
 
 /// The Athlete tab (MVP2-123, design doc §2.3): the avatar and name, the live overlap warning, and a
 /// settings-style list of groups, each opening its own screen — Personal Information (with Heart
 /// Rate Zones and Pace Zones inside it), Connected Services (Apple Health, Apple Watch), Calendar
-/// and Developer. Read-only: the profile isn't edited here.
+/// and Developer. The screens it opens edit the profile where the athlete knows better than Health
+/// (MVP2-132); this list itself only navigates.
 ///
 /// The `NavigationStack`'s path is owned by `AppTabView` (``path``), so the week view's Watch
 /// permission banner can open the Apple Watch synchronisation screen directly
@@ -12,6 +14,8 @@ import TrainingCore
 /// it's visible whenever the tab is (MVP1-67).
 struct AthleteView: View {
     let viewModel: AthleteViewModel
+    /// The week view model the screens' edits go through (MVP2-132).
+    let weekViewModel: WeekViewModel
     /// The screens currently pushed, owned by `AppTabView`.
     @Binding var path: [AthleteRoute]
     let isResyncing: Bool
@@ -57,7 +61,7 @@ struct AthleteView: View {
             List {
                 Section {
                     VStack(spacing: 8) {
-                        AvatarView(initials: viewModel.initials)
+                        AvatarView(initials: viewModel.initials, imageData: viewModel.avatarImageData)
                         Text(viewModel.displayName)
                             .font(.title3.weight(.semibold))
                     }
@@ -141,11 +145,11 @@ struct AthleteView: View {
     private func destination(for route: AthleteRoute) -> some View {
         switch route {
         case .personalInformation:
-            PersonalInformationView(viewModel: viewModel)
+            PersonalInformationView(viewModel: viewModel, weekViewModel: weekViewModel)
         case .heartRateZones:
-            HeartRateZonesView(viewModel: viewModel)
+            HeartRateZonesView(viewModel: viewModel, weekViewModel: weekViewModel, showsHealthKitSwitch: !hasNoActivities)
         case .paceZones:
-            PaceZonesView(viewModel: viewModel)
+            PaceZonesView(viewModel: viewModel, weekViewModel: weekViewModel)
         case .connectedServices:
             ConnectedServicesView(showsAppleWatch: watchSync != nil)
         case .appleHealth:
@@ -160,7 +164,7 @@ struct AthleteView: View {
                 WatchSynchronisationView(sync: watchSync)
             }
         case .calendar:
-            CalendarSettingsView(viewModel: viewModel)
+            CalendarSettingsView(viewModel: viewModel, weekViewModel: weekViewModel)
         case .developer:
             DeveloperView(
                 isResyncing: isResyncing, onResync: onResync,
@@ -181,15 +185,34 @@ struct AthleteRouteRow: View {
     }
 }
 
+/// The athlete's avatar (MVP2-132): the picture they chose, cropped to a circle, or their initials on
+/// blue when there's none or it can't be decoded.
 struct AvatarView: View {
     let initials: String
+    /// The picked picture as encoded image data, if any.
+    var imageData: Data?
 
     var body: some View {
-        Text(initials)
-            .font(.title.bold())
-            .foregroundStyle(.white)
-            .frame(width: 72, height: 72)
-            .background(Circle().fill(.blue))
-            .accessibilityHidden(true)
+        Group {
+            if let image = decodedImage {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Text(initials)
+                    .font(.title.bold())
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.blue)
+            }
+        }
+        .frame(width: 72, height: 72)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    private var decodedImage: CGImage? {
+        guard let imageData, let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 }
