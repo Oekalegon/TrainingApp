@@ -70,7 +70,7 @@ public struct AthleteViewModel {
         athlete.currentHeartRateZoneSettings
     }
 
-    /// Where the current max heart rate came from, for a caption under the Max HR row (MVP2-56):
+    /// Where the current max heart rate came from, for a caption under the Maximum Heart Rate row (MVP2-56):
     /// "Estimated from age", or "Measured in a workout on 24 Sep 2026". `nil` when there are no
     /// settings on record.
     ///
