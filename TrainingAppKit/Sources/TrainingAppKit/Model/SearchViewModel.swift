@@ -7,7 +7,7 @@ import TrainingCore
 ///
 /// Plans and activities come from the stores, over all dates, read by ``reload()``:
 /// `TrainingModel` only holds the week view's loaded window. Activities are kept as light
-/// ``ActivityResult``s without their samples; ``activity(id:)`` fetches the full one when a result
+/// ``ActivityResult``s, read as `ActivityListItem`s so the samples are never built; ``activity(id:)`` fetches the full one when a result
 /// is opened, and the week view's model is loaded around a result's day before its detail sheet
 /// opens (``prepareDetail``). Each result's searchable text (names, sport, dates) is written once at reload, so
 /// typing only compares strings. Templates come from ``library``.
@@ -112,7 +112,7 @@ public final class SearchViewModel {
             let everything = Date.distantPast...Date.distantFuture
             let allPlans = try await stores.planStore.plans(in: everything)
             let workouts = try await stores.workoutStore.workouts()
-            let allActivities = try await stores.activityStore.activities(in: everything)
+            let allActivities = try await stores.activityStore.activityListItems(in: everything)
 
             guard generation == reloadGeneration else { return }
 
