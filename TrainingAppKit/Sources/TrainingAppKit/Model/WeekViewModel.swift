@@ -56,12 +56,12 @@ public final class WeekViewModel {
     /// populated — see ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch
     /// invalidates the whole cache rather than trying to single out which weeks actually changed.
     /// A fingerprint rather than the count: a resync can change an activity's heart-rate samples
-    /// without changing how many activities there are (MVP2-129).
+    /// without changing how many activities there are (MVP2-130).
     @ObservationIgnored
     private var weekGraphCachesFingerprint: Int?
     /// `model.athlete` as of the last time ``weekGraphCaches`` was populated. A change (e.g. a new
     /// max heart rate, MVP2-56) moves the zone boundaries the histogram is shaded against, so it
-    /// marks every cached week stale the same way a changed activity count does.
+    /// marks every cached week stale the same way a changed activity fingerprint does.
     @ObservationIgnored
     private var weekGraphCachesAthlete: AthleteProfile?
 
@@ -951,13 +951,17 @@ public final class WeekViewModel {
     /// storing — `false` once either has moved on, since the result is now either stale (a
     /// subsequent import changed the underlying activities) or for a week that's fallen outside the
     /// 3-week window this cache keeps.
+    ///
+    /// Compares against the stored ``weekGraphCachesFingerprint`` rather than re-hashing every
+    /// sample: a refresh that sees changed data stores its new fingerprint first, so an older
+    /// result is dropped here, and data that changed before any refresh is caught by the next one.
     private func isStillCacheable(_ weekStart: Date, fingerprint: Int?) -> Bool {
-        cachedWeekStarts.contains(weekStart) && fingerprint == histogramFingerprint()
+        cachedWeekStarts.contains(weekStart) && fingerprint == weekGraphCachesFingerprint
     }
 
     /// A hash of what the heart-rate histogram reads from each activity — id, start, duration and
     /// every heart-rate sample — so activities changed in place (same count) still invalidate
-    /// ``weekGraphCaches`` (MVP2-129). Unlike ``activitiesFingerprint()`` it hashes the samples
+    /// ``weekGraphCaches`` (MVP2-130). Unlike ``activitiesFingerprint()`` it hashes the samples
     /// themselves: it only runs when the week caches refresh, not on the week-swipe path, and the
     /// histogram is exactly what those samples feed.
     private func histogramFingerprint() -> Int {

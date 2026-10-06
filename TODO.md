@@ -169,7 +169,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 - [x] **MVP2-51** Intensity marker icon instead of tint (2026-09-22)
 - [x] **MVP2-53** Refresh plans after import so auto-matched links show live (2026-10-01, TrainingKit#63, #66)
 - [x] **MVP2-54** Stats, load chart and pills refresh live; stats and daily-load caches now also key on an activity fingerprint (in-place changes such as a resync); missed plans confirmed uncounted (2026-10-05)
-- [x] **MVP2-130** Heart-rate histogram cache refreshes when an activity's heart-rate samples change in place (same count): keyed on a fingerprint of the activities' samples instead of the count (2026-10-06; found in the MVP2-54 review)
+- [x] **MVP2-130** Heart-rate histogram cache refreshes when an activity's heart-rate samples change in place (same count): keyed on a fingerprint of the activities' samples instead of the count (2026-10-06, #93; found in the MVP2-54 review)
 - [x] **MVP2-56** Raise max HR from ordinary workouts: raise-only, athlete-confirmed, date-effective; 10 s held peak with cadence-lock and stuck-reading guards; one-time 12-month scan after the first import (2026-10-01, TrainingKit#65, #70)
 - [x] **MVP2-101** Queued athlete updates: `TrainingModel.updateAthlete(asOf:_:)`, used by `applyMaxHeartRate` and the HealthKit merge, so the two can't overwrite each other (2026-10-01, TrainingKit#66, #71)
 - [x] **MVP2-100** Daily calendar JSON export for a chosen period: share button in the week view toolbar, completed and upcoming planned workouts per day (missed left out) with TRIMP, sport/template/intensity, name, duration, distance, plus CTL/ATL/TSB/monotony/strain (2026-10-01, TrainingKit#67, #72)
