@@ -783,7 +783,7 @@ the foreground, which also moves the window on after midnight.
   workout against the Watch nor schedules it. The permission banner doesn't show while it's off.
 - **Permission denied (MVP2-117).** Each run records the permission (`WatchScheduleSync.authorization`).
   While it's denied and sending is on, `WeekView` shows a yellow `WatchPermissionBanner` at the bottom of the screen,
-  explaining that planned workouts won't reach the Watch, with an "Open Athlete Tab" button to the
+  explaining that planned workouts won't reach the Watch, with an "Open Watch Settings" button to the
   Athlete tab's Apple Watch ▸ Synchronisation screen (§2.3). The banner can be dismissed; the dismissal is kept in
   `UserDefaults` and cleared once permission is granted, so declining again later brings the banner
   back. iOS asks only once: after "Don't Allow", or after the athlete turns the app off in the Watch

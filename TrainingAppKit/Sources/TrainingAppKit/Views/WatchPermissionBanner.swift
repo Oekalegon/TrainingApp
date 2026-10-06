@@ -28,7 +28,7 @@ struct WatchPermissionBanner: View {
                     .foregroundStyle(.black.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
                 // A 44 pt tall hit area: the banner's main action, in small text.
-                Button("Open Athlete Tab", action: onShowWatchSettings)
+                Button("Open Watch Settings", action: onShowWatchSettings)
                     .font(.footnote.weight(.semibold))
                     .underline()
                     .buttonStyle(.plain)
