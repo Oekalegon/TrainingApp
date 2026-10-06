@@ -27,7 +27,7 @@ struct WeekViewModelPlanLinkTests {
     /// A model with one workout/plan per entry of `minutes` on day 2, and the activity imported
     /// (so it's auto-matched, as in the app).
     private func makeViewModel(
-        planMinutes: [Double], activityMinutes: Double
+        planMinutes: [Double], activityMinutes: Double, startedFromPlan: Int? = nil
     ) async throws -> (WeekViewModel, [PlannedActivity], Activity) {
         let store = InMemoryStore()
         let stores = StoreSet(
@@ -44,7 +44,10 @@ struct WeekViewModelPlanLinkTests {
             plans.append(plan)
         }
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let activity = Activity(source: .healthKit(UUID()), sport: .running, start: day(2), duration: activityMinutes * 60)
+        let activity = Activity(
+            source: .healthKit(UUID()), sport: .running, start: day(2), duration: activityMinutes * 60,
+            scheduledPlanID: startedFromPlan.map { plans[$0].id }
+        )
         try await model.importActivities(from: StubImporter(activities: [activity]), asOf: day(2))
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(2))
         return (viewModel, plans, model.activities[0])
@@ -60,6 +63,19 @@ struct WeekViewModelPlanLinkTests {
         #expect(context.linkedPlan?.title == "Run 0")
         #expect(!context.isAmbiguous)
         #expect(context.candidates.isEmpty)
+    }
+
+    @Test("an activity started from a scheduled plan is linked to exactly that plan, with no ambiguity (MVP2-120)")
+    func linkedByScheduledPlanID() async throws {
+        // 30 minutes fits plan 0 and plan 1 (31) almost equally; the Watch says it was plan 1.
+        let (viewModel, plans, activity) = try await makeViewModel(
+            planMinutes: [30, 31], activityMinutes: 30, startedFromPlan: 1
+        )
+
+        let context = try #require(viewModel.planLinkContext(for: activity))
+
+        #expect(context.linkedPlan?.id == plans[1].id)
+        #expect(!context.isAmbiguous)
     }
 
     @Test("a near-tie is flagged as ambiguous and offers the other plan")
