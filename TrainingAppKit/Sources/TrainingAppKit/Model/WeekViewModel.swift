@@ -1183,6 +1183,17 @@ public final class WeekViewModel {
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
+    /// Brings the caches up to date after workouts were imported without this view model, by the
+    /// background import (MVP2-121, see `TrainingAppEnvironment.importArrivedWorkouts(asOf:)`), which
+    /// has already imported them and synced the Watch. What ``refresh(asOf:)`` does after its own
+    /// import: the week caches and pace history, and the max heart rate suggestion.
+    ///
+    /// - Parameter today: Passed through to the cache refresh and the suggestion check.
+    public func activitiesImportedElsewhere(asOf today: Date = .now) async {
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await checkForMaxHeartRateSuggestion(asOf: today)
+    }
+
     /// The empty-state "Connect Health data" action (design doc §2.1): requests authorization,
     /// then runs the same import ``refresh(asOf:)`` does. Failures fail silently, same as
     /// ``refresh(asOf:)`` — MVP 1 has no error UI, and the empty state simply stays empty.
