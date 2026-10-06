@@ -42,9 +42,10 @@ public final class WeekViewModel {
     /// via `PlannedWorkoutSheet`). The athlete is part of the key too: a changed max or resting
     /// heart rate rescores every activity's load (MVP2-56). So is ``plansFingerprint()``: editing a
     /// plan's load override, date or workout changes no count but does change the planned totals and
-    /// which of them are estimates (MVP2-8).
+    /// which of them are estimates (MVP2-8). And ``activitiesFingerprint()``: a resync can change an
+    /// activity's sport, distance or effort without changing the count (MVP2-54).
     @ObservationIgnored
-    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int, plans: Int)?
+    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int, plans: Int, activities: Int)?
 
     /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
     /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
@@ -76,9 +77,10 @@ public final class WeekViewModel {
     /// `model.activities` (e.g. saving a new planned workout via `PlannedWorkoutSheet`), plus the
     /// athlete, whose heart-rate settings every activity's load is scored with (MVP2-56), plus
     /// ``plansFingerprint()``, since an edited override, date or workout moves a planned bar without
-    /// changing any count.
+    /// changing any count, plus ``activitiesFingerprint()``, since an activity changed in place (a
+    /// resync) moves a performed bar without changing the count (MVP2-54).
     @ObservationIgnored
-    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, plans: Int)?
+    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, plans: Int, activities: Int)?
 
     /// The card caches: ``plannedCardSummary(for:)``, ``linkedPlanExpectation(for:)`` and
     /// ``intensity(for:)-(Activity)``/``intensity(for:)-(PlannedActivity)`` results. The day list
@@ -302,14 +304,15 @@ public final class WeekViewModel {
     func dailyLoadSplit(for weekStart: Date, asOf today: Date = .now) -> DailyLoadSplit {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
         let plans = plansFingerprint()
+        let activities = activitiesFingerprint()
         let keyIsCurrent = dailyLoadSplitCachesKey.map {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
                 && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
-                && $0.plans == plans
+                && $0.plans == plans && $0.activities == activities
         } ?? false
         if !keyIsCurrent {
             dailyLoadSplitCaches.removeAll()
-            dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today, plans)
+            dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today, plans, activities)
         }
         if let cached = dailyLoadSplitCaches[weekStart] {
             return cached
@@ -629,14 +632,16 @@ public final class WeekViewModel {
     public func sportStatsPages(for weekStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
         let plans = plansFingerprint()
+        let activities = activitiesFingerprint()
         let keyIsCurrent = sportStatsPagesCachesKey.map {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
                 && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
                 && $0.paceHistoryGeneration == paceHistoryGeneration && $0.plans == plans
+                && $0.activities == activities
         } ?? false
         if !keyIsCurrent {
             sportStatsPagesCaches.removeAll()
-            sportStatsPagesCachesKey = (key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration, plans)
+            sportStatsPagesCachesKey = (key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration, plans, activities)
         }
         if let cached = sportStatsPagesCaches[weekStart] {
             return cached
@@ -656,6 +661,27 @@ public final class WeekViewModel {
             hasher.combine(plan.date)
             hasher.combine(plan.workoutID)
             hasher.combine(plan.expectedLoadOverride)
+        }
+        return hasher.finalize()
+    }
+
+    /// A hash of what each activity contributes to the stats and daily load — id, sport, start,
+    /// duration, distance, effort, plan link and heart-rate sample count — so a resync that changes
+    /// activities in place (same count) still invalidates the caches. Cheap enough for the swipe path
+    /// (a handful of fields per loaded activity, no statistics). Deliberately approximate: it counts
+    /// heart-rate samples rather than hashing them, so a same-length series with other values goes
+    /// unnoticed.
+    private func activitiesFingerprint() -> Int {
+        var hasher = Hasher()
+        for activity in model.activities {
+            hasher.combine(activity.id)
+            hasher.combine(activity.sport)
+            hasher.combine(activity.start)
+            hasher.combine(activity.duration)
+            hasher.combine(activity.distanceMeters)
+            hasher.combine(activity.perceivedExertion)
+            hasher.combine(activity.linkedPlanID)
+            hasher.combine(activity.heartRate.count)
         }
         return hasher.finalize()
     }
