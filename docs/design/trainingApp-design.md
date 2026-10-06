@@ -289,6 +289,13 @@ across launches.
     (`FitnessMetrics.isProjected`). Form follows the *previous* day instead, since TSB is yesterday's
     CTL minus ATL: today's Form is known before today's workout is done
     (`FitnessMetrics.isFormProjected(on:in:calendar:)`).
+    A performed day's Load pill is marked too (MVP2-127) when one of that day's activities was scored
+    from perceived effort rather than heart rate, as its card is (`WeekViewModel.dayMetrics(on:)`'s
+    `isLoadEstimated`); one such activity is enough, since the day's total then includes an estimate.
+    Fitness and Fatigue aren't marked for it. Each activity's score is cached per activity
+    (`scoredLoad(for:)`, MVP2-128), keyed on its sport, start, duration, effort and heart-rate sample
+    count and cleared when the athlete changes, so the card, the stats bar's flags and the pill share
+    one statistics pass on the swipe path.
   - Detail sheets: the planned-workout sheet takes its duration, distance and marks from the same
     `PlannedCardSummary` as the card (`PlannedWorkoutDetailViewModel.expected(from:)`), keeps its "Forecast" captions and adds "Estimate" under
     an estimated load; the activity sheet explains a perceived-effort load in a footnote; the plan

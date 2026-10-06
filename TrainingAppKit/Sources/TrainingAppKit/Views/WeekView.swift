@@ -603,6 +603,7 @@ public struct WeekView: View {
                             showsConnector: true,
                             metrics: dayMetrics.metrics,
                             isFormProjected: dayMetrics.isFormProjected,
+                            isLoadEstimated: dayMetrics.isLoadEstimated,
                             activities: viewModel.activities(on: day),
                             plans: viewModel.pendingPlans(on: day),
                             races: viewModel.races(on: day),

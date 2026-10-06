@@ -110,6 +110,10 @@ public final class WeekViewModel {
     /// extensions using them live in their own files.
     @ObservationIgnored
     var plannedSummaryCache = InputKeyedCache<PlannedCardSummary>()
+    /// ``scoredLoad(for:)`` per activity (MVP2-127, MVP2-128): the card, the stats bar's estimate flags
+    /// and the day row's Load pill all ask for it, each time running a full statistics pass.
+    @ObservationIgnored
+    var scoredLoadCache = InputKeyedCache<TrainingLoad?>()
     @ObservationIgnored
     var linkedExpectationCache = InputKeyedCache<LinkedPlanExpectation?>()
     @ObservationIgnored
@@ -592,23 +596,34 @@ public final class WeekViewModel {
         model.metrics.first { calendar.isDate($0.day, inSameDayAs: day) }
     }
 
-    /// `day`'s metrics (see ``metrics(on:)``) and whether its Form (TSB) pill shows an estimate
+    /// `day`'s metrics (see ``metrics(on:)``), whether its Form (TSB) pill shows an estimate
     /// (MVP2-8; see `FitnessMetrics.isFormProjected(on:in:calendar:)` — Load, Fitness and Fatigue
-    /// follow `day`'s own ``FitnessMetrics/isProjected`` instead), for the day list's pill row.
+    /// follow `day`'s own ``FitnessMetrics/isProjected`` instead), and whether its Load pill does
+    /// because an activity was scored from perceived effort (MVP2-127), for the day list's pill row.
     ///
     /// One scan of `model.metrics` for both: every day row calls this on each week-swipe frame. The
     /// series is one entry per day in order, so the previous day is normally the entry before
     /// `day`'s; anything else falls back to a lookup.
-    public func dayMetrics(on day: Date) -> (metrics: FitnessMetrics?, isFormProjected: Bool) {
+    public func dayMetrics(on day: Date) -> (metrics: FitnessMetrics?, isFormProjected: Bool, isLoadEstimated: Bool) {
         let series = model.metrics
         guard let index = series.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: day) }) else {
-            return (nil, false)
+            return (nil, false, false)
         }
+        let isLoadEstimated = isLoadEstimated(on: day)
         if index > 0, let previousDay = calendar.date(byAdding: .day, value: -1, to: day),
            calendar.isDate(series[index - 1].day, inSameDayAs: previousDay) {
-            return (series[index], series[index - 1].isProjected)
+            return (series[index], series[index - 1].isProjected, isLoadEstimated)
         }
-        return (series[index], FitnessMetrics.isFormProjected(on: day, in: series, calendar: calendar))
+        return (series[index], FitnessMetrics.isFormProjected(on: day, in: series, calendar: calendar), isLoadEstimated)
+    }
+
+    /// Whether `day`'s Load pill is an estimate because a completed activity that day was scored from
+    /// perceived effort rather than heart rate (MVP2-127), the same test its card makes (MVP2-8). A day
+    /// with any such activity counts, since its total load then includes an estimate. A projected day
+    /// is estimated by `FitnessMetrics.isProjected` instead. Each activity's score is cached
+    /// (``scoredLoad(for:)``), so this stays cheap on the week-swipe path.
+    private func isLoadEstimated(on day: Date) -> Bool {
+        activities(on: day).contains { scoredLoad(for: $0)?.method.isEstimate ?? false }
     }
 
     /// One page per sport for the week view's stats pager (MVP1-52; design doc: "a weekly overview
@@ -861,9 +876,21 @@ public final class WeekViewModel {
     /// ``trainingLoad(for:)`` with how it was computed, so a card can mark a load scored from
     /// perceived effort rather than heart rate as an estimate (MVP2-8). `nil` when no calculator
     /// could score the activity.
+    ///
+    /// Cached per activity (``scoredLoadCache``), keyed on what scores it: its sport, start, duration,
+    /// effort and heart-rate sample count; the athlete's settings clear it
+    /// (`refreshCardCachesIfNeeded()`). Like ``activitiesFingerprint()``, it counts heart-rate samples
+    /// rather than hashing them, so a same-length series with other values goes unnoticed.
     func scoredLoad(for activity: Activity) -> TrainingLoad? {
-        let summary = statisticsCalculator.summary(for: activity, athlete: model.athlete)
-        return summary.load.confidence > 0 ? summary.load : nil
+        refreshCardCachesIfNeeded()
+        let inputs = [
+            activity.sport.hashValue, activity.start.hashValue, activity.duration.hashValue,
+            activity.perceivedExertion ?? -1, activity.heartRate.count,
+        ]
+        return scoredLoadCache.value(for: activity.id, inputs: inputs) {
+            let summary = statisticsCalculator.summary(for: activity, athlete: model.athlete)
+            return summary.load.confidence > 0 ? summary.load : nil
+        }
     }
 
     /// `weekStart`'s heart-rate histogram, for the graph panel's "Heart Rate Histogram" page
