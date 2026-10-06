@@ -124,6 +124,29 @@ struct WeekViewModelStatsFreshnessTests {
         #expect(try #require(secondLoad) > #require(firstLoad))
     }
 
+    @Test("a heart-rate series changed in place (same count, e.g. after a resync) refreshes the histogram (MVP2-129)")
+    func changedHeartRateInPlaceRefreshesHistogram() async throws {
+        let f = await makeFixture()
+        let weekStart = f.viewModel.displayedWeekStart
+        let id = UUID()
+        func activity(bpm: Double) -> Activity {
+            let samples = stride(from: 0, through: 600, by: 30).map {
+                HeartRateSample(time: f.today.addingTimeInterval(TimeInterval($0)), bpm: bpm)
+            }
+            return Activity(id: id, source: .manual, sport: .running, start: f.today, duration: 600, heartRate: samples)
+        }
+        try await f.store.upsert([activity(bpm: 150)])
+        await f.viewModel.load(asOf: f.today)
+        #expect(f.viewModel.heartRateHistogram(for: weekStart).bins.contains { $0.bpm == 150 })
+
+        try await f.store.upsert([activity(bpm: 175)])
+        await f.viewModel.load(asOf: f.today)
+
+        let bins = f.viewModel.heartRateHistogram(for: weekStart).bins
+        #expect(bins.contains { $0.bpm == 175 })
+        #expect(!bins.contains { $0.bpm == 150 })
+    }
+
     @Test("a missed planned workout (before today, never performed) counts nowhere")
     func missedPlanCountsNowhere() async throws {
         let f = await makeFixture()

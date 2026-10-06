@@ -403,7 +403,8 @@ banner can open the Athlete tab (MVP2-117); it isn't remembered or restored acro
     with it.
 - **Caches follow the athlete**: the sport-stats pages, daily-load split and heart-rate histogram
   caches include the athlete in their keys alongside the activity, plan and workout counts (the
-  sport-stats and daily-load caches also hash the activities and plans themselves). A
+  sport-stats and daily-load caches also hash the activities and plans themselves, and the
+  heart-rate histogram cache hashes the activities' heart-rate samples (MVP2-130)). A
   changed max or resting heart rate rescores every activity's load and moves the zone
   boundaries, so it invalidates them the same way a new activity does.
 

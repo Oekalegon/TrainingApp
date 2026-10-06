@@ -52,14 +52,16 @@ public final class WeekViewModel {
     /// by ``refreshWeekCachesIfNeeded()``. Not `@ObservationIgnored`, for the same reason as
     /// ``sportStatsPagesCaches``.
     private var weekGraphCaches: [Date: HeartRateHistogram] = [:]
-    /// `model.activities.count` as of the last time ``weekGraphCaches`` was populated — see
-    /// ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch invalidates the whole
-    /// cache rather than trying to single out which weeks actually changed.
+    /// ``histogramFingerprint()`` of `model.activities` as of the last time ``weekGraphCaches`` was
+    /// populated — see ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch
+    /// invalidates the whole cache rather than trying to single out which weeks actually changed.
+    /// A fingerprint rather than the count: a resync can change an activity's heart-rate samples
+    /// without changing how many activities there are (MVP2-130).
     @ObservationIgnored
-    private var weekGraphCachesActivityCount: Int?
+    private var weekGraphCachesFingerprint: Int?
     /// `model.athlete` as of the last time ``weekGraphCaches`` was populated. A change (e.g. a new
     /// max heart rate, MVP2-56) moves the zone boundaries the histogram is shaded against, so it
-    /// marks every cached week stale the same way a changed activity count does.
+    /// marks every cached week stale the same way a changed activity fingerprint does.
     @ObservationIgnored
     private var weekGraphCachesAthlete: AthleteProfile?
 
@@ -878,7 +880,7 @@ public final class WeekViewModel {
     /// settled, and a caller that only cares about the displayed week's own data (already updated
     /// first) isn't kept waiting by anything else, since `WeekView` never awaits this call itself.
     ///
-    /// A changed `activityCount` or athlete (MVP2-56) marks every currently cached week stale and due for
+    /// A changed activity fingerprint or athlete (MVP2-56) marks every currently cached week stale and due for
     /// recomputation, but deliberately doesn't clear ``weekGraphCaches`` up front to do that —
     /// `weekGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
     /// (synchronously, before this method's first `await`) was visible to
@@ -898,11 +900,11 @@ public final class WeekViewModel {
     ///     change the stored activities the pace history is built from without anything the week
     ///     view itself keys on changing; forces a pace-history refresh.
     public func refreshWeekCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
-        let activityCount = model.activities.count
-        let inputsChanged = weekGraphCachesActivityCount != activityCount
+        let fingerprint = histogramFingerprint()
+        let inputsChanged = weekGraphCachesFingerprint != fingerprint
             || weekGraphCachesAthlete != model.athlete
         if inputsChanged {
-            weekGraphCachesActivityCount = activityCount
+            weekGraphCachesFingerprint = fingerprint
             weekGraphCachesAthlete = model.athlete
         }
         let window = cachedWeekStarts
@@ -925,7 +927,7 @@ public final class WeekViewModel {
     /// stale result for a week no longer near ``displayedWeekStart`` is simply dropped, not
     /// cached).
     private func cacheWeekGraph(weekStart: Date, priority: TaskPriority) async {
-        let activityCount = model.activities.count
+        let fingerprint = weekGraphCachesFingerprint
         let weekActivities = activities(forWeekStarting: weekStart)
         let athlete = model.athlete
         let statisticsCalculator = self.statisticsCalculator
@@ -940,16 +942,37 @@ public final class WeekViewModel {
                 weekActivities, athlete: athlete, asOf: asOf, statisticsCalculator: statisticsCalculator
             )
         }.value
-        guard isStillCacheable(weekStart, activityCount: activityCount), athlete == model.athlete else { return }
+        guard isStillCacheable(weekStart, fingerprint: fingerprint), athlete == model.athlete else { return }
         weekGraphCaches[weekStart] = histogram
     }
 
-    /// Whether a background computation for `weekStart` (started when `activityCount` was
-    /// `model.activities.count`) is still worth storing — `false` once either has moved on, since
-    /// the result is now either stale (a subsequent import changed the underlying activities) or
-    /// for a week that's fallen outside the 3-week window this cache keeps.
-    private func isStillCacheable(_ weekStart: Date, activityCount: Int) -> Bool {
-        cachedWeekStarts.contains(weekStart) && activityCount == model.activities.count
+    /// Whether a background computation for `weekStart` (started under `fingerprint`, the one
+    /// ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`` had just stored) is still worth
+    /// storing — `false` once either has moved on, since the result is now either stale (a
+    /// subsequent import changed the underlying activities) or for a week that's fallen outside the
+    /// 3-week window this cache keeps.
+    ///
+    /// Compares against the stored ``weekGraphCachesFingerprint`` rather than re-hashing every
+    /// sample: a refresh that sees changed data stores its new fingerprint first, so an older
+    /// result is dropped here, and data that changed before any refresh is caught by the next one.
+    private func isStillCacheable(_ weekStart: Date, fingerprint: Int?) -> Bool {
+        cachedWeekStarts.contains(weekStart) && fingerprint == weekGraphCachesFingerprint
+    }
+
+    /// A hash of what the heart-rate histogram reads from each activity — id, start, duration and
+    /// every heart-rate sample — so activities changed in place (same count) still invalidate
+    /// ``weekGraphCaches`` (MVP2-130). Unlike ``activitiesFingerprint()`` it hashes the samples
+    /// themselves: it only runs when the week caches refresh, not on the week-swipe path, and the
+    /// histogram is exactly what those samples feed.
+    private func histogramFingerprint() -> Int {
+        var hasher = Hasher()
+        for activity in model.activities {
+            hasher.combine(activity.id)
+            hasher.combine(activity.start)
+            hasher.combine(activity.duration)
+            hasher.combine(activity.heartRate)
+        }
+        return hasher.finalize()
     }
 
     /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day
