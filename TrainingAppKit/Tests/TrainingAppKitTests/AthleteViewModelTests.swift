@@ -27,6 +27,16 @@ struct AthleteViewModelTests {
         #expect(viewModel.displayName == "Dieudonné Willems")
     }
 
+    @Test("ageText is the athlete's age in whole years, and nil until a date of birth is on record (MVP2-124)")
+    func ageText() {
+        var athlete = AthleteProfile.fixture()
+        let today = Date(timeIntervalSince1970: 1_700_000_000)
+        #expect(AthleteViewModel(athlete: athlete).ageText(asOf: today) == nil)
+
+        athlete.dateOfBirth = today.addingTimeInterval(-40.5 * 365.2425 * 86400)
+        #expect(AthleteViewModel(athlete: athlete).ageText(asOf: today) == "40")
+    }
+
     @Test("initials takes the first letter of up to the first two words")
     func initialsTakesFirstTwoWords() {
         let athlete = AthleteProfile(

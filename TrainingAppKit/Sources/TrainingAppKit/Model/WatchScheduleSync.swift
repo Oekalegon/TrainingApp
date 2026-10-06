@@ -34,7 +34,7 @@ public final class WatchScheduleSync {
     @ObservationIgnored private var needsRerun = false
 
     /// Whether the app may schedule workouts, as of the last sync or check: what the Athlete tab's
-    /// Apple Watch section shows. `nil` until one has run.
+    /// Apple Watch synchronisation screen shows. `nil` until one has run.
     public private(set) var authorization: WatchSchedulingAuthorization?
 
     /// Whether the athlete declined permission to schedule workouts, as of the last sync or check.
@@ -77,7 +77,7 @@ public final class WatchScheduleSync {
     private var isBannerDismissed: Bool
 
     /// Whether the week view shows the banner explaining that planned workouts won't reach the
-    /// Watch, with a button to the Athlete tab's Apple Watch section (MVP2-117): sending is on,
+    /// Watch, with a button to the Athlete tab's Apple Watch synchronisation screen (MVP2-117): sending is on,
     /// permission is denied and the athlete hasn't dismissed the banner. With sending turned off
     /// (MVP2-118), the athlete chose not to send, so there's nothing to warn about.
     public var showsPermissionDeniedBanner: Bool {
@@ -130,7 +130,7 @@ public final class WatchScheduleSync {
         defaults.set(true, forKey: Self.bannerDismissedKey)
     }
 
-    /// Reads the current permission without asking, for the Athlete tab's Apple Watch section to
+    /// Reads the current permission without asking, for the Apple Watch synchronisation screen to
     /// show when it appears, before any sync has run.
     public func refreshAuthorization() async {
         record(await scheduler.authorizationStatus())

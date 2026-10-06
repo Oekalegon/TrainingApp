@@ -12,8 +12,8 @@ import TrainingCore
 /// why `WeekViewModel` is constructed once here rather than inside `WeekView` itself.
 ///
 /// Also puts the next 7 days of planned workouts on the Watch each time the app becomes active
-/// (MVP2-55, ``WatchScheduleSync``), and switches to the Athlete tab when the week view's Watch
-/// permission banner asks for it (MVP2-117).
+/// (MVP2-55, ``WatchScheduleSync``), and opens the Athlete tab's Apple Watch synchronisation screen
+/// when the week view's Watch permission banner asks for it (MVP2-117, MVP2-123).
 public struct AppTabView: View {
     /// The app's tabs, for `TabView`'s selection.
     private enum AppTab: Hashable {
@@ -32,6 +32,9 @@ public struct AppTabView: View {
     /// The visible tab. Kept so the week view's Watch permission banner (MVP2-117) can open the
     /// Athlete tab; not remembered across launches.
     @State private var selectedTab = AppTab.week
+    /// The Athlete tab's pushed screens (MVP2-123), kept here so the Watch permission banner can open
+    /// the Apple Watch synchronisation screen directly.
+    @State private var athletePath: [AthleteRoute] = []
     /// The tab bar's search field (MVP2-21).
     @State private var searchText = ""
     @Environment(\.scenePhase) private var scenePhase
@@ -59,7 +62,10 @@ public struct AppTabView: View {
 
         TabView(selection: $selectedTab) {
             Tab("Week", systemImage: "calendar", value: AppTab.week) {
-                WeekView(viewModel: viewModel, onShowWatchSettings: { selectedTab = .athlete })
+                WeekView(viewModel: viewModel, onShowWatchSettings: {
+                    athletePath = AthleteRoute.watchSettings
+                    selectedTab = .athlete
+                })
             }
 
             Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
@@ -69,10 +75,15 @@ public struct AppTabView: View {
             Tab("Athlete", systemImage: "person.circle", value: AppTab.athlete) {
                 AthleteView(
                     viewModel: viewModel.athleteViewModel,
+                    path: $athletePath,
                     isResyncing: viewModel.isResyncing,
                     onResync: { Task { await viewModel.resyncActivities() } },
                     isDeduplicating: viewModel.isDeduplicating,
                     onDeduplicate: { Task { await viewModel.deduplicateActivities() } },
+                    isRefreshing: viewModel.isRefreshing,
+                    hasNoActivities: viewModel.hasNoActivities,
+                    onImport: { Task { await viewModel.refresh() } },
+                    onConnectHealth: { Task { await viewModel.connectHealthData() } },
                     overlapReviewItems: overlapReviewItems,
                     athleteTimeZone: viewModel.athleteTimeZone,
                     activityDetailViewModel: { viewModel.activityDetailViewModel(for: $0) },
