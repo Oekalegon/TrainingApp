@@ -68,9 +68,15 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     /// entry the app target's entitlements declare — `TrainingPersistenceContainer` itself has no
     /// opinion on the identifier (see `docs/design/trainingApp-design.md` §3.2).
     ///
+    /// The container is built off the main actor: the first launch after the container was split
+    /// (MVP2-131) copies the old store's activities, with their heart-rate samples, into the local-only
+    /// store, which can take a while and mustn't block the launch screen.
+    ///
     /// - Throws: Whatever `TrainingPersistenceContainer.make()` or the store throws.
     public static func make() async throws -> TrainingAppEnvironment {
-        let container = try TrainingPersistenceContainer.make()
+        let container = try await Task.detached(priority: .userInitiated) {
+            try TrainingPersistenceContainer.make()
+        }.value
         let store = SwiftDataStore(modelContainer: container)
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,

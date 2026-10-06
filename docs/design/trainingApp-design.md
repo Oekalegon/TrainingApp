@@ -786,9 +786,12 @@ import wiring. Tracked as a separate todo (see §7).
 
 `TrainingModel.load(in:asOf:)` is called on launch (window ≈ the 3-week chart range, expanded
 somewhat so `recompute` has enough trailing history for CTL's warm-up) and again on
-`scenePhase == .active` (foreground). No periodic background refresh in MVP 1 — CloudKit sync latency is
+`scenePhase == .active` (foreground). No periodic background refresh in MVP 1. Activities reach a
+device only through its own HealthKit import, never through CloudKit (§3.2), so what the athlete
+sees of them waits for an import; CloudKit latency now affects only plans and preferences, which is
 accepted as-is between explicit triggers. New workouts are the exception (see Background import
-below).
+below). The container itself is built off the main actor (`TrainingAppEnvironment.make()`), so the
+one-time migration of an old store doesn't hold up the launch screen.
 
 Each import also re-reads the athlete's biometrics from HealthKit and merges them into the profile
 (`AthleteProfile.merging(_:asOf:)`): resting HR, sex, and a Tanaka max-HR estimate from date of
