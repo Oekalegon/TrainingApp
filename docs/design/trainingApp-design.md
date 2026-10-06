@@ -443,7 +443,10 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 - **Planned workout link** (MVP2-42): a "Planned Workout" section, shown when the activity is linked
   to a plan or an unmatched plan exists on its day (`WeekViewModel.planLinkContext(for:)`). Matching
   itself is automatic (TrainingKit's import runs `PlanReconciler`); this section is how the athlete
-  checks and corrects it. It shows the plan the activity completes and offers "Unlink from Planned
+  checks and corrects it. A workout started from a scheduled Watch entry links to exactly that plan
+  (MVP2-120): the importer reads the plan the workout came from, whose id is the `PlannedActivity`'s,
+  and the reconciler matches on it before guessing by day, sport and duration, so such a match is
+  never flagged as ambiguous. It shows the plan the activity completes and offers "Unlink from Planned
   Workout"; when the automatic match had a close runner-up (`TrainingModel.planMatchAmbiguities`) it
   says so and offers "Confirm Match" (a link to the same plan, which clears the flag). The other
   unmatched plans on that day appear as "Switch to …"/"Link to …", never plans on another day, which
