@@ -1,8 +1,8 @@
 # TrainingApp
 
 Companion iOS app for [TrainingKit](https://github.com/Oekalegon/TrainingKit): a personal,
-single-athlete, read-only viewer of training data synced via HealthKit and CloudKit. iOS 26+,
-iPhone only.
+single-athlete viewer of training data read from HealthKit, with plans and preferences synced
+through CloudKit (health data stays on the device). iOS 26+, iPhone only.
 
 MVP 1 shows a rolling fitness trend (CTL/ATL/TSB) alongside a week-by-week view of completed and
 planned activities, with a basic activity detail screen and a read-only athlete account screen.

@@ -1,13 +1,15 @@
 # TrainingApp — iOS App Design (MVP 1)
 
-Companion iOS app for TrainingKit. Personal, single-athlete, **read-only** viewer of training
-data synced via HealthKit and CloudKit. iOS 26+, iPhone only.
+Companion iOS app for TrainingKit. Personal, single-athlete viewer of training data read from
+HealthKit, with plans and preferences synced through CloudKit (health-derived data stays on the
+device, §3.2). iOS 26+, iPhone only.
 
 Scope of MVP 1:
 - Show a rolling fitness trend (CTL / ATL / TSB) alongside a week-by-week view of completed and
   planned activities.
 - Let the athlete drill into a single activity's stats.
-- Prove the HealthKit → `TrainingPersistence` → CloudKit → `TrainingModel` pipeline works
+- Prove the HealthKit → `TrainingPersistence` → `TrainingModel` pipeline works, with plans and
+  preferences synced through CloudKit,
   end-to-end in a real app, not just the `HealthKitHarness`/`PersistenceHarness` test harnesses.
 
 Explicitly **not** MVP 1: manual activity entry, plan editing/generation (MVP 2 territory), a
@@ -735,10 +737,28 @@ than `.environment(_:)`/`@Environment(TrainingModel.self)` — there's only ever
 for the app's lifetime, so there's no need for the environment-injection machinery that pattern
 exists to support.
 
-### 3.2 CloudKit container
+### 3.2 Stores and the CloudKit container (MVP2-131)
 
-Reuse the harnesses' container rather than starting fresh — it already has real synced activity
-history:
+Persistence is two stores in one `ModelContainer` (`TrainingPersistenceContainer.make`), because
+Apple's guideline 5.1.3(ii) forbids storing health information in iCloud:
+
+- **Synced through CloudKit:** planned workouts, the workout library, cycles, races, and the athlete's
+  own preferences (name, picture, time zone, week start, main sport, the pace history and the Apple
+  Health resting-heart-rate switch).
+- **Local to the device:** activities with their heart-rate samples, tombstones of deleted
+  activities, joins, the fitness-metrics cache, and the whole profile including what comes from
+  HealthKit (sex, date of birth, heart-rate settings) and the HealthKit import anchor.
+
+So each device imports its own activities from its own Health (an iPad or Mac without Health data
+shows plans and preferences but no activities), and the app's `UserDefaults`-based settings were
+already per-device. The first launch after the split copies an old single store's local data across,
+after backing the old file up as `default.store.pre-split`; records already in iCloud stay there until
+the athlete deletes the app's iCloud data (Settings, Apple Account, iCloud, Manage Storage). The
+details, the per-model table and the known gaps are in TrainingKit's
+`docs/design/icloud-healthkit-compliance-architecture.md`.
+
+The CloudKit container is the harnesses' one, reused rather than started fresh, so the plans and
+workouts they synced are there:
 
 ```
 iCloud.org.oekalegon.trainingkit.shared

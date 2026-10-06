@@ -20,8 +20,8 @@ public struct AthleteViewModel {
         athlete.name.isEmpty ? "Athlete" : athlete.name
     }
 
-    /// A one- or two-letter monogram derived from ``displayName`` — the avatar shown in place of
-    /// a photo (design doc §2.3: no iCloud/Contacts photo lookup in MVP 1).
+    /// A one- or two-letter monogram derived from ``displayName`` — the avatar shown until the
+    /// athlete chooses a photo (design doc §2.3).
     public var initials: String {
         let words = displayName.split(separator: " ")
         let letters = words.prefix(2).compactMap { $0.first }
