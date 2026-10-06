@@ -430,6 +430,25 @@ struct WeekViewModelTests {
         #expect(viewModel.races(on: day(3)).isEmpty)
     }
 
+    @Test("chartRaces(for:) returns the races in that week's chartRange, in date order (MVP2-104)")
+    func chartRacesScopedToChartRange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+        let weekStart = viewModel.displayedWeekStart
+        func offset(_ days: Int) -> Date { calendar.date(byAdding: .day, value: days, to: weekStart)! }
+        let later = Race(name: "Later", date: offset(10), priority: .secondary)
+        let earlier = Race(name: "Earlier", date: offset(2), priority: .primary)
+        let outside = Race(name: "Outside", date: offset(40), priority: .tertiary)
+        try await store.upsert([later, earlier, outside])
+
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.chartRaces(for: weekStart).map(\.id) == [earlier.id, later.id])
+    }
+
     @Test("races on one day with the same priority are ordered by name")
     func racesWithSamePriorityOrderedByName() async throws {
         let (store, stores) = makeStores()

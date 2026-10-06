@@ -15,6 +15,7 @@ struct GraphPanelPagerView: View {
     let dailyLoadSplit: DailyLoadSplit
     let displayedWeekRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
+    let races: [Race]
     /// Called whenever the page changes, so `WeekView` can remember it across a week change or a
     /// scroll-triggered recycle (see `selectedIndex`'s own doc comment for why this is a one-way
     /// callback rather than a `@Binding`).
@@ -64,6 +65,7 @@ struct GraphPanelPagerView: View {
         dailyLoadSplit: DailyLoadSplit,
         displayedWeekRange: ClosedRange<Date>,
         heartRateHistogram: HeartRateHistogram,
+        races: [Race],
         initialSelectedIndex: Int,
         onSelectedIndexChange: @escaping (Int) -> Void,
         onTapPage: @escaping (GraphPanelPage) -> Void
@@ -72,6 +74,7 @@ struct GraphPanelPagerView: View {
         self.dailyLoadSplit = dailyLoadSplit
         self.displayedWeekRange = displayedWeekRange
         self.heartRateHistogram = heartRateHistogram
+        self.races = races
         self.onSelectedIndexChange = onSelectedIndexChange
         self.onTapPage = onTapPage
         _selectedIndex = State(initialValue: initialSelectedIndex)
@@ -91,7 +94,7 @@ struct GraphPanelPagerView: View {
                         // offset out of the clipped, visible area) -- without this, VoiceOver's
                         // element list would include every page's chart, not just the visible one.
                         .accessibilityHidden(selectedIndex != 0)
-                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
+                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange, races: races)
                         .frame(width: pageWidth)
                         .accessibilityHidden(selectedIndex != 1)
                     HeartRateHistogramChartView(histogram: heartRateHistogram)
@@ -185,6 +188,7 @@ struct GraphPanelStaticPreview: View {
     let dailyLoadSplit: DailyLoadSplit
     let displayedWeekRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
+    let races: [Race]
     let selectedIndex: Int
 
     var body: some View {
@@ -197,7 +201,7 @@ struct GraphPanelStaticPreview: View {
                         metrics: metrics, displayedWeekRange: displayedWeekRange
                     )
                 case 1:
-                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
+                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange, races: races)
                 default:
                     HeartRateHistogramChartView(histogram: heartRateHistogram)
                 }

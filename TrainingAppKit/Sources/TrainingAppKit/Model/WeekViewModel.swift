@@ -298,6 +298,15 @@ public final class WeekViewModel {
             .sorted { $0.day < $1.day }
     }
 
+    /// The races inside ``chartRange(for:)`` for `weekStart`, in date order (MVP2-104), for the Form
+    /// chart's race markers.
+    public func chartRaces(for weekStart: Date) -> [Race] {
+        let range = chartRange(for: weekStart)
+        return model.races
+            .filter { range.contains($0.date) }
+            .sorted { $0.date < $1.date }
+    }
+
     /// ``chartRange(for:)``'s own range for `weekStart`'s daily load, split into what was actually
     /// performed vs. what's planned (MVP2-30) — for `DailyLoadChartView`'s bars.
     ///

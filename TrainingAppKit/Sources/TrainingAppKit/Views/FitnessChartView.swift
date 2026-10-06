@@ -13,6 +13,9 @@ struct FitnessChartView: View {
     /// shaded behind the trend line so the 3-week chart stays visually anchored to whichever week
     /// the athlete has scrolled to.
     let displayedWeekRange: ClosedRange<Date>
+    /// The races in the chart's window, each marked with a vertical rule and its A/B/C circle on
+    /// top (MVP2-104).
+    var races: [Race] = []
     /// Days after this are projected/estimated rather than actual history (see
     /// `FitnessMetrics.isProjected`), so the Form lines render dashed past this point.
     let today: Date = .now
@@ -57,6 +60,26 @@ struct FitnessChartView: View {
             xEnd: .value("Week end", displayedWeekRange.upperBound)
         )
         .foregroundStyle(Color.primary.opacity(0.1))
+    }
+
+    /// A solid vertical rule at each race's day with its priority's lettered circle on top, the
+    /// same circle the week view's race card uses.
+    @ChartContentBuilder
+    private var raceMarks: some ChartContent {
+        ForEach(races) { race in
+            RuleMark(x: .value("Race", race.date))
+                .foregroundStyle(Color.primary.opacity(0.6))
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+                .annotation(
+                    position: .top, spacing: 0,
+                    overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))
+                ) {
+                    Image(systemName: race.priority.markerSymbolName)
+                        .font(.body)
+                        .foregroundStyle(Color.primary)
+                        .accessibilityLabel("\(race.priority.displayName) race, \(race.name)")
+                }
+        }
     }
 
     /// The thin grey line follows the exact TSB values (linear interpolation, one segment per
@@ -109,6 +132,7 @@ struct FitnessChartView: View {
         Chart {
             zoneBandMarks
             weekHighlightMark
+            raceMarks
             rawLineMarks
             smoothedLineMarks
         }
