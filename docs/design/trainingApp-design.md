@@ -279,8 +279,9 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
     expected (performed + planned) figure when a plan's part of it is an estimate
     (`SportStatsPage.is…Estimated`, from the same activities and plans
     `StatisticsCalculator.periodStatsSplit` counts). The stats and daily-load caches are keyed on each
-    plan's id, date, workout and override as well as the counts, so editing an override updates the
-    totals and their marks at once.
+    plan's id, date, workout and override and on each activity's sport, start, duration, distance,
+    effort and plan link, as well as the counts, so editing an override or resyncing an activity in
+    place (same count) updates the totals and their marks at once (MVP2-54).
   - Day-row pills and the metric detail header: a projected day's values
     (`FitnessMetrics.isProjected`). Form follows the *previous* day instead, since TSB is yesterday's
     CTL minus ATL: today's Form is known before today's workout is done
@@ -400,7 +401,8 @@ open the Athlete tab (MVP2-117); it isn't remembered or restored across launches
   - It's never applied silently, because every zone and every TRIMP score from that day on moves
     with it.
 - **Caches follow the athlete**: the sport-stats pages, daily-load split and heart-rate histogram
-  caches include the athlete in their keys alongside the activity, plan and workout counts. A
+  caches include the athlete in their keys alongside the activity, plan and workout counts (the
+  sport-stats and daily-load caches also hash the activities and plans themselves). A
   changed max or resting heart rate rescores every activity's load and moves the zone
   boundaries, so it invalidates them the same way a new activity does.
 
