@@ -25,7 +25,7 @@ private let weekSwipeCoordinateSpace = "WeekView.weekSwipe"
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
 public struct WeekView: View {
     let viewModel: WeekViewModel
-    /// Opens the Athlete tab's Apple Watch section, from the Watch permission banner (MVP2-117).
+    /// Opens the Athlete tab's Apple Watch synchronisation screen, from the Watch permission banner (MVP2-117, MVP2-123).
     let onShowWatchSettings: () -> Void
     #if os(iOS)
     @Environment(\.colorScheme) private var colorScheme
@@ -130,7 +130,7 @@ public struct WeekView: View {
 
     /// - Parameters:
     ///   - viewModel: The week view's model.
-    ///   - onShowWatchSettings: Opens the Athlete tab, from the Watch permission banner's button.
+    ///   - onShowWatchSettings: Opens the Athlete tab's Apple Watch synchronisation screen, from the Watch permission banner's button.
     public init(viewModel: WeekViewModel, onShowWatchSettings: @escaping () -> Void = {}) {
         self.viewModel = viewModel
         self.onShowWatchSettings = onShowWatchSettings

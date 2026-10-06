@@ -1,8 +1,9 @@
 import Foundation
 import TrainingCore
 
-/// Drives the read-only athlete account screen (design doc §2.3): everything here comes straight
-/// from `AthleteProfile` — no editing, no write path through `TrainingModel` exists yet.
+/// Drives the read-only athlete screens (design doc §2.3), the Athlete tab's list and the screens it
+/// opens (MVP2-123): everything here comes straight from `AthleteProfile` — no editing, no write path
+/// through `TrainingModel` exists yet.
 ///
 /// Immutable after creation, like `ActivityDetailViewModel` — a plain struct, not an `@Observable`
 /// class.
@@ -25,6 +26,14 @@ public struct AthleteViewModel {
         let words = displayName.split(separator: " ")
         let letters = words.prefix(2).compactMap { $0.first }
         return letters.isEmpty ? "?" : String(letters).uppercased()
+    }
+
+    /// The athlete's age for the Personal Information screen (MVP2-124), in whole years as of `today`
+    /// in the athlete's time zone, or `nil` while no date of birth is on record.
+    ///
+    /// - Parameter today: The date to compute the age as of; injected for tests.
+    public func ageText(asOf today: Date = .now) -> String? {
+        athlete.age(asOf: today).map { "\($0)" }
     }
 
     /// The zone settings currently in effect, if the athlete has any on record — MVP 1 shows only

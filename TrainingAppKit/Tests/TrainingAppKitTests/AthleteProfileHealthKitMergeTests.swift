@@ -33,6 +33,21 @@ struct AthleteProfileHealthKitMergeTests {
         #expect(merged.sex == .female)
     }
 
+    @Test("the date of birth is stored whenever HealthKit reports one, and kept when it doesn't (MVP2-124)")
+    func dateOfBirthIsStoredWhenReported() {
+        let athlete = AthleteProfile.fixture()
+        let born = day(-10_000)
+        let snapshot = HealthKitAthleteSnapshot(
+            restingHeartRateBPM: nil, biologicalSex: nil, estimatedMaxHeartRateBPM: nil, dateOfBirth: born
+        )
+
+        let merged = athlete.merging(snapshot, asOf: day(0))
+        #expect(merged.dateOfBirth == born)
+
+        // A later read that couldn't get it (denied, offline) doesn't wipe what was stored.
+        #expect(merged.merging(emptySnapshot(), asOf: day(1)).dateOfBirth == born)
+    }
+
     @Test("a new heart-rate zone entry is appended when both resting and max HR are present and no entry exists yet")
     func appendsFirstZoneEntry() {
         let athlete = AthleteProfile.fixture()

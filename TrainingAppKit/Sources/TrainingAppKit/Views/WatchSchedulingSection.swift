@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Athlete tab's Apple Watch section (MVP2-117, MVP2-118): a "Send Planned Workouts to Apple
+/// The Apple Watch ▸ Synchronisation screen's section (MVP2-117, MVP2-118, MVP2-123): a "Send Planned Workouts to Apple
 /// Watch" switch, whether the app may put planned workouts on the Watch, an Allow button while the
 /// athlete hasn't been asked, and where to turn it back on once declined. The week view's
 /// ``WatchPermissionBanner`` opens the Athlete tab to show this.

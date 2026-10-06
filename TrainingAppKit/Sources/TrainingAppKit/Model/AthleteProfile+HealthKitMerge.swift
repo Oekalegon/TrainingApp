@@ -15,7 +15,7 @@ extension AthleteProfile {
 
     /// Merges a `HealthKitAthleteReader` snapshot into this profile.
     ///
-    /// `sex` is replaced whenever HealthKit reports one (a biological-sex change is rare enough,
+    /// `sex` and `dateOfBirth` are replaced whenever HealthKit reports one (a biological-sex change is rare enough,
     /// and cheap enough to just overwrite, that no history is kept for it — unlike heart-rate
     /// zones below). A new `HeartRateZoneSettings` entry is appended only when both resting and
     /// estimated max heart rate are available *and* differ from ``currentHeartRateZoneSettings``
@@ -39,6 +39,10 @@ extension AthleteProfile {
         var merged = self
         if let sex = snapshot.biologicalSex {
             merged.sex = sex
+        }
+        // The date of birth is a fact, not a reading: replace it whenever HealthKit has one (MVP2-124).
+        if let dateOfBirth = snapshot.dateOfBirth {
+            merged.dateOfBirth = dateOfBirth
         }
         if let resting = snapshot.restingHeartRateBPM, let estimate = snapshot.estimatedMaxHeartRateBPM {
             let current = merged.currentHeartRateZoneSettings

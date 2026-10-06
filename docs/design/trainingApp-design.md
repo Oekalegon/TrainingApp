@@ -79,8 +79,10 @@ MVP2-21) and "Athlete" (§2.3), plus a search tab (§2.5). All are built from th
 `WeekViewModel` instance (`AthleteView` reads it via `WeekViewModel.athleteViewModel`, the Library
 and search tabs via `WeekViewModel.workoutLibraryViewModel()` and `searchViewModel(library:)`),
 owned by `AppTabView` and constructed once for the app's lifetime, as are the Library and search
-tabs' view models. `AppTabView` holds the selected tab only so the week view's Watch permission
-banner can open the Athlete tab (MVP2-117); it isn't remembered or restored across launches.
+tabs' view models. `AppTabView` holds the selected tab and the Athlete tab's pushed screens
+(`[AthleteRoute]`) only so the week view's Watch permission banner can open the Athlete tab's Apple
+Watch ▸ Synchronisation screen directly (MVP2-117, MVP2-123); neither is remembered or restored
+across launches.
 
 ### 2.1 Week view
 
@@ -505,73 +507,95 @@ median time they took in earlier runs of the same workout or template.
 
 ### 2.3 Athlete account
 
-Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0).
-Display of `TrainingModel.athlete: AthleteProfile` — the profile is **not editable in MVP 1**,
-since there's no save/write path back through `TrainingModel` yet and it's shown to confirm the
-imported biometric data looks right. The only app settings here are the Apple Watch section's
-(MVP2-117):
+Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0). A settings-style list of groups
+(MVP2-123), each opening its own screen on the tab's `NavigationStack`, whose path (`[AthleteRoute]`)
+`AppTabView` owns so a screen can be opened from another tab. Display of
+`TrainingModel.athlete: AthleteProfile` — the profile is **not editable in MVP 1**, since there's no
+save/write path back through `TrainingModel` yet and it's shown to confirm the imported biometric data
+looks right. The only app settings are the Apple Watch ones (MVP2-117, MVP2-118).
 
-- **Avatar**: an initials monogram derived from `athlete.name` — no photo. There's no public API
-  for "the iCloud account's photo" (`CKDiscoverUserIdentity` gives a name at best, never an
+The list itself (`AthleteView`):
+
+- **Avatar and name**: an initials monogram derived from `athlete.name` — no photo. There's no public
+  API for "the iCloud account's photo" (`CKDiscoverUserIdentity` gives a name at best, never an
   image); the one real alternative, reading the Contacts "My Card" photo via
   `CNContactStore.unifiedMeContact(withKeys:)`, needs a Contacts permission prompt for something
-  that's often unset anyway, and isn't worth that cost in a read-only MVP 1. Revisit only if a
-  manual avatar picker gets added alongside real editing later.
+  that's often unset anyway, and isn't worth that cost in a read-only MVP 1. Revisit only if a manual
+  avatar picker gets added alongside real editing later.
 - **Overlap warning** (MVP1-67): a non-dismissible row just below the avatar, with a warning-color
   background, showing "N activities have overlaps to review" whenever
   `WeekViewModel.overlapWarningCount` (`overlapReviewItems.count`, the same non-`.possibleMultisport`
   set §2.1's per-card badge and the summary below both derive from) is non-zero — always current,
   not a one-time post-import snapshot, so it updates the moment an overlap is resolved from the
-  activity detail sheet (§2.2) just as readily as after a fresh import. Tapping it opens the same
-  review sheet (`OverlapReviewView`) §2.1 used to open from its old banner; tapping a row opens
-  that activity's own detail sheet (§2.2). The same live count is mirrored as a `.badge(_:)` on the
-  Athlete tab's own tab-bar icon (§2.0), so it's visible without switching tabs.
-- Name, biological sex.
-- Current heart-rate zone settings (`athlete.currentHeartRateZoneSettings`): resting HR, max HR,
-  lactate threshold HR (if set), zone method. Max HR carries a caption saying where it came from
-  (MVP2-56, `AthleteViewModel.maxHeartRateSourceDescription`): "Estimated from age", or "Measured
-  in a workout on 24 Sep 2026" once a workout has raised it — plus a "Zones" table (MVP1-71,
-  `AthleteViewModel.heartRateZoneRanges`) listing each named zone's own bpm range under those
-  settings (`HeartRateZoneModel.zoneBPMRange(_:)`), each preceded by a colored dot in that zone's
-  color (`HeartRateZone.color`), same treatment as the activity detail sheet's own zone list
-  (MVP1-70). Omitted when there are no settings on record yet, or when the current method can't
-  resolve a zone at all (`.lactateThreshold` with no LTHR set).
-- Pace model's threshold pace (`paceModel.thresholdPaceSecondsPerKilometer`), shown as min/km.
-- Week-starts-on, time zone — minor, but confirms the app is bucketing days the way the athlete
-  expects.
-- **Apple Watch** (MVP2-117, MVP2-118, `WatchSchedulingSection`), just below name and sex so the
-  week view's Watch permission banner (§3.5), which opens this tab, lands on it:
-  - A **"Send Planned Workouts to Apple Watch"** switch (MVP2-118, `WatchScheduleSync.isEnabled`),
-    on by default and kept in `UserDefaults` on this device. It's the app's own setting, on top of
-    iOS's permission: turning it off removes the app's workouts from the Watch and stops the sync
-    and the planned-workout sheets from scheduling (§3.5), without changing the permission.
-    Turning it on asks for permission if the athlete hasn't been asked yet, then syncs. With the
-    permission refused, the switch stays on but nothing is sent; the footer and the week view's
-    banner say why. Hidden on a device that can't schedule workouts.
-  - A **Watch Permission** row: "Allowed", "Not asked yet", "Not allowed" or "Unavailable". While
-    the switch is on and the athlete hasn't been asked, an "Allow Sending to Apple Watch" button
-    shows the WorkoutKit prompt and syncs once it's granted
-    (`WatchScheduleSync.requestPermission(asOf:)`). Once declined, iOS won't ask again, so the
-    footer says where to turn it back on: the Watch app on the iPhone, under Workout. With the
-    switch off, the footer says planned workouts aren't sent instead.
+  activity detail sheet (§2.2) just as readily as after a fresh import. It stays on the list rather
+  than inside a group, so it's visible whenever the tab is. Tapping it opens the same review sheet
+  (`OverlapReviewView`) §2.1 used to open from its old banner; tapping a row opens that activity's own
+  detail sheet (§2.2). The same live count is mirrored as a `.badge(_:)` on the Athlete tab's own
+  tab-bar icon (§2.0), so it's visible without switching tabs.
+- Four rows, each pushing a screen: **Personal Information**, **Connected Services**, **Calendar**,
+  and, in a section of its own, **Developer**.
 
-  The section reads the permission when it appears (`refreshAuthorization()`), and the sync that
-  runs when the app becomes active updates it. Hidden where WorkoutKit isn't available. The banner
-  switches tabs without scrolling, so a list left scrolled further down keeps that position and the
-  section may be off-screen; scrolling to it is a possible later improvement.
+The screens:
+
+- **Personal Information** (`PersonalInformationView`): the avatar, name, biological sex, and age
+  (MVP2-124: whole years in the athlete's time zone, shown once `AthleteProfile.dateOfBirth` is on
+  record; `AthleteProfile.merging(_:asOf:)` fills it from HealthKit on each import and never wipes it
+  when a read fails), then two rows:
+  - **Heart Rate Zones** (`HeartRateZonesView`): the current heart-rate zone settings
+    (`athlete.currentHeartRateZoneSettings`): resting HR, maximum HR with its value on the title's own
+    row and a second row saying where it came from (MVP2-56,
+    `AthleteViewModel.maxHeartRateSourceDescription`: "Estimated from age", or "Measured in a workout
+    on 24 Sep 2026" once a workout has raised it), lactate threshold HR (if set), zone method — plus a
+    "Zones" table (MVP1-71, `AthleteViewModel.heartRateZoneRanges`) listing each named zone's own bpm
+    range (`HeartRateZoneModel.zoneBPMRange(_:)`), each preceded by a dot in that zone's color
+    (`HeartRateZone.color`), as the activity detail sheet's zone list does (MVP1-70). The table is
+    omitted when there are no settings on record yet, or when the current method can't resolve a zone
+    (`.lactateThreshold` with no LTHR set).
+  - **Pace Zones** (`PaceZonesView`): the pace model's threshold pace
+    (`paceModel.thresholdPaceSecondsPerKilometer`), shown as min/km, and a note that the zones
+    themselves aren't available yet (MVP8).
+- **Connected Services** (`ConnectedServicesView`):
+  - **Apple Health** (`AppleHealthView`, MVP2-126): what the app reads from Health, "Import Now" (the
+    pull-to-refresh import) and, while nothing has ever been imported, "Connect Apple Health" (the
+    empty state's action). HealthKit doesn't reveal whether read access was granted, only whether the
+    prompt was shown, so the screen can't say which data types are allowed.
+  - **Apple Watch** (`AppleWatchView`, MVP2-125), hidden where WorkoutKit isn't available. One row, not
+    one per paired watch: iOS gives an app no list of paired watches or their names, and WorkoutKit
+    asks for one permission and schedules to whichever watch is active. It holds one row,
+    **Synchronisation** (`WatchSynchronisationView`, hosting `WatchSchedulingSection`, MVP2-117,
+    MVP2-118):
+    - A **"Send Planned Workouts to Apple Watch"** switch (`WatchScheduleSync.isEnabled`), on by
+      default and kept in `UserDefaults` on this device. It's the app's own setting, on top of iOS's
+      permission: turning it off removes the app's workouts from the Watch and stops the sync and the
+      planned-workout sheets from scheduling (§3.5), without changing the permission. Turning it on
+      asks for permission if the athlete hasn't been asked yet, then syncs. With the permission
+      refused, the switch stays on but nothing is sent; the footer and the week view's banner say why.
+      Hidden on a device that can't schedule workouts.
+    - A **Watch Permission** row: "Allowed", "Not asked yet", "Not allowed" or "Unavailable". While
+      the switch is on and the athlete hasn't been asked, an "Allow Sending to Apple Watch" button
+      shows the WorkoutKit prompt and syncs once it's granted
+      (`WatchScheduleSync.requestPermission(asOf:)`). Once declined, iOS won't ask again, so the
+      footer says where to turn it back on: the Watch app on the iPhone, under Workout. With the
+      switch off, the footer says planned workouts aren't sent instead.
+
+    The section reads the permission when it appears (`refreshAuthorization()`), and the sync that
+    runs when the app becomes active updates it. The week view's Watch permission banner opens the
+    tab with this screen already pushed (`AthleteRoute.watchSettings`).
+- **Calendar** (`CalendarSettingsView`): week-starts-on and time zone — minor, but confirms the app
+  is bucketing days the way the athlete expects.
+- **Developer** (`DeveloperView`): **Force Full Resync** and **Deduplicate Activities**, moved here
+  from the bottom of the old single screen. Force Full Resync re-imports every activity from HealthKit
+  from scratch, via `TrainingModel.resyncActivities(from:asOf:)` — a full import (cleared
+  `ImportAnchor`) rather than the incremental one pull-to-refresh runs. It doesn't edit the athlete
+  profile; it exists because `Sport` (and other per-activity fields) is resolved once at import time
+  and persisted, not recomputed on read, so an app update that fixes a mapping (e.g. a
+  `HKWorkoutActivityType` that used to fall back to `Sport.other`) doesn't retroactively fix
+  activities imported before the fix. It's a recovery action, not a settings toggle. Each asks for
+  confirmation, and neither runs while the other does.
 
 `heartRateZoneHistory` beyond the current entry is not shown in MVP 1 (no history/timeline UI —
-just "what's in effect now"). No editing, no HealthKit-write-back; this screen only reads what
+just "what's in effect now"). No editing, no HealthKit-write-back; these screens only read what
 `TrainingHealthKit`/`TrainingPersistence` have already populated.
-
-**Force Full Resync**: a single action at the bottom of the screen that re-imports every activity
-from HealthKit from scratch, via `TrainingModel.resyncActivities(from:asOf:)` — a full import
-(cleared `ImportAnchor`) rather than the incremental one pull-to-refresh runs. This doesn't edit
-the athlete profile; it exists because `Sport` (and other per-activity fields) is resolved once at
-import time and persisted, not recomputed on read, so an app update that fixes a mapping (e.g. a
-`HKWorkoutActivityType` that used to fall back to `Sport.other`) doesn't retroactively fix
-activities imported before the fix. This is a recovery action, not a settings toggle — the
-profile otherwise stays read-only as described above.
 
 ### 2.4 Workout library (MVP2-21)
 
@@ -760,7 +784,7 @@ the foreground, which also moves the window on after midnight.
 - **Permission denied (MVP2-117).** Each run records the permission (`WatchScheduleSync.authorization`).
   While it's denied and sending is on, `WeekView` shows a yellow `WatchPermissionBanner` at the bottom of the screen,
   explaining that planned workouts won't reach the Watch, with an "Open Athlete Tab" button to the
-  Athlete tab's Apple Watch section (§2.3). The banner can be dismissed; the dismissal is kept in
+  Athlete tab's Apple Watch ▸ Synchronisation screen (§2.3). The banner can be dismissed; the dismissal is kept in
   `UserDefaults` and cleared once permission is granted, so declining again later brings the banner
   back. iOS asks only once: after "Don't Allow", or after the athlete turns the app off in the Watch
   app's Workout settings, only those settings can turn it back on. Doing so hides the banner on its

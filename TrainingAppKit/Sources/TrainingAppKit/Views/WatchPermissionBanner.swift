@@ -5,7 +5,7 @@ import SwiftUI
 /// dismissible banner the TrainingKit roadmap describes for revoked HealthKit access.
 ///
 /// Yellow with black content in both light and dark mode, so it stands out from the grey week
-/// background behind it. Its button opens the Athlete tab, whose Apple Watch section
+/// background behind it. Its button opens the Athlete tab's Apple Watch ▸ Synchronisation screen, whose section
 /// (``WatchSchedulingSection``) shows the permission and where to turn it back on.
 ///
 /// Dismissing it hides it until permission is granted and later declined again (see
