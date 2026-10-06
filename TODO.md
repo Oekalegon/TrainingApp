@@ -66,6 +66,7 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
   - Open steps take the median time they took in earlier linked runs of the same workout or template.
 - [x] **MVP2-114** After the TrainingKit MVP2-35/111 PR merged, point `TrainingAppKit/Package.swift` back at TrainingKit's `develop` and pin `Package.resolved` to the merge commit. (done 2026-10-05, TrainingKit#75, #81)
 - [ ] **MVP2-115** Unify how a planned step's zone is chosen: `WorkoutDurationEstimator` assumes zone 3 for a distance step without a `.heartRateZone` target, while the projector, the TRIMP estimator and the pace forecast use `HeartRateZoneModel.intensityRatio` (zone 4 for a `.pace`/`.power` target). Found in the MVP2-35/111 review; changing it moves existing load and duration estimates, so it needs its own PR in TrainingKit.
+- [ ] **MVP2-131** The athlete profile (sex, date of birth, resting and max heart rate, all read from HealthKit) lives in the CloudKit-synced store, but `docs/design/icloud-healthkit-compliance-architecture.md` (TrainingKit) says HealthKit-derived data belongs in the local-only store (Apple Guideline 5.1.3(ii)); activities already sync too. Decide whether to split the container as that doc describes, or change the doc. MVP2-124 added the date of birth to this exposure (found in the TrainingKit#77 review).
 - [ ] **MVP2-?** Onboarding: HealthKit and CloudKit permissions block first launch; a later revocation shows a dismissible banner
 
 ## MVP3: Calibration
