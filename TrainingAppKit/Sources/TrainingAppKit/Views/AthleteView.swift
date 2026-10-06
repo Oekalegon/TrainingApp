@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 import TrainingCore
 
@@ -60,7 +61,7 @@ struct AthleteView: View {
             List {
                 Section {
                     VStack(spacing: 8) {
-                        AvatarView(initials: viewModel.initials)
+                        AvatarView(initials: viewModel.initials, imageData: viewModel.avatarImageData)
                         Text(viewModel.displayName)
                             .font(.title3.weight(.semibold))
                     }
@@ -184,15 +185,34 @@ struct AthleteRouteRow: View {
     }
 }
 
+/// The athlete's avatar (MVP2-132): the picture they chose, cropped to a circle, or their initials on
+/// blue when there's none or it can't be decoded.
 struct AvatarView: View {
     let initials: String
+    /// The picked picture as encoded image data, if any.
+    var imageData: Data?
 
     var body: some View {
-        Text(initials)
-            .font(.title.bold())
-            .foregroundStyle(.white)
-            .frame(width: 72, height: 72)
-            .background(Circle().fill(.blue))
-            .accessibilityHidden(true)
+        Group {
+            if let image = decodedImage {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Text(initials)
+                    .font(.title.bold())
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.blue)
+            }
+        }
+        .frame(width: 72, height: 72)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    private var decodedImage: CGImage? {
+        guard let imageData, let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 }

@@ -219,4 +219,51 @@ struct AthleteViewModelEditingTests {
         // No date of birth, no estimate.
         #expect(AthleteViewModel(athlete: AthleteProfile.fixture()).offeredMaxHeartRateEstimate(asOf: today) == nil)
     }
+
+    @Test("choosing a zone method drafts the current settings from today with only the method changed")
+    func zoneMethodDraft() {
+        let athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let viewModel = AthleteViewModel(athlete: athlete)
+
+        let draft = viewModel.zoneMethodDraft(.percentageOfMaxHeartRate, asOf: today)
+
+        let settings = draft?.settings()
+        #expect(settings?.zoneMethod == .percentageOfMaxHeartRate)
+        #expect(settings?.effectiveDate == today)
+        #expect(settings?.restingHeartRateBPM == 50)
+        #expect(settings?.maxHeartRateBPM == 190)
+        #expect(draft?.needsLactateThresholdReview == false)
+        #expect(draft?.validationMessage == nil)
+    }
+
+    @Test("choosing the lactate-threshold method without a threshold asks for one instead of inventing it")
+    func zoneMethodNeedingAThreshold() {
+        let viewModel = AthleteViewModel(athlete: AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190))
+
+        let draft = viewModel.zoneMethodDraft(.lactateThreshold, asOf: today)
+
+        #expect(draft?.needsLactateThresholdReview == true)
+        #expect(draft?.lactateThresholdHeartRate != nil)
+
+        // With a threshold on record it can be applied as it is.
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        athlete.heartRateZoneHistory[0].lactateThresholdHeartRateBPM = 168
+        let ready = AthleteViewModel(athlete: athlete).zoneMethodDraft(.lactateThreshold, asOf: today)
+        #expect(ready?.needsLactateThresholdReview == false)
+        #expect(ready?.settings().lactateThresholdHeartRateBPM == 168)
+    }
+
+    @Test("with no settings on record there's no draft for a zone method")
+    func noZoneMethodDraftWithoutSettings() {
+        #expect(AthleteViewModel(athlete: AthleteProfile.fixture()).zoneMethodDraft(.karvonen, asOf: today) == nil)
+    }
+
+    @Test("the avatar picture comes from the profile")
+    func avatarImageData() {
+        var athlete = AthleteProfile.fixture()
+        #expect(AthleteViewModel(athlete: athlete).avatarImageData == nil)
+
+        athlete.avatarImageData = Data([1, 2, 3])
+        #expect(AthleteViewModel(athlete: athlete).avatarImageData == Data([1, 2, 3]))
+    }
 }

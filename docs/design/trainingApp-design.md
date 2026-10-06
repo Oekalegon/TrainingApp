@@ -519,12 +519,11 @@ earliest changed date. The other app settings are the Apple Watch ones (MVP2-117
 
 The list itself (`AthleteView`):
 
-- **Avatar and name**: an initials monogram derived from `athlete.name` — no photo. There's no public
-  API for "the iCloud account's photo" (`CKDiscoverUserIdentity` gives a name at best, never an
-  image); the one real alternative, reading the Contacts "My Card" photo via
-  `CNContactStore.unifiedMeContact(withKeys:)`, needs a Contacts permission prompt for something
-  that's often unset anyway, and isn't worth that cost in a read-only MVP 1. Revisit only if a manual
-  avatar picker gets added alongside real editing later.
+- **Avatar and name**: the athlete's chosen photo (MVP2-132), or an initials monogram derived from
+  `athlete.name` until they choose one. There's no public API for "the iCloud account's photo"
+  (`CKDiscoverUserIdentity` gives a name at best, never an image) and reading the Contacts "My Card"
+  photo needs a permission prompt for something that's often unset, so the athlete picks one themselves
+  on the Personal Information screen (below).
 - **Overlap warning** (MVP1-67): a non-dismissible row just below the avatar, with a warning-color
   background, showing "N activities have overlaps to review" whenever
   `WeekViewModel.overlapWarningCount` (`overlapReviewItems.count`, the same non-`.possibleMultisport`
@@ -540,7 +539,11 @@ The list itself (`AthleteView`):
 
 The screens:
 
-- **Personal Information** (`PersonalInformationView`): the avatar, name (tap the row to change it; an
+- **Personal Information** (`PersonalInformationView`): the avatar (tap it to choose a photo from the
+  library with `PhotosPicker`; "Remove Photo" goes back to the initials. `AvatarImageProcessor` cuts the
+  photo to a centered 256-pixel square JPEG, a few tens of kilobytes, because it's kept in
+  `AthleteProfile.avatarImageData` and so is saved and synced with the profile; a file that can't be
+  read shows "Couldn't Use That Photo"), name (tap the row to change it; an
   empty name shows as "Athlete"), biological sex, and age
   (MVP2-124: whole years in the athlete's time zone, shown once `AthleteProfile.dateOfBirth` is on
   record; `AthleteProfile.merging(_:asOf:)` fills it from HealthKit on each import and never wipes it
@@ -556,6 +559,13 @@ The screens:
     omitted when there are no settings on record yet, or when the current method can't resolve a zone
     (`.lactateThreshold` with no LTHR set).
 
+    The screen leads with a **Resting Heart Rate** section: the value, and, while Apple Health is
+    connected, the "Use Apple Health" switch that decides who owns it (below). Next come the maximum
+    heart rate, the lactate threshold if set, and the **Zone Method**, an inline picker: choosing a
+    method records it from today at once, with everything else as it was
+    (`AthleteViewModel.zoneMethodDraft(_:asOf:)`); choosing lactate threshold when none is on record opens
+    the settings sheet instead, to enter one, rather than saving a threshold the athlete never gave.
+
     Editing is dated, like the history it edits. The "+" button (or a tap on a history row) opens
     `HeartRateSettingsSheet`: the date the settings take effect, resting and maximum heart rate, an
     optional lactate threshold and the zone method, checked by `HeartRateSettingsDraft` (resting 25–120,
@@ -566,8 +576,8 @@ The screens:
     newest first, and a swipe deletes one (never the last). A maximum the athlete changes is stored with
     the source `.manual` ("Set by you on …"); one left alone keeps its source.
 
-    While Apple Health is connected (an import has happened), a switch, "Resting Heart Rate from Apple
-    Health" (`AthleteProfile.usesHealthKitRestingHeartRate`, on by default), decides who owns the
+    While Apple Health is connected (an import has happened), a switch, "Use Apple Health"
+    (`AthleteProfile.usesHealthKitRestingHeartRate`, on by default), decides who owns the
     resting heart rate. On, HealthKit's reading is merged on each import and the field can't be edited
     (the sheet shows it locked); off, the athlete's own entries stand and HealthKit's reading is ignored.
     Turning it on imports straight away. The maximum is **never** changed for the athlete: the HealthKit

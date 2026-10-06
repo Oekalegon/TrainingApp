@@ -28,6 +28,34 @@ public struct AthleteViewModel {
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }
 
+    /// The athlete's picture as encoded image data, if they chose one (MVP2-132); the avatar shows the
+    /// monogram otherwise.
+    public var avatarImageData: Data? {
+        athlete.avatarImageData
+    }
+
+    /// The heart-rate settings that choosing `method` on the Heart Rate Zones screen would record, from
+    /// `today`: the current settings with only the zone method changed (MVP2-132). `nil` when there are
+    /// no settings yet.
+    ///
+    /// When the method is lactate threshold and no lactate threshold is on record, the draft carries a
+    /// default one and ``HeartRateSettingsDraft/needsLactateThresholdReview`` is `true`, so the screen
+    /// opens the sheet to enter it rather than saving a threshold the athlete never gave.
+    ///
+    /// - Parameters:
+    ///   - method: The method chosen.
+    ///   - today: The day the change takes effect; injected for tests.
+    func zoneMethodDraft(_ method: HeartRateZoneMethod, asOf today: Date = .now) -> HeartRateSettingsDraft? {
+        guard let current = currentHeartRateZoneSettings else { return nil }
+        var draft = HeartRateSettingsDraft(prefilling: current, effectiveDate: today)
+        draft.zoneMethod = method
+        if method == .lactateThreshold, draft.lactateThresholdHeartRate == nil {
+            draft.lactateThresholdHeartRate = min(draft.maxHeartRate - 10, 170)
+            draft.needsLactateThresholdReview = true
+        }
+        return draft
+    }
+
     /// The athlete's age for the Personal Information screen (MVP2-124), in whole years as of `today`
     /// in the athlete's time zone, or `nil` while no date of birth is on record.
     ///

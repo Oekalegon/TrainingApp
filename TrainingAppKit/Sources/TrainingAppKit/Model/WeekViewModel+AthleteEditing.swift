@@ -6,6 +6,15 @@ import TrainingCore
 /// imports and other updates, and invalidates the fitness-metrics cache from the earliest changed
 /// date; so a failed save changes nothing and these report it by returning `false`.
 extension WeekViewModel {
+    /// Sets the athlete's picture, or removes it with `nil`. The data should already be small (see
+    /// ``AvatarImageProcessor``): it's stored in the profile, which travels with the athlete.
+    ///
+    /// - Parameter imageData: The encoded image, or `nil` for none.
+    /// - Returns: Whether the profile was saved.
+    public func setAthleteAvatar(_ imageData: Data?, asOf today: Date = .now) async -> Bool {
+        await applyAthleteChange(asOf: today) { $0.avatarImageData = imageData }
+    }
+
     /// Renames the athlete. Surrounding whitespace is dropped, and an empty name is allowed: the
     /// screens then show "Athlete".
     ///

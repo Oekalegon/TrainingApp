@@ -12,6 +12,10 @@ struct HeartRateSettingsDraft: Equatable {
     /// `nil` while no lactate threshold is set.
     var lactateThresholdHeartRate: Int?
     var zoneMethod: HeartRateZoneMethod
+    /// Whether the lactate threshold in the draft is a placeholder the athlete should confirm, set when
+    /// the lactate-threshold zone method is chosen with none on record; see
+    /// `AthleteViewModel.zoneMethodDraft(_:asOf:)`.
+    var needsLactateThresholdReview = false
     /// The maximum the draft started from and where it came from, so leaving it untouched keeps its
     /// source (a workout-measured max stays one) and changing it makes it the athlete's own.
     private let originalMax: Int

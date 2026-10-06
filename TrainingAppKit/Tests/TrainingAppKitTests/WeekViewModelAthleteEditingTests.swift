@@ -38,6 +38,18 @@ struct WeekViewModelAthleteEditingTests {
         #expect(viewModel.athleteViewModel.displayName == "Athlete")
     }
 
+    @Test("the avatar is saved with the profile and can be removed")
+    func avatar() async throws {
+        let (viewModel, model, store) = makeViewModel()
+
+        #expect(await viewModel.setAthleteAvatar(Data([9, 9]), asOf: now))
+        #expect(model.athlete.avatarImageData == Data([9, 9]))
+        #expect(try await store.athleteProfile()?.avatarImageData == Data([9, 9]))
+
+        #expect(await viewModel.setAthleteAvatar(nil, asOf: now))
+        #expect(model.athlete.avatarImageData == nil)
+    }
+
     @Test("heart-rate settings recorded from a date are saved, replace that day's entry, and can be removed")
     func heartRateSettingsLifecycle() async throws {
         let (viewModel, model, store) = makeViewModel()

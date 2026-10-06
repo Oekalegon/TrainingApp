@@ -22,26 +22,29 @@ struct HeartRateZonesView: View {
 
     var body: some View {
         List {
-            if showsHealthKitSwitch {
-                Section {
-                    Toggle("Resting Heart Rate from Apple Health", isOn: Binding(
-                        get: { viewModel.athlete.usesHealthKitRestingHeartRate },
-                        set: { isOn in
-                            Task {
-                                if await !weekViewModel.setUsesHealthKitRestingHeartRate(isOn) { isShowingError = true }
-                            }
-                        }
-                    ))
-                } footer: {
-                    Text(viewModel.athlete.usesHealthKitRestingHeartRate
-                        ? "Your resting heart rate follows Apple Health and can't be edited here."
-                        : "Enter your own resting heart rate with the add button.")
-                }
-            }
-
             if let settings = viewModel.currentHeartRateZoneSettings {
+                // The resting heart rate and the switch that decides who owns it, together.
                 Section {
                     LabeledContent("Resting Heart Rate", value: "\(Int(settings.restingHeartRateBPM.rounded())) bpm")
+                    if showsHealthKitSwitch {
+                        Toggle("Use Apple Health", isOn: Binding(
+                            get: { viewModel.athlete.usesHealthKitRestingHeartRate },
+                            set: { isOn in
+                                Task {
+                                    if await !weekViewModel.setUsesHealthKitRestingHeartRate(isOn) { isShowingError = true }
+                                }
+                            }
+                        ))
+                    }
+                } footer: {
+                    if showsHealthKitSwitch {
+                        Text(viewModel.athlete.usesHealthKitRestingHeartRate
+                            ? "Your resting heart rate follows Apple Health and can't be edited here."
+                            : "Enter your own resting heart rate with the add button.")
+                    }
+                }
+
+                Section {
                     LabeledContent {
                         Text("\(Int(settings.maxHeartRateBPM.rounded())) bpm")
                     } label: {
@@ -55,7 +58,16 @@ struct HeartRateZonesView: View {
                     if let lactateThreshold = settings.lactateThresholdHeartRateBPM {
                         LabeledContent("Lactate Threshold", value: "\(Int(lactateThreshold.rounded())) bpm")
                     }
-                    LabeledContent("Method", value: settings.zoneMethod.displayName)
+                    Picker("Zone Method", selection: Binding(
+                        get: { settings.zoneMethod },
+                        set: { chooseMethod($0) }
+                    )) {
+                        ForEach(HeartRateSettingsSheet.methods, id: \.self) { method in
+                            Text(method.displayName).tag(method)
+                        }
+                    }
+                } footer: {
+                    Text("A new zone method applies from today. Earlier activities keep the one they were scored with.")
                 }
 
                 if let estimate = viewModel.offeredMaxHeartRateEstimate() {
@@ -151,6 +163,19 @@ struct HeartRateZonesView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("The change couldn't be saved. Try again.")
+        }
+    }
+
+    /// The zone method picker's choice: recorded from today at once, unless it needs a lactate threshold
+    /// the athlete hasn't entered, in which case the settings sheet opens to enter it first.
+    private func chooseMethod(_ method: HeartRateZoneMethod) {
+        guard let draft = viewModel.zoneMethodDraft(method) else { return }
+        if draft.needsLactateThresholdReview {
+            editing = draft
+        } else {
+            Task {
+                if await !weekViewModel.recordHeartRateSettings(draft.settings()) { isShowingError = true }
+            }
         }
     }
 
