@@ -346,6 +346,74 @@ struct EstimatedValuesTests {
         #expect(tomorrowRow.isFormProjected)
     }
 
+    @Test("a day's Load pill is an estimate when an activity that day was scored from perceived effort (MVP2-127)")
+    func dayLoadEstimateFollowsEffortScoredActivities() async throws {
+        let (viewModel, _, store) = makeViewModel()
+        let today = viewModel.displayedWeekStart
+        let measuredDay = today.addingTimeInterval(-3 * 86400)
+        let effortDay = today.addingTimeInterval(-2 * 86400)
+        let mixedDay = today.addingTimeInterval(-86400)
+        try await store.upsert([
+            heartRateActivity(on: measuredDay),
+            Activity(source: .manual, sport: .running, start: effortDay, duration: 1800, perceivedExertion: 5),
+            heartRateActivity(on: mixedDay),
+            Activity(
+                source: .manual, sport: .running, start: mixedDay.addingTimeInterval(7200), duration: 1800,
+                perceivedExertion: 4
+            ),
+        ])
+        await viewModel.load(asOf: today)
+
+        #expect(!viewModel.dayMetrics(on: measuredDay).isLoadEstimated)
+        #expect(viewModel.dayMetrics(on: effortDay).isLoadEstimated)
+        // Part of this day's load is an estimate, so the total is marked.
+        #expect(viewModel.dayMetrics(on: mixedDay).isLoadEstimated)
+        // No activity, nothing to mark.
+        #expect(!viewModel.dayMetrics(on: today.addingTimeInterval(-5 * 86400)).isLoadEstimated)
+    }
+
+    @Test("an activity's scored load is cached, and refreshed when it changes in place or the athlete does (MVP2-128)")
+    func scoredLoadCacheFollowsItsInputs() async throws {
+        let (viewModel, model, store) = makeViewModel()
+        let today = viewModel.displayedWeekStart
+        var activity = Activity(source: .manual, sport: .running, start: today, duration: 1800, perceivedExertion: 4)
+        try await store.upsert([activity])
+        await viewModel.load(asOf: today)
+        #expect(viewModel.scoredLoad(for: activity)?.value == 120.0)
+        #expect(viewModel.scoredLoadCache.count == 1)
+
+        // Edited in place, same id: the new effort scores, not the cached one.
+        activity.perceivedExertion = 6
+        try await store.upsert([activity])
+        await viewModel.load(asOf: today)
+        let reloaded = try #require(model.activities.first)
+        #expect(viewModel.scoredLoad(for: reloaded)?.value == 180.0)
+
+        // A changed athlete drops what was cached under the old settings.
+        try await model.updateAthlete(asOf: today) { $0.recordingHeartRateSettings(
+            HeartRateZoneSettings(effectiveDate: .distantPast + 86400, restingHeartRateBPM: 45, maxHeartRateBPM: 180)
+        ) }
+        _ = viewModel.scoredLoad(for: reloaded)
+        #expect(viewModel.scoredLoadCache.count == 1)
+    }
+
+    @Test("an activity deleted from the model is dropped from the scored-load cache")
+    func scoredLoadCacheForgetsDeletedActivities() async throws {
+        let (viewModel, model, store) = makeViewModel()
+        let today = viewModel.displayedWeekStart
+        let activity = Activity(source: .manual, sport: .running, start: today, duration: 1800, perceivedExertion: 4)
+        try await store.upsert([activity])
+        await viewModel.load(asOf: today)
+        _ = viewModel.scoredLoad(for: activity)
+        #expect(viewModel.scoredLoadCache.count == 1)
+
+        try await model.deleteActivity(id: activity.id, asOf: today)
+        _ = viewModel.activityCardContent(for: Activity(source: .manual, sport: .cycling, start: today, duration: 600))
+
+        #expect(viewModel.scoredLoadCache.count == 1)
+        #expect(model.activities.isEmpty)
+    }
+
     @Test("a metric detail subject is projected by its own days, and by the previous day for Form")
     func metricDetailSubjectProjection() {
         var calendar = Calendar(identifier: .gregorian)

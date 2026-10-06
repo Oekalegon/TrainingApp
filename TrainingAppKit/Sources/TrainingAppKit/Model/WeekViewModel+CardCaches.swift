@@ -2,7 +2,7 @@ import Foundation
 import TrainingCore
 
 /// Invalidation shared by the card caches (`InputKeyedCache`s for card summaries, linked-plan
-/// expectations and intensities).
+/// expectations, intensities and activities' scored loads).
 extension WeekViewModel {
     /// Everything a cached card value can depend on that isn't one of its own inputs: the athlete
     /// (zone settings, pace model) and the intensity thresholds. Changing either drops every card
@@ -10,6 +10,7 @@ extension WeekViewModel {
     func refreshCardCachesIfNeeded() {
         if cardCacheAthlete != model.athlete || cardCacheIntensityParameters != model.intensityParameters {
             plannedSummaryCache.removeAll()
+            scoredLoadCache.removeAll()
             linkedExpectationCache.removeAll()
             activityIntensityCache.removeAll()
             planIntensityCache.removeAll()
@@ -22,6 +23,7 @@ extension WeekViewModel {
             let activityIDs = Set(model.activities.map(\.id))
             let planIDs = Set(model.plans.map(\.id))
             activityIntensityCache.retain(activityIDs)
+            scoredLoadCache.retain(activityIDs)
             plannedSummaryCache.retain(planIDs)
             linkedExpectationCache.retain(planIDs)
             planIntensityCache.retain(planIDs)

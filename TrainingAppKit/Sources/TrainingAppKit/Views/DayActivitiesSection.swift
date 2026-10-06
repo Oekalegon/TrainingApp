@@ -59,6 +59,9 @@ struct DayActivitiesSection: View {
     /// Whether this day's Form is an estimate, shown with a "~" (MVP2-8) — see
     /// `WeekViewModel.dayMetrics(on:)`.
     let isFormProjected: Bool
+    /// Whether this day's Load is an estimate, shown with a "~" (MVP2-127): an activity that day was
+    /// scored from perceived effort — see `WeekViewModel.dayMetrics(on:)`.
+    let isLoadEstimated: Bool
     let activities: [Activity]
     /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.
     let plans: [PlannedActivity]
@@ -109,8 +112,8 @@ struct DayActivitiesSection: View {
                     .frame(width: WeekdayPillView.columnWidth)
                 if let metrics {
                     DayMetricsPillRow(
-                        metrics: metrics, isFormProjected: isFormProjected, showsOnlyForm: activities.isEmpty,
-                        onSelectMetric: onSelectMetric
+                        metrics: metrics, isFormProjected: isFormProjected, isLoadEstimated: isLoadEstimated,
+                        showsOnlyForm: activities.isEmpty, onSelectMetric: onSelectMetric
                     )
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 } else {
@@ -263,6 +266,9 @@ private struct DayMetricsPillRow: View {
     let metrics: FitnessMetrics
     /// Whether Form is an estimate: it follows the previous day's metrics, not this day's (MVP2-8).
     let isFormProjected: Bool
+    /// Whether Load is an estimate although the day isn't projected: an activity was scored from
+    /// perceived effort (MVP2-127). Fitness and Fatigue follow from Load, but only Load is marked.
+    let isLoadEstimated: Bool
     /// `true` on a day with no completed activities — Load/Fitness/Fatigue describe that day's
     /// training input, which has nothing to say on a day nothing happened, so only Form (TSB, a
     /// trend that moves whether or not the athlete trained that day) is worth showing.
@@ -286,7 +292,11 @@ private struct DayMetricsPillRow: View {
     var body: some View {
         HStack(spacing: 0) {
             if !showsOnlyForm {
-                MetricPillView(kind: .load, value: text(metrics.load, Self.unsignedFormat), onSelect: onSelectMetric)
+                MetricPillView(
+                    kind: .load,
+                    value: text(metrics.load, Self.unsignedFormat, isEstimated: metrics.isProjected || isLoadEstimated),
+                    onSelect: onSelectMetric
+                )
                 Spacer().frame(width: Self.loadGroupSpacing)
                 MetricPillView(kind: .fitness, value: text(metrics.ctl, Self.unsignedFormat), onSelect: onSelectMetric)
                 Spacer().frame(width: Self.metricSpacing)
