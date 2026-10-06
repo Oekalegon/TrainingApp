@@ -719,14 +719,14 @@ view), because HealthKit launches the app without a window and only delivers to 
 process has registered. It runs an `HKObserverQuery` on workouts with background delivery at
 `.immediate` frequency (`HealthKitWorkoutObserver`; entitlement
 `com.apple.developer.healthkit.background-delivery`). Each notification runs
-`TrainingAppEnvironment.importArrivedWorkouts(asOf:)`: the normal import (which links the workout to
+`ArrivedWorkoutImport.run(…)` (via `TrainingAppEnvironment.importArrivedWorkouts(asOf:)`): the normal import (which links the workout to
 its plan, MVP2-120), then the Watch sync (MVP2-116), awaited because HealthKit keeps the app awake only
 until the observer is told the work is finished. A running UI is told through
 `Notification.Name.trainingAppDidImportWorkouts` and calls
 `WeekViewModel.activitiesImportedElsewhere(asOf:)`, which refreshes the week caches and checks the max
 heart rate suggestion, as a pull-to-refresh does. Observation can't start before HealthKit access is
 granted, so the launch-time start fails on a first run; `requestAuthorization()` starts it again once
-the athlete has granted access, and a failed start leaves it retryable.
+the athlete has granted access, and a failed start leaves it retryable (the observer stops its query first, so a retry can't leave two running). HealthKit also calls the handler once when a query is registered, so every launch runs one extra, idempotent import.
 
 ### 3.5 Planned workouts on the Watch (MVP2-55)
 

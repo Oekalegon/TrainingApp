@@ -128,19 +128,12 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         await workoutBackgroundImport.start()
     }
 
-    /// What a "new workout" notification does: imports it (which links it to its plan), then puts
-    /// the Watch schedule right again, since a done plan's entry is kept and the window moves on
-    /// (MVP2-116), and finally tells the UI, if there is one, so it refreshes its caches.
-    ///
-    /// The Watch sync is awaited: the system keeps a background-launched app awake only until the
-    /// observer is told the work is finished. Failures are swallowed, as in ``refreshActivities(asOf:)``'s
-    /// other callers: the next launch, refresh or notification catches up.
-    ///
-    /// - Parameter today: The current time, for tests to pin.
+    /// What a "new workout" notification does: see ``ArrivedWorkoutImport/run(refresher:watchSync:asOf:notify:)``.
+    /// The UI is told through ``Foundation/Notification/Name/trainingAppDidImportWorkouts``.
     func importArrivedWorkouts(asOf today: Date = .now) async {
-        try? await refreshActivities(asOf: today)
-        await watchSync?.requestSync(asOf: today).value
-        NotificationCenter.default.post(name: .trainingAppDidImportWorkouts, object: nil)
+        await ArrivedWorkoutImport.run(refresher: self, watchSync: watchSync, asOf: today) {
+            NotificationCenter.default.post(name: .trainingAppDidImportWorkouts, object: nil)
+        }
     }
 
     /// See ``ActivityRefreshing/requestAuthorization()``.
