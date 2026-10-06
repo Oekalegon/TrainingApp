@@ -694,8 +694,9 @@ import wiring. Tracked as a separate todo (see §7).
 
 `TrainingModel.load(in:asOf:)` is called on launch (window ≈ the 3-week chart range, expanded
 somewhat so `recompute` has enough trailing history for CTL's warm-up) and again on
-`scenePhase == .active` (foreground). No background refresh in MVP 1 — CloudKit sync latency is
-accepted as-is between explicit triggers.
+`scenePhase == .active` (foreground). No periodic background refresh in MVP 1 — CloudKit sync latency is
+accepted as-is between explicit triggers. New workouts are the exception (see Background import
+below).
 
 Each import also re-reads the athlete's biometrics from HealthKit and merges them into the profile
 (`AthleteProfile.merging(_:asOf:)`): resting HR, sex, and a Tanaka max-HR estimate from date of
@@ -710,6 +711,22 @@ calls `TrainingModel.importActivities(from:)` (§3.3) to pull anything new from 
 (HealthKit not authorized, import failure) fail silently back to the pre-refresh state — MVP 1
 doesn't add error-presentation UI beyond that; worth a follow-up once the app has been used for
 a while.
+
+**Background import (MVP2-121).** A workout saved by the Watch is imported as soon as Health has it,
+also while the app is closed. `AppDelegate` (in the iOS shell) starts `WorkoutBackgroundImport` at
+every launch, through `TrainingAppEnvironment.shared()` (the one environment, also used by the launch
+view), because HealthKit launches the app without a window and only delivers to a query the new
+process has registered. It runs an `HKObserverQuery` on workouts with background delivery at
+`.immediate` frequency (`HealthKitWorkoutObserver`; entitlement
+`com.apple.developer.healthkit.background-delivery`). Each notification runs
+`TrainingAppEnvironment.importArrivedWorkouts(asOf:)`: the normal import (which links the workout to
+its plan, MVP2-120), then the Watch sync (MVP2-116), awaited because HealthKit keeps the app awake only
+until the observer is told the work is finished. A running UI is told through
+`Notification.Name.trainingAppDidImportWorkouts` and calls
+`WeekViewModel.activitiesImportedElsewhere(asOf:)`, which refreshes the week caches and checks the max
+heart rate suggestion, as a pull-to-refresh does. Observation can't start before HealthKit access is
+granted, so the launch-time start fails on a first run; `requestAuthorization()` starts it again once
+the athlete has granted access, and a failed start leaves it retryable.
 
 ### 3.5 Planned workouts on the Watch (MVP2-55)
 

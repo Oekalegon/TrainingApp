@@ -21,6 +21,14 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     private let importer: any ActivityImporting
     private let healthStore: HKHealthStore
     private let athleteReader: HealthKitAthleteReader
+    /// Imports workouts as soon as Health has them (MVP2-121); see ``startWorkoutObservation()``.
+    private lazy var workoutBackgroundImport = WorkoutBackgroundImport(
+        observer: HealthKitWorkoutObserver(healthStore: healthStore),
+        onNewWorkouts: { [weak self] in await self?.importArrivedWorkouts() }
+    )
+    /// The one environment the app runs on, shared by the app delegate (which starts workout
+    /// observation at launch, also when HealthKit launches the app in the background) and the UI.
+    private static var sharedTask: Task<TrainingAppEnvironment, Error>?
 
     private init(
         model: TrainingModel,
@@ -32,6 +40,26 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         self.importer = importer
         self.healthStore = healthStore
         self.athleteReader = HealthKitAthleteReader(healthStore: healthStore)
+    }
+
+    /// The environment this app instance runs on, created on first use and shared afterwards.
+    ///
+    /// Both the app delegate and the launch view ask for it, and two environments would open the
+    /// store twice. A failed creation isn't kept, so the next call tries again.
+    ///
+    /// - Throws: Whatever ``make()`` throws.
+    public static func shared() async throws -> TrainingAppEnvironment {
+        if let sharedTask {
+            return try await sharedTask.value
+        }
+        let task = Task { try await make() }
+        sharedTask = task
+        do {
+            return try await task.value
+        } catch {
+            sharedTask = nil
+            throw error
+        }
     }
 
     /// Creates the environment this app instance runs on.
@@ -90,9 +118,38 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         try? await model.updateAthlete(asOf: today) { $0.merging(snapshot, asOf: today) }
     }
 
+    /// Starts importing new workouts as soon as Health has them, also while the app is closed
+    /// (MVP2-121). Safe to call again: once it's running, later calls do nothing, and a call after a
+    /// failed start (HealthKit not authorized yet) tries again.
+    ///
+    /// Call it on every launch, early — HealthKit wakes the app in the background only for a query
+    /// the new process has registered — and again once the athlete grants access.
+    public func startWorkoutObservation() async {
+        await workoutBackgroundImport.start()
+    }
+
+    /// What a "new workout" notification does: imports it (which links it to its plan), then puts
+    /// the Watch schedule right again, since a done plan's entry is kept and the window moves on
+    /// (MVP2-116), and finally tells the UI, if there is one, so it refreshes its caches.
+    ///
+    /// The Watch sync is awaited: the system keeps a background-launched app awake only until the
+    /// observer is told the work is finished. Failures are swallowed, as in ``refreshActivities(asOf:)``'s
+    /// other callers: the next launch, refresh or notification catches up.
+    ///
+    /// - Parameter today: The current time, for tests to pin.
+    func importArrivedWorkouts(asOf today: Date = .now) async {
+        try? await refreshActivities(asOf: today)
+        await watchSync?.requestSync(asOf: today).value
+        NotificationCenter.default.post(name: .trainingAppDidImportWorkouts, object: nil)
+    }
+
     /// See ``ActivityRefreshing/requestAuthorization()``.
+    ///
+    /// Then starts workout observation (MVP2-121): background delivery can only be enabled once
+    /// HealthKit access has been granted, so the launch-time start fails on a first run.
     public func requestAuthorization() async throws {
         try await HealthKitAuthorization.requestAuthorization(for: healthStore)
+        await startWorkoutObservation()
     }
 
     /// A blank athlete profile used until the first HealthKit import populates real biometrics.

@@ -103,5 +103,10 @@ public struct AppTabView: View {
             guard phase == .active else { return }
             watchSync?.requestSync()
         }
+        // A workout imported in the background (MVP2-121) already synced the Watch; the caches are
+        // this view model's own.
+        .onReceive(NotificationCenter.default.publisher(for: .trainingAppDidImportWorkouts)) { _ in
+            Task { await viewModel.activitiesImportedElsewhere() }
+        }
     }
 }
