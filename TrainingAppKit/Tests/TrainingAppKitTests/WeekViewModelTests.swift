@@ -449,6 +449,25 @@ struct WeekViewModelTests {
         #expect(viewModel.chartRaces(for: weekStart).map(\.id) == [earlier.id, later.id])
     }
 
+    @Test("chartRaces(for:) keeps only the most important race of a day (MVP2-104)")
+    func chartRacesOnePerDay() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+        let weekStart = viewModel.displayedWeekStart
+        let raceDay = calendar.date(byAdding: .day, value: 3, to: weekStart)!
+        let tertiary = Race(name: "Parkrun", date: raceDay, priority: .tertiary)
+        let primary = Race(name: "Marathon", date: raceDay, priority: .primary)
+        let boundary = Race(name: "Last day", date: viewModel.chartRange(for: weekStart).upperBound, priority: .secondary)
+        try await store.upsert([tertiary, primary, boundary])
+
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.chartRaces(for: weekStart).map(\.id) == [primary.id, boundary.id])
+    }
+
     @Test("races on one day with the same priority are ordered by name")
     func racesWithSamePriorityOrderedByName() async throws {
         let (store, stores) = makeStores()

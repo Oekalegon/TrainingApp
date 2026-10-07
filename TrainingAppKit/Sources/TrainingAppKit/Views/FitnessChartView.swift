@@ -13,9 +13,10 @@ struct FitnessChartView: View {
     /// shaded behind the trend line so the 3-week chart stays visually anchored to whichever week
     /// the athlete has scrolled to.
     let displayedWeekRange: ClosedRange<Date>
-    /// The races in the chart's window, each marked with a vertical rule and its A/B/C circle on
-    /// top (MVP2-104).
-    var races: [Race] = []
+    /// The races in the chart's window (one per day, see `WeekViewModel.chartRaces(for:)`), each
+    /// marked with a solid vertical rule and an outlined A/B/C circle at the top of the plot
+    /// (MVP2-104).
+    let races: [Race]
     /// Days after this are projected/estimated rather than actual history (see
     /// `FitnessMetrics.isProjected`), so the Form lines render dashed past this point.
     let today: Date = .now
@@ -181,7 +182,8 @@ struct FitnessChartView: View {
     private func raceMarker(_ race: Race, proxy: ChartProxy, plotArea: CGRect) -> some View {
         if let x = proxy.position(forX: race.date) {
             let size = Self.raceMarkerSize
-            let centerX = plotArea.minX + x
+            // Kept inside the plot, so a race on the window's first or last day isn't half clipped.
+            let centerX = min(max(plotArea.minX + x, plotArea.minX + size / 2), plotArea.maxX - size / 2)
             Path { path in
                 path.move(to: CGPoint(x: centerX, y: plotArea.minY + size))
                 path.addLine(to: CGPoint(x: centerX, y: plotArea.maxY))

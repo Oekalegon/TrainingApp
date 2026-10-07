@@ -322,7 +322,10 @@ across launches.
   secondary, C tertiary) where the activity card has its intensity marker, a flag icon and the race
   name. Several races on one day are listed primary first (`WeekViewModel.races(on:)`). The card is
   not tappable (there is no race detail sheet yet) and reads as one VoiceOver element, e.g. "Primary
-  race: Marathon". The daily-load chart has no race marker yet.
+  race: Marathon". The Form chart marks each race in its 3-week window with a solid vertical rule and an
+  outlined A/B/C circle at the top of the plot, drawn in the chart overlay so the rule stops at the
+  circle (`WeekViewModel.chartRaces(for:)`; one race per day, the most important). The daily-load and
+  heart-rate pages and the metric detail chart have no race marker.
 - `DayActivitiesSection` takes one closure per card kind (`WeekViewModel.activityCardContent(for:)`,
   `plannedCardContent(for:asOf:)`) returning everything the card shows. Those values are cached per
   item against the inputs they depend on — a plan's load override, its workout's steps and date, an
