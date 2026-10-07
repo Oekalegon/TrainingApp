@@ -24,6 +24,9 @@ struct DailyLoadChartView: View {
     /// Date range of the week currently visible in the day list, shaded behind the bars — same
     /// role as `FitnessChartView.displayedWeekRange`.
     let displayedWeekRange: ClosedRange<Date>
+    /// The races in the chart's window (one per day, see `WeekViewModel.chartRaces(for:)`), marked
+    /// like `FitnessChartView` marks them (MVP2-104).
+    let races: [Race]
 
     /// The planned bar is full width; the actual bar is narrower so it visibly nests inside it
     /// rather than the two reading as unrelated, same-width bars sitting side by side.
@@ -85,6 +88,16 @@ struct DailyLoadChartView: View {
                     AxisGridLine()
                     AxisTick()
                     AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                }
+            }
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    if let plotFrame = proxy.plotFrame {
+                        RaceChartMarkers(
+                            races: races, proxy: proxy, plotArea: geometry[plotFrame],
+                            dayOffset: RaceChartMarkers.halfDay
+                        )
+                    }
                 }
             }
             .frame(height: 172)
