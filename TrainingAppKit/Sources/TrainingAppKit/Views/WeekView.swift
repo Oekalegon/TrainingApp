@@ -559,6 +559,7 @@ public struct WeekView: View {
                 dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
                 displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
+                races: viewModel.chartRaces(for: weekStart),
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 },
                 onTapPage: { page in showGraphInfo(for: page) }
@@ -569,6 +570,7 @@ public struct WeekView: View {
                 dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
                 displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
+                races: viewModel.chartRaces(for: weekStart),
                 selectedIndex: graphPanelSelectedIndex
             )
         }

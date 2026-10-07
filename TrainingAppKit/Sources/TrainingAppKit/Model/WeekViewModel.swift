@@ -298,6 +298,23 @@ public final class WeekViewModel {
             .sorted { $0.day < $1.day }
     }
 
+    /// The races inside ``chartRange(for:)`` for `weekStart`, in date order (MVP2-104), for the Form
+    /// chart's race markers. One race per day, the most important (primary, then secondary, then
+    /// tertiary; by name when equal), since markers for two races on one day would sit on top of
+    /// each other.
+    public func chartRaces(for weekStart: Date) -> [Race] {
+        let range = chartRange(for: weekStart)
+        let order = RacePriority.allCases
+        func rank(_ race: Race) -> Int { order.firstIndex(of: race.priority) ?? 0 }
+        var byDay: [Date: Race] = [:]
+        for race in model.races where range.contains(race.date) {
+            let day = calendar.startOfDay(for: race.date)
+            if let existing = byDay[day], (rank(existing), existing.name) <= (rank(race), race.name) { continue }
+            byDay[day] = race
+        }
+        return byDay.values.sorted { $0.date < $1.date }
+    }
+
     /// ``chartRange(for:)``'s own range for `weekStart`'s daily load, split into what was actually
     /// performed vs. what's planned (MVP2-30) — for `DailyLoadChartView`'s bars.
     ///

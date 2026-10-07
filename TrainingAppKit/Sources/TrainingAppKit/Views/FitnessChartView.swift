@@ -13,6 +13,10 @@ struct FitnessChartView: View {
     /// shaded behind the trend line so the 3-week chart stays visually anchored to whichever week
     /// the athlete has scrolled to.
     let displayedWeekRange: ClosedRange<Date>
+    /// The races in the chart's window (one per day, see `WeekViewModel.chartRaces(for:)`), each
+    /// marked with a solid vertical rule and an outlined A/B/C circle at the top of the plot
+    /// (MVP2-104).
+    let races: [Race]
     /// Days after this are projected/estimated rather than actual history (see
     /// `FitnessMetrics.isProjected`), so the Form lines render dashed past this point.
     let today: Date = .now
@@ -21,6 +25,8 @@ struct FitnessChartView: View {
     private static let futureLineStyle = StrokeStyle(dash: [5, 4])
     private static let rawLineWidth: CGFloat = 1
     private static let smoothedLineWidth: CGFloat = 3
+    /// Size of a race's circle at the top of the plot; its rule starts just below it.
+    private static let raceMarkerSize: CGFloat = 22
 
     private var pastPoints: [FitnessMetrics] {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).past
@@ -149,6 +155,9 @@ struct FitnessChartView: View {
             GeometryReader { geometry in
                 if let plotFrame = proxy.plotFrame {
                     let plotArea = geometry[plotFrame]
+                    ForEach(races) { race in
+                        raceMarker(race, proxy: proxy, plotArea: plotArea)
+                    }
                     ForEach(TSBZoneBand.all, id: \.label) { band in
                         let midValue = (band.lowerBound + band.upperBound) / 2
                         if let y = proxy.position(forY: midValue) {
@@ -164,5 +173,28 @@ struct FitnessChartView: View {
         }
         .frame(height: 172)
         .padding(.horizontal)
+    }
+
+    /// A race's solid vertical rule with its outlined A/B/C circle at the top of the plot (MVP2-104),
+    /// drawn in the overlay so the rule can stop where the circle begins instead of running through
+    /// its letter.
+    @ViewBuilder
+    private func raceMarker(_ race: Race, proxy: ChartProxy, plotArea: CGRect) -> some View {
+        if let x = proxy.position(forX: race.date) {
+            let size = Self.raceMarkerSize
+            // Kept inside the plot, so a race on the window's first or last day isn't half clipped.
+            let centerX = min(max(plotArea.minX + x, plotArea.minX + size / 2), plotArea.maxX - size / 2)
+            Path { path in
+                path.move(to: CGPoint(x: centerX, y: plotArea.minY + size))
+                path.addLine(to: CGPoint(x: centerX, y: plotArea.maxY))
+            }
+            .stroke(Color.primary.opacity(0.6), lineWidth: 1.5)
+            Image(systemName: race.priority.outlineMarkerSymbolName)
+                .font(.system(size: size - 4))
+                .foregroundStyle(Color.primary)
+                .frame(width: size, height: size)
+                .position(x: centerX, y: plotArea.minY + size / 2)
+                .accessibilityLabel("\(race.priority.displayName) race, \(race.name)")
+        }
     }
 }
