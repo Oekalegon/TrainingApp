@@ -78,7 +78,7 @@ struct FitnessChartView: View {
                     position: .top, spacing: 0,
                     overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                 ) {
-                    Image(systemName: race.priority.markerSymbolName)
+                    Image(systemName: race.priority.outlineMarkerSymbolName)
                         .font(.body)
                         .foregroundStyle(Color.primary)
                         .accessibilityLabel("\(race.priority.displayName) race, \(race.name)")

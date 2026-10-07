@@ -21,6 +21,16 @@ extension RacePriority {
         }
     }
 
+    /// The outlined form of ``markerSymbolName``, for places where a filled circle is too heavy
+    /// (the Form chart's race markers).
+    var outlineMarkerSymbolName: String {
+        switch self {
+        case .primary: "a.circle"
+        case .secondary: "b.circle"
+        case .tertiary: "c.circle"
+        }
+    }
+
     /// Lowercase priority name for accessibility labels.
     var displayName: String {
         switch self {
