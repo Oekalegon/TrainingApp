@@ -24,8 +24,8 @@ struct FitnessChartView: View {
     private static let futureLineStyle = StrokeStyle(dash: [5, 4])
     private static let rawLineWidth: CGFloat = 1
     private static let smoothedLineWidth: CGFloat = 3
-    /// Height reserved above the plot for the race circles (the `.body` symbol is about this tall).
-    private static let raceMarkerHeight: CGFloat = 22
+    /// Size of a race's circle at the top of the plot; its rule starts just below it.
+    private static let raceMarkerSize: CGFloat = 22
 
     private var pastPoints: [FitnessMetrics] {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).past
@@ -62,28 +62,6 @@ struct FitnessChartView: View {
             xEnd: .value("Week end", displayedWeekRange.upperBound)
         )
         .foregroundStyle(Color.primary.opacity(0.1))
-    }
-
-    /// A solid vertical rule at each race's day with its priority's lettered circle on top, the
-    /// same circle the week view's race card uses. The circle sits above the plot (see
-    /// `chartPlotStyle` in `chart`, which leaves room for it), so the rule ends where the circle
-    /// begins instead of running through its letter.
-    @ChartContentBuilder
-    private var raceMarks: some ChartContent {
-        ForEach(races) { race in
-            RuleMark(x: .value("Race", race.date))
-                .foregroundStyle(Color.primary.opacity(0.6))
-                .lineStyle(StrokeStyle(lineWidth: 1.5))
-                .annotation(
-                    position: .top, spacing: 0,
-                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
-                ) {
-                    Image(systemName: race.priority.outlineMarkerSymbolName)
-                        .font(.body)
-                        .foregroundStyle(Color.primary)
-                        .accessibilityLabel("\(race.priority.displayName) race, \(race.name)")
-                }
-        }
     }
 
     /// The thin grey line follows the exact TSB values (linear interpolation, one segment per
@@ -136,7 +114,6 @@ struct FitnessChartView: View {
         Chart {
             zoneBandMarks
             weekHighlightMark
-            raceMarks
             rawLineMarks
             smoothedLineMarks
         }
@@ -153,10 +130,6 @@ struct FitnessChartView: View {
             "Form (raw) (projected)": Color.secondary,
             "Form (smoothed) (projected)": Color.primary,
         ])
-        .chartPlotStyle { plot in
-            // Room above the plot for the race circles when there are any.
-            plot.padding(.top, races.isEmpty ? 0 : Self.raceMarkerHeight)
-        }
         .chartXScale(domain: dayDomain)
         .chartYScale(domain: TSBZoneBand.domain)
         .chartXAxis {
@@ -181,6 +154,9 @@ struct FitnessChartView: View {
             GeometryReader { geometry in
                 if let plotFrame = proxy.plotFrame {
                     let plotArea = geometry[plotFrame]
+                    ForEach(races) { race in
+                        raceMarker(race, proxy: proxy, plotArea: plotArea)
+                    }
                     ForEach(TSBZoneBand.all, id: \.label) { band in
                         let midValue = (band.lowerBound + band.upperBound) / 2
                         if let y = proxy.position(forY: midValue) {
@@ -196,5 +172,27 @@ struct FitnessChartView: View {
         }
         .frame(height: 172)
         .padding(.horizontal)
+    }
+
+    /// A race's solid vertical rule with its outlined A/B/C circle at the top of the plot (MVP2-104),
+    /// drawn in the overlay so the rule can stop where the circle begins instead of running through
+    /// its letter.
+    @ViewBuilder
+    private func raceMarker(_ race: Race, proxy: ChartProxy, plotArea: CGRect) -> some View {
+        if let x = proxy.position(forX: race.date) {
+            let size = Self.raceMarkerSize
+            let centerX = plotArea.minX + x
+            Path { path in
+                path.move(to: CGPoint(x: centerX, y: plotArea.minY + size))
+                path.addLine(to: CGPoint(x: centerX, y: plotArea.maxY))
+            }
+            .stroke(Color.primary.opacity(0.6), lineWidth: 1.5)
+            Image(systemName: race.priority.outlineMarkerSymbolName)
+                .font(.system(size: size - 4))
+                .foregroundStyle(Color.primary)
+                .frame(width: size, height: size)
+                .position(x: centerX, y: plotArea.minY + size / 2)
+                .accessibilityLabel("\(race.priority.displayName) race, \(race.name)")
+        }
     }
 }
