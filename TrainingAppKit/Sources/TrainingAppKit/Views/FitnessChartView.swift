@@ -24,6 +24,8 @@ struct FitnessChartView: View {
     private static let futureLineStyle = StrokeStyle(dash: [5, 4])
     private static let rawLineWidth: CGFloat = 1
     private static let smoothedLineWidth: CGFloat = 3
+    /// Height reserved above the plot for the race circles (the `.body` symbol is about this tall).
+    private static let raceMarkerHeight: CGFloat = 22
 
     private var pastPoints: [FitnessMetrics] {
         FitnessMetricsSplit.pastAndFuture(metrics, today: today).past
@@ -63,7 +65,9 @@ struct FitnessChartView: View {
     }
 
     /// A solid vertical rule at each race's day with its priority's lettered circle on top, the
-    /// same circle the week view's race card uses.
+    /// same circle the week view's race card uses. The circle sits above the plot (see
+    /// `chartPlotStyle` in `chart`, which leaves room for it), so the rule ends where the circle
+    /// begins instead of running through its letter.
     @ChartContentBuilder
     private var raceMarks: some ChartContent {
         ForEach(races) { race in
@@ -72,7 +76,7 @@ struct FitnessChartView: View {
                 .lineStyle(StrokeStyle(lineWidth: 1.5))
                 .annotation(
                     position: .top, spacing: 0,
-                    overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))
+                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
                 ) {
                     Image(systemName: race.priority.markerSymbolName)
                         .font(.body)
@@ -149,6 +153,10 @@ struct FitnessChartView: View {
             "Form (raw) (projected)": Color.secondary,
             "Form (smoothed) (projected)": Color.primary,
         ])
+        .chartPlotStyle { plot in
+            // Room above the plot for the race circles when there are any.
+            plot.padding(.top, races.isEmpty ? 0 : Self.raceMarkerHeight)
+        }
         .chartXScale(domain: dayDomain)
         .chartYScale(domain: TSBZoneBand.domain)
         .chartXAxis {
