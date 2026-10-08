@@ -506,6 +506,26 @@ struct WeekViewModelTests {
         #expect(buffer.dailyLoadSplit.actual.contains { $0.load > 0 })
     }
 
+    @Test("chartBuffer(in:) loads its range once, not once per part (MVP2-138)")
+    func chartBufferLoadsOnce() async throws {
+        let store = InMemoryStore()
+        let racesCounter = CountingRaceStore(base: store)
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: racesCounter, athleteStore: store
+        )
+        let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+        let before = await racesCounter.reads
+
+        _ = await viewModel.chartBuffer(in: day(100)...day(200), asOf: day(0))
+
+        // One `TrainingModel.load(in:)`. It reads the races once, which is what this counts; if
+        // TrainingKit's `load` ever reads them twice, expect 2 here for a single load.
+        #expect(await racesCounter.reads - before == 1)
+    }
+
     @Test("races on one day with the same priority are ordered by name")
     func racesWithSamePriorityOrderedByName() async throws {
         let (store, stores) = makeStores()
@@ -1793,4 +1813,20 @@ private struct OverlapProducingImporter: ActivityImporting {
     func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
         ImportResult(upserted: activities, deletedSources: [], anchor: ImportAnchor(data: Data([1])))
     }
+}
+
+/// A `RaceStore` that counts `races(in:)` reads, to see how many times a view model loads its model.
+private actor CountingRaceStore: RaceStore {
+    private let base: InMemoryStore
+    private(set) var reads = 0
+
+    init(base: InMemoryStore) { self.base = base }
+
+    func races(in range: ClosedRange<Date>) async throws -> [Race] {
+        reads += 1
+        return try await base.races(in: range)
+    }
+    func race(id: UUID) async throws -> Race? { try await base.race(id: id) }
+    func upsert(_ races: [Race]) async throws { try await base.upsert(races) }
+    func deleteRace(id: UUID) async throws { try await base.deleteRace(id: id) }
 }

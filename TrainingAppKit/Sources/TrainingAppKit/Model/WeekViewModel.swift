@@ -375,15 +375,10 @@ public final class WeekViewModel {
     /// reload, never from the per-frame swipe-drag hot path ``dailyLoadSplit(for:asOf:)`` itself
     /// has to guard against.
     ///
-    /// Loads the *union* of `range` and the currently loaded window first, same reasoning
-    /// ``metrics(in:asOf:)`` documents: `TrainingModel.load(in:)` replaces `model.activities`/
-    /// `plans`/`workouts` outright rather than merging into them, so loading a shifted range on its
-    /// own would silently drop data the main week view's own carousel still needs.
+    /// Loads `range` first through ``loadWindow(covering:asOf:)``; ``metrics(in:asOf:)`` explains why the
+    /// union with the displayed week's window is loaded rather than `range` alone.
     func dailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date = .now) async -> DailyLoadSplit {
-        let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
-        let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
-        try? await model.load(in: unionRange, asOf: today)
-        await refreshWeekCachesIfNeeded(asOf: today)
+        await loadWindow(covering: range, asOf: today)
         return computeDailyLoadSplit(in: range, asOf: today)
     }
 
@@ -1226,27 +1221,39 @@ public final class WeekViewModel {
     /// until the next natural navigation reloads it. The union is a strict superset of both, so
     /// nothing the main view relies on is ever lost by calling this.
     public func metrics(in range: ClosedRange<Date>, asOf today: Date = .now) async -> [FitnessMetrics] {
+        await loadWindow(covering: range, asOf: today)
+        return loadedMetrics(in: range)
+    }
+
+    /// Loads the union of `range` and the displayed week's load window into `model` and refreshes the
+    /// week caches (see ``metrics(in:asOf:)`` for why the union): the single load every `…(in:)`
+    /// chart-range read goes through.
+    private func loadWindow(covering range: ClosedRange<Date>, asOf today: Date) async {
         let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
         try? await model.load(in: unionRange, asOf: today)
         await refreshWeekCachesIfNeeded(asOf: today)
-        return model.metrics.filter { range.contains($0.day) }.sorted { $0.day < $1.day }
+    }
+
+    /// `model.metrics` inside `range`, in day order, without loading anything.
+    private func loadedMetrics(in range: ClosedRange<Date>) -> [FitnessMetrics] {
+        model.metrics.filter { range.contains($0.day) }.sorted { $0.day < $1.day }
     }
 
     /// The metrics, daily-load split and races for `range`, for a metric detail chart's buffer
     /// (MVP2-137).
     ///
-    /// The metrics and load are fetched first, which loads `range` into the model; the races are
-    /// read after that, so a caller can't read them before they're loaded. Another load that lands
-    /// between those steps (the week view navigating, say) could still replace the model's races
-    /// before they're read; the metrics have the same property. See ``metrics(in:asOf:)`` for why
-    /// loading `range` keeps what the displayed week needs.
-    ///
-    /// Loads `range` twice, once for the metrics and once for the load split.
+    /// Loads `range` once (MVP2-138), then reads all three from the model with no suspension in
+    /// between, so they describe the same loaded state and a caller can't read the races before
+    /// they're loaded. See ``metrics(in:asOf:)`` for why loading `range` keeps what the displayed
+    /// week needs.
     func chartBuffer(in range: ClosedRange<Date>, asOf today: Date = .now) async -> ChartBuffer {
-        let metrics = await metrics(in: range, asOf: today)
-        let dailyLoadSplit = await dailyLoadSplit(in: range, asOf: today)
-        return ChartBuffer(metrics: metrics, dailyLoadSplit: dailyLoadSplit, races: chartRaces(in: range))
+        await loadWindow(covering: range, asOf: today)
+        return ChartBuffer(
+            metrics: loadedMetrics(in: range),
+            dailyLoadSplit: computeDailyLoadSplit(in: range, asOf: today),
+            races: chartRaces(in: range)
+        )
     }
 
     /// Runs a pull-to-refresh import via `refresher`. `TrainingModel.importActivities(from:)`
