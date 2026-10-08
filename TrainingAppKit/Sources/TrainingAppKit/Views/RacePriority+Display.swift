@@ -22,7 +22,7 @@ extension RacePriority {
     }
 
     /// The outlined form of ``markerSymbolName``, for places where a filled circle is too heavy
-    /// (the Form chart's race markers).
+    /// (the race markers on the graph and detail charts).
     var outlineMarkerSymbolName: String {
         switch self {
         case .primary: "a.circle"

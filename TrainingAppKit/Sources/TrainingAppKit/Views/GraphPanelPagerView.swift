@@ -87,7 +87,7 @@ struct GraphPanelPagerView: View {
                 HStack(spacing: 0) {
                     DailyLoadChartView(
                         actualLoads: dailyLoadSplit.actual, plannedLoads: dailyLoadSplit.planned,
-                        metrics: metrics, displayedWeekRange: displayedWeekRange
+                        metrics: metrics, displayedWeekRange: displayedWeekRange, races: races
                     )
                         .frame(width: pageWidth)
                         // Every page's content actually exists in the layout simultaneously (just
@@ -198,7 +198,7 @@ struct GraphPanelStaticPreview: View {
                 case 0:
                     DailyLoadChartView(
                         actualLoads: dailyLoadSplit.actual, plannedLoads: dailyLoadSplit.planned,
-                        metrics: metrics, displayedWeekRange: displayedWeekRange
+                        metrics: metrics, displayedWeekRange: displayedWeekRange, races: races
                     )
                 case 1:
                     FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange, races: races)

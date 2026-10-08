@@ -14,6 +14,9 @@ struct MetricChartContext {
     /// before `dailyLoadSplitProvider` fetches its own, wider buffer. Unused by the Fitness/Fatigue/
     /// Form kinds, which only ever read `metrics`.
     let dailyLoadSplit: DailyLoadSplit
+    /// `WeekViewModel.chartRaces(for:)`'s 3-week window for the week containing `subject`, the first
+    /// paint's race markers before `racesProvider` supplies the buffer's own (MVP2-104).
+    let races: [Race]
     /// A specific day (a day-list pill tap) or a whole displayed week (a graph-panel tap) — see
     /// `MetricDetailSubject`'s own doc comment.
     let subject: MetricDetailSubject
@@ -68,6 +71,9 @@ struct MetricDetailView: View {
     /// unconditionally alongside `metricsProvider` (same trigger, same buffer range) rather than
     /// branching on `kind`, matching how `chartContext.dailyLoadSplit` is always populated too.
     let dailyLoadSplitProvider: (ClosedRange<Date>) async -> DailyLoadSplit
+    /// The races in a range, one per day (`WeekViewModel.chartRaces(in:)`). Called right after
+    /// `metricsProvider` for the same buffer, which has already loaded that range into the model.
+    let racesProvider: (ClosedRange<Date>) -> [Race]
 
     /// What the chart actually renders from — always a wider buffer than what's on screen (see
     /// `ChartPanState.bufferRange(around:period:calendar:)`), so dragging the chart can pan the
@@ -75,6 +81,9 @@ struct MetricDetailView: View {
     /// for an instant first paint, then replaced by a proper buffer fetched via `metricsProvider`
     /// once `.task(id: period)` runs.
     @State private var displayedMetrics: [FitnessMetrics]
+    /// `displayedMetrics`' counterpart for the race markers (MVP2-104): seeded from
+    /// `chartContext.races`, then replaced by `racesProvider`'s buffer.
+    @State private var displayedRaces: [Race]
     /// `displayedMetrics`'s own counterpart for the Load kind's planned/performed split — same
     /// seed-then-replace lifecycle, driven by `dailyLoadSplitProvider` alongside `metricsProvider`.
     @State private var displayedDailyLoadSplit: DailyLoadSplit
@@ -99,13 +108,16 @@ struct MetricDetailView: View {
         chartContext: MetricChartContext,
         period: Binding<ChartPeriod>,
         metricsProvider: @escaping (ClosedRange<Date>) async -> [FitnessMetrics],
-        dailyLoadSplitProvider: @escaping (ClosedRange<Date>) async -> DailyLoadSplit
+        dailyLoadSplitProvider: @escaping (ClosedRange<Date>) async -> DailyLoadSplit,
+        racesProvider: @escaping (ClosedRange<Date>) -> [Race]
     ) {
         self.kind = kind
         self.chartContext = chartContext
         self._period = period
         self.metricsProvider = metricsProvider
         self.dailyLoadSplitProvider = dailyLoadSplitProvider
+        self.racesProvider = racesProvider
+        self._displayedRaces = State(initialValue: chartContext.races)
         self._displayedMetrics = State(initialValue: chartContext.metrics)
         self._displayedDailyLoadSplit = State(initialValue: chartContext.dailyLoadSplit)
         self._panState = State(
@@ -169,8 +181,10 @@ struct MetricDetailView: View {
         // gain here anyway, since both ultimately go through the same `@MainActor` `WeekViewModel`.
         let metrics = await metricsProvider(buffer)
         let dailyLoadSplit = await dailyLoadSplitProvider(buffer)
+        let races = racesProvider(buffer)
         guard !Task.isCancelled else { return }
         displayedMetrics = metrics
+        displayedRaces = races
         displayedDailyLoadSplit = dailyLoadSplit
         panState.loadedRange = buffer
     }
@@ -351,7 +365,8 @@ struct MetricDetailView: View {
                 visibleRange: visibleRange,
                 period: period,
                 subject: chartContext.subject,
-                calendar: chartContext.calendar
+                calendar: chartContext.calendar,
+                races: displayedRaces
             )
         case .fitness, .fatigue, .form:
             FitnessTrendDetailChartView(
@@ -361,7 +376,8 @@ struct MetricDetailView: View {
                 emphasized: kind,
                 subject: chartContext.subject,
                 calendar: chartContext.calendar,
-                highlightedZone: subjectZone
+                highlightedZone: subjectZone,
+                races: displayedRaces
             )
         }
     }

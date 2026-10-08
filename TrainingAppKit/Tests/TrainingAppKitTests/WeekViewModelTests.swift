@@ -468,6 +468,23 @@ struct WeekViewModelTests {
         #expect(viewModel.chartRaces(for: weekStart).map(\.id) == [primary.id, boundary.id])
     }
 
+    @Test("chartRaces(in:) covers any loaded range, so the detail charts can ask for a year (MVP2-135)")
+    func chartRacesInArbitraryRange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let far = Race(name: "Far", date: day(150), priority: .secondary)
+        let near = Race(name: "Near", date: day(2), priority: .tertiary)
+        try await store.upsert([far, near])
+        let range = day(-10)...day(200)
+
+        _ = await viewModel.metrics(in: range, asOf: day(0))
+
+        #expect(viewModel.chartRaces(in: range).map(\.id) == [near.id, far.id])
+        #expect(viewModel.chartRaces(in: day(100)...day(200)).map(\.id) == [far.id])
+    }
+
     @Test("races on one day with the same priority are ordered by name")
     func racesWithSamePriorityOrderedByName() async throws {
         let (store, stores) = makeStores()

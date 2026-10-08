@@ -24,6 +24,9 @@ struct LoadDetailChartView: View {
     /// (MVP1-60) — see `MetricDetailSubject`'s own doc comment.
     let subject: MetricDetailSubject
     let calendar: Calendar
+    /// The races in the loaded buffer, one per day (`WeekViewModel.chartRaces(in:)`), marked like the
+    /// main graphs mark them (MVP2-104); those outside `visibleRange` are skipped.
+    let races: [Race]
 
     private static let actualBarWidth: MarkDimension = .ratio(0.45)
     private static let dimmedOpacity = 0.4
@@ -74,6 +77,16 @@ struct LoadDetailChartView: View {
                 }
             }
         }
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                if let plotFrame = proxy.plotFrame {
+                    RaceChartMarkers(
+                        races: races, proxy: proxy, plotArea: geometry[plotFrame],
+                        dayOffset: RaceChartMarkers.halfDay
+                    )
+                }
+            }
+        }
         .frame(height: 160)
     }
 }
@@ -115,6 +128,9 @@ struct FitnessTrendDetailChartView: View {
     /// actually in reads as more saturated than the rest. `nil` for Fitness/Fatigue (`zoneBandMarks`
     /// draws nothing for either) and for Form before `subjectValue` has loaded.
     let highlightedZone: TSBZone?
+    /// The races in the loaded buffer, one per day (`WeekViewModel.chartRaces(in:)`), marked like the
+    /// main graphs mark them (MVP2-104); those outside `visibleRange` are skipped.
+    let races: [Race]
     let today: Date = .now
 
     private static let emphasizedLineWidth: CGFloat = 3
@@ -292,13 +308,14 @@ struct FitnessTrendDetailChartView: View {
             plotContent.clipped()
         }
         .chartOverlay { proxy in
-            // The zone names, next to the boundary axis labels -- matching `FitnessChartView`'s
-            // own Form chart, so the same zone reads the same way in both places. Only for Form:
-            // Fitness/Fatigue show no zone bands, so there's nothing to name here for them.
-            if emphasized == .form {
-                GeometryReader { geometry in
-                    if let plotFrame = proxy.plotFrame {
-                        let plotArea = geometry[plotFrame]
+            GeometryReader { geometry in
+                if let plotFrame = proxy.plotFrame {
+                    let plotArea = geometry[plotFrame]
+                    RaceChartMarkers(races: races, proxy: proxy, plotArea: plotArea)
+                    // The zone names, next to the boundary axis labels -- matching `FitnessChartView`'s
+                    // own Form chart, so the same zone reads the same way in both places. Only for
+                    // Form: Fitness/Fatigue show no zone bands, so there's nothing to name here.
+                    if emphasized == .form {
                         ForEach(TSBZoneBand.all, id: \.label) { band in
                             let midValue = (band.lowerBound + band.upperBound) / 2
                             if let y = proxy.position(forY: midValue) {
