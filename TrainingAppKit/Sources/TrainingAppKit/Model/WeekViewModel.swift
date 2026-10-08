@@ -1237,9 +1237,12 @@ public final class WeekViewModel {
     /// (MVP2-137).
     ///
     /// The metrics and load are fetched first, which loads `range` into the model; the races are
-    /// read after that, so they are always those of the same range and a caller can't read them
-    /// before they're loaded. See ``metrics(in:asOf:)`` for why loading `range` keeps what the
-    /// displayed week needs.
+    /// read after that, so a caller can't read them before they're loaded. Another load that lands
+    /// between those steps (the week view navigating, say) could still replace the model's races
+    /// before they're read; the metrics have the same property. See ``metrics(in:asOf:)`` for why
+    /// loading `range` keeps what the displayed week needs.
+    ///
+    /// Loads `range` twice, once for the metrics and once for the load split.
     func chartBuffer(in range: ClosedRange<Date>, asOf today: Date = .now) async -> ChartBuffer {
         let metrics = await metrics(in: range, asOf: today)
         let dailyLoadSplit = await dailyLoadSplit(in: range, asOf: today)
