@@ -375,10 +375,8 @@ public final class WeekViewModel {
     /// reload, never from the per-frame swipe-drag hot path ``dailyLoadSplit(for:asOf:)`` itself
     /// has to guard against.
     ///
-    /// Loads the *union* of `range` and the currently loaded window first, same reasoning
-    /// ``metrics(in:asOf:)`` documents: `TrainingModel.load(in:)` replaces `model.activities`/
-    /// `plans`/`workouts` outright rather than merging into them, so loading a shifted range on its
-    /// own would silently drop data the main week view's own carousel still needs.
+    /// Loads `range` first through ``loadWindow(covering:asOf:)``; ``metrics(in:asOf:)`` explains why the
+    /// union with the displayed week's window is loaded rather than `range` alone.
     func dailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date = .now) async -> DailyLoadSplit {
         await loadWindow(covering: range, asOf: today)
         return computeDailyLoadSplit(in: range, asOf: today)

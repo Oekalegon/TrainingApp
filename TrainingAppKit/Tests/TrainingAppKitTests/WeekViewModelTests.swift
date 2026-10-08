@@ -521,7 +521,8 @@ struct WeekViewModelTests {
 
         _ = await viewModel.chartBuffer(in: day(100)...day(200), asOf: day(0))
 
-        // One `TrainingModel.load(in:)`, which reads the races once.
+        // One `TrainingModel.load(in:)`. It reads the races once, which is what this counts; if
+        // TrainingKit's `load` ever reads them twice, expect 2 here for a single load.
         #expect(await racesCounter.reads - before == 1)
     }
 
