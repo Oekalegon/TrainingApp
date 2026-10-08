@@ -307,7 +307,7 @@ public final class WeekViewModel {
     /// The loaded races inside `range`, in date order, one per day: the most important (primary,
     /// then secondary, then tertiary; by name when equal), since markers for two races on one day
     /// would sit on top of each other (MVP2-104). Only races the model has loaded: the metric detail
-    /// charts' ``metrics(in:asOf:)`` has already loaded their range by the time they ask.
+    /// charts get theirs from ``chartBuffer(in:asOf:)``, which loads the range first.
     ///
     /// Not cached, unlike the other chart inputs, though ``chartRaces(for:)`` runs on the week-swipe path:
     /// the work is one date comparison per loaded race, and a day lookup only for the few races that
@@ -1231,6 +1231,22 @@ public final class WeekViewModel {
         try? await model.load(in: unionRange, asOf: today)
         await refreshWeekCachesIfNeeded(asOf: today)
         return model.metrics.filter { range.contains($0.day) }.sorted { $0.day < $1.day }
+    }
+
+    /// The metrics, daily-load split and races for `range`, for a metric detail chart's buffer
+    /// (MVP2-137).
+    ///
+    /// The metrics and load are fetched first, which loads `range` into the model; the races are
+    /// read after that, so a caller can't read them before they're loaded. Another load that lands
+    /// between those steps (the week view navigating, say) could still replace the model's races
+    /// before they're read; the metrics have the same property. See ``metrics(in:asOf:)`` for why
+    /// loading `range` keeps what the displayed week needs.
+    ///
+    /// Loads `range` twice, once for the metrics and once for the load split.
+    func chartBuffer(in range: ClosedRange<Date>, asOf today: Date = .now) async -> ChartBuffer {
+        let metrics = await metrics(in: range, asOf: today)
+        let dailyLoadSplit = await dailyLoadSplit(in: range, asOf: today)
+        return ChartBuffer(metrics: metrics, dailyLoadSplit: dailyLoadSplit, races: chartRaces(in: range))
     }
 
     /// Runs a pull-to-refresh import via `refresher`. `TrainingModel.importActivities(from:)`

@@ -325,9 +325,7 @@ public struct WeekView: View {
                     kind: presentation.kind,
                     chartContext: chartContext(for: presentation),
                     period: $metricsChartPeriod,
-                    metricsProvider: { range in await viewModel.metrics(in: range) },
-                    dailyLoadSplitProvider: { range in await viewModel.dailyLoadSplit(in: range) },
-                    racesProvider: { range in viewModel.chartRaces(in: range) }
+                    bufferProvider: { range in await viewModel.chartBuffer(in: range) }
                 )
             }
             // Same reasoning as the destination above -- a real push, not a sheet.

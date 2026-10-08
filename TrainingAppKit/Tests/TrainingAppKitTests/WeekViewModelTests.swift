@@ -485,6 +485,27 @@ struct WeekViewModelTests {
         #expect(viewModel.chartRaces(in: day(100)...day(200)).map(\.id) == [far.id])
     }
 
+    @Test("chartBuffer(in:) returns metrics, load split and races for one range, loading it first (MVP2-137)")
+    func chartBufferLoadsBeforeReadingRaces() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let race = Race(name: "Far", date: day(150), priority: .primary)
+        let activity = Activity(source: .manual, sport: .running, start: day(149), duration: 1800, perceivedExertion: 6)
+        try await store.upsert([race])
+        try await store.upsert([activity])
+        let range = day(100)...day(200)
+
+        // Nothing has loaded this range yet: the buffer itself has to.
+        let buffer = await viewModel.chartBuffer(in: range, asOf: day(0))
+
+        #expect(buffer.races.map(\.id) == [race.id])
+        #expect(buffer.metrics.allSatisfy { range.contains($0.day) })
+        #expect(!buffer.metrics.isEmpty)
+        #expect(buffer.dailyLoadSplit.actual.contains { $0.load > 0 })
+    }
+
     @Test("races on one day with the same priority are ordered by name")
     func racesWithSamePriorityOrderedByName() async throws {
         let (store, stores) = makeStores()
