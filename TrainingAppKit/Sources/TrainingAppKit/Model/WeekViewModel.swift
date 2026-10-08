@@ -308,6 +308,10 @@ public final class WeekViewModel {
     /// then secondary, then tertiary; by name when equal), since markers for two races on one day
     /// would sit on top of each other (MVP2-104). Only races the model has loaded: the metric detail
     /// charts' ``metrics(in:asOf:)`` has already loaded their range by the time they ask.
+    ///
+    /// Not cached, unlike the other chart inputs, though ``chartRaces(for:)`` runs on the week-swipe path:
+    /// the work is one date comparison per loaded race, and a day lookup only for the few races that
+    /// fall in `range`, and an uncached read can never show a race that was just edited or deleted.
     public func chartRaces(in range: ClosedRange<Date>) -> [Race] {
         let order = RacePriority.allCases
         func rank(_ race: Race) -> Int { order.firstIndex(of: race.priority) ?? 0 }

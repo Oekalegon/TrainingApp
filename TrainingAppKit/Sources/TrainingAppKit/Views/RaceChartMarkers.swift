@@ -8,7 +8,9 @@ import TrainingCore
 /// Drawn in a `chartOverlay` rather than as chart marks, so the rule can stop where the circle
 /// begins instead of running through its letter. A race outside the plot's x-range is skipped
 /// (the detail charts clip what they've loaded beyond the visible window), and a circle at the
-/// plot's first or last day is kept inside it rather than half clipped.
+/// plot's first or last day is kept inside it rather than half clipped, with its rule moved along
+/// so the two stay joined. Races are date-only (the race form stores the start of the day), which is
+/// what `dayOffset` assumes.
 ///
 /// Callers pass races with at most one per day (`WeekViewModel.chartRaces(in:)`), so circles never
 /// stack.
@@ -40,8 +42,8 @@ struct RaceChartMarkers: View {
         let size = Self.markerSize
         let centerX = min(max(plotArea.minX + x, plotArea.minX + size / 2), plotArea.maxX - size / 2)
         Path { path in
-            path.move(to: CGPoint(x: plotArea.minX + x, y: plotArea.minY + size))
-            path.addLine(to: CGPoint(x: plotArea.minX + x, y: plotArea.maxY))
+            path.move(to: CGPoint(x: centerX, y: plotArea.minY + size))
+            path.addLine(to: CGPoint(x: centerX, y: plotArea.maxY))
         }
         .stroke(Color.primary.opacity(0.6), lineWidth: 1.5)
         Image(systemName: race.priority.outlineMarkerSymbolName)
