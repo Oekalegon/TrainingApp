@@ -151,8 +151,12 @@ extension View {
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.secondary.opacity(0.08))
             )
+            // Inside the edge (`strokeBorder`), not centred on it: a list row clips its content, which
+            // halved the left and right sides of a centred stroke. `primary` keeps it visible on a
+            // light card as well as a dark one.
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.secondary.opacity(0.35), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.22), lineWidth: 1)
             )
     }
 }
