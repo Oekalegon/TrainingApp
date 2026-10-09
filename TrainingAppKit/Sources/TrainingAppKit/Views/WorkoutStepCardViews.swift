@@ -45,7 +45,7 @@ struct WorkoutRepeatCard<Header: View, StepView: View, Footer: View>: View {
         VStack(spacing: 0) {
             header
             ForEach(steps) { step in
-                Divider()
+                WorkoutCardDivider()
                 stepView(step)
             }
             footer
@@ -102,6 +102,8 @@ struct WorkoutRepeatHeader: View {
         .foregroundStyle(.purple)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        // The whole row, not just the text and the symbol, so the editor's tap target is the header.
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Repeat \(count) times")
     }
@@ -201,6 +203,18 @@ struct WorkoutStepListSpacerRow: View {
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+            .accessibilityHidden(true)
+    }
+}
+
+/// The line between the parts of a repeat card: the header, each step and the "Add Step" row. A full
+/// point thick and in the card border's colour, so it reads as part of the card rather than as the
+/// hairline of an ordinary list.
+struct WorkoutCardDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.22))
+            .frame(height: 1)
             .accessibilityHidden(true)
     }
 }

@@ -706,8 +706,10 @@ since nothing makes sense after a cool-down; either can be removed (Delete Step)
 changed into one (a warm-up or cool-down can become a work or recovery step, which then moves freely).
 The steps and repeats between them are reordered by dragging one onto another (dragged down it lands
 after, up before); a step open for editing can't be dragged, and Move Up / Move Down in the
-touch-and-hold menu does the same. A template needs at least one work or recovery step to be saved. Tapping a "Repeat"
-header opens the block's repeats screen, which also removes the block. Adding is done with cards too:
+touch-and-hold menu does the same. A template needs at least one work or recovery step to be saved. Tapping a "Repeat" header opens the block's repeat count in place, the same way as a step's
+duration: a "Repeats" row that says "Fixed" or "Parameter", with its value or parameter details under
+it on the lighter background, and a red "Delete Repeat" row; it closes the open step, and opening a
+step closes it. Adding is done with cards too:
 one card holds "+ Add Step", which adds a step that runs once, and "Add Repeat", which adds a repeating
 work and recovery pair (four times, to edit); a repeat card has an "Add Step" row of its own for adding
 to that block. Touching and holding a step moves it, repeats it (a single step) or removes it; removing

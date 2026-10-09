@@ -13,10 +13,9 @@ struct WorkoutTemplateEditorSheet: View {
     /// The step that is open for editing, if any: tapping a step expands it in place and collapses the
     /// one that was open.
     @State private var expandedStepID: UUID?
-    /// The block whose repeats screen is pushed.
-    @State private var editingBlock: BlockRef?
-
-    private struct BlockRef: Hashable { let blockID: UUID }
+    /// The repeat whose repeat count is open for editing, if any. Like the open step, only one thing
+    /// is open at a time.
+    @State private var expandedRepeatID: UUID?
 
     private func blockBinding(_ id: UUID) -> Binding<WorkoutTemplateDraft.Block>? {
         guard let index = viewModel.draft.blocks.firstIndex(where: { $0.id == id }) else { return nil }
@@ -31,7 +30,18 @@ struct WorkoutTemplateEditorSheet: View {
 
     /// Opens `stepID` for editing, closing the other; `nil` closes whichever is open.
     private func expand(_ stepID: UUID?) {
-        withAnimation(.snappy) { expandedStepID = stepID }
+        withAnimation(.snappy) {
+            expandedStepID = stepID
+            if stepID != nil { expandedRepeatID = nil }
+        }
+    }
+
+    /// Opens or closes the repeat count of the block `blockID`, closing any open step.
+    private func toggleRepeat(_ blockID: UUID) {
+        withAnimation(.snappy) {
+            expandedRepeatID = expandedRepeatID == blockID ? nil : blockID
+            if expandedRepeatID != nil { expandedStepID = nil }
+        }
     }
 
     var body: some View {
@@ -50,11 +60,6 @@ struct WorkoutTemplateEditorSheet: View {
                 stepsSection
 
                 summarySection(summary)
-            }
-            .navigationDestination(item: $editingBlock) { ref in
-                if let block = blockBinding(ref.blockID) {
-                    WorkoutTemplateBlockForm(viewModel: viewModel, block: block)
-                }
             }
             // Swiping the sheet away would lose a long edit without asking.
             .interactiveDismissDisabled(viewModel.hasChanges)
@@ -119,57 +124,55 @@ struct WorkoutTemplateEditorSheet: View {
         Section {
             WorkoutStepListSpacerRow()
             // The warm-up stays on top and the cool-down at the bottom; the steps and repeats between
-            // them can be dragged, and new ones are added between them.
-            VStack(spacing: 10) {
-                if let leading = viewModel.draft.leadingBlockIndex {
-                    pinnedBlockCard(viewModel.draft.blocks[leading])
-                } else {
-                    // Removed: a card to put it back.
-                    Button { expand(viewModel.addWarmup()) } label: {
-                        WorkoutAddCardLabel(title: "Add Warm-up", symbolName: StepKind.warmup.symbolName)
-                    }
-                    .buttonStyle(.plain)
-                    .cardStyle()
+            // them can be dragged, and new ones are added between them. Each card is a list row of its
+            // own: with all of them in one row, a drag lifted the whole list as a single picture.
+            if let leading = viewModel.draft.leadingBlockIndex {
+                pinnedBlockCard(viewModel.draft.blocks[leading]).stepListRow()
+            } else {
+                // Removed: a card to put it back.
+                Button { expand(viewModel.addWarmup()) } label: {
+                    WorkoutAddCardLabel(title: "Add Warm-up", symbolName: StepKind.warmup.symbolName)
                 }
-                ForEach(viewModel.draft.blocks[viewModel.draft.movableRange]) { block in
-                    movableBlockCard(block)
-                }
-                // One card for both, after the Fitness app's creator.
-                VStack(spacing: 0) {
-                    Button {
-                        expand(viewModel.addBlock())
-                    } label: {
-                        WorkoutAddCardLabel(title: "Add Step", symbolName: "plus")
-                    }
-                    .buttonStyle(.plain)
-                    Divider()
-                    Button {
-                        expand(viewModel.addRepeat())
-                    } label: {
-                        WorkoutAddCardLabel(title: "Add Repeat", symbolName: "repeat")
-                    }
-                    .buttonStyle(.plain)
-                }
+                .buttonStyle(.plain)
                 .cardStyle()
-                if let trailing = viewModel.draft.trailingBlockIndex {
-                    pinnedBlockCard(viewModel.draft.blocks[trailing])
-                } else {
-                    Button { expand(viewModel.addCooldown()) } label: {
-                        WorkoutAddCardLabel(title: "Add Cool-down", symbolName: StepKind.cooldown.symbolName)
-                    }
-                    .buttonStyle(.plain)
-                    .cardStyle()
-                }
+                .stepListRow()
             }
-            .padding(.vertical, 6)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+            ForEach(viewModel.draft.blocks[viewModel.draft.movableRange]) { block in
+                movableBlockCard(block).stepListRow()
+            }
+            // One card for both, after the Fitness app's creator.
+            VStack(spacing: 0) {
+                Button {
+                    expand(viewModel.addBlock())
+                } label: {
+                    WorkoutAddCardLabel(title: "Add Step", symbolName: "plus")
+                }
+                .buttonStyle(.plain)
+                Divider()
+                Button {
+                    expand(viewModel.addRepeat())
+                } label: {
+                    WorkoutAddCardLabel(title: "Add Repeat", symbolName: "repeat")
+                }
+                .buttonStyle(.plain)
+            }
+            .cardStyle()
+            .stepListRow()
+            if let trailing = viewModel.draft.trailingBlockIndex {
+                pinnedBlockCard(viewModel.draft.blocks[trailing]).stepListRow()
+            } else {
+                Button { expand(viewModel.addCooldown()) } label: {
+                    WorkoutAddCardLabel(title: "Add Cool-down", symbolName: StepKind.cooldown.symbolName)
+                }
+                .buttonStyle(.plain)
+                .cardStyle()
+                .stepListRow()
+            }
             WorkoutStepListSpacerRow()
         } header: {
             Text("Steps")
         } footer: {
-            Text("Drag a step or repeat to reorder it; the warm-up stays first and the cool-down last, if you have them. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step for more.")
+            Text("Drag a step or repeat to reorder it; the warm-up stays first and the cool-down last, if you have them. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step in a repeat to move or remove it.")
         }
     }
 
@@ -186,7 +189,7 @@ struct WorkoutTemplateEditorSheet: View {
     /// A step or repeat between the warm-up and the cool-down: draggable onto another one, unless one
     /// of its steps is open for editing (dragging would fight with its fields).
     private func movableBlockCard(_ block: WorkoutTemplateDraft.Block) -> some View {
-        let isOpen = block.steps.contains { $0.id == expandedStepID }
+        let isOpen = block.steps.contains { $0.id == expandedStepID } || expandedRepeatID == block.id
         return blockCard(block, firstNumber: firstStepNumber(of: block))
             .modifier(BlockReorder(blockID: block.id, isDraggable: !isOpen) { sourceID in
                 withAnimation(.snappy) { viewModel.moveBlock(id: sourceID, toPositionOf: block.id) }
@@ -200,20 +203,23 @@ struct WorkoutTemplateEditorSheet: View {
         let cards = block.steps.enumerated().map { draft.card(for: $1, number: firstNumber + $0) }
         if isGroup {
             WorkoutRepeatCard(steps: cards) {
-                Button { editingBlock = BlockRef(blockID: block.id) } label: {
-                    WorkoutRepeatHeader(count: draft.repetitionsText(block))
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    blockMoveButtons(block)
-                    Button("Remove Repeat", systemImage: "trash", role: .destructive) {
-                        viewModel.removeBlock(id: block.id)
+                VStack(spacing: 0) {
+                    Button { toggleRepeat(block.id) } label: {
+                        WorkoutRepeatHeader(count: draft.repetitionsText(block))
+                    }
+                    .buttonStyle(.plain)
+                    if expandedRepeatID == block.id, let binding = blockBinding(block.id) {
+                        WorkoutCardDivider()
+                        WorkoutRepeatInlineEditor(viewModel: viewModel, block: binding) {
+                            withAnimation(.snappy) { expandedRepeatID = nil }
+                            viewModel.removeBlock(id: block.id)
+                        }
                     }
                 }
             } stepView: { card in
                 stepRow(block: block, card: card, index: card.id - firstNumber)
             } footer: {
-                Divider()
+                WorkoutCardDivider()
                 Button {
                     viewModel.addStep(toBlock: block.id)
                     expand(viewModel.draft.blocks.first { $0.id == block.id }?.steps.last?.id)
@@ -247,17 +253,17 @@ struct WorkoutTemplateEditorSheet: View {
         }
     }
 
+    @ViewBuilder
     private func stepButton(block: WorkoutTemplateDraft.Block, card: WorkoutStepCard, index: Int) -> some View {
         let step = block.steps[index]
-        return Button { expand(step.id) } label: {
+        let button = Button { expand(step.id) } label: {
             WorkoutStepCardView(step: card)
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            if block.steps.count == 1 {
-                // A step on its own moves as a block among the others.
-                blockMoveButtons(block)
-            } else {
+        // A step on its own is dragged, and a touch-and-hold menu would take that gesture, so only the
+        // steps inside a repeat have one.
+        if block.steps.count > 1 {
+            button.contextMenu {
                 if index > 0 {
                     Button("Move Up", systemImage: "arrow.up") {
                         viewModel.moveSteps(from: IndexSet(integer: index), to: index - 1, inBlock: block.id)
@@ -268,32 +274,12 @@ struct WorkoutTemplateEditorSheet: View {
                         viewModel.moveSteps(from: IndexSet(integer: index), to: index + 2, inBlock: block.id)
                     }
                 }
-            }
-            if block.repetitions == .fixed(1), block.steps.count == 1 {
-                Button("Repeat", systemImage: "repeat") { viewModel.setRepetitions(2, inBlock: block.id) }
-            }
-            Button("Remove Step", systemImage: "trash", role: .destructive) {
-                viewModel.removeSteps(at: IndexSet(integer: index), fromBlock: block.id)
-            }
-        }
-    }
-
-    /// Move Up / Move Down for a block among the movable ones; nothing for the warm-up and cool-down,
-    /// or where it can't go further. Dragging does the same.
-    @ViewBuilder
-    private func blockMoveButtons(_ block: WorkoutTemplateDraft.Block) -> some View {
-        let draft = viewModel.draft
-        if let index = draft.blocks.firstIndex(where: { $0.id == block.id }), draft.movableRange.contains(index) {
-            if draft.movableRange.contains(index - 1) {
-                Button("Move Up", systemImage: "arrow.up") {
-                    withAnimation(.snappy) { viewModel.moveBlock(id: block.id, by: -1) }
+                Button("Remove Step", systemImage: "trash", role: .destructive) {
+                    viewModel.removeSteps(at: IndexSet(integer: index), fromBlock: block.id)
                 }
             }
-            if draft.movableRange.contains(index + 1) {
-                Button("Move Down", systemImage: "arrow.down") {
-                    withAnimation(.snappy) { viewModel.moveBlock(id: block.id, by: 1) }
-                }
-            }
+        } else {
+            button
         }
     }
 
@@ -497,34 +483,34 @@ private struct WorkoutTemplateStepInlineEditor: View {
     }
 }
 
-/// A block's own screen: how often its steps repeat, and a way to remove it.
-private struct WorkoutTemplateBlockForm: View {
+/// A repeat opened for editing in place, below its header, like an open step: how often its steps
+/// run (fixed or a parameter) and a delete row.
+private struct WorkoutRepeatInlineEditor: View {
     let viewModel: WorkoutTemplateEditorViewModel
     @Binding var block: WorkoutTemplateDraft.Block
-    @Environment(\.dismiss) private var dismiss
+    let onDelete: () -> Void
 
     var body: some View {
-        Form {
-            Section {
-                SourceEditor(
-                    viewModel: viewModel, title: "Repeats", source: $block.repetitions, unit: .count,
-                    suggestedName: "Repeats", isExpanded: .constant(true)
-                )
-            } footer: {
-                Text("The block's steps run this many times in a row.")
+        VStack(spacing: 0) {
+            SourceEditor(
+                viewModel: viewModel, title: "Repeats", source: $block.repetitions, unit: .count,
+                suggestedName: "Repeats", isExpanded: $isDetailExpanded
+            )
+            WorkoutCardDivider()
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete Repeat", systemImage: "trash")
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .contentShape(Rectangle())
             }
-            Section {
-                Button("Remove Block", systemImage: "trash", role: .destructive) {
-                    dismiss()
-                    viewModel.removeBlock(id: block.id)
-                }
-            }
+            .buttonStyle(.plain)
         }
-        .navigationTitle("Repeats")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
+
+    /// Open to start with, so the value is shown as soon as the repeat is.
+    @State private var isDetailExpanded = true
 }
 
 /// A value that is either a fixed number or a parameter of the template (MVP2-140): the athlete turns
@@ -753,5 +739,14 @@ private struct BlockReorder: ViewModifier {
             onDrop(source.blockID)
             return true
         }
+    }
+}
+
+private extension View {
+    /// Makes a step card a clear, separator-less list row with a little space around it.
+    func stepListRow() -> some View {
+        listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }
