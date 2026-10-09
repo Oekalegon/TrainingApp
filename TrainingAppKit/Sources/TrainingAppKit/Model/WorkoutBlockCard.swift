@@ -29,6 +29,9 @@ public struct WorkoutStepCard: Identifiable, Equatable, Sendable {
     public let end: End
     /// The intensity the step aims for, e.g. "HR Zone 2"; `nil` without a target.
     public let target: String?
+    /// The SF Symbol shown before ``target``: a heart for heart rate, a shoe for pace; `nil` without a
+    /// target.
+    public let targetSymbol: String?
 }
 
 /// Steps that repeat together, as one card in the step list. A block that runs once shows its steps as
@@ -55,7 +58,8 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
                 defer { stepNumber += 1 }
                 return WorkoutStepCard(
                     id: stepNumber, kind: step.kind, title: step.kind.displayName,
-                    detail: goalText(step.goal), end: end(of: step.goal), target: step.target.map(targetText)
+                    detail: goalText(step.goal), end: end(of: step.goal),
+                    target: step.target.map(targetText), targetSymbol: step.target.map(targetSymbol)
                 )
             }
             return WorkoutBlockCard(id: index, repetitions: block.repetitions, steps: steps)
@@ -81,6 +85,23 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
         case .open:
             "Open"
         }
+    }
+
+    /// The symbol before a target: a heart for heart rate, a shoe for pace, a bolt for power and a
+    /// scope for a perceived-effort target.
+    static func targetSymbol(_ target: IntensityTarget) -> String {
+        switch target {
+        case .heartRateZone, .heartRateRange: "heart.fill"
+        case .pace: paceSymbol
+        case .power: "bolt.fill"
+        case .rpe: "scope"
+        }
+    }
+
+    /// The running shoe with its shadow, a symbol new in the 2026 set (iOS 27); `shoe.fill` before that,
+    /// where the newer name would draw nothing.
+    static var paceSymbol: String {
+        if #available(iOS 27, macOS 27, *) { "shoe.running.and.shadow.fill" } else { "shoe.fill" }
     }
 
     /// The intensity a step aims for, as the cards write it.

@@ -128,12 +128,15 @@ struct WorkoutStepCardView: View {
             Spacer(minLength: 8)
             if let target = step.target {
                 HStack(spacing: 4) {
-                    Image(systemName: "scope")
-                        .accessibilityHidden(true)
+                    if let symbol = step.targetSymbol {
+                        Image(systemName: symbol)
+                            .foregroundStyle(.primary)
+                            .accessibilityHidden(true)
+                    }
                     Text(target)
+                        .foregroundStyle(.secondary)
                 }
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 16)

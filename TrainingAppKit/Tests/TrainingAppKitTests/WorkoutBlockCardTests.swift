@@ -35,6 +35,9 @@ struct WorkoutBlockCardTests {
         #expect(steps.map(\.detail) == ["5:00", "400 m", "Open", "Open"])
         #expect(steps.map(\.target) == ["HR Zone 1", "140–150 bpm", nil, "RPE 3"])
         #expect(steps.map(\.end) == [.time, .distance, .open, .open])
+        #expect(steps.map(\.targetSymbol) == ["heart.fill", "heart.fill", nil, "scope"])
+        #expect(WorkoutBlockCard.targetSymbol(.pace(3.0...3.5)) == WorkoutBlockCard.paceSymbol)
+        #expect(WorkoutBlockCard.targetSymbol(.power(200...250)) == "bolt.fill")
         // Several steps in one block belong together even when it runs once.
         #expect(WorkoutBlockCard.cards(for: blocks)[0].isGroup)
     }
@@ -54,7 +57,7 @@ struct WorkoutBlockCardTests {
         let fixed = WorkoutTemplateDraft.Step(kind: .recovery, goal: .distance(.fixed(200)))
         let block = WorkoutTemplateDraft.Block(steps: [step, fixed], repetitions: .parameter(reps.id))
 
-        #expect(draft.card(for: step, number: 3) == WorkoutStepCard(id: 3, kind: .work, title: "Work", detail: "Effort · 1:00", end: .time, target: "HR Zone 4"))
+        #expect(draft.card(for: step, number: 3) == WorkoutStepCard(id: 3, kind: .work, title: "Work", detail: "Effort · 1:00", end: .time, target: "HR Zone 4", targetSymbol: "heart.fill"))
         #expect(draft.card(for: fixed, number: 4).detail == "200 m")
         #expect(draft.card(for: fixed, number: 4).end == .distance)
         #expect(draft.repetitionsText(block) == "Repeats · 8")

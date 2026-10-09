@@ -19,7 +19,15 @@ extension WorkoutTemplateDraft {
         case .zone(let zone): WorkoutBlockCard.targetText(.heartRateZone(zone))
         case .preserved(let target): WorkoutBlockCard.targetText(target)
         }
-        return WorkoutStepCard(id: number, kind: step.kind, title: step.kind.displayName, detail: detail, end: end, target: target)
+        let targetSymbol: String? = switch step.target {
+        case .none: nil
+        case .zone: WorkoutBlockCard.targetSymbol(.heartRateZone(1))
+        case .preserved(let target): WorkoutBlockCard.targetSymbol(target)
+        }
+        return WorkoutStepCard(
+            id: number, kind: step.kind, title: step.kind.displayName, detail: detail, end: end,
+            target: target, targetSymbol: targetSymbol
+        )
     }
 
     /// How a block's repeat count reads in its "Repeat" header, e.g. "5" or "Repeats · 8".

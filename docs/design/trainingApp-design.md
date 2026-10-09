@@ -686,7 +686,10 @@ sport's section with a "Custom" label; a swipe on a row deletes one.
 workout, in the detail screen and the editor alike (`WorkoutStepCardList`, fed by
 `WorkoutBlockCard.cards(for:)`): each step an outlined card with its role icon (chevrons up for work
 and down for recovery, dotted chevrons pointing up-right for warm-up and down-right for cool-down), its name, what ends it ("5:00",
-"400 m", "Open") and, on the right, the zone it aims for ("HR Zone 2", or "RPE 10" and so on). A block
+"400 m", "Open") and, on the right, the zone it aims for ("HR Zone 2", or "RPE 10" and so on) after
+a symbol in the primary colour: a heart for heart rate, a running shoe for pace (the iOS 27 symbol
+`shoe.running.and.shadow.fill`, `shoe.fill` before that), a bolt for power and a scope for perceived
+effort. A block
 that repeats, or holds several steps, is one "Repeat N" card in purple holding its steps between
 dividers; a single step that runs once is a plain card. The icon's colour says what ends the step: yellow for a duration, blue for a distance, green when it's open. The colours and icons are never the only cue:
 every card reads out as "Work, 5:00, HR Zone 2". The same card views are meant for the planned-workout
