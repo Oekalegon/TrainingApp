@@ -76,4 +76,45 @@ struct WorkoutBlockCardTests {
 
         #expect(editor.draft.blocks[0].steps.map(\.kind) == [.recovery])
     }
+
+    @Test("Add Step adds a step that runs once; Add Repeat adds a repeating work and recovery pair")
+    @MainActor
+    func addStepAndRepeat() async {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store, templateStore: store
+        )
+        let editor = WorkoutTemplateEditorViewModel(model: TrainingModel(stores: stores, athlete: .fixture()))
+        editor.addBlock()
+        editor.addRepeat()
+
+        let blocks = editor.draft.blocks
+        #expect(blocks.count == 3)
+        #expect(blocks[1].repetitions == .fixed(1))
+        #expect(blocks[2].steps.map(\.kind) == [.work, .recovery])
+        #expect(blocks[2].repetitions == .fixed(4))
+    }
+
+    @Test("a step can be made to repeat, and removing a block's last step removes the block")
+    @MainActor
+    func repeatAndEmptyBlock() async {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store, templateStore: store
+        )
+        let editor = WorkoutTemplateEditorViewModel(model: TrainingModel(stores: stores, athlete: .fixture()))
+        let block = editor.draft.blocks[0].id
+
+        editor.setRepetitions(3, inBlock: block)
+        #expect(editor.draft.blocks[0].repetitions == .fixed(3))
+
+        editor.removeStep(id: editor.draft.blocks[0].steps[0].id, fromBlock: block)
+        #expect(editor.draft.blocks.isEmpty)
+
+        editor.addBlock()
+        editor.removeSteps(at: IndexSet(integer: 0), fromBlock: editor.draft.blocks[0].id)
+        #expect(editor.draft.blocks.isEmpty)
+    }
 }

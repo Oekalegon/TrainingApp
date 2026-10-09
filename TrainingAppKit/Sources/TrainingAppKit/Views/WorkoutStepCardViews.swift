@@ -22,19 +22,23 @@ struct WorkoutStepCardList: View {
 }
 
 /// A "Repeat N" card: a header with the repeat count, then the block's steps divided by lines. The
-/// editor supplies its own header and step views, so they can be buttons.
-struct WorkoutRepeatCard<Header: View, StepView: View>: View {
+/// editor supplies its own header, step views and footer (the block's "Add Step" row), so they can be
+/// buttons.
+struct WorkoutRepeatCard<Header: View, StepView: View, Footer: View>: View {
     let header: Header
     let steps: [WorkoutStepCard]
     let stepView: (WorkoutStepCard) -> StepView
+    let footer: Footer
 
     init(
         steps: [WorkoutStepCard], @ViewBuilder header: () -> Header,
-        @ViewBuilder stepView: @escaping (WorkoutStepCard) -> StepView
+        @ViewBuilder stepView: @escaping (WorkoutStepCard) -> StepView,
+        @ViewBuilder footer: () -> Footer
     ) {
         self.header = header()
         self.steps = steps
         self.stepView = stepView
+        self.footer = footer()
     }
 
     var body: some View {
@@ -44,15 +48,41 @@ struct WorkoutRepeatCard<Header: View, StepView: View>: View {
                 Divider()
                 stepView(step)
             }
+            footer
         }
         .cardStyle()
     }
 }
 
-extension WorkoutRepeatCard where Header == WorkoutRepeatHeader, StepView == WorkoutStepCardView {
+extension WorkoutRepeatCard where Header == WorkoutRepeatHeader, StepView == WorkoutStepCardView, Footer == EmptyView {
     /// The read-only card: "Repeat" with `repetitions`, then plain steps.
     init(repetitions: String, steps: [WorkoutStepCard]) {
-        self.init(steps: steps, header: { WorkoutRepeatHeader(count: repetitions) }, stepView: { WorkoutStepCardView(step: $0) })
+        self.init(
+            steps: steps, header: { WorkoutRepeatHeader(count: repetitions) },
+            stepView: { WorkoutStepCardView(step: $0) }, footer: { EmptyView() }
+        )
+    }
+}
+
+/// The creator's "+ Add Step" / "+ Add Repeat" row, after the Fitness app's: a full-width card with a
+/// purple symbol and label.
+struct WorkoutAddCardLabel: View {
+    let title: String
+    let symbolName: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbolName)
+                .font(.title3)
+                .frame(width: 28)
+                .accessibilityHidden(true)
+            Text(title)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.purple)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
     }
 }
 

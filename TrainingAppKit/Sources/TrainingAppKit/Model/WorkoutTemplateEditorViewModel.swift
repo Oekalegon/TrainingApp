@@ -116,9 +116,28 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
 
     // MARK: Blocks and steps
 
-    /// Adds a block with one step after the others.
+    /// Adds a block with one step after the others: a step that runs once.
     public func addBlock() {
         draft.blocks.append(.init(steps: [.standard]))
+    }
+
+    /// Adds a block that repeats a hard step and a recovery step four times after the others, which
+    /// the athlete then edits (the creator's "Add Repeat").
+    public func addRepeat() {
+        draft.blocks.append(.init(
+            steps: [
+                .init(kind: .work, goal: .time(.fixed(1)), target: .zone(4)),
+                .init(kind: .recovery, goal: .time(.fixed(1)), target: .zone(1))
+            ],
+            repetitions: .fixed(4)
+        ))
+    }
+
+    /// Makes the block with id `blockID` repeat `count` times; a step that ran once then shows as a
+    /// "Repeat" card.
+    public func setRepetitions(_ count: Int, inBlock blockID: UUID) {
+        guard let index = draft.blocks.firstIndex(where: { $0.id == blockID }) else { return }
+        draft.blocks[index].repetitions = .fixed(Double(count))
     }
 
     /// Removes the block with id `blockID`.
@@ -136,12 +155,19 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
     public func removeSteps(at offsets: IndexSet, fromBlock blockID: UUID) {
         guard let index = draft.blocks.firstIndex(where: { $0.id == blockID }) else { return }
         draft.blocks[index].steps.remove(atOffsets: offsets)
+        removeBlockIfEmpty(at: index)
+    }
+
+    /// A block with no steps is meaningless, so removing its last step removes it.
+    private func removeBlockIfEmpty(at index: Int) {
+        if draft.blocks[index].steps.isEmpty { draft.blocks.remove(at: index) }
     }
 
     /// Removes the step with id `stepID` from the block with id `blockID`.
     public func removeStep(id stepID: UUID, fromBlock blockID: UUID) {
         guard let index = draft.blocks.firstIndex(where: { $0.id == blockID }) else { return }
         draft.blocks[index].steps.removeAll { $0.id == stepID }
+        removeBlockIfEmpty(at: index)
     }
 
     /// Moves the steps at `source` to `destination` within the block with id `blockID`.

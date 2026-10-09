@@ -138,39 +138,33 @@ struct WorkoutTemplateEditorSheet: View {
     }
 
     /// The workout's steps as cards, like the Fitness app's list: tapping a step opens its fields, the
-    /// "Repeat" header or the Repeats button opens the block's.
+    /// "Repeat" header opens the block's repeats, and "Add Step" / "Add Repeat" are cards of their own.
     private var stepsSection: some View {
         Section {
-            ForEach(viewModel.draft.blocks) { block in
-                let firstNumber = viewModel.draft.blocks.prefix { $0.id != block.id }.reduce(0) { $0 + $1.steps.count }
-                VStack(spacing: 8) {
+            VStack(spacing: 10) {
+                ForEach(viewModel.draft.blocks) { block in
+                    let firstNumber = viewModel.draft.blocks.prefix { $0.id != block.id }.reduce(0) { $0 + $1.steps.count }
                     blockCard(block, firstNumber: firstNumber)
-                    HStack {
-                        Button("Add Step", systemImage: "plus") { viewModel.addStep(toBlock: block.id) }
-                        Button("Repeats", systemImage: "repeat") { editingBlock = BlockRef(blockID: block.id) }
-                        Spacer()
-                        Button("Remove Block", systemImage: "trash", role: .destructive) {
-                            viewModel.removeBlock(id: block.id)
-                        }
-                        .labelStyle(.iconOnly)
-                    }
-                    .buttonStyle(.borderless)
-                    .font(.subheadline)
                 }
-                .padding(.vertical, 6)
+                Button { viewModel.addBlock() } label: {
+                    WorkoutAddCardLabel(title: "Add Step", symbolName: "plus")
+                }
+                .buttonStyle(.plain)
+                .cardStyle()
+                Button { viewModel.addRepeat() } label: {
+                    WorkoutAddCardLabel(title: "Add Repeat", symbolName: "repeat")
+                }
+                .buttonStyle(.plain)
+                .cardStyle()
             }
+            .padding(.vertical, 6)
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-            Button {
-                viewModel.addBlock()
-            } label: {
-                Label("Add Block", systemImage: "plus")
-            }
         } header: {
             Text("Steps")
         } footer: {
-            Text("A block repeats its steps, e.g. work and recovery repeated 6 times. Touch and hold a step to move or remove it.")
+            Text("Touch and hold a step to move, repeat or remove it.")
         }
     }
 
@@ -187,12 +181,16 @@ struct WorkoutTemplateEditorSheet: View {
                 .buttonStyle(.plain)
             } stepView: { card in
                 stepButton(block: block, card: card, index: card.id - firstNumber)
+            } footer: {
+                Divider()
+                Button { viewModel.addStep(toBlock: block.id) } label: {
+                    WorkoutAddCardLabel(title: "Add Step", symbolName: "plus")
+                }
+                .buttonStyle(.plain)
             }
         } else {
-            VStack(spacing: 10) {
-                ForEach(cards) { card in
-                    stepButton(block: block, card: card, index: card.id - firstNumber).cardStyle()
-                }
+            ForEach(cards) { card in
+                stepButton(block: block, card: card, index: card.id - firstNumber).cardStyle()
             }
         }
     }
@@ -213,6 +211,9 @@ struct WorkoutTemplateEditorSheet: View {
                 Button("Move Down", systemImage: "arrow.down") {
                     viewModel.moveSteps(from: IndexSet(integer: index), to: index + 2, inBlock: block.id)
                 }
+            }
+            if block.repetitions == .fixed(1), block.steps.count == 1 {
+                Button("Repeat", systemImage: "repeat") { viewModel.setRepetitions(2, inBlock: block.id) }
             }
             Button("Remove Step", systemImage: "trash", role: .destructive) {
                 viewModel.removeSteps(at: IndexSet(integer: index), fromBlock: block.id)
