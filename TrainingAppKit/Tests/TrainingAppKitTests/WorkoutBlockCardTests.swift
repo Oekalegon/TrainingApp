@@ -215,4 +215,36 @@ struct WorkoutBlockCardTests {
         let mixed = WorkoutTemplateDraft.Block(steps: [.init(kind: .warmup, goal: .open), .init(kind: .work, goal: .open)])
         #expect(WorkoutTemplateDraft(name: "x", blocks: [mixed]).leadingBlockIndex == nil)
     }
+
+    @Test("a removed warm-up and cool-down can be put back, at the top and bottom")
+    @MainActor
+    func reinsertWarmupAndCooldown() async throws {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store, templateStore: store
+        )
+        let editor = WorkoutTemplateEditorViewModel(
+            model: TrainingModel(stores: stores, athlete: .fixture()), draft: .starter()
+        )
+        editor.addBlock()
+        // Already there: nothing is added.
+        #expect(editor.addWarmup() == nil)
+        #expect(editor.addCooldown() == nil)
+
+        editor.removeBlock(id: editor.draft.blocks[0].id)
+        editor.removeBlock(id: editor.draft.blocks.last!.id)
+        #expect(editor.draft.blocks.map { $0.steps[0].kind } == [.work])
+        #expect(editor.draft.leadingBlockIndex == nil)
+        #expect(editor.draft.trailingBlockIndex == nil)
+
+        let warmup = try #require(editor.addWarmup())
+        let cooldown = try #require(editor.addCooldown())
+
+        #expect(editor.draft.blocks.map { $0.steps[0].kind } == [.warmup, .work, .cooldown])
+        #expect(editor.draft.blocks[0].steps[0].id == warmup)
+        #expect(editor.draft.blocks[2].steps[0].id == cooldown)
+        #expect(editor.draft.blocks[0].steps[0].goal == .time(.fixed(5)))
+        #expect(editor.draft.movableRange == 1..<2)
+    }
 }

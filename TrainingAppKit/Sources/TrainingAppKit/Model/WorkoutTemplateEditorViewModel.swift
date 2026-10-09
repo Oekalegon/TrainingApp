@@ -171,6 +171,30 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
         return work.id
     }
 
+    /// Puts a 5-minute Zone 1 warm-up back at the top, after it was removed. Does nothing, and returns
+    /// `nil`, when the workout already opens with one.
+    ///
+    /// - Returns: The new step's id, so the editor can open it.
+    @discardableResult
+    public func addWarmup() -> UUID? {
+        guard draft.leadingBlockIndex == nil else { return nil }
+        let step = WorkoutTemplateDraft.Step(kind: .warmup, goal: .time(.fixed(5)), target: .zone(1))
+        draft.blocks.insert(.init(steps: [step]), at: 0)
+        return step.id
+    }
+
+    /// Puts a 5-minute Zone 1 cool-down back at the bottom, after it was removed. Does nothing, and
+    /// returns `nil`, when the workout already closes with one.
+    ///
+    /// - Returns: The new step's id, so the editor can open it.
+    @discardableResult
+    public func addCooldown() -> UUID? {
+        guard draft.trailingBlockIndex == nil else { return nil }
+        let step = WorkoutTemplateDraft.Step(kind: .cooldown, goal: .time(.fixed(5)), target: .zone(1))
+        draft.blocks.append(.init(steps: [step]))
+        return step.id
+    }
+
     /// Where a new block goes: after the other steps but before a closing cool-down, since nothing
     /// added should land after it.
     private var insertionIndex: Int { draft.insertionIndex }

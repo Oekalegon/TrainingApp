@@ -123,6 +123,13 @@ struct WorkoutTemplateEditorSheet: View {
             VStack(spacing: 10) {
                 if let leading = viewModel.draft.leadingBlockIndex {
                     pinnedBlockCard(viewModel.draft.blocks[leading])
+                } else {
+                    // Removed: a card to put it back.
+                    Button { expand(viewModel.addWarmup()) } label: {
+                        WorkoutAddCardLabel(title: "Add Warm-up", symbolName: StepKind.warmup.symbolName)
+                    }
+                    .buttonStyle(.plain)
+                    .cardStyle()
                 }
                 ForEach(viewModel.draft.blocks[viewModel.draft.movableRange]) { block in
                     movableBlockCard(block)
@@ -146,6 +153,12 @@ struct WorkoutTemplateEditorSheet: View {
                 .cardStyle()
                 if let trailing = viewModel.draft.trailingBlockIndex {
                     pinnedBlockCard(viewModel.draft.blocks[trailing])
+                } else {
+                    Button { expand(viewModel.addCooldown()) } label: {
+                        WorkoutAddCardLabel(title: "Add Cool-down", symbolName: StepKind.cooldown.symbolName)
+                    }
+                    .buttonStyle(.plain)
+                    .cardStyle()
                 }
             }
             .padding(.vertical, 6)
@@ -156,7 +169,7 @@ struct WorkoutTemplateEditorSheet: View {
         } header: {
             Text("Steps")
         } footer: {
-            Text("Drag a step or repeat to reorder it; the warm-up stays first and the cool-down last. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step for more.")
+            Text("Drag a step or repeat to reorder it; the warm-up stays first and the cool-down last, if you have them. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step for more.")
         }
     }
 

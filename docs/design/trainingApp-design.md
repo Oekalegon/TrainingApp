@@ -702,7 +702,7 @@ instead), Goal Type (time, distance or open), the duration or distance (fixed or
 parameters), the Target zone and a red "Delete Step" row. A new step opens at once. A new template starts with a 5-minute Zone 1 warm-up and a 5-minute Zone 1 cool-down and nothing
 between them: the "+ Add Step" / "Add Repeat" card sits between the two, and what it adds goes there. The
 warm-up (a lone first step) always stays on top and the cool-down (a lone last step) at the bottom,
-since nothing makes sense after a cool-down; either can be removed or edited, and a step can't be
+since nothing makes sense after a cool-down; either can be removed (Delete Step) or edited, and a removed one comes back with an "Add Warm-up" card in its place at the top or an "Add Cool-down" card at the bottom, each adding the usual 5-minute Zone 1 step, and a step can't be
 changed into one (a warm-up or cool-down can become a work or recovery step, which then moves freely).
 The steps and repeats between them are reordered by dragging one onto another (dragged down it lands
 after, up before); a step open for editing can't be dragged, and Move Up / Move Down in the
