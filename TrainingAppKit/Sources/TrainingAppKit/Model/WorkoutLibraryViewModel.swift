@@ -61,6 +61,9 @@ public final class WorkoutLibraryViewModel {
         /// One line per block at the default values, e.g. `"4 × Work 8:00, Recovery 2:00"`; empty
         /// when the template can't be instantiated.
         public let stepLines: [String]
+        /// The steps at the default values, as the detail screen's step cards show them (MVP2-143);
+        /// empty when the template can't be instantiated.
+        public let blockCards: [WorkoutBlockCard]
         /// The estimated load in TRIMP at the default values; `nil` when it can't be estimated.
         /// Always an estimate, so shown with a "~" (MVP2-8).
         public let expectedLoad: Double?
@@ -183,6 +186,7 @@ public final class WorkoutLibraryViewModel {
                 isCustom: customIDs.contains(template.id),
                 defaultTitle: template.defaultTitle(distanceSystem: distanceSystem),
                 stepLines: (workout?.blocks ?? []).map { PlannedWorkoutDetailViewModel.line(for: $0) },
+                blockCards: WorkoutBlockCard.cards(for: template, distanceSystem: distanceSystem),
                 expectedLoad: load?.value,
                 planCount: plans.count,
                 nextPlannedDate: plans
@@ -198,7 +202,7 @@ public final class WorkoutLibraryViewModel {
 
     /// The editor for a new template.
     public func makeEditorForNewTemplate() -> WorkoutTemplateEditorViewModel {
-        makeEditor(draft: .blank(), isNew: true)
+        makeEditor(draft: .starter(), isNew: true)
     }
 
     /// The editor for `template`: for one of the athlete's own, one that replaces it when saved;
@@ -233,7 +237,7 @@ public final class WorkoutLibraryViewModel {
         do {
             return try await model.deleteTemplate(id: id)
         } catch {
-            actionError = "Couldn't delete this workout: \(error.localizedDescription)"
+            actionError = "Couldn't delete this workout template: \(error.localizedDescription)"
             return nil
         }
     }

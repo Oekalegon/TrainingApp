@@ -682,14 +682,64 @@ and **Duplicate** (any template). Built-in templates are read-only: Duplicate op
 `WorkoutTemplateStore` (a synced `WorkoutTemplateRecord`) and shown after the built-in ones in their
 sport's section with a "Custom" label; a swipe on a row deletes one.
 
+**Step cards (MVP2-143).** A workout's steps are drawn after how the Fitness app shows a structured
+workout, in the detail screen and the editor alike (`WorkoutStepCardList`, fed by
+`WorkoutBlockCard.cards(for:)`): each step an outlined card with its role icon (chevrons up for work
+and down for recovery, dotted chevrons pointing up-right for warm-up and down-right for cool-down), its name, what ends it ("5:00",
+"400 m", "Open") and, on the right, the zone it aims for ("HR Zone 2", or "RPE 10" and so on) after
+a symbol in the same secondary colour: a heart for heart rate, a running shoe for pace (the iOS 27
+symbol `shoe.running.and.shadow.fill`, `shoe.fill` before that), a lightning bolt for perceived effort
+and a horizontal bolt for power. A block
+that repeats, or holds several steps, is one "Repeat N" card in purple holding its steps between
+dividers; a single step that runs once is a plain card. A duration, distance or repeat count that a template parameter sets shows the parameter's name after a gauge symbol (`gauge.range.33to100.dotted.with.needle` on iOS 27, sliders before that) instead of its default value, in the template detail and the editor alike (the detail's "Parameters" title carries the same symbol; a repeat's parameter name is set smaller than its "Repeat" label); a step's value and its target share one line of one size, so they sit on a common baseline under the step's name; the default values are in the Parameters section. The icon's colour says what ends the step: yellow for a duration, blue for a distance, green when it's open. The colours and icons are never the only cue:
+every card reads out as "Work, 5:00, HR Zone 2". The same card views are meant for the planned-workout
+and linked-activity redesign (MVP2-144).
+
+In the editor a card is a button: tapping a step expands it in place, after the Fitness app's creator,
+and collapses the one that was open (tapping the open step's header collapses it). The open step shows,
+inside its card, a Work / Recovery switch (a warm-up or cool-down gets a menu of all four roles
+instead), Goal Type (time, distance or open), the duration or distance (fixed or one of the
+parameters), the Target zone and a red "Delete Step" row. A new step opens at once. A new template starts with a 5-minute Zone 1 warm-up and a 5-minute Zone 1 cool-down and nothing
+between them: the "+ Add Step" / "Add Repeat" card sits between the two, and what it adds goes there. The
+warm-up (a lone first step) always stays on top and the cool-down (a lone last step) at the bottom,
+since nothing makes sense after a cool-down; either can be removed (Delete Step) or edited, and a removed one comes back with an "Add Warm-up" card in its place at the top or an "Add Cool-down" card at the bottom, each adding the usual 5-minute Zone 1 step, and a step can't be
+changed into one (a warm-up or cool-down can become a work or recovery step, which then moves freely).
+The steps and repeats between them are reordered by touching and holding one and dragging it: the card
+lifts and follows the finger, and swaps places with each neighbour it passes the middle of. This is a
+gesture of the editor's own rather than the system's drag and drop, since the cards are separate list
+rows whose positions it measures; the warm-up and cool-down never take part, and a step open for editing
+can't be dragged. Steps inside a repeat are moved from their touch-and-hold menu (Move Up, Move Down,
+Remove Step). A card lifted by a gesture the system cancels is put back down, and VoiceOver users reorder
+with the "Move Up" and "Move Down" actions on each step or repeat. The step cards write distances by the
+same distance system as the default titles (the device's region unless a setting says otherwise), so the
+two never disagree. A template needs at least one work or recovery step to be saved. Tapping a "Repeat" header opens the block's repeat count in place, the same way as a step's
+duration: a "Repeats" row that says "Fixed" or "Parameter", with its value or parameter details under
+it on the lighter background, and a red "Delete Repeat" row; it closes the open step, and opening a
+step closes it. Adding is done with cards too:
+one card holds "+ Add Step", which adds a step that runs once, and "Add Repeat", which adds a repeating
+work and recovery pair (four times, to edit); a repeat card has an "Add Step" row of its own for adding
+to that block. Touching and holding a step moves it, repeats it (a single step) or removes it; removing
+a block's last step removes the block. A value that comes from a parameter reads "Effort · 1:00" (the
+parameter's name and starting value). A number field ignores a write-back
+that only rounds what it shows, so merely opening a step doesn't change it.
+
 The editor works on a `WorkoutTemplateDraft`, in the units it shows (minutes, metres, counts), and
 nothing is saved until the check mark:
 
 - **Workout**: name and sport.
-- **Parameters**: a name, a starting value and a lowest and highest value, for a duration, a distance or
-  a repeat count. Each becomes a slider in the planned-workout sheet. Removing one leaves what used it
-  at the parameter's starting value.
-- **Blocks**: the repeats (fixed or a count parameter) and the block's steps. A step has a kind
+- **Parameters** belong to the step that uses them (there is no separate list). In an open step, its
+  duration or distance is a row that says "Fixed" or "Parameter". Closed, the row shows a one-line
+  summary under its label (the value, or the parameter's name, default and range); touching it, or
+  switching it between fixed and parameter, opens it on a lighter background, with the details in a
+  smaller font aligned with the label: "Value" for a fixed value, or "Name", "Default Value", "Minimum
+  Value" and "Maximum Value" for a parameter. Changing the step's role, goal type or target closes it
+  again (editing the parameter's own fields doesn't). Switching to Parameter makes a parameter named after the step ("Recovery
+  duration") that starts at the fixed value, with a range of half to double it; switching back to
+  Fixed keeps its default value. Each parameter becomes a slider in the planned-workout sheet. The
+  repeat count of a block is set from its "Repeat" header, in the same way; an ordinary step has no
+  repeats of its own. Going back to "Fixed", or removing the step or block, drops a parameter nothing
+  else uses, so no slider is left that does nothing.
+- **Steps**: the block cards above. A block has repeats (fixed or a count parameter) and steps. A step has a kind
   (warmup, work, recovery, cooldown), an end (time, distance or open; time and distance fixed or taken
   from a matching parameter) and a heart-rate zone target or none. Pace, power, RPE and heart-rate-range
   targets can't be set here; a template that has one keeps it.

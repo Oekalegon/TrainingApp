@@ -51,7 +51,7 @@ struct WorkoutTemplateEditorTests {
     @Test("a blank draft needs a name; a name makes it a valid one-step template")
     func blankDraft() throws {
         var draft = WorkoutTemplateDraft.blank()
-        #expect(draft.issues == ["Give the workout a name."])
+        #expect(draft.issues == ["Give the workout template a name."])
         #expect(draft.build() == nil)
 
         draft.name = "  Steady 10  "
@@ -122,8 +122,11 @@ struct WorkoutTemplateEditorTests {
         draft.blocks = [.init(steps: [.init(kind: .work, goal: .distance(.fixed(-1)))])]
         #expect(draft.issues == ["A step with a distance needs a distance above zero."])
 
-        draft.blocks = [.init(steps: [.standard])]
-        draft.parameters = [.init(key: "p", name: "Duration", unit: .minutes, defaultValue: 50, lowerBound: 10, upperBound: 40)]
+        let duration = WorkoutTemplateDraft.Parameter(
+            key: "p", name: "Duration", unit: .minutes, defaultValue: 50, lowerBound: 10, upperBound: 40
+        )
+        draft.blocks = [.init(steps: [.init(kind: .work, goal: .time(.parameter(duration.id)))])]
+        draft.parameters = [duration]
         #expect(draft.issues == ["Duration: the starting value must be within its range."])
         draft.parameters[0].lowerBound = 40
         #expect(draft.issues == ["Duration: the lowest value must be below the highest."])
@@ -168,7 +171,7 @@ struct WorkoutTemplateEditorTests {
         again.draft.name = "Steady state"
         #expect(await again.save())
         #expect(model.templates.map(\.name) == ["Steady state"])
-        #expect(again.title == "Edit Workout")
+        #expect(again.title == "Edit Workout Template")
     }
 
     @Test("a second save while the first is running is ignored")
@@ -193,7 +196,7 @@ struct WorkoutTemplateEditorTests {
         let editor = WorkoutTemplateEditorViewModel(model: model)
         editor.distanceSystem = .metric
         #expect(!editor.hasChanges)
-        #expect(editor.summary.issues == ["Give the workout a name."])
+        #expect(editor.summary.issues == ["Give the workout template a name."])
         #expect(editor.summary.defaultTitle == nil)
 
         editor.draft.name = "easy run"
@@ -227,7 +230,7 @@ struct WorkoutTemplateEditorTests {
         editor.draft.name = "Steady"
 
         #expect(await !editor.save())
-        #expect(editor.saveError?.hasPrefix("Couldn't save this workout") == true)
+        #expect(editor.saveError?.hasPrefix("Couldn't save this workout template") == true)
     }
 
     @Test("steps can be added, moved and removed within a block; blocks can be added and removed")
@@ -247,5 +250,80 @@ struct WorkoutTemplateEditorTests {
         #expect(editor.draft.blocks.count == 2)
         editor.removeBlock(id: block)
         #expect(editor.draft.blocks.count == 1)
+    }
+
+    @Test("a parameter nothing uses is dropped: by the editor after a value stops using it, and by build")
+    func unusedParametersAreDropped() async throws {
+        let (_, model) = await makeModel()
+        let editor = WorkoutTemplateEditorViewModel(model: model)
+        editor.draft.name = "x"
+        let effort = editor.addParameter(unit: .minutes, name: "Effort")
+        editor.draft.blocks[0].steps[0].goal = .time(.parameter(effort))
+        #expect(editor.draft.parameters.map(\.name) == ["Effort"])
+
+        // The value goes back to fixed, as the picker does.
+        editor.draft.blocks[0].steps[0].goal = .time(.fixed(20))
+        editor.pruneUnusedParameters()
+        #expect(editor.draft.parameters.isEmpty)
+
+        // An orphan neither blocks saving nor reaches the template.
+        var draft = WorkoutTemplateDraft(name: "x", blocks: [.init(steps: [.standard])])
+        draft.parameters = [.init(key: "orphan", name: "", unit: .count, defaultValue: 99, lowerBound: 5, upperBound: 1)]
+        #expect(draft.issues.isEmpty)
+        #expect(try #require(draft.build()).parameters.isEmpty)
+    }
+
+    @Test("two parameters of one kind get different names; a step can have a duration and a repeat parameter")
+    func parameterNamesAndMultipleParametersPerStep() async throws {
+        let (_, model) = await makeModel()
+        let editor = WorkoutTemplateEditorViewModel(model: model)
+        editor.draft.name = "x"
+        let first = editor.addParameter(unit: .minutes, name: "Recovery duration")
+        let second = editor.addParameter(unit: .minutes, name: "Recovery duration")
+        let reps = editor.addParameter(unit: .count, name: "Work repeats")
+        #expect(editor.draft.parameters.map(\.name) == ["Recovery duration", "Recovery duration 2", "Work repeats"])
+        #expect(first != second)
+
+        // One single-step block with both a duration and a repeat count as parameters.
+        editor.draft.blocks[0].steps[0].goal = .time(.parameter(first))
+        editor.draft.blocks[0].repetitions = .parameter(reps)
+        editor.pruneUnusedParameters()
+
+        #expect(editor.draft.parameters.map(\.name) == ["Recovery duration", "Work repeats"])
+        let template = try #require(editor.draft.build())
+        #expect(template.parameters.map(\.unit) == [.minutes, .count])
+        #expect(try template.instantiate().blocks[0].repetitions == 4)
+    }
+
+    @Test("removing the step that used a parameter removes the parameter")
+    func removingAStepRemovesItsParameter() async {
+        let (_, model) = await makeModel()
+        let editor = WorkoutTemplateEditorViewModel(model: model)
+        editor.addBlock()
+        let id = editor.addParameter(unit: .minutes, name: "Rest")
+        editor.draft.blocks[1].steps[0].goal = .time(.parameter(id))
+
+        editor.removeBlock(id: editor.draft.blocks[1].id)
+
+        #expect(editor.draft.parameters.isEmpty)
+    }
+
+    @Test("a parameter made from a fixed value starts at that value, with a range around it")
+    func parameterStartsFromFixedValue() async throws {
+        let (_, model) = await makeModel()
+        let editor = WorkoutTemplateEditorViewModel(model: model)
+        let duration = editor.addParameter(unit: .minutes, name: "Rest", defaultValue: 5)
+        let distance = editor.addParameter(unit: .meters, name: "Rep", defaultValue: 400)
+        let count = editor.addParameter(unit: .count, name: "Reps", defaultValue: 6)
+        let unusable = editor.addParameter(unit: .count, name: "Odd", defaultValue: 0)
+
+        func parameter(_ id: UUID) throws -> WorkoutTemplateDraft.Parameter {
+            try #require(editor.draft.parameters.first { $0.id == id })
+        }
+        #expect(try (parameter(duration).lowerBound, parameter(duration).defaultValue, parameter(duration).upperBound) == (2.5, 5, 10))
+        #expect(try (parameter(distance).lowerBound, parameter(distance).upperBound) == (200, 800))
+        #expect(try (parameter(count).lowerBound, parameter(count).defaultValue, parameter(count).upperBound) == (4, 6, 10))
+        // No usable value: the unit's usual start.
+        #expect(try (parameter(unusable).lowerBound, parameter(unusable).defaultValue, parameter(unusable).upperBound) == (2, 4, 10))
     }
 }

@@ -23,7 +23,7 @@ struct WorkoutLibraryView: View {
                         } label: {
                             Image(systemName: "plus")
                         }
-                        .accessibilityLabel("New Workout")
+                        .accessibilityLabel("New Workout Template")
                     }
                 }
                 .sheet(item: $editor) { editor in
@@ -73,17 +73,17 @@ private struct WorkoutLibraryList: View {
         // Each time the tab appears: plans made on the week view since count too.
         .task { await viewModel.reload() }
         .confirmationDialog(
-            "Delete this workout?",
+            "Delete this workout template?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
             titleVisibility: .visible, presenting: pendingDelete
         ) { entry in
-            Button("Delete Workout", role: .destructive) {
+            Button("Delete Workout Template", role: .destructive) {
                 Task { await viewModel.deleteTemplate(id: entry.id) }
             }
         } message: { entry in
             Text(WorkoutTemplateDetailView.deleteMessage(planCount: entry.planCount))
         }
-        .alert("Couldn't Delete Workout", isPresented: Binding(
+        .alert("Couldn't Delete Workout Template", isPresented: Binding(
             get: { viewModel.actionError != nil }, set: { if !$0 { viewModel.actionError = nil } }
         ), presenting: viewModel.actionError) { _ in
             Button("OK", role: .cancel) {}
@@ -148,7 +148,7 @@ struct WorkoutTemplateDetailView: View {
     /// What the delete confirmation says: plans made from the template stay either way.
     static func deleteMessage(planCount: Int) -> String {
         planCount == 0
-            ? "This removes the workout from your library."
+            ? "This removes the workout template from your library."
             : "It leaves your library, but the plans already made from it stay in your calendar and keep their parameters."
     }
 
@@ -206,17 +206,20 @@ struct WorkoutTemplateDetailView: View {
                             }
                         }
                     } header: {
-                        Text("Parameters")
+                        Label("Parameters", systemImage: WorkoutBlockCard.parameterSymbol)
                     } footer: {
                         Text("Defaults, with the range you can choose from when planning.")
                     }
                 }
 
-                if !entry.stepLines.isEmpty {
+                if !entry.blockCards.isEmpty {
                     Section("Steps") {
-                        ForEach(Array(entry.stepLines.enumerated()), id: \.offset) { _, line in
-                            Text(line)
-                        }
+                        WorkoutStepListSpacerRow()
+                        WorkoutStepCardList(blocks: entry.blockCards)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        WorkoutStepListSpacerRow()
                     }
                 }
 
@@ -262,30 +265,42 @@ struct WorkoutTemplateDetailView: View {
                 // A built-in workout can't be changed, only copied; "Duplicate" is the way to
                 // start from one.
                 Section {
+                    // Centred, like "Plan This Workout" above.
                     if entry.isCustom {
-                        Button("Edit", systemImage: "pencil") {
+                        Button {
                             editor = viewModel.makeEditor(for: entry.template)
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                                .frame(maxWidth: .infinity)
                         }
                     }
-                    Button("Duplicate", systemImage: "plus.square.on.square") {
+                    Button {
                         editor = viewModel.makeEditorDuplicating(entry.template)
+                    } label: {
+                        Label("Duplicate", systemImage: "plus.square.on.square")
+                            .frame(maxWidth: .infinity)
                     }
                     if entry.isCustom {
-                        Button("Delete", systemImage: "trash", role: .destructive) {
+                        Button(role: .destructive) {
                             isConfirmingDelete = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
                         }
                     }
                 } footer: {
                     if !entry.isCustom {
-                        Text("Built-in workouts can't be changed. Duplicate one to make your own version.")
+                        Text("Built-in workout templates can't be changed. Duplicate one to make your own version.")
                     }
                 }
             } else {
-                Text("This workout is no longer in the library.")
+                Text("This workout template is no longer in the library.")
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(entry?.template.name ?? "Workout")
+        // The step list's spacer rows are one point high (``WorkoutStepListSpacerRow``).
+        .environment(\.defaultMinListRowHeight, 1)
+        .navigationTitle(entry?.template.name ?? "Workout Template")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -298,9 +313,9 @@ struct WorkoutTemplateDetailView: View {
             WorkoutTemplateEditorSheet(viewModel: editor)
         }
         .confirmationDialog(
-            "Delete this workout?", isPresented: $isConfirmingDelete, titleVisibility: .visible
+            "Delete this workout template?", isPresented: $isConfirmingDelete, titleVisibility: .visible
         ) {
-            Button("Delete Workout", role: .destructive) {
+            Button("Delete Workout Template", role: .destructive) {
                 Task {
                     // Stay on the screen when it failed: the library shows why.
                     if await viewModel.deleteTemplate(id: templateID) != nil {

@@ -46,7 +46,7 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
     }
 
     /// The navigation title.
-    public var title: String { isNew ? "New Workout" : "Edit Workout" }
+    public var title: String { isNew ? "New Workout Template" : "Edit Workout Template" }
 
     /// Whether the athlete changed anything since the editor opened; the sheet then asks before
     /// discarding.
@@ -74,24 +74,56 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
 
     // MARK: Parameters
 
-    /// Adds a parameter of `unit` with a name, starting value and range that make sense for it, and
-    /// returns its id.
+    /// Adds a parameter of `unit` with a starting value and range that make sense for it, and returns
+    /// its id. The step or block that asked for it points at it.
+    ///
+    /// - Parameters:
+    ///   - name: What the slider is called when planning, e.g. "Recovery duration"; made unique among
+    ///     the parameters ("… 2") so two sliders are never labelled alike. Defaults to a name for the
+    ///     unit.
+    ///   - defaultValue: The starting value, in the editor's unit, when the parameter replaces a fixed
+    ///     value, so nothing changes until the athlete edits it; its range is built around it (half to
+    ///     double for a duration or distance; two below to four above for a count). Without one, or
+    ///     with one that isn't positive, the unit's usual starting value and range are used.
     @discardableResult
-    public func addParameter(unit: ParameterUnit) -> UUID {
+    public func addParameter(unit: ParameterUnit, name: String? = nil, defaultValue: Double? = nil) -> UUID {
         let keys = Set(draft.parameters.map(\.key))
         var number = draft.parameters.count + 1
         while keys.contains("parameter\(number)") { number += 1 }
+        let key = "parameter\(number)"
+        let baseName = name ?? { switch unit { case .minutes: "Duration"; case .meters: "Distance"; case .count: "Repeats" } }()
+        let names = Set(draft.parameters.map(\.name))
+        var uniqueName = baseName
+        var suffix = 2
+        while names.contains(uniqueName) {
+            uniqueName = "\(baseName) \(suffix)"
+            suffix += 1
+        }
         let parameter: WorkoutTemplateDraft.Parameter
-        switch unit {
-        case .minutes:
-            parameter = .init(key: "parameter\(number)", name: "Duration", unit: unit, defaultValue: 20, lowerBound: 10, upperBound: 40)
-        case .meters:
-            parameter = .init(key: "parameter\(number)", name: "Distance", unit: unit, defaultValue: 400, lowerBound: 200, upperBound: 1000)
-        case .count:
-            parameter = .init(key: "parameter\(number)", name: "Repeats", unit: unit, defaultValue: 4, lowerBound: 2, upperBound: 10)
+        if let value = defaultValue, value > 0 {
+            let range: ClosedRange<Double> = unit == .count ? max(1, value - 2)...(value + 4) : (value / 2)...(value * 2)
+            parameter = .init(
+                key: key, name: uniqueName, unit: unit,
+                defaultValue: value, lowerBound: range.lowerBound, upperBound: range.upperBound
+            )
+        } else {
+            switch unit {
+            case .minutes:
+                parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 20, lowerBound: 10, upperBound: 40)
+            case .meters:
+                parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 400, lowerBound: 200, upperBound: 1000)
+            case .count:
+                parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 4, lowerBound: 2, upperBound: 10)
+            }
         }
         draft.parameters.append(parameter)
         return parameter.id
+    }
+
+    /// Drops the parameters no step or block uses any more; called after a value stops using one and
+    /// after steps or blocks are removed.
+    public func pruneUnusedParameters() {
+        draft.pruneUnusedParameters()
     }
 
     /// Removes a parameter. A step or block that used it keeps the parameter's starting value as a
@@ -116,14 +148,79 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
 
     // MARK: Blocks and steps
 
-    /// Adds a block with one step after the others.
-    public func addBlock() {
-        draft.blocks.append(.init(steps: [.standard]))
+    /// Adds a block with one step: a step that runs once. It goes after the others, except that a
+    /// cool-down closing the workout stays last.
+    ///
+    /// - Returns: The new step's id, so the editor can open it.
+    @discardableResult
+    public func addBlock() -> UUID {
+        let step = WorkoutTemplateDraft.Step.standard
+        draft.blocks.insert(.init(steps: [step]), at: insertionIndex)
+        return step.id
+    }
+
+    /// Adds a block that repeats a hard step and a recovery step four times (the creator's "Add
+    /// Repeat"), which the athlete then edits; placed like ``addBlock()``.
+    ///
+    /// - Returns: The first new step's id, so the editor can open it.
+    @discardableResult
+    public func addRepeat() -> UUID {
+        let work = WorkoutTemplateDraft.Step(kind: .work, goal: .time(.fixed(1)), target: .zone(4))
+        let recovery = WorkoutTemplateDraft.Step(kind: .recovery, goal: .time(.fixed(1)), target: .zone(1))
+        draft.blocks.insert(.init(steps: [work, recovery], repetitions: .fixed(4)), at: insertionIndex)
+        return work.id
+    }
+
+    /// Puts a 5-minute Zone 1 warm-up back at the top, after it was removed. Does nothing, and returns
+    /// `nil`, when the workout already opens with one.
+    ///
+    /// - Returns: The new step's id, so the editor can open it.
+    @discardableResult
+    public func addWarmup() -> UUID? {
+        guard draft.leadingBlockIndex == nil else { return nil }
+        let step = WorkoutTemplateDraft.Step(kind: .warmup, goal: .time(.fixed(5)), target: .zone(1))
+        draft.blocks.insert(.init(steps: [step]), at: 0)
+        return step.id
+    }
+
+    /// Puts a 5-minute Zone 1 cool-down back at the bottom, after it was removed. Does nothing, and
+    /// returns `nil`, when the workout already closes with one.
+    ///
+    /// - Returns: The new step's id, so the editor can open it.
+    @discardableResult
+    public func addCooldown() -> UUID? {
+        guard draft.trailingBlockIndex == nil else { return nil }
+        let step = WorkoutTemplateDraft.Step(kind: .cooldown, goal: .time(.fixed(5)), target: .zone(1))
+        draft.blocks.append(.init(steps: [step]))
+        return step.id
+    }
+
+    /// Where a new block goes: after the other steps but before a closing cool-down, since nothing
+    /// added should land after it.
+    private var insertionIndex: Int { draft.insertionIndex }
+
+    /// Moves the block with id `id` to where `targetID` is, as a drop does; the opening warm-up and the
+    /// closing cool-down never move, nor can a block be dropped past them.
+    public func moveBlock(id: UUID, toPositionOf targetID: UUID) {
+        draft.moveBlock(id: id, toPositionOf: targetID)
+    }
+
+    /// Moves the block with id `id` up (`-1`) or down (`1`) among the movable blocks.
+    public func moveBlock(id: UUID, by offset: Int) {
+        draft.moveBlock(id: id, by: offset)
+    }
+
+    /// Makes the block with id `blockID` repeat `count` times; a step that ran once then shows as a
+    /// "Repeat" card.
+    public func setRepetitions(_ count: Int, inBlock blockID: UUID) {
+        guard let index = draft.blocks.firstIndex(where: { $0.id == blockID }) else { return }
+        draft.blocks[index].repetitions = .fixed(Double(count))
     }
 
     /// Removes the block with id `blockID`.
     public func removeBlock(id blockID: UUID) {
         draft.blocks.removeAll { $0.id == blockID }
+        draft.pruneUnusedParameters()
     }
 
     /// Adds a step to the end of the block with id `blockID`.
@@ -136,6 +233,20 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
     public func removeSteps(at offsets: IndexSet, fromBlock blockID: UUID) {
         guard let index = draft.blocks.firstIndex(where: { $0.id == blockID }) else { return }
         draft.blocks[index].steps.remove(atOffsets: offsets)
+        removeBlockIfEmpty(at: index)
+    }
+
+    /// A block with no steps is meaningless, so removing its last step removes it.
+    private func removeBlockIfEmpty(at index: Int) {
+        if draft.blocks[index].steps.isEmpty { draft.blocks.remove(at: index) }
+        draft.pruneUnusedParameters()
+    }
+
+    /// Removes the step with id `stepID` from the block with id `blockID`.
+    public func removeStep(id stepID: UUID, fromBlock blockID: UUID) {
+        guard let index = draft.blocks.firstIndex(where: { $0.id == blockID }) else { return }
+        draft.blocks[index].steps.removeAll { $0.id == stepID }
+        removeBlockIfEmpty(at: index)
     }
 
     /// Moves the steps at `source` to `destination` within the block with id `blockID`.
@@ -159,7 +270,7 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
             onSaved?()
             return true
         } catch {
-            saveError = "Couldn't save this workout: \(error.localizedDescription)"
+            saveError = "Couldn't save this workout template: \(error.localizedDescription)"
             return false
         }
     }
