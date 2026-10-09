@@ -691,7 +691,7 @@ a symbol in the same secondary colour: a heart for heart rate, a running shoe fo
 symbol `shoe.running.and.shadow.fill`, `shoe.fill` before that), a lightning bolt for perceived effort
 and a horizontal bolt for power. A block
 that repeats, or holds several steps, is one "Repeat N" card in purple holding its steps between
-dividers; a single step that runs once is a plain card. A duration, distance or repeat count that a template parameter sets shows the parameter's name after a gauge symbol (`gauge.range.33to100.dotted.with.needle` on iOS 27, sliders before that) instead of its default value, in the template detail and the editor alike; the default values are in the Parameters section. The icon's colour says what ends the step: yellow for a duration, blue for a distance, green when it's open. The colours and icons are never the only cue:
+dividers; a single step that runs once is a plain card. A duration, distance or repeat count that a template parameter sets shows the parameter's name after a gauge symbol (`gauge.range.33to100.dotted.with.needle` on iOS 27, sliders before that) instead of its default value, in the template detail and the editor alike (the detail's "Parameters" title carries the same symbol; a repeat's parameter name is set smaller than its "Repeat" label); a step's value and its target share one line of one size, so they sit on a common baseline under the step's name; the default values are in the Parameters section. The icon's colour says what ends the step: yellow for a duration, blue for a distance, green when it's open. The colours and icons are never the only cue:
 every card reads out as "Work, 5:00, HR Zone 2". The same card views are meant for the planned-workout
 and linked-activity redesign (MVP2-144).
 

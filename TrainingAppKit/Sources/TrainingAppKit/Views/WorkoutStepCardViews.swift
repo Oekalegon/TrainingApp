@@ -100,9 +100,13 @@ struct WorkoutRepeatHeader: View {
             Image(systemName: "repeat")
                 .accessibilityHidden(true)
             if let parameterName {
-                Image(systemName: WorkoutBlockCard.parameterSymbol)
-                    .accessibilityHidden(true)
-                Text(parameterName)
+                // Smaller than the "Repeat" label: it names the parameter, the count isn't shown.
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Image(systemName: WorkoutBlockCard.parameterSymbol)
+                        .accessibilityHidden(true)
+                    Text(parameterName)
+                }
+                .font(.subheadline)
             } else {
                 Text(count)
             }
@@ -131,25 +135,29 @@ struct WorkoutStepCardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(step.title)
                     .font(.headline)
-                if let parameterName = step.parameterName {
-                    // Set by a template parameter: say which, not what it starts at.
-                    Label(parameterName, systemImage: WorkoutBlockCard.parameterSymbol)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(step.detail)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 8)
-            if let target = step.target {
-                HStack(spacing: 4) {
-                    if let symbol = step.targetSymbol {
-                        Image(systemName: symbol)
-                            .accessibilityHidden(true)
+                // What ends the step on the left and its target on the right, on one line of one
+                // size, so they share a baseline rather than the target centring on the whole card.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let parameterName = step.parameterName {
+                        // Set by a template parameter: say which, not what it starts at.
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Image(systemName: WorkoutBlockCard.parameterSymbol)
+                                .accessibilityHidden(true)
+                            Text(parameterName)
+                        }
+                    } else {
+                        Text(step.detail)
                     }
-                    Text(target)
+                    Spacer(minLength: 8)
+                    if let target = step.target {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            if let symbol = step.targetSymbol {
+                                Image(systemName: symbol)
+                                    .accessibilityHidden(true)
+                            }
+                            Text(target)
+                        }
+                    }
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

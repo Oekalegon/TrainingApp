@@ -206,7 +206,7 @@ struct WorkoutTemplateDetailView: View {
                             }
                         }
                     } header: {
-                        Text("Parameters")
+                        Label("Parameters", systemImage: WorkoutBlockCard.parameterSymbol)
                     } footer: {
                         Text("Defaults, with the range you can choose from when planning.")
                     }
