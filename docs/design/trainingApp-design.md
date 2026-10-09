@@ -704,9 +704,12 @@ between them: the "+ Add Step" / "Add Repeat" card sits between the two, and wha
 warm-up (a lone first step) always stays on top and the cool-down (a lone last step) at the bottom,
 since nothing makes sense after a cool-down; either can be removed (Delete Step) or edited, and a removed one comes back with an "Add Warm-up" card in its place at the top or an "Add Cool-down" card at the bottom, each adding the usual 5-minute Zone 1 step, and a step can't be
 changed into one (a warm-up or cool-down can become a work or recovery step, which then moves freely).
-The steps and repeats between them are reordered by dragging one onto another (dragged down it lands
-after, up before); a step open for editing can't be dragged, and Move Up / Move Down in the
-touch-and-hold menu does the same. A template needs at least one work or recovery step to be saved. Tapping a "Repeat" header opens the block's repeat count in place, the same way as a step's
+The steps and repeats between them are reordered by touching and holding one and dragging it: the card
+lifts and follows the finger, and swaps places with each neighbour it passes the middle of. This is a
+gesture of the editor's own rather than the system's drag and drop, since the cards are separate list
+rows whose positions it measures; the warm-up and cool-down never take part, and a step open for editing
+can't be dragged. Steps inside a repeat are moved from their touch-and-hold menu (Move Up, Move Down,
+Remove Step). A template needs at least one work or recovery step to be saved. Tapping a "Repeat" header opens the block's repeat count in place, the same way as a step's
 duration: a "Repeats" row that says "Fixed" or "Parameter", with its value or parameter details under
 it on the lighter background, and a red "Delete Repeat" row; it closes the open step, and opening a
 step closes it. Adding is done with cards too:

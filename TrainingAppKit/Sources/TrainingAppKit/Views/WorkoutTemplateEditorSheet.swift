@@ -1,6 +1,5 @@
 import SwiftUI
 import TrainingCore
-import UniformTypeIdentifiers
 
 /// The Structured Workout creator (MVP2-140, design doc §2.4): a sheet to make a workout template,
 /// change one of the athlete's own, or edit a copy of a built-in one. Sections for the name and
@@ -16,6 +15,15 @@ struct WorkoutTemplateEditorSheet: View {
     /// The repeat whose repeat count is open for editing, if any. Like the open step, only one thing
     /// is open at a time.
     @State private var expandedRepeatID: UUID?
+    /// Where each movable block currently sits on screen, measured as they lay out, so a drag can tell
+    /// which neighbour it has passed.
+    @State private var blockFrames: [UUID: CGRect] = [:]
+    /// The block being dragged, if any.
+    @State private var draggingBlockID: UUID?
+    /// How far below the dragged card's top the finger grabbed it.
+    @State private var grabOffset: CGFloat = 0
+    /// The finger's vertical position on screen while dragging.
+    @State private var dragY: CGFloat = 0
 
     private func blockBinding(_ id: UUID) -> Binding<WorkoutTemplateDraft.Block>? {
         guard let index = viewModel.draft.blocks.firstIndex(where: { $0.id == id }) else { return nil }
@@ -172,7 +180,7 @@ struct WorkoutTemplateEditorSheet: View {
         } header: {
             Text("Steps")
         } footer: {
-            Text("Drag a step or repeat to reorder it; the warm-up stays first and the cool-down last, if you have them. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step in a repeat to move or remove it.")
+            Text("Touch and hold a step or repeat, then drag it to reorder; the warm-up stays first and the cool-down last, if you have them. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step in a repeat to move or remove it.")
         }
     }
 
@@ -186,14 +194,64 @@ struct WorkoutTemplateEditorSheet: View {
         blockCard(block, firstNumber: firstStepNumber(of: block))
     }
 
-    /// A step or repeat between the warm-up and the cool-down: draggable onto another one, unless one
-    /// of its steps is open for editing (dragging would fight with its fields).
+    /// A step or repeat between the warm-up and the cool-down: touch and hold, then drag it over its
+    /// neighbours to reorder. Not while one of its steps is open for editing, since dragging would fight
+    /// with its fields.
     private func movableBlockCard(_ block: WorkoutTemplateDraft.Block) -> some View {
         let isOpen = block.steps.contains { $0.id == expandedStepID } || expandedRepeatID == block.id
+        let isDragging = draggingBlockID == block.id
+        let frame = blockFrames[block.id] ?? .zero
         return blockCard(block, firstNumber: firstStepNumber(of: block))
-            .modifier(BlockReorder(blockID: block.id, isDraggable: !isOpen) { sourceID in
-                withAnimation(.snappy) { viewModel.moveBlock(id: sourceID, toPositionOf: block.id) }
-            })
+            // The card follows the finger; the layout slot it came from is what `blockFrames` measures.
+            .scaleEffect(isDragging ? 1.02 : 1)
+            .shadow(color: .black.opacity(isDragging ? 0.25 : 0), radius: 10, y: 4)
+            .offset(y: isDragging ? dragY - grabOffset - frame.minY : 0)
+            .zIndex(isDragging ? 1 : 0)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: BlockFramePreference.self, value: [block.id: proxy.frame(in: .global)])
+                }
+            )
+            .onPreferenceChange(BlockFramePreference.self) { blockFrames.merge($0) { _, new in new } }
+            // Simultaneous, so the card's own button (which opens the step) and the list's scrolling don't
+            // swallow the touch before the long press can lift it.
+            .simultaneousGesture(isOpen ? nil : reorderGesture(for: block.id))
+    }
+
+    /// Touch and hold, then drag: lifts the card, moves it with the finger and swaps it with each
+    /// neighbour the finger passes the middle of.
+    private func reorderGesture(for id: UUID) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.35)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .onChanged { value in
+                guard case .second(true, let drag?) = value else { return }
+                if draggingBlockID != id {
+                    guard let frame = blockFrames[id] else { return }
+                    draggingBlockID = id
+                    grabOffset = drag.startLocation.y - frame.minY
+                    expand(nil)
+                }
+                dragY = drag.location.y
+                reorderIfPassed(id)
+            }
+            .onEnded { _ in
+                withAnimation(.snappy) { draggingBlockID = nil }
+            }
+    }
+
+    /// Swaps the dragged block with the first movable neighbour whose middle the card's centre has passed.
+    private func reorderIfPassed(_ id: UUID) {
+        guard let frame = blockFrames[id] else { return }
+        let centre = dragY - grabOffset + frame.height / 2
+        let movable = viewModel.draft.blocks[viewModel.draft.movableRange].map(\.id)
+        let target = movable.first { other in
+            guard other != id, let otherFrame = blockFrames[other] else { return false }
+            return otherFrame.minY > frame.minY ? centre > otherFrame.midY : centre < otherFrame.midY
+        }
+        // Only a neighbour the card is on the far side of; the one nearest in the direction of travel.
+        if let target, let targetFrame = blockFrames[target], abs(targetFrame.midY - centre) < max(frame.height, targetFrame.height) {
+            withAnimation(.snappy) { viewModel.moveBlock(id: id, toPositionOf: target) }
+        }
     }
 
     @ViewBuilder
@@ -709,36 +767,11 @@ private extension ParameterUnit {
     }
 }
 
-/// What a dragged block carries: its id, within this editor.
-private struct BlockDragItem: Codable, Transferable {
-    let blockID: UUID
-
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .json)
-    }
-}
-
-/// Makes a block card draggable and a place to drop another block, to reorder the steps.
-private struct BlockReorder: ViewModifier {
-    let blockID: UUID
-    /// `false` while one of the block's steps is open for editing.
-    let isDraggable: Bool
-    /// Called with the id of the block dropped on this one.
-    let onDrop: (UUID) -> Void
-
-    func body(content: Content) -> some View {
-        Group {
-            if isDraggable {
-                content.draggable(BlockDragItem(blockID: blockID))
-            } else {
-                content
-            }
-        }
-        .dropDestination(for: BlockDragItem.self) { items, _ in
-            guard let source = items.first, source.blockID != blockID else { return false }
-            onDrop(source.blockID)
-            return true
-        }
+/// The on-screen frames of the movable blocks, by id, for the reorder drag.
+private struct BlockFramePreference: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
