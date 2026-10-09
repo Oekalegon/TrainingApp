@@ -1,5 +1,6 @@
 import SwiftUI
 import TrainingCore
+import UniformTypeIdentifiers
 
 /// The Structured Workout creator (MVP2-140, design doc §2.4): a sheet to make a workout template,
 /// change one of the athlete's own, or edit a copy of a built-in one. Sections for the name and
@@ -117,10 +118,14 @@ struct WorkoutTemplateEditorSheet: View {
     private var stepsSection: some View {
         Section {
             WorkoutStepListSpacerRow()
+            // The warm-up stays on top and the cool-down at the bottom; the steps and repeats between
+            // them can be dragged, and new ones are added between them.
             VStack(spacing: 10) {
-                ForEach(viewModel.draft.blocks) { block in
-                    let firstNumber = viewModel.draft.blocks.prefix { $0.id != block.id }.reduce(0) { $0 + $1.steps.count }
-                    blockCard(block, firstNumber: firstNumber)
+                if let leading = viewModel.draft.leadingBlockIndex {
+                    pinnedBlockCard(viewModel.draft.blocks[leading])
+                }
+                ForEach(viewModel.draft.blocks[viewModel.draft.movableRange]) { block in
+                    movableBlockCard(block)
                 }
                 // One card for both, after the Fitness app's creator.
                 VStack(spacing: 0) {
@@ -139,6 +144,9 @@ struct WorkoutTemplateEditorSheet: View {
                     .buttonStyle(.plain)
                 }
                 .cardStyle()
+                if let trailing = viewModel.draft.trailingBlockIndex {
+                    pinnedBlockCard(viewModel.draft.blocks[trailing])
+                }
             }
             .padding(.vertical, 6)
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
@@ -148,8 +156,28 @@ struct WorkoutTemplateEditorSheet: View {
         } header: {
             Text("Steps")
         } footer: {
-            Text("A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step to move, repeat or remove it.")
+            Text("Drag a step or repeat to reorder it; the warm-up stays first and the cool-down last. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step for more.")
         }
+    }
+
+    /// The position of `block`'s first step among all of the workout's steps, which numbers its cards.
+    private func firstStepNumber(of block: WorkoutTemplateDraft.Block) -> Int {
+        viewModel.draft.blocks.prefix { $0.id != block.id }.reduce(0) { $0 + $1.steps.count }
+    }
+
+    /// The opening warm-up or closing cool-down: a card that doesn't move.
+    private func pinnedBlockCard(_ block: WorkoutTemplateDraft.Block) -> some View {
+        blockCard(block, firstNumber: firstStepNumber(of: block))
+    }
+
+    /// A step or repeat between the warm-up and the cool-down: draggable onto another one, unless one
+    /// of its steps is open for editing (dragging would fight with its fields).
+    private func movableBlockCard(_ block: WorkoutTemplateDraft.Block) -> some View {
+        let isOpen = block.steps.contains { $0.id == expandedStepID }
+        return blockCard(block, firstNumber: firstStepNumber(of: block))
+            .modifier(BlockReorder(blockID: block.id, isDraggable: !isOpen) { sourceID in
+                withAnimation(.snappy) { viewModel.moveBlock(id: sourceID, toPositionOf: block.id) }
+            })
     }
 
     @ViewBuilder
@@ -163,6 +191,12 @@ struct WorkoutTemplateEditorSheet: View {
                     WorkoutRepeatHeader(count: draft.repetitionsText(block))
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    blockMoveButtons(block)
+                    Button("Remove Repeat", systemImage: "trash", role: .destructive) {
+                        viewModel.removeBlock(id: block.id)
+                    }
+                }
             } stepView: { card in
                 stepRow(block: block, card: card, index: card.id - firstNumber)
             } footer: {
@@ -207,14 +241,19 @@ struct WorkoutTemplateEditorSheet: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            if index > 0 {
-                Button("Move Up", systemImage: "arrow.up") {
-                    viewModel.moveSteps(from: IndexSet(integer: index), to: index - 1, inBlock: block.id)
+            if block.steps.count == 1 {
+                // A step on its own moves as a block among the others.
+                blockMoveButtons(block)
+            } else {
+                if index > 0 {
+                    Button("Move Up", systemImage: "arrow.up") {
+                        viewModel.moveSteps(from: IndexSet(integer: index), to: index - 1, inBlock: block.id)
+                    }
                 }
-            }
-            if index < block.steps.count - 1 {
-                Button("Move Down", systemImage: "arrow.down") {
-                    viewModel.moveSteps(from: IndexSet(integer: index), to: index + 2, inBlock: block.id)
+                if index < block.steps.count - 1 {
+                    Button("Move Down", systemImage: "arrow.down") {
+                        viewModel.moveSteps(from: IndexSet(integer: index), to: index + 2, inBlock: block.id)
+                    }
                 }
             }
             if block.repetitions == .fixed(1), block.steps.count == 1 {
@@ -222,6 +261,25 @@ struct WorkoutTemplateEditorSheet: View {
             }
             Button("Remove Step", systemImage: "trash", role: .destructive) {
                 viewModel.removeSteps(at: IndexSet(integer: index), fromBlock: block.id)
+            }
+        }
+    }
+
+    /// Move Up / Move Down for a block among the movable ones; nothing for the warm-up and cool-down,
+    /// or where it can't go further. Dragging does the same.
+    @ViewBuilder
+    private func blockMoveButtons(_ block: WorkoutTemplateDraft.Block) -> some View {
+        let draft = viewModel.draft
+        if let index = draft.blocks.firstIndex(where: { $0.id == block.id }), draft.movableRange.contains(index) {
+            if draft.movableRange.contains(index - 1) {
+                Button("Move Up", systemImage: "arrow.up") {
+                    withAnimation(.snappy) { viewModel.moveBlock(id: block.id, by: -1) }
+                }
+            }
+            if draft.movableRange.contains(index + 1) {
+                Button("Move Down", systemImage: "arrow.down") {
+                    withAnimation(.snappy) { viewModel.moveBlock(id: block.id, by: 1) }
+                }
             }
         }
     }
@@ -405,8 +463,10 @@ private struct WorkoutTemplateStepInlineEditor: View {
         } else {
             row {
                 LabeledContent("Step") {
+                    // A warm-up or cool-down can become a work or recovery step, but a step can't become
+                    // one: they open and close the workout, and only exist there.
                     Picker("Step", selection: $step.kind) {
-                        ForEach([StepKind.warmup, .work, .recovery, .cooldown], id: \.self) { kind in
+                        ForEach([step.kind, .work, .recovery], id: \.self) { kind in
                             Text(kind.displayName).tag(kind)
                         }
                     }
@@ -646,6 +706,39 @@ private extension ParameterUnit {
         case .minutes: "min"
         case .meters: "m"
         case .count: "×"
+        }
+    }
+}
+
+/// What a dragged block carries: its id, within this editor.
+private struct BlockDragItem: Codable, Transferable {
+    let blockID: UUID
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
+    }
+}
+
+/// Makes a block card draggable and a place to drop another block, to reorder the steps.
+private struct BlockReorder: ViewModifier {
+    let blockID: UUID
+    /// `false` while one of the block's steps is open for editing.
+    let isDraggable: Bool
+    /// Called with the id of the block dropped on this one.
+    let onDrop: (UUID) -> Void
+
+    func body(content: Content) -> some View {
+        Group {
+            if isDraggable {
+                content.draggable(BlockDragItem(blockID: blockID))
+            } else {
+                content
+            }
+        }
+        .dropDestination(for: BlockDragItem.self) { items, _ in
+            guard let source = items.first, source.blockID != blockID else { return false }
+            onDrop(source.blockID)
+            return true
         }
     }
 }

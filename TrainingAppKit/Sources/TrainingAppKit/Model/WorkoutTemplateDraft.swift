@@ -145,15 +145,64 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         WorkoutTemplateDraft(blocks: [Block(steps: [Step.standard])])
     }
 
-    /// A draft for a new template, as the creator starts it: a 5-minute Zone 1 warm-up, a 10-minute Zone 2
-    /// work step and a 5-minute Zone 1 cool-down, like the built-in runs. The athlete can change or remove
-    /// any of them.
+    /// A draft for a new template, as the creator starts it: a 5-minute Zone 1 warm-up and a 5-minute Zone
+    /// 1 cool-down, like the built-in runs, with nothing between them: the athlete adds the steps. The
+    /// athlete can change or remove either.
     public static func starter() -> WorkoutTemplateDraft {
         WorkoutTemplateDraft(blocks: [
             Block(steps: [Step(kind: .warmup, goal: .time(.fixed(5)), target: .zone(1))]),
-            Block(steps: [Step.standard]),
             Block(steps: [Step(kind: .cooldown, goal: .time(.fixed(5)), target: .zone(1))])
         ])
+    }
+
+    // MARK: Order
+
+    /// The index of the warm-up that opens the workout, which stays first: the first block, when it is a
+    /// warm-up on its own; otherwise `nil`.
+    public var leadingBlockIndex: Int? {
+        guard let first = blocks.first, first.steps.count == 1, first.steps[0].kind == .warmup else { return nil }
+        return 0
+    }
+
+    /// The index of the cool-down that closes the workout, which stays last (nothing makes sense after
+    /// it): the last block, when it is a cool-down on its own; otherwise `nil`.
+    public var trailingBlockIndex: Int? {
+        guard let last = blocks.last, last.steps.count == 1, last.steps[0].kind == .cooldown else { return nil }
+        return blocks.count - 1
+    }
+
+    /// The indices of the blocks that can be moved and added among: all but the opening warm-up and the
+    /// closing cool-down.
+    public var movableRange: Range<Int> {
+        let lower = leadingBlockIndex == nil ? 0 : 1
+        let upper = trailingBlockIndex ?? blocks.count
+        return lower..<max(lower, upper)
+    }
+
+    /// Where a new block goes: the end of the movable blocks, so before a closing cool-down.
+    public var insertionIndex: Int { movableRange.upperBound }
+
+    /// Whether the block with `id` is the opening warm-up or the closing cool-down, which don't move.
+    public func isPinned(blockID id: UUID) -> Bool {
+        guard let index = blocks.firstIndex(where: { $0.id == id }) else { return false }
+        return !movableRange.contains(index)
+    }
+
+    /// Moves the block with id `id` to where the block `targetID` is, the way a drop does: dragged down
+    /// it lands after the target, dragged up before it. Does nothing if either is pinned.
+    public mutating func moveBlock(id: UUID, toPositionOf targetID: UUID) {
+        guard let from = blocks.firstIndex(where: { $0.id == id }),
+              let to = blocks.firstIndex(where: { $0.id == targetID }),
+              from != to, movableRange.contains(from), movableRange.contains(to) else { return }
+        blocks.move(fromOffsets: IndexSet(integer: from), toOffset: from < to ? to + 1 : to)
+    }
+
+    /// Moves the block with id `id` up (`-1`) or down (`1`) among the movable blocks; does nothing at
+    /// either end or if the block is pinned.
+    public mutating func moveBlock(id: UUID, by offset: Int) {
+        guard let from = blocks.firstIndex(where: { $0.id == id }), movableRange.contains(from),
+              movableRange.contains(from + offset) else { return }
+        blocks.move(fromOffsets: IndexSet(integer: from), toOffset: offset > 0 ? from + offset + 1 : from + offset)
     }
 
     /// The editor's number for a stored value of `unit`: minutes for a duration kept in seconds.
@@ -264,6 +313,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         }
         if blocks.isEmpty || blocks.allSatisfy({ $0.steps.isEmpty }) {
             issues.append("Add at least one step.")
+        } else if blocks.allSatisfy({ $0.steps.allSatisfy { $0.kind == .warmup || $0.kind == .cooldown } }) {
+            issues.append("Add at least one work or recovery step.")
         }
         if blocks.contains(where: { $0.steps.isEmpty }) && !blocks.allSatisfy({ $0.steps.isEmpty }) {
             issues.append("Every block needs a step; remove the empty one.")

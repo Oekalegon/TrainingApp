@@ -171,13 +171,19 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
         return work.id
     }
 
-    /// Where a new block goes: at the end, or before a cool-down that ends the workout, since nothing
-    /// added should land after the cool-down.
-    private var insertionIndex: Int {
-        if let last = draft.blocks.last, last.steps.count == 1, last.steps[0].kind == .cooldown {
-            return draft.blocks.count - 1
-        }
-        return draft.blocks.count
+    /// Where a new block goes: after the other steps but before a closing cool-down, since nothing
+    /// added should land after it.
+    private var insertionIndex: Int { draft.insertionIndex }
+
+    /// Moves the block with id `id` to where `targetID` is, as a drop does; the opening warm-up and the
+    /// closing cool-down never move, nor can a block be dropped past them.
+    public func moveBlock(id: UUID, toPositionOf targetID: UUID) {
+        draft.moveBlock(id: id, toPositionOf: targetID)
+    }
+
+    /// Moves the block with id `id` up (`-1`) or down (`1`) among the movable blocks.
+    public func moveBlock(id: UUID, by offset: Int) {
+        draft.moveBlock(id: id, by: offset)
     }
 
     /// Makes the block with id `blockID` repeat `count` times; a step that ran once then shows as a

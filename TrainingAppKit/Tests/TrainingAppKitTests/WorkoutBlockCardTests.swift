@@ -123,11 +123,14 @@ struct WorkoutBlockCardTests {
         #expect(editor.draft.blocks.isEmpty)
     }
 
-    @Test("a new template starts with a 5 minute warm-up, a work step and a 5 minute cool-down")
+    @Test("a new template starts with a 5 minute warm-up and cool-down and nothing between them")
     func starterDraft() throws {
         var draft = WorkoutTemplateDraft.starter()
         draft.name = "x"
+        #expect(draft.issues == ["Add at least one work or recovery step."])
+        #expect(draft.build() == nil)
 
+        draft.blocks.insert(.init(steps: [.standard]), at: draft.insertionIndex)
         let template = try #require(draft.build())
 
         #expect(template.blocks.map { $0.steps[0].kind } == [.warmup, .work, .cooldown])
@@ -136,7 +139,7 @@ struct WorkoutBlockCardTests {
         #expect(template.blocks[0].steps[0].target == .heartRateZone(1))
     }
 
-    @Test("steps and repeats added to a new template go before its closing cool-down")
+    @Test("steps and repeats added to a new template go between its warm-up and cool-down")
     @MainActor
     func additionsStayBeforeCooldown() async {
         let store = InMemoryStore()
@@ -151,14 +154,65 @@ struct WorkoutBlockCardTests {
         let step = editor.addBlock()
         let repeatStep = editor.addRepeat()
 
-        #expect(editor.draft.blocks.map { $0.steps[0].kind } == [.warmup, .work, .work, .work, .cooldown])
-        #expect(editor.draft.blocks[2].steps[0].id == step)
-        #expect(editor.draft.blocks[3].steps[0].id == repeatStep)
-        #expect(editor.draft.blocks[3].repetitions == .fixed(4))
+        #expect(editor.draft.blocks.map { $0.steps[0].kind } == [.warmup, .work, .work, .cooldown])
+        #expect(editor.draft.blocks[1].steps[0].id == step)
+        #expect(editor.draft.blocks[2].steps[0].id == repeatStep)
+        #expect(editor.draft.blocks[2].repetitions == .fixed(4))
+        #expect(editor.draft.leadingBlockIndex == 0)
+        #expect(editor.draft.trailingBlockIndex == 3)
+        #expect(editor.draft.movableRange == 1..<3)
         // The cool-down can be removed like any step, after which additions go last again.
-        editor.removeBlock(id: editor.draft.blocks[4].id)
+        editor.removeBlock(id: editor.draft.blocks[3].id)
         editor.addBlock()
-        #expect(editor.draft.blocks.count == 5)
+        #expect(editor.draft.blocks.count == 4)
         #expect(editor.draft.blocks.last?.steps[0].kind == .work)
+        #expect(editor.draft.trailingBlockIndex == nil)
+    }
+
+    @Test("the warm-up and cool-down never move, and nothing moves past them")
+    func pinnedBlocks() {
+        func block(_ kind: StepKind) -> WorkoutTemplateDraft.Block {
+            .init(steps: [.init(kind: kind, goal: .open)])
+        }
+        let warmup = block(.warmup), first = block(.work), second = block(.recovery), third = block(.work), cooldown = block(.cooldown)
+        var draft = WorkoutTemplateDraft(name: "x", blocks: [warmup, first, second, third, cooldown])
+        #expect(draft.isPinned(blockID: warmup.id))
+        #expect(draft.isPinned(blockID: cooldown.id))
+        #expect(!draft.isPinned(blockID: second.id))
+
+        // Dropped on another: dragged down it lands after, dragged up before.
+        draft.moveBlock(id: first.id, toPositionOf: third.id)
+        #expect(draft.blocks.map(\.id) == [warmup.id, second.id, third.id, first.id, cooldown.id])
+        draft.moveBlock(id: first.id, toPositionOf: second.id)
+        #expect(draft.blocks.map(\.id) == [warmup.id, first.id, second.id, third.id, cooldown.id])
+
+        // Pinned ones can't be dragged, nor dropped on.
+        draft.moveBlock(id: warmup.id, toPositionOf: second.id)
+        draft.moveBlock(id: cooldown.id, toPositionOf: first.id)
+        draft.moveBlock(id: first.id, toPositionOf: cooldown.id)
+        draft.moveBlock(id: second.id, toPositionOf: warmup.id)
+        #expect(draft.blocks.map(\.id) == [warmup.id, first.id, second.id, third.id, cooldown.id])
+
+        // Up and down stop at the ends of the movable ones.
+        draft.moveBlock(id: first.id, by: -1)
+        draft.moveBlock(id: third.id, by: 1)
+        #expect(draft.blocks.map(\.id) == [warmup.id, first.id, second.id, third.id, cooldown.id])
+        draft.moveBlock(id: third.id, by: -1)
+        #expect(draft.blocks.map(\.id) == [warmup.id, first.id, third.id, second.id, cooldown.id])
+        draft.moveBlock(id: first.id, by: 1)
+        #expect(draft.blocks.map(\.id) == [warmup.id, third.id, first.id, second.id, cooldown.id])
+    }
+
+    @Test("a warm-up that isn't first, or a cool-down that isn't last, isn't pinned")
+    func onlyTheEndsArePinned() {
+        let a = WorkoutTemplateDraft.Block(steps: [.init(kind: .work, goal: .open)])
+        let warmup = WorkoutTemplateDraft.Block(steps: [.init(kind: .warmup, goal: .open)])
+        let draft = WorkoutTemplateDraft(name: "x", blocks: [a, warmup])
+        #expect(draft.leadingBlockIndex == nil)
+        #expect(draft.trailingBlockIndex == nil)
+        #expect(draft.movableRange == 0..<2)
+        // A warm-up inside a block with other steps isn't a lone warm-up either.
+        let mixed = WorkoutTemplateDraft.Block(steps: [.init(kind: .warmup, goal: .open), .init(kind: .work, goal: .open)])
+        #expect(WorkoutTemplateDraft(name: "x", blocks: [mixed]).leadingBlockIndex == nil)
     }
 }
