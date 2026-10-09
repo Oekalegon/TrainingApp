@@ -111,7 +111,9 @@ struct PlannedWorkoutFormFields: View {
                     LabeledContent("Name", value: "Planned workout")
                 }
                 if viewModel.editedWorkoutName != nil, !viewModel.canEditParameters {
-                    Text("This workout's parameters can't be changed — it wasn't created from a template.")
+                    Text(viewModel.templateIsMissing
+                        ? "This workout's parameters can't be changed — the template it was made from no longer exists."
+                        : "This workout's parameters can't be changed — it wasn't created from a template.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

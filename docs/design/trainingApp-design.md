@@ -674,8 +674,50 @@ A template's plans are found through their workouts' `templateID`, across every 
 (`PlanStore.plans(in:)` over all dates): `TrainingModel.plans` only holds the week view's loaded
 window. The view model reloads them each time the tab appears and after a plan is saved from it.
 
-Not yet: custom workouts and editing templates (the Structured Workout creator), and the rest of
-the roadmap's 14-workout library (MVP2-106).
+**Structured Workout creator (MVP2-140).** The "+" in the navigation bar opens
+`WorkoutTemplateEditorSheet` (driven by `WorkoutTemplateEditorViewModel`) to make a template of the
+athlete's own. A template's detail screen has **Edit** and **Delete** (the athlete's own templates only)
+and **Duplicate** (any template). Built-in templates are read-only: Duplicate opens the editor on a copy
+(a new id, "… Copy") that is added when saved. The athlete's templates are stored through TrainingKit's
+`WorkoutTemplateStore` (a synced `WorkoutTemplateRecord`) and shown after the built-in ones in their
+sport's section with a "Custom" label; a swipe on a row deletes one.
+
+The editor works on a `WorkoutTemplateDraft`, in the units it shows (minutes, metres, counts), and
+nothing is saved until the check mark:
+
+- **Workout**: name and sport.
+- **Parameters**: a name, a starting value and a lowest and highest value, for a duration, a distance or
+  a repeat count. Each becomes a slider in the planned-workout sheet. Removing one leaves what used it
+  at the parameter's starting value.
+- **Blocks**: the repeats (fixed or a count parameter) and the block's steps. A step has a kind
+  (warmup, work, recovery, cooldown), an end (time, distance or open; time and distance fixed or taken
+  from a matching parameter) and a heart-rate zone target or none. Pace, power, RPE and heart-rate-range
+  targets can't be set here; a template that has one keeps it.
+- A "To Fix" section lists what stops saving (no name, no step, a number at or below zero, a parameter
+  whose starting value is outside its range); once none is left it shows the default title the workout
+  gets at its default values.
+
+Editing a template changes what the library offers from then on, not the plans already made from it:
+each plan instantiated a workout of its own (MVP2-15). The exception is editing a plan afterwards:
+changing one of its parameters instantiates the template's *current* blocks, so a plan made before the
+template was edited takes the new structure; recorded values the template no longer has fall back to
+its defaults.
+
+Deleting a template asks first (from a swipe or the detail screen). One that any plan still uses, past
+or upcoming, is archived rather than removed (MVP2-142, `TrainingModel.deleteTemplate(id:asOf:)`): it
+leaves the library, the picker and search, but those plans keep it, so their parameters stay editable
+and an export still names it. One no plan uses is removed. The planned-workout sheet's picker and the
+Library read `TrainingModel.libraryTemplates` (the built-in library, then the athlete's active
+templates by name); plan editing and the calendar export read `knownTemplates`, which adds the archived
+ones. If a plan's template is gone altogether (deleted on another device before this existed), the edit
+sheet says the template no longer exists rather than that the workout never had one.
+
+A copy's name ends in "Copy", but planned titles don't: the copy keeps the original's short title
+until it is renamed. The editor asks before discarding changes, and swiping the sheet away is blocked
+while there are any.
+
+Not yet: reordering blocks, other target kinds, and the rest of the roadmap's 14-workout library
+(MVP2-106).
 
 ### 2.5 Search (MVP2-21)
 

@@ -4,14 +4,31 @@ import TrainingCore
 /// The Library tab (MVP2-21, design doc §2.4): the workout templates the athlete can plan, grouped
 /// by sport. Each row shows the template's default title and how often it's planned; tapping it
 /// pushes ``WorkoutTemplateDetailView``, whose "Plan This Workout" button opens the planned-workout
-/// sheet with the template already picked. MVP5's plan builder will live in this tab too.
+/// sheet with the template already picked. The "+" button opens the Structured Workout creator
+/// (MVP2-140) for a template of the athlete's own. MVP5's plan builder will live in this tab too.
 struct WorkoutLibraryView: View {
     let viewModel: WorkoutLibraryViewModel
+    /// The creator's view model, made when "+" is tapped and kept while its sheet is up, so a
+    /// re-render doesn't reset the fields (as for ``WorkoutTemplateDetailView``'s planner).
+    @State private var editor: WorkoutTemplateEditorViewModel?
 
     var body: some View {
         NavigationStack {
             WorkoutLibraryList(viewModel: viewModel)
                 .navigationTitle("Library")
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            editor = viewModel.makeEditorForNewTemplate()
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("New Workout")
+                    }
+                }
+                .sheet(item: $editor) { editor in
+                    WorkoutTemplateEditorSheet(viewModel: editor)
+                }
         }
     }
 }
@@ -19,6 +36,8 @@ struct WorkoutLibraryView: View {
 /// Every template, grouped by sport, each pushing ``WorkoutTemplateDetailView``.
 private struct WorkoutLibraryList: View {
     let viewModel: WorkoutLibraryViewModel
+    /// The row a swipe asked to delete, until the athlete confirms.
+    @State private var pendingDelete: WorkoutLibraryViewModel.Entry?
 
     var body: some View {
         List {
@@ -31,6 +50,13 @@ private struct WorkoutLibraryList: View {
                     ForEach(section.entries) { entry in
                         NavigationLink(value: TemplateRoute(id: entry.id)) {
                             WorkoutTemplateRow(entry: entry)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            if entry.isCustom {
+                                Button("Delete", systemImage: "trash", role: .destructive) {
+                                    pendingDelete = entry
+                                }
+                            }
                         }
                     }
                 }
@@ -46,6 +72,24 @@ private struct WorkoutLibraryList: View {
         }
         // Each time the tab appears: plans made on the week view since count too.
         .task { await viewModel.reload() }
+        .confirmationDialog(
+            "Delete this workout?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible, presenting: pendingDelete
+        ) { entry in
+            Button("Delete Workout", role: .destructive) {
+                Task { await viewModel.deleteTemplate(id: entry.id) }
+            }
+        } message: { entry in
+            Text(WorkoutTemplateDetailView.deleteMessage(planCount: entry.planCount))
+        }
+        .alert("Couldn't Delete Workout", isPresented: Binding(
+            get: { viewModel.actionError != nil }, set: { if !$0 { viewModel.actionError = nil } }
+        ), presenting: viewModel.actionError) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
+        }
     }
 }
 
@@ -68,10 +112,17 @@ struct WorkoutTemplateRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if entry.planCount > 0 {
-                Text(WorkoutTemplateDetailView.planCountText(entry.planCount))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 2) {
+                if entry.isCustom {
+                    Text("Custom")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.tint)
+                }
+                if entry.planCount > 0 {
+                    Text(WorkoutTemplateDetailView.planCountText(entry.planCount))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -87,8 +138,19 @@ struct WorkoutTemplateDetailView: View {
     /// as long as the sheet is up — built inside the `.sheet` closure instead, a re-render would
     /// reset its sliders (same reasoning as ``PlannedWorkoutDetailSheet``'s editor).
     @State private var planner: PlannedWorkoutSheetViewModel?
+    /// The creator's view model for Edit or Duplicate, kept while its sheet is up, like ``planner``.
+    @State private var editor: WorkoutTemplateEditorViewModel?
+    @State private var isConfirmingDelete = false
+    @Environment(\.dismiss) private var dismiss
 
     private static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
+
+    /// What the delete confirmation says: plans made from the template stay either way.
+    static func deleteMessage(planCount: Int) -> String {
+        planCount == 0
+            ? "This removes the workout from your library."
+            : "It leaves your library, but the plans already made from it stay in your calendar and keep their parameters."
+    }
 
     static func planCountText(_ count: Int) -> String {
         count == 1 ? "Planned once" : "Planned \(count) times"
@@ -196,6 +258,28 @@ struct WorkoutTemplateDetailView: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
+
+                // A built-in workout can't be changed, only copied; "Duplicate" is the way to
+                // start from one.
+                Section {
+                    if entry.isCustom {
+                        Button("Edit", systemImage: "pencil") {
+                            editor = viewModel.makeEditor(for: entry.template)
+                        }
+                    }
+                    Button("Duplicate", systemImage: "plus.square.on.square") {
+                        editor = viewModel.makeEditorDuplicating(entry.template)
+                    }
+                    if entry.isCustom {
+                        Button("Delete", systemImage: "trash", role: .destructive) {
+                            isConfirmingDelete = true
+                        }
+                    }
+                } footer: {
+                    if !entry.isCustom {
+                        Text("Built-in workouts can't be changed. Duplicate one to make your own version.")
+                    }
+                }
             } else {
                 Text("This workout is no longer in the library.")
                     .foregroundStyle(.secondary)
@@ -209,6 +293,23 @@ struct WorkoutTemplateDetailView: View {
             if let planner {
                 PlannedWorkoutSheet(viewModel: planner)
             }
+        }
+        .sheet(item: $editor) { editor in
+            WorkoutTemplateEditorSheet(viewModel: editor)
+        }
+        .confirmationDialog(
+            "Delete this workout?", isPresented: $isConfirmingDelete, titleVisibility: .visible
+        ) {
+            Button("Delete Workout", role: .destructive) {
+                Task {
+                    // Stay on the screen when it failed: the library shows why.
+                    if await viewModel.deleteTemplate(id: templateID) != nil {
+                        dismiss()
+                    }
+                }
+            }
+        } message: {
+            Text(Self.deleteMessage(planCount: entry?.planCount ?? 0))
         }
     }
 }
