@@ -695,13 +695,17 @@ dividers; a single step that runs once is a plain card. The icon's colour says w
 every card reads out as "Work, 5:00, HR Zone 2". The same card views are meant for the planned-workout
 and linked-activity redesign (MVP2-144).
 
-In the editor a card is a button: tapping a step opens its own screen (role, end, value, zone,
-remove), tapping a "Repeat" header opens the block's repeats and its remove button. Adding is done
-with cards too, after the Fitness app's creator: a purple "+ Add Step" card at the end of the list adds
-a step that runs once, "Add Repeat" adds a repeating work and recovery pair (four times, to edit), and
-a repeat card has an "Add Step" row of its own for adding to that block. Touching and holding a step
-moves it, repeats it (a single step) or removes it; removing a block's last step removes the block. A
-value that comes from a parameter reads "Effort · 1:00" (the parameter's name and starting value). A number field ignores a write-back
+In the editor a card is a button: tapping a step expands it in place, after the Fitness app's creator,
+and collapses the one that was open (tapping the open step's header collapses it). The open step shows,
+inside its card, a Work / Recovery switch (a warm-up or cool-down gets a menu of all four roles
+instead), Goal Type (time, distance or open), the duration or distance (fixed or one of the
+parameters), the Target zone and a red "Delete Step" row. A new step opens at once. Tapping a "Repeat"
+header opens the block's repeats screen, which also removes the block. Adding is done with cards too:
+one card holds "+ Add Step", which adds a step that runs once, and "Add Repeat", which adds a repeating
+work and recovery pair (four times, to edit); a repeat card has an "Add Step" row of its own for adding
+to that block. Touching and holding a step moves it, repeats it (a single step) or removes it; removing
+a block's last step removes the block. A value that comes from a parameter reads "Effort · 1:00" (the
+parameter's name and starting value). A number field ignores a write-back
 that only rounds what it shows, so merely opening a step doesn't change it.
 
 The editor works on a `WorkoutTemplateDraft`, in the units it shows (minutes, metres, counts), and

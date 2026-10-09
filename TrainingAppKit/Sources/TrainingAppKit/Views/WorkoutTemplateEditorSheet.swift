@@ -9,11 +9,12 @@ struct WorkoutTemplateEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingSaveError = false
     @State private var isConfirmingDiscard = false
-    /// The step or block whose own screen is pushed.
-    @State private var editingStep: StepRef?
+    /// The step that is open for editing, if any: tapping a step expands it in place and collapses the
+    /// one that was open.
+    @State private var expandedStepID: UUID?
+    /// The block whose repeats screen is pushed.
     @State private var editingBlock: BlockRef?
 
-    private struct StepRef: Hashable { let blockID: UUID; let stepID: UUID }
     private struct BlockRef: Hashable { let blockID: UUID }
 
     private func blockBinding(_ id: UUID) -> Binding<WorkoutTemplateDraft.Block>? {
@@ -21,10 +22,15 @@ struct WorkoutTemplateEditorSheet: View {
         return $viewModel.draft.blocks[index]
     }
 
-    private func stepBinding(_ ref: StepRef) -> Binding<WorkoutTemplateDraft.Step>? {
-        guard let block = blockBinding(ref.blockID),
-              let index = block.wrappedValue.steps.firstIndex(where: { $0.id == ref.stepID }) else { return nil }
+    private func stepBinding(blockID: UUID, stepID: UUID) -> Binding<WorkoutTemplateDraft.Step>? {
+        guard let block = blockBinding(blockID),
+              let index = block.wrappedValue.steps.firstIndex(where: { $0.id == stepID }) else { return nil }
         return block.steps[index]
+    }
+
+    /// Opens `stepID` for editing, closing the other; `nil` closes whichever is open.
+    private func expand(_ stepID: UUID?) {
+        withAnimation(.snappy) { expandedStepID = stepID }
     }
 
     var body: some View {
@@ -45,13 +51,6 @@ struct WorkoutTemplateEditorSheet: View {
                 stepsSection
 
                 summarySection(summary)
-            }
-            .navigationDestination(item: $editingStep) { ref in
-                if let step = stepBinding(ref) {
-                    WorkoutTemplateStepForm(
-                        viewModel: viewModel, blockID: ref.blockID, step: step, parameters: viewModel.draft.parameters
-                    )
-                }
             }
             .navigationDestination(item: $editingBlock) { ref in
                 if let block = blockBinding(ref.blockID) {
@@ -149,15 +148,24 @@ struct WorkoutTemplateEditorSheet: View {
                     let firstNumber = viewModel.draft.blocks.prefix { $0.id != block.id }.reduce(0) { $0 + $1.steps.count }
                     blockCard(block, firstNumber: firstNumber)
                 }
-                Button { viewModel.addBlock() } label: {
-                    WorkoutAddCardLabel(title: "Add Step", symbolName: "plus")
+                // One card for both, after the Fitness app's creator.
+                VStack(spacing: 0) {
+                    Button {
+                        viewModel.addBlock()
+                        expand(viewModel.draft.blocks.last?.steps.last?.id)
+                    } label: {
+                        WorkoutAddCardLabel(title: "Add Step", symbolName: "plus")
+                    }
+                    .buttonStyle(.plain)
+                    Divider()
+                    Button {
+                        viewModel.addRepeat()
+                        expand(viewModel.draft.blocks.last?.steps.first?.id)
+                    } label: {
+                        WorkoutAddCardLabel(title: "Add Repeat", symbolName: "repeat")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .cardStyle()
-                Button { viewModel.addRepeat() } label: {
-                    WorkoutAddCardLabel(title: "Add Repeat", symbolName: "repeat")
-                }
-                .buttonStyle(.plain)
                 .cardStyle()
             }
             .padding(.vertical, 6)
@@ -184,24 +192,45 @@ struct WorkoutTemplateEditorSheet: View {
                 }
                 .buttonStyle(.plain)
             } stepView: { card in
-                stepButton(block: block, card: card, index: card.id - firstNumber)
+                stepRow(block: block, card: card, index: card.id - firstNumber)
             } footer: {
                 Divider()
-                Button { viewModel.addStep(toBlock: block.id) } label: {
+                Button {
+                    viewModel.addStep(toBlock: block.id)
+                    expand(viewModel.draft.blocks.first { $0.id == block.id }?.steps.last?.id)
+                } label: {
                     WorkoutAddCardLabel(title: "Add Step", symbolName: "plus")
                 }
                 .buttonStyle(.plain)
             }
         } else {
             ForEach(cards) { card in
-                stepButton(block: block, card: card, index: card.id - firstNumber).cardStyle()
+                stepRow(block: block, card: card, index: card.id - firstNumber).cardStyle()
             }
+        }
+    }
+
+    /// A step as its card, or, when it is the open one, its fields in place of the card.
+    @ViewBuilder
+    private func stepRow(block: WorkoutTemplateDraft.Block, card: WorkoutStepCard, index: Int) -> some View {
+        let step = block.steps[index]
+        if expandedStepID == step.id, let binding = stepBinding(blockID: block.id, stepID: step.id) {
+            WorkoutTemplateStepInlineEditor(
+                step: binding, card: card, parameters: viewModel.draft.parameters,
+                onCollapse: { expand(nil) },
+                onDelete: {
+                    expand(nil)
+                    viewModel.removeStep(id: step.id, fromBlock: block.id)
+                }
+            )
+        } else {
+            stepButton(block: block, card: card, index: index)
         }
     }
 
     private func stepButton(block: WorkoutTemplateDraft.Block, card: WorkoutStepCard, index: Int) -> some View {
         let step = block.steps[index]
-        return Button { editingStep = StepRef(blockID: block.id, stepID: step.id) } label: {
+        return Button { expand(step.id) } label: {
             WorkoutStepCardView(step: card)
         }
         .buttonStyle(.plain)
@@ -266,13 +295,14 @@ private struct WorkoutTemplateParameterEditor: View {
     }
 }
 
-/// A step's own screen: its role, what ends it and the zone it aims for.
-private struct WorkoutTemplateStepForm: View {
-    let viewModel: WorkoutTemplateEditorViewModel
-    let blockID: UUID
+/// A step opened for editing in place (after the Fitness app's creator): its role, what ends it, the
+/// value, the zone it aims for and a delete row, inside the step's card.
+private struct WorkoutTemplateStepInlineEditor: View {
     @Binding var step: WorkoutTemplateDraft.Step
+    let card: WorkoutStepCard
     let parameters: [WorkoutTemplateDraft.Parameter]
-    @Environment(\.dismiss) private var dismiss
+    let onCollapse: () -> Void
+    let onDelete: () -> Void
 
     private enum GoalKind: Hashable { case time, distance, open }
 
@@ -304,57 +334,6 @@ private struct WorkoutTemplateStepForm: View {
         }
     }
 
-    var body: some View {
-        Form {
-            Section {
-                Picker("Step", selection: $step.kind) {
-                    ForEach([StepKind.warmup, .work, .recovery, .cooldown], id: \.self) { kind in
-                        Label(kind.displayName, systemImage: kind.symbolName).tag(kind)
-                    }
-                }
-                Picker("Ends after", selection: goalKind) {
-                    Text("Time").tag(GoalKind.time)
-                    Text("Distance").tag(GoalKind.distance)
-                    Text("Open").tag(GoalKind.open)
-                }
-                switch step.goal {
-                case .time:
-                    SourceEditor(
-                        title: "Duration", source: timeSource, unit: .minutes,
-                        parameters: parameters.filter { $0.unit == .minutes }
-                    )
-                case .distance:
-                    SourceEditor(
-                        title: "Distance", source: distanceSource, unit: .meters,
-                        parameters: parameters.filter { $0.unit == .meters }
-                    )
-                case .open:
-                    EmptyView()
-                }
-                if case .preserved = step.target {
-                    LabeledContent("Target", value: "Custom target")
-                } else {
-                    Picker("Target", selection: zone) {
-                        Text("None").tag(0)
-                        ForEach(HeartRateZone.allCases, id: \.rawValue) { zone in
-                            Text("HR Zone \(zone.rawValue) · \(zone.displayName)").tag(zone.rawValue)
-                        }
-                    }
-                }
-            }
-            Section {
-                Button("Remove Step", systemImage: "trash", role: .destructive) {
-                    dismiss()
-                    viewModel.removeStep(id: step.id, fromBlock: blockID)
-                }
-            }
-        }
-        .navigationTitle(step.kind.displayName)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-    }
-
     private var timeSource: Binding<WorkoutTemplateDraft.Source> {
         Binding {
             if case .time(let source) = step.goal { source } else { .fixed(10) }
@@ -365,6 +344,127 @@ private struct WorkoutTemplateStepForm: View {
         Binding {
             if case .distance(let source) = step.goal { source } else { .fixed(1000) }
         } set: { step.goal = .distance($0) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: onCollapse) {
+                HStack(spacing: 12) {
+                    Image(systemName: step.kind.symbolName)
+                        .font(.title3)
+                        .foregroundStyle(card.end.tint)
+                        .frame(width: 28)
+                        .accessibilityHidden(true)
+                    Text(step.kind.displayName)
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "chevron.up")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(step.kind.displayName), editing")
+            .accessibilityHint("Collapses this step")
+            Divider()
+            kindRow
+            Divider()
+            row {
+                LabeledContent("Goal Type") {
+                    Picker("Goal Type", selection: goalKind) {
+                        Text("Time").tag(GoalKind.time)
+                        Text("Distance").tag(GoalKind.distance)
+                        Text("Open").tag(GoalKind.open)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+            }
+            switch step.goal {
+            case .time:
+                Divider()
+                row {
+                    SourceEditor(
+                        title: "Duration", source: timeSource, unit: .minutes,
+                        parameters: parameters.filter { $0.unit == .minutes }
+                    )
+                }
+            case .distance:
+                Divider()
+                row {
+                    SourceEditor(
+                        title: "Distance", source: distanceSource, unit: .meters,
+                        parameters: parameters.filter { $0.unit == .meters }
+                    )
+                }
+            case .open:
+                EmptyView()
+            }
+            Divider()
+            row {
+                if case .preserved = step.target {
+                    LabeledContent("Target", value: "Custom target")
+                } else {
+                    LabeledContent("Target") {
+                        Picker("Target", selection: zone) {
+                            Text("None").tag(0)
+                            ForEach(HeartRateZone.allCases, id: \.rawValue) { zone in
+                                Text("HR Zone \(zone.rawValue) · \(zone.displayName)").tag(zone.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+                }
+            }
+            Divider()
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete Step", systemImage: "trash")
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// Work and recovery are a two-way switch, as in the Fitness app; a warm-up or cool-down, which
+    /// aren't either, pick from all four.
+    @ViewBuilder
+    private var kindRow: some View {
+        if step.kind == .work || step.kind == .recovery {
+            Picker("Step", selection: $step.kind) {
+                Text(StepKind.work.displayName).tag(StepKind.work)
+                Text(StepKind.recovery.displayName).tag(StepKind.recovery)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        } else {
+            row {
+                LabeledContent("Step") {
+                    Picker("Step", selection: $step.kind) {
+                        ForEach([StepKind.warmup, .work, .recovery, .cooldown], id: \.self) { kind in
+                            Text(kind.displayName).tag(kind)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+            }
+        }
+    }
+
+    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
     }
 }
 
@@ -429,11 +529,15 @@ private struct SourceEditor: View {
         if parameters.isEmpty {
             LabeledContent(title) { NumberField(label: title, value: fixedValue, unit: unit) }
         } else {
-            Picker(title, selection: parameterID) {
-                Text("Fixed").tag(nil as UUID?)
-                ForEach(parameters) { parameter in
-                    Text(parameter.name).tag(parameter.id as UUID?)
+            LabeledContent(title) {
+                Picker(title, selection: parameterID) {
+                    Text("Fixed").tag(nil as UUID?)
+                    ForEach(parameters) { parameter in
+                        Text(parameter.name).tag(parameter.id as UUID?)
+                    }
                 }
+                .pickerStyle(.menu)
+                .labelsHidden()
             }
             if case .fixed = source {
                 LabeledContent("Value") { NumberField(label: title, value: fixedValue, unit: unit) }
