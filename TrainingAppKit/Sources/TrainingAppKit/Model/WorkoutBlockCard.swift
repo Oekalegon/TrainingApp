@@ -32,6 +32,10 @@ public struct WorkoutStepCard: Identifiable, Equatable, Sendable {
     /// The SF Symbol shown before ``target``: a heart for heart rate, a shoe for pace; `nil` without a
     /// target.
     public let targetSymbol: String?
+    /// The name of the template parameter that sets what ends the step (its duration or distance), shown
+    /// in place of ``detail``'s value so the card says where the template can be tuned; `nil` for a
+    /// fixed value.
+    public var parameterName: String? = nil
 }
 
 /// Steps that repeat together, as one card in the step list. A block that runs once shows its steps as
@@ -42,7 +46,9 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
     /// How many times the steps repeat.
     public let repetitions: Int
     /// The steps of one repetition.
-    public let steps: [WorkoutStepCard]
+    public var steps: [WorkoutStepCard]
+    /// The name of the template parameter that sets the repeat count; `nil` for a fixed count.
+    public var repetitionsParameterName: String? = nil
 
     /// Whether the block is drawn as a "Repeat" card: it repeats, or holds several steps that belong
     /// together. A single step run once is a plain step card.
@@ -64,6 +70,34 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
             }
             return WorkoutBlockCard(id: index, repetitions: block.repetitions, steps: steps)
         }
+    }
+
+    /// The cards for a template at its default values, naming the parameters that set its durations,
+    /// distances and repeat counts (MVP2-143), so the detail screen shows where it can be tuned.
+    ///
+    /// - Parameter template: The template; one that can't be instantiated has no cards.
+    public static func cards(for template: WorkoutTemplate) -> [WorkoutBlockCard] {
+        guard let workout = try? template.instantiate() else { return [] }
+        func name(_ key: String) -> String? { template.parameters.first { $0.key == key }?.name }
+        var cards = cards(for: workout.blocks)
+        for (blockIndex, block) in template.blocks.enumerated() where blockIndex < cards.count {
+            if case .parameter(let key) = block.repetitions { cards[blockIndex].repetitionsParameterName = name(key) }
+            for (stepIndex, step) in block.steps.enumerated() where stepIndex < cards[blockIndex].steps.count {
+                switch step.goal {
+                case .time(.parameter(let key)), .distance(.parameter(let key)):
+                    cards[blockIndex].steps[stepIndex].parameterName = name(key)
+                default:
+                    break
+                }
+            }
+        }
+        return cards
+    }
+
+    /// The symbol that marks a value set by a template parameter: a gauge with a range and a needle,
+    /// new in the 2026 set (iOS 27); sliders before that.
+    static var parameterSymbol: String {
+        if #available(iOS 27, macOS 27, *) { "gauge.range.33to100.dotted.with.needle" } else { "slider.horizontal.3" }
     }
 
     /// The kind of end a goal is.

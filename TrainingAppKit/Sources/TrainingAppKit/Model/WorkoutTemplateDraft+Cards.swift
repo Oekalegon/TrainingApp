@@ -24,10 +24,21 @@ extension WorkoutTemplateDraft {
         case .zone: WorkoutBlockCard.targetSymbol(.heartRateZone(1))
         case .preserved(let target): WorkoutBlockCard.targetSymbol(target)
         }
-        return WorkoutStepCard(
+        var card = WorkoutStepCard(
             id: number, kind: step.kind, title: step.kind.displayName, detail: detail, end: end,
             target: target, targetSymbol: targetSymbol
         )
+        switch step.goal {
+        case .time(let source), .distance(let source): card.parameterName = parameterName(source)
+        case .open: break
+        }
+        return card
+    }
+
+    /// The name of the parameter `source` points at, if it does.
+    func parameterName(_ source: Source) -> String? {
+        guard case .parameter(let id) = source else { return nil }
+        return parameters.first { $0.id == id }?.name
     }
 
     /// How a block's repeat count reads in its "Repeat" header, e.g. "5" or "Repeats · 8".

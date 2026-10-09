@@ -263,7 +263,7 @@ struct WorkoutTemplateEditorSheet: View {
             WorkoutRepeatCard(steps: cards) {
                 VStack(spacing: 0) {
                     Button { toggleRepeat(block.id) } label: {
-                        WorkoutRepeatHeader(count: draft.repetitionsText(block))
+                        WorkoutRepeatHeader(count: draft.repetitionsText(block), parameterName: draft.parameterName(block.repetitions))
                     }
                     .buttonStyle(.plain)
                     if expandedRepeatID == block.id, let binding = blockBinding(block.id) {

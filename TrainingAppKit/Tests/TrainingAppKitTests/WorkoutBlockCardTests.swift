@@ -57,7 +57,7 @@ struct WorkoutBlockCardTests {
         let fixed = WorkoutTemplateDraft.Step(kind: .recovery, goal: .distance(.fixed(200)))
         let block = WorkoutTemplateDraft.Block(steps: [step, fixed], repetitions: .parameter(reps.id))
 
-        #expect(draft.card(for: step, number: 3) == WorkoutStepCard(id: 3, kind: .work, title: "Work", detail: "Effort · 1:00", end: .time, target: "HR Zone 4", targetSymbol: "heart.fill"))
+        #expect(draft.card(for: step, number: 3) == WorkoutStepCard(id: 3, kind: .work, title: "Work", detail: "Effort · 1:00", end: .time, target: "HR Zone 4", targetSymbol: "heart.fill", parameterName: "Effort"))
         #expect(draft.card(for: fixed, number: 4).detail == "200 m")
         #expect(draft.card(for: fixed, number: 4).end == .distance)
         #expect(draft.repetitionsText(block) == "Repeats · 8")
@@ -246,5 +246,39 @@ struct WorkoutBlockCardTests {
         #expect(editor.draft.blocks[2].steps[0].id == cooldown)
         #expect(editor.draft.blocks[0].steps[0].goal == .time(.fixed(5)))
         #expect(editor.draft.movableRange == 1..<2)
+    }
+
+    @Test("cards for a template name the parameters behind its durations, distances and repeats")
+    func templateCardsNameParameters() throws {
+        let template = BuiltInWorkoutTemplates.shortIntervalRun
+        let cards = WorkoutBlockCard.cards(for: template)
+        let named = cards.flatMap(\.steps).compactMap(\.parameterName)
+        let expected = template.blocks.flatMap(\.steps).compactMap { step -> String? in
+            switch step.goal {
+            case .time(.parameter(let key)), .distance(.parameter(let key)):
+                template.parameters.first { $0.key == key }?.name
+            default: nil
+            }
+        }
+        #expect(named == expected)
+        #expect(!named.isEmpty)
+        #expect(cards.compactMap(\.repetitionsParameterName).count == template.blocks.filter {
+            if case .parameter = $0.repetitions { true } else { false }
+        }.count)
+        // A fixed warm-up has none.
+        #expect(cards[0].steps[0].parameterName == nil)
+    }
+
+    @Test("a draft card names its parameter, and a fixed value has no name")
+    func draftCardParameterName() {
+        var draft = WorkoutTemplateDraft(name: "x")
+        let effort = WorkoutTemplateDraft.Parameter(key: "e", name: "Effort", unit: .minutes, defaultValue: 1, lowerBound: 0.5, upperBound: 2)
+        draft.parameters = [effort]
+        let variable = WorkoutTemplateDraft.Step(kind: .work, goal: .time(.parameter(effort.id)))
+        let fixed = WorkoutTemplateDraft.Step(kind: .recovery, goal: .time(.fixed(1)))
+        #expect(draft.card(for: variable, number: 0).parameterName == "Effort")
+        #expect(draft.card(for: fixed, number: 1).parameterName == nil)
+        let block = WorkoutTemplateDraft.Block(steps: [variable], repetitions: .parameter(effort.id))
+        #expect(draft.parameterName(block.repetitions) == "Effort")
     }
 }

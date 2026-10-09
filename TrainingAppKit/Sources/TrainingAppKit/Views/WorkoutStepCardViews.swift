@@ -12,7 +12,7 @@ struct WorkoutStepCardList: View {
         VStack(spacing: 10) {
             ForEach(blocks) { block in
                 if block.isGroup {
-                    WorkoutRepeatCard(repetitions: block.repetitions.formatted(), steps: block.steps)
+                    WorkoutRepeatCard(repetitions: block.repetitions.formatted(), parameterName: block.repetitionsParameterName, steps: block.steps)
                 } else {
                     ForEach(block.steps) { WorkoutStepCardView(step: $0).cardStyle() }
                 }
@@ -56,9 +56,9 @@ struct WorkoutRepeatCard<Header: View, StepView: View, Footer: View>: View {
 
 extension WorkoutRepeatCard where Header == WorkoutRepeatHeader, StepView == WorkoutStepCardView, Footer == EmptyView {
     /// The read-only card: "Repeat" with `repetitions`, then plain steps.
-    init(repetitions: String, steps: [WorkoutStepCard]) {
+    init(repetitions: String, parameterName: String? = nil, steps: [WorkoutStepCard]) {
         self.init(
-            steps: steps, header: { WorkoutRepeatHeader(count: repetitions) },
+            steps: steps, header: { WorkoutRepeatHeader(count: repetitions, parameterName: parameterName) },
             stepView: { WorkoutStepCardView(step: $0) }, footer: { EmptyView() }
         )
     }
@@ -88,8 +88,10 @@ struct WorkoutAddCardLabel: View {
 
 /// The header of a repeat card: "Repeat" and the count beside the repeat symbol.
 struct WorkoutRepeatHeader: View {
-    /// The count as written, e.g. "5", or a parameter's name in the editor.
+    /// The count as written, e.g. "5".
     let count: String
+    /// The parameter that sets the count, shown in place of it; `nil` for a fixed count.
+    var parameterName: String? = nil
 
     var body: some View {
         HStack {
@@ -97,7 +99,13 @@ struct WorkoutRepeatHeader: View {
             Spacer()
             Image(systemName: "repeat")
                 .accessibilityHidden(true)
-            Text(count)
+            if let parameterName {
+                Image(systemName: WorkoutBlockCard.parameterSymbol)
+                    .accessibilityHidden(true)
+                Text(parameterName)
+            } else {
+                Text(count)
+            }
         }
         .foregroundStyle(.purple)
         .padding(.horizontal, 16)
@@ -105,7 +113,7 @@ struct WorkoutRepeatHeader: View {
         // The whole row, not just the text and the symbol, so the editor's tap target is the header.
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Repeat \(count) times")
+        .accessibilityLabel(parameterName.map { "Repeat \($0), a parameter" } ?? "Repeat \(count) times")
     }
 }
 
@@ -123,9 +131,16 @@ struct WorkoutStepCardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(step.title)
                     .font(.headline)
-                Text(step.detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if let parameterName = step.parameterName {
+                    // Set by a template parameter: say which, not what it starts at.
+                    Label(parameterName, systemImage: WorkoutBlockCard.parameterSymbol)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(step.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 8)
             if let target = step.target {
@@ -144,7 +159,10 @@ struct WorkoutStepCardView: View {
         .padding(.vertical, 12)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([step.title, step.detail, step.target].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityLabel(
+            [step.title, step.parameterName.map { "\($0), a parameter" } ?? step.detail, step.target]
+                .compactMap { $0 }.joined(separator: ", ")
+        )
     }
 }
 
