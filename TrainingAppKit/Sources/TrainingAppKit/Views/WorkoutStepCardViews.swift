@@ -115,7 +115,7 @@ struct WorkoutStepCardView: View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: step.kind.symbolName)
                 .font(.title3)
-                .foregroundStyle(step.kind.tint)
+                .foregroundStyle(step.end.tint)
                 .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
@@ -173,14 +173,16 @@ extension StepKind {
         case .cooldown: "chevron.down.right.dotted.2"
         }
     }
+}
 
-    /// The role's colour; the name beside it always says the same, so colour is never the only cue.
+extension WorkoutStepCard.End {
+    /// The icon's colour: yellow for a duration, blue for a distance and green for an open step, as in
+    /// the Fitness app. The detail line beside it says the same, so colour is never the only cue.
     var tint: Color {
         switch self {
-        case .warmup: .orange
-        case .work: .green
-        case .recovery: .yellow
-        case .cooldown: .cyan
+        case .time: .yellow
+        case .distance: .blue
+        case .open: .green
         }
     }
 }

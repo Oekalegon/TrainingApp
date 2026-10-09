@@ -7,6 +7,16 @@ import TrainingCore
 /// Built from resolved values (``WorkoutBlockCard/cards(for:)``), so the template detail, the editor and
 /// later the planned-workout views (MVP2-144) all say a step the same way.
 public struct WorkoutStepCard: Identifiable, Equatable, Sendable {
+    /// What ends a step.
+    public enum End: Equatable, Sendable {
+        /// A duration.
+        case time
+        /// A distance.
+        case distance
+        /// The athlete ends it.
+        case open
+    }
+
     /// The step's position among all of the workout's steps.
     public let id: Int
     /// The role the step plays.
@@ -15,6 +25,8 @@ public struct WorkoutStepCard: Identifiable, Equatable, Sendable {
     public let title: String
     /// What ends the step, e.g. "5:00", "400 m" or "Open".
     public let detail: String
+    /// The kind of end ``detail`` describes; it decides the icon's colour.
+    public let end: End
     /// The intensity the step aims for, e.g. "HR Zone 2"; `nil` without a target.
     public let target: String?
 }
@@ -43,10 +55,19 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
                 defer { stepNumber += 1 }
                 return WorkoutStepCard(
                     id: stepNumber, kind: step.kind, title: step.kind.displayName,
-                    detail: goalText(step.goal), target: step.target.map(targetText)
+                    detail: goalText(step.goal), end: end(of: step.goal), target: step.target.map(targetText)
                 )
             }
             return WorkoutBlockCard(id: index, repetitions: block.repetitions, steps: steps)
+        }
+    }
+
+    /// The kind of end a goal is.
+    static func end(of goal: StepGoal) -> WorkoutStepCard.End {
+        switch goal {
+        case .time: .time
+        case .distance: .distance
+        case .open: .open
         }
     }
 

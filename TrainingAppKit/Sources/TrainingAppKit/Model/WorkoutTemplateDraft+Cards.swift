@@ -8,17 +8,18 @@ extension WorkoutTemplateDraft {
     /// - Parameter number: The step's position among all steps, used as the card's id.
     public func card(for step: Step, number: Int) -> WorkoutStepCard {
         let detail: String
+        let end: WorkoutStepCard.End
         switch step.goal {
-        case .time(let source): detail = text(source, unit: .minutes)
-        case .distance(let source): detail = text(source, unit: .meters)
-        case .open: detail = "Open"
+        case .time(let source): (detail, end) = (text(source, unit: .minutes), .time)
+        case .distance(let source): (detail, end) = (text(source, unit: .meters), .distance)
+        case .open: (detail, end) = ("Open", .open)
         }
         let target: String? = switch step.target {
         case .none: nil
         case .zone(let zone): WorkoutBlockCard.targetText(.heartRateZone(zone))
         case .preserved(let target): WorkoutBlockCard.targetText(target)
         }
-        return WorkoutStepCard(id: number, kind: step.kind, title: step.kind.displayName, detail: detail, target: target)
+        return WorkoutStepCard(id: number, kind: step.kind, title: step.kind.displayName, detail: detail, end: end, target: target)
     }
 
     /// How a block's repeat count reads in its "Repeat" header, e.g. "5" or "Repeats · 8".

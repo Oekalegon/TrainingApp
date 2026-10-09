@@ -685,10 +685,10 @@ sport's section with a "Custom" label; a swipe on a row deletes one.
 **Step cards (MVP2-143).** A workout's steps are drawn after how the Fitness app shows a structured
 workout, in the detail screen and the editor alike (`WorkoutStepCardList`, fed by
 `WorkoutBlockCard.cards(for:)`): each step an outlined card with its role icon (chevrons up for work
-and down for recovery, a flame for warm-up, a cool-down figure), its name, what ends it ("5:00",
+and down for recovery, dotted chevrons pointing up-right for warm-up and down-right for cool-down), its name, what ends it ("5:00",
 "400 m", "Open") and, on the right, the zone it aims for ("HR Zone 2", or "RPE 10" and so on). A block
 that repeats, or holds several steps, is one "Repeat N" card in purple holding its steps between
-dividers; a single step that runs once is a plain card. The colours and icons are never the only cue:
+dividers; a single step that runs once is a plain card. The icon's colour says what ends the step: yellow for a duration, blue for a distance, green when it's open. The colours and icons are never the only cue:
 every card reads out as "Work, 5:00, HR Zone 2". The same card views are meant for the planned-workout
 and linked-activity redesign (MVP2-144).
 
