@@ -163,13 +163,13 @@ extension View {
 
 extension StepKind {
     /// An SF Symbol for the role, after the Fitness app's: solid double chevrons up for effort and down
-    /// for recovery, dotted ones pointing up-right for the warm-up and down-right for the cool-down.
+    /// for recovery, ones pointing up-right for the warm-up and down-right for the cool-down.
     var symbolName: String {
         switch self {
-        case .warmup: "chevron.up.right.dotted.2"
+        case .warmup: "chevron.up.right.2"
         case .work: "chevron.up.2"
         case .recovery: "chevron.down.2"
-        case .cooldown: "chevron.down.right.dotted.2"
+        case .cooldown: "chevron.down.right.2"
         }
     }
 
