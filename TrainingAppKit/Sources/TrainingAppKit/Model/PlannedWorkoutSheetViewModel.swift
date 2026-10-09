@@ -75,8 +75,8 @@ public final class PlannedWorkoutSheetViewModel {
     /// The edited workout's name, shown read-only in edit mode.
     public var editedWorkoutName: String? { editedWorkout?.name }
 
-    /// The templates offered in the picker — the built-in library only; MVP2-15 doesn't add custom
-    /// template persistence.
+    /// The templates offered in the picker: the built-in library and the athlete's own
+    /// (``TrainingModel/libraryTemplates``), as of when the sheet opened.
     public let templates: [WorkoutTemplate]
 
     /// The day this workout is being planned for.
@@ -193,7 +193,7 @@ public final class PlannedWorkoutSheetViewModel {
     /// - Parameters:
     ///   - model: The training model to save the instantiated workout/plan into.
     ///   - date: The day this workout is being planned for; defaults to `.now`'s calendar day.
-    ///   - templates: The templates offered in the picker; defaults to the built-in library.
+    ///   - templates: The templates offered in the picker; defaults to ``TrainingModel/libraryTemplates``.
     ///   - estimator: Estimates ``expectedLoad`` from a step's target intensity; defaults to the
     ///     same ``TRIMPPlanEstimator`` `TrainingModel` itself uses, so the preview agrees with what
     ///     the fitness chart will show once this workout is scheduled.
@@ -205,13 +205,13 @@ public final class PlannedWorkoutSheetViewModel {
     public init(
         model: TrainingModel,
         date: Date = .now,
-        templates: [WorkoutTemplate] = BuiltInWorkoutTemplates.all,
+        templates: [WorkoutTemplate]? = nil,
         estimator: any PlannedLoadEstimator = TRIMPPlanEstimator(),
         scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSchedulers.live
     ) {
         self.model = model
         self.date = date
-        self.templates = templates
+        self.templates = templates ?? model.libraryTemplates
         self.estimator = estimator
         self.scheduler = scheduler
         self.editingPlan = nil
@@ -230,13 +230,14 @@ public final class PlannedWorkoutSheetViewModel {
     public init(
         model: TrainingModel,
         editing plan: PlannedActivity,
-        templates: [WorkoutTemplate] = BuiltInWorkoutTemplates.all,
+        templates: [WorkoutTemplate]? = nil,
         estimator: any PlannedLoadEstimator = TRIMPPlanEstimator(),
         scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSchedulers.live
     ) {
         self.model = model
         self.date = plan.date
         self.loadOverride = plan.expectedLoadOverride
+        let templates = templates ?? model.libraryTemplates
         self.templates = templates
         self.estimator = estimator
         self.scheduler = scheduler
