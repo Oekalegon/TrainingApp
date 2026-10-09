@@ -125,16 +125,14 @@ struct WorkoutTemplateEditorSheet: View {
                 // One card for both, after the Fitness app's creator.
                 VStack(spacing: 0) {
                     Button {
-                        viewModel.addBlock()
-                        expand(viewModel.draft.blocks.last?.steps.last?.id)
+                        expand(viewModel.addBlock())
                     } label: {
                         WorkoutAddCardLabel(title: "Add Step", symbolName: "plus")
                     }
                     .buttonStyle(.plain)
                     Divider()
                     Button {
-                        viewModel.addRepeat()
-                        expand(viewModel.draft.blocks.last?.steps.first?.id)
+                        expand(viewModel.addRepeat())
                     } label: {
                         WorkoutAddCardLabel(title: "Add Repeat", symbolName: "repeat")
                     }
@@ -191,7 +189,6 @@ struct WorkoutTemplateEditorSheet: View {
         if expandedStepID == step.id, let binding = stepBinding(blockID: block.id, stepID: step.id) {
             WorkoutTemplateStepInlineEditor(
                 viewModel: viewModel, step: binding, card: card,
-                repetitions: block.steps.count == 1 ? blockBinding(block.id)?.repetitions : nil,
                 onCollapse: { expand(nil) },
                 onDelete: {
                     expand(nil)
@@ -257,9 +254,6 @@ private struct WorkoutTemplateStepInlineEditor: View {
     let viewModel: WorkoutTemplateEditorViewModel
     @Binding var step: WorkoutTemplateDraft.Step
     let card: WorkoutStepCard
-    /// How often the step's block repeats, when the block holds only this step (a block of several is
-    /// set from its "Repeat" header); lets one step carry both a duration and a repeat parameter.
-    let repetitions: Binding<WorkoutTemplateDraft.Source>?
     let onCollapse: () -> Void
     let onDelete: () -> Void
 
@@ -362,15 +356,6 @@ private struct WorkoutTemplateStepInlineEditor: View {
                 }
             case .open:
                 EmptyView()
-            }
-            if let repetitions {
-                Divider()
-                row {
-                    SourceEditor(
-                        viewModel: viewModel, title: "Repeats", source: repetitions, unit: .count,
-                        suggestedName: "\(step.kind.displayName) repeats"
-                    )
-                }
             }
             Divider()
             row {
@@ -517,6 +502,8 @@ private struct SourceEditor: View {
     var body: some View {
         VStack(spacing: 8) {
             LabeledContent(title) {
+                // No animation: switching Fixed / parameter inserts and removes rows below, and the
+                // menu's label otherwise slid to the edge for a moment.
                 Picker(title, selection: choice) {
                     Text("Fixed").tag(Choice.fixed)
                     Text("New Parameter").tag(Choice.new)
@@ -526,6 +513,7 @@ private struct SourceEditor: View {
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
+                .transaction { $0.animation = nil }
             }
             switch source {
             case .fixed:

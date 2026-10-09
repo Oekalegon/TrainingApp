@@ -265,17 +265,27 @@ struct WorkoutTemplateDetailView: View {
                 // A built-in workout can't be changed, only copied; "Duplicate" is the way to
                 // start from one.
                 Section {
+                    // Centred, like "Plan This Workout" above.
                     if entry.isCustom {
-                        Button("Edit", systemImage: "pencil") {
+                        Button {
                             editor = viewModel.makeEditor(for: entry.template)
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                                .frame(maxWidth: .infinity)
                         }
                     }
-                    Button("Duplicate", systemImage: "plus.square.on.square") {
+                    Button {
                         editor = viewModel.makeEditorDuplicating(entry.template)
+                    } label: {
+                        Label("Duplicate", systemImage: "plus.square.on.square")
+                            .frame(maxWidth: .infinity)
                     }
                     if entry.isCustom {
-                        Button("Delete", systemImage: "trash", role: .destructive) {
+                        Button(role: .destructive) {
                             isConfirmingDelete = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
                         }
                     }
                 } footer: {

@@ -699,7 +699,7 @@ In the editor a card is a button: tapping a step expands it in place, after the 
 and collapses the one that was open (tapping the open step's header collapses it). The open step shows,
 inside its card, a Work / Recovery switch (a warm-up or cool-down gets a menu of all four roles
 instead), Goal Type (time, distance or open), the duration or distance (fixed or one of the
-parameters), the Target zone and a red "Delete Step" row. A new step opens at once. Tapping a "Repeat"
+parameters), the Target zone and a red "Delete Step" row. A new step opens at once. A new template starts with a 5-minute Zone 1 warm-up, a 10-minute Zone 2 work step and a 5-minute Zone 1 cool-down, which can be changed or removed like any step; steps and repeats added later go before a closing cool-down. Tapping a "Repeat"
 header opens the block's repeats screen, which also removes the block. Adding is done with cards too:
 one card holds "+ Add Step", which adds a step that runs once, and "Add Repeat", which adds a repeating
 work and recovery pair (four times, to edit); a repeat card has an "Add Step" row of its own for adding
@@ -713,13 +713,13 @@ nothing is saved until the check mark:
 
 - **Workout**: name and sport.
 - **Parameters** belong to the step that uses them (there is no separate list). In an open step, its
-  duration or distance, and, for a block holding only that step, its repeats, each offer "Fixed", "New
-  Parameter" or a parameter of the same kind another step has (to share one slider). Choosing New
-  Parameter names it after the step ("Recovery duration"), makes the value a parameter and shows its
-  name, starting value, lowest and highest right under it; each becomes a slider in the planned-workout
-  sheet. A step can therefore have several, e.g. a duration and a repeat count; a block of several steps
-  sets its repeats from its "Repeat" header, in the same way. Going back to "Fixed", or removing the
-  step or block, drops a parameter nothing else uses, so no slider is left that does nothing.
+  duration or distance offers "Fixed", "New Parameter" or a parameter of the same kind another step has
+  (to share one slider). Choosing New Parameter names it after the step ("Recovery duration"), makes
+  the value a parameter and shows its name, starting value, lowest and highest right under it; each
+  becomes a slider in the planned-workout sheet. The repeat count of a block is set from its "Repeat"
+  header, in the same way; an ordinary step has no repeats of its own. Going back to "Fixed", or
+  removing the step or block, drops a parameter nothing else uses, so no slider is left that does
+  nothing.
 - **Steps**: the block cards above. A block has repeats (fixed or a count parameter) and steps. A step has a kind
   (warmup, work, recovery, cooldown), an end (time, distance or open; time and distance fixed or taken
   from a matching parameter) and a heart-rate zone target or none. Pace, power, RPE and heart-rate-range

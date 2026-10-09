@@ -122,4 +122,43 @@ struct WorkoutBlockCardTests {
         editor.removeSteps(at: IndexSet(integer: 0), fromBlock: editor.draft.blocks[0].id)
         #expect(editor.draft.blocks.isEmpty)
     }
+
+    @Test("a new template starts with a 5 minute warm-up, a work step and a 5 minute cool-down")
+    func starterDraft() throws {
+        var draft = WorkoutTemplateDraft.starter()
+        draft.name = "x"
+
+        let template = try #require(draft.build())
+
+        #expect(template.blocks.map { $0.steps[0].kind } == [.warmup, .work, .cooldown])
+        #expect(template.blocks[0].steps[0].goal == .time(.fixed(300)))
+        #expect(template.blocks[2].steps[0].goal == .time(.fixed(300)))
+        #expect(template.blocks[0].steps[0].target == .heartRateZone(1))
+    }
+
+    @Test("steps and repeats added to a new template go before its closing cool-down")
+    @MainActor
+    func additionsStayBeforeCooldown() async {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store, templateStore: store
+        )
+        let editor = WorkoutTemplateEditorViewModel(
+            model: TrainingModel(stores: stores, athlete: .fixture()), draft: .starter()
+        )
+
+        let step = editor.addBlock()
+        let repeatStep = editor.addRepeat()
+
+        #expect(editor.draft.blocks.map { $0.steps[0].kind } == [.warmup, .work, .work, .work, .cooldown])
+        #expect(editor.draft.blocks[2].steps[0].id == step)
+        #expect(editor.draft.blocks[3].steps[0].id == repeatStep)
+        #expect(editor.draft.blocks[3].repetitions == .fixed(4))
+        // The cool-down can be removed like any step, after which additions go last again.
+        editor.removeBlock(id: editor.draft.blocks[4].id)
+        editor.addBlock()
+        #expect(editor.draft.blocks.count == 5)
+        #expect(editor.draft.blocks.last?.steps[0].kind == .work)
+    }
 }

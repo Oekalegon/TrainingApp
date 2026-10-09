@@ -135,21 +135,36 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
 
     // MARK: Blocks and steps
 
-    /// Adds a block with one step after the others: a step that runs once.
-    public func addBlock() {
-        draft.blocks.append(.init(steps: [.standard]))
+    /// Adds a block with one step: a step that runs once. It goes after the others, except that a
+    /// cool-down closing the workout stays last.
+    ///
+    /// - Returns: The new step's id, so the editor can open it.
+    @discardableResult
+    public func addBlock() -> UUID {
+        let step = WorkoutTemplateDraft.Step.standard
+        draft.blocks.insert(.init(steps: [step]), at: insertionIndex)
+        return step.id
     }
 
-    /// Adds a block that repeats a hard step and a recovery step four times after the others, which
-    /// the athlete then edits (the creator's "Add Repeat").
-    public func addRepeat() {
-        draft.blocks.append(.init(
-            steps: [
-                .init(kind: .work, goal: .time(.fixed(1)), target: .zone(4)),
-                .init(kind: .recovery, goal: .time(.fixed(1)), target: .zone(1))
-            ],
-            repetitions: .fixed(4)
-        ))
+    /// Adds a block that repeats a hard step and a recovery step four times (the creator's "Add
+    /// Repeat"), which the athlete then edits; placed like ``addBlock()``.
+    ///
+    /// - Returns: The first new step's id, so the editor can open it.
+    @discardableResult
+    public func addRepeat() -> UUID {
+        let work = WorkoutTemplateDraft.Step(kind: .work, goal: .time(.fixed(1)), target: .zone(4))
+        let recovery = WorkoutTemplateDraft.Step(kind: .recovery, goal: .time(.fixed(1)), target: .zone(1))
+        draft.blocks.insert(.init(steps: [work, recovery], repetitions: .fixed(4)), at: insertionIndex)
+        return work.id
+    }
+
+    /// Where a new block goes: at the end, or before a cool-down that ends the workout, since nothing
+    /// added should land after the cool-down.
+    private var insertionIndex: Int {
+        if let last = draft.blocks.last, last.steps.count == 1, last.steps[0].kind == .cooldown {
+            return draft.blocks.count - 1
+        }
+        return draft.blocks.count
     }
 
     /// Makes the block with id `blockID` repeat `count` times; a step that ran once then shows as a

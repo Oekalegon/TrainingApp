@@ -145,6 +145,17 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         WorkoutTemplateDraft(blocks: [Block(steps: [Step.standard])])
     }
 
+    /// A draft for a new template, as the creator starts it: a 5-minute Zone 1 warm-up, a 10-minute Zone 2
+    /// work step and a 5-minute Zone 1 cool-down, like the built-in runs. The athlete can change or remove
+    /// any of them.
+    public static func starter() -> WorkoutTemplateDraft {
+        WorkoutTemplateDraft(blocks: [
+            Block(steps: [Step(kind: .warmup, goal: .time(.fixed(5)), target: .zone(1))]),
+            Block(steps: [Step.standard]),
+            Block(steps: [Step(kind: .cooldown, goal: .time(.fixed(5)), target: .zone(1))])
+        ])
+    }
+
     /// The editor's number for a stored value of `unit`: minutes for a duration kept in seconds.
     static func displayValue(_ stored: Double, unit: ParameterUnit) -> Double {
         unit == .minutes ? stored / 60 : stored

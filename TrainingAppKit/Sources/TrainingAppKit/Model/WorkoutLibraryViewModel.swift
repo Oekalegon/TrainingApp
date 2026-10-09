@@ -202,7 +202,7 @@ public final class WorkoutLibraryViewModel {
 
     /// The editor for a new template.
     public func makeEditorForNewTemplate() -> WorkoutTemplateEditorViewModel {
-        makeEditor(draft: .blank(), isNew: true)
+        makeEditor(draft: .starter(), isNew: true)
     }
 
     /// The editor for `template`: for one of the athlete's own, one that replaces it when saved;
