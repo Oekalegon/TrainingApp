@@ -214,9 +214,12 @@ struct WorkoutTemplateDetailView: View {
 
                 if !entry.blockCards.isEmpty {
                     Section("Steps") {
+                        WorkoutStepListSpacerRow()
                         WorkoutStepCardList(blocks: entry.blockCards)
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        WorkoutStepListSpacerRow()
                     }
                 }
 
@@ -285,6 +288,8 @@ struct WorkoutTemplateDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        // The step list's spacer rows are one point high (``WorkoutStepListSpacerRow``).
+        .environment(\.defaultMinListRowHeight, 1)
         .navigationTitle(entry?.template.name ?? "Workout")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

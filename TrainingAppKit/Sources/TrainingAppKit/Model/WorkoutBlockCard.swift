@@ -87,14 +87,14 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// The symbol before a target: a heart for heart rate, a shoe for pace, a bolt for power and a
-    /// scope for a perceived-effort target.
+    /// The symbol before a target: a heart for heart rate, a shoe for pace, a lightning bolt for
+    /// perceived effort and a horizontal bolt for power.
     static func targetSymbol(_ target: IntensityTarget) -> String {
         switch target {
         case .heartRateZone, .heartRateRange: "heart.fill"
         case .pace: paceSymbol
-        case .power: "bolt.fill"
-        case .rpe: "scope"
+        case .power: "bolt.horizontal.fill"
+        case .rpe: "bolt.fill"
         }
     }
 

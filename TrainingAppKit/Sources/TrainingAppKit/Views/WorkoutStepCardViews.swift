@@ -130,13 +130,12 @@ struct WorkoutStepCardView: View {
                 HStack(spacing: 4) {
                     if let symbol = step.targetSymbol {
                         Image(systemName: symbol)
-                            .foregroundStyle(.primary)
                             .accessibilityHidden(true)
                     }
                     Text(target)
-                        .foregroundStyle(.secondary)
                 }
                 .font(.subheadline)
+                .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 16)
@@ -187,5 +186,21 @@ extension WorkoutStepCard.End {
         case .distance: .blue
         case .open: .green
         }
+    }
+}
+
+/// An invisible, one-point list row to put before and after a list of step cards.
+///
+/// A grouped list rounds and clips the first row of a section at its top corners and the last at its
+/// bottom corners, even with a clear background, which thinned the border of the first and last card
+/// at those corners. With a spacer row at each end, no card is the first or last row.
+struct WorkoutStepListSpacerRow: View {
+    var body: some View {
+        Color.clear
+            .frame(height: 1)
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .accessibilityHidden(true)
     }
 }

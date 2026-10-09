@@ -63,6 +63,8 @@ struct WorkoutTemplateEditorSheet: View {
             .confirmationDialog("Discard your changes?", isPresented: $isConfirmingDiscard, titleVisibility: .visible) {
                 Button("Discard Changes", role: .destructive) { dismiss() }
             }
+            // The step list's spacer rows are one point high (``WorkoutStepListSpacerRow``).
+            .environment(\.defaultMinListRowHeight, 1)
             .navigationTitle(viewModel.title)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -141,6 +143,7 @@ struct WorkoutTemplateEditorSheet: View {
     /// "Repeat" header opens the block's repeats, and "Add Step" / "Add Repeat" are cards of their own.
     private var stepsSection: some View {
         Section {
+            WorkoutStepListSpacerRow()
             VStack(spacing: 10) {
                 ForEach(viewModel.draft.blocks) { block in
                     let firstNumber = viewModel.draft.blocks.prefix { $0.id != block.id }.reduce(0) { $0 + $1.steps.count }
@@ -161,6 +164,7 @@ struct WorkoutTemplateEditorSheet: View {
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+            WorkoutStepListSpacerRow()
         } header: {
             Text("Steps")
         } footer: {

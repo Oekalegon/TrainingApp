@@ -35,9 +35,9 @@ struct WorkoutBlockCardTests {
         #expect(steps.map(\.detail) == ["5:00", "400 m", "Open", "Open"])
         #expect(steps.map(\.target) == ["HR Zone 1", "140–150 bpm", nil, "RPE 3"])
         #expect(steps.map(\.end) == [.time, .distance, .open, .open])
-        #expect(steps.map(\.targetSymbol) == ["heart.fill", "heart.fill", nil, "scope"])
+        #expect(steps.map(\.targetSymbol) == ["heart.fill", "heart.fill", nil, "bolt.fill"])
         #expect(WorkoutBlockCard.targetSymbol(.pace(3.0...3.5)) == WorkoutBlockCard.paceSymbol)
-        #expect(WorkoutBlockCard.targetSymbol(.power(200...250)) == "bolt.fill")
+        #expect(WorkoutBlockCard.targetSymbol(.power(200...250)) == "bolt.horizontal.fill")
         // Several steps in one block belong together even when it runs once.
         #expect(WorkoutBlockCard.cards(for: blocks)[0].isGroup)
     }
