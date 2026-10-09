@@ -138,6 +138,12 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
         draft.blocks[index].steps.remove(atOffsets: offsets)
     }
 
+    /// Removes the step with id `stepID` from the block with id `blockID`.
+    public func removeStep(id stepID: UUID, fromBlock blockID: UUID) {
+        guard let index = draft.blocks.firstIndex(where: { $0.id == blockID }) else { return }
+        draft.blocks[index].steps.removeAll { $0.id == stepID }
+    }
+
     /// Moves the steps at `source` to `destination` within the block with id `blockID`.
     public func moveSteps(from source: IndexSet, to destination: Int, inBlock blockID: UUID) {
         guard let index = draft.blocks.firstIndex(where: { $0.id == blockID }) else { return }

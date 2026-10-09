@@ -682,6 +682,22 @@ and **Duplicate** (any template). Built-in templates are read-only: Duplicate op
 `WorkoutTemplateStore` (a synced `WorkoutTemplateRecord`) and shown after the built-in ones in their
 sport's section with a "Custom" label; a swipe on a row deletes one.
 
+**Step cards (MVP2-143).** A workout's steps are drawn after how the Fitness app shows a structured
+workout, in the detail screen and the editor alike (`WorkoutStepCardList`, fed by
+`WorkoutBlockCard.cards(for:)`): each step an outlined card with its role icon (chevrons up for work
+and down for recovery, a flame for warm-up, a cool-down figure), its name, what ends it ("5:00",
+"400 m", "Open") and, on the right, the zone it aims for ("HR Zone 2", or "RPE 10" and so on). A block
+that repeats, or holds several steps, is one "Repeat N" card in purple holding its steps between
+dividers; a single step that runs once is a plain card. The colours and icons are never the only cue:
+every card reads out as "Work, 5:00, HR Zone 2". The same card views are meant for the planned-workout
+and linked-activity redesign (MVP2-144).
+
+In the editor a card is a button: tapping a step opens its own screen (role, end, value, zone,
+remove), tapping a "Repeat" header opens the block's repeats; under each block, Add Step, Repeats and
+remove buttons; touching and holding a step moves or removes it. A value that comes from a parameter
+reads "Effort · 1:00" (the parameter's name and starting value). A number field ignores a write-back
+that only rounds what it shows, so merely opening a step doesn't change it.
+
 The editor works on a `WorkoutTemplateDraft`, in the units it shows (minutes, metres, counts), and
 nothing is saved until the check mark:
 
@@ -689,7 +705,7 @@ nothing is saved until the check mark:
 - **Parameters**: a name, a starting value and a lowest and highest value, for a duration, a distance or
   a repeat count. Each becomes a slider in the planned-workout sheet. Removing one leaves what used it
   at the parameter's starting value.
-- **Blocks**: the repeats (fixed or a count parameter) and the block's steps. A step has a kind
+- **Steps**: the block cards above. A block has repeats (fixed or a count parameter) and steps. A step has a kind
   (warmup, work, recovery, cooldown), an end (time, distance or open; time and distance fixed or taken
   from a matching parameter) and a heart-rate zone target or none. Pace, power, RPE and heart-rate-range
   targets can't be set here; a template that has one keeps it.

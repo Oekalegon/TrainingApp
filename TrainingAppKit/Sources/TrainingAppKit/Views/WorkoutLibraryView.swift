@@ -212,11 +212,11 @@ struct WorkoutTemplateDetailView: View {
                     }
                 }
 
-                if !entry.stepLines.isEmpty {
+                if !entry.blockCards.isEmpty {
                     Section("Steps") {
-                        ForEach(Array(entry.stepLines.enumerated()), id: \.offset) { _, line in
-                            Text(line)
-                        }
+                        WorkoutStepCardList(blocks: entry.blockCards)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
                     }
                 }
 

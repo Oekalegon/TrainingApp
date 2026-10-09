@@ -9,6 +9,23 @@ struct WorkoutTemplateEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingSaveError = false
     @State private var isConfirmingDiscard = false
+    /// The step or block whose own screen is pushed.
+    @State private var editingStep: StepRef?
+    @State private var editingBlock: BlockRef?
+
+    private struct StepRef: Hashable { let blockID: UUID; let stepID: UUID }
+    private struct BlockRef: Hashable { let blockID: UUID }
+
+    private func blockBinding(_ id: UUID) -> Binding<WorkoutTemplateDraft.Block>? {
+        guard let index = viewModel.draft.blocks.firstIndex(where: { $0.id == id }) else { return nil }
+        return $viewModel.draft.blocks[index]
+    }
+
+    private func stepBinding(_ ref: StepRef) -> Binding<WorkoutTemplateDraft.Step>? {
+        guard let block = blockBinding(ref.blockID),
+              let index = block.wrappedValue.steps.firstIndex(where: { $0.id == ref.stepID }) else { return nil }
+        return block.steps[index]
+    }
 
     var body: some View {
         let summary = viewModel.summary
@@ -25,24 +42,21 @@ struct WorkoutTemplateEditorSheet: View {
 
                 parameterSection
 
-                ForEach(Array($viewModel.draft.blocks.enumerated()), id: \.element.id) { index, $block in
-                    WorkoutTemplateBlockSection(
-                        viewModel: viewModel, block: $block, number: index + 1,
-                        parameters: viewModel.draft.parameters
-                    )
-                }
-
-                Section {
-                    Button {
-                        viewModel.addBlock()
-                    } label: {
-                        Label("Add Block", systemImage: "plus")
-                    }
-                } footer: {
-                    Text("A block repeats its steps, e.g. a block of work and recovery repeated 6 times.")
-                }
+                stepsSection
 
                 summarySection(summary)
+            }
+            .navigationDestination(item: $editingStep) { ref in
+                if let step = stepBinding(ref) {
+                    WorkoutTemplateStepForm(
+                        viewModel: viewModel, blockID: ref.blockID, step: step, parameters: viewModel.draft.parameters
+                    )
+                }
+            }
+            .navigationDestination(item: $editingBlock) { ref in
+                if let block = blockBinding(ref.blockID) {
+                    WorkoutTemplateBlockForm(viewModel: viewModel, block: block, parameters: viewModel.draft.parameters)
+                }
             }
             // Swiping the sheet away would lose a long edit without asking.
             .interactiveDismissDisabled(viewModel.hasChanges)
@@ -123,6 +137,89 @@ struct WorkoutTemplateEditorSheet: View {
         }
     }
 
+    /// The workout's steps as cards, like the Fitness app's list: tapping a step opens its fields, the
+    /// "Repeat" header or the Repeats button opens the block's.
+    private var stepsSection: some View {
+        Section {
+            ForEach(viewModel.draft.blocks) { block in
+                let firstNumber = viewModel.draft.blocks.prefix { $0.id != block.id }.reduce(0) { $0 + $1.steps.count }
+                VStack(spacing: 8) {
+                    blockCard(block, firstNumber: firstNumber)
+                    HStack {
+                        Button("Add Step", systemImage: "plus") { viewModel.addStep(toBlock: block.id) }
+                        Button("Repeats", systemImage: "repeat") { editingBlock = BlockRef(blockID: block.id) }
+                        Spacer()
+                        Button("Remove Block", systemImage: "trash", role: .destructive) {
+                            viewModel.removeBlock(id: block.id)
+                        }
+                        .labelStyle(.iconOnly)
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.subheadline)
+                }
+                .padding(.vertical, 6)
+            }
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            Button {
+                viewModel.addBlock()
+            } label: {
+                Label("Add Block", systemImage: "plus")
+            }
+        } header: {
+            Text("Steps")
+        } footer: {
+            Text("A block repeats its steps, e.g. work and recovery repeated 6 times. Touch and hold a step to move or remove it.")
+        }
+    }
+
+    @ViewBuilder
+    private func blockCard(_ block: WorkoutTemplateDraft.Block, firstNumber: Int) -> some View {
+        let draft = viewModel.draft
+        let isGroup = block.steps.count > 1 || block.repetitions != .fixed(1)
+        let cards = block.steps.enumerated().map { draft.card(for: $1, number: firstNumber + $0) }
+        if isGroup {
+            WorkoutRepeatCard(steps: cards) {
+                Button { editingBlock = BlockRef(blockID: block.id) } label: {
+                    WorkoutRepeatHeader(count: draft.repetitionsText(block))
+                }
+                .buttonStyle(.plain)
+            } stepView: { card in
+                stepButton(block: block, card: card, index: card.id - firstNumber)
+            }
+        } else {
+            VStack(spacing: 10) {
+                ForEach(cards) { card in
+                    stepButton(block: block, card: card, index: card.id - firstNumber).cardStyle()
+                }
+            }
+        }
+    }
+
+    private func stepButton(block: WorkoutTemplateDraft.Block, card: WorkoutStepCard, index: Int) -> some View {
+        let step = block.steps[index]
+        return Button { editingStep = StepRef(blockID: block.id, stepID: step.id) } label: {
+            WorkoutStepCardView(step: card)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if index > 0 {
+                Button("Move Up", systemImage: "arrow.up") {
+                    viewModel.moveSteps(from: IndexSet(integer: index), to: index - 1, inBlock: block.id)
+                }
+            }
+            if index < block.steps.count - 1 {
+                Button("Move Down", systemImage: "arrow.down") {
+                    viewModel.moveSteps(from: IndexSet(integer: index), to: index + 2, inBlock: block.id)
+                }
+            }
+            Button("Remove Step", systemImage: "trash", role: .destructive) {
+                viewModel.removeSteps(at: IndexSet(integer: index), fromBlock: block.id)
+            }
+        }
+    }
+
     @ViewBuilder
     private func summarySection(_ summary: WorkoutTemplateEditorViewModel.Summary) -> some View {
         let issues = summary.issues
@@ -164,44 +261,13 @@ private struct WorkoutTemplateParameterEditor: View {
     }
 }
 
-/// One block: how often it repeats, its steps, and buttons to add a step or remove the block.
-private struct WorkoutTemplateBlockSection: View {
+/// A step's own screen: its role, what ends it and the zone it aims for.
+private struct WorkoutTemplateStepForm: View {
     let viewModel: WorkoutTemplateEditorViewModel
-    @Binding var block: WorkoutTemplateDraft.Block
-    let number: Int
-    let parameters: [WorkoutTemplateDraft.Parameter]
-
-    var body: some View {
-        Section {
-            SourceEditor(
-                title: "Repeats", source: $block.repetitions, unit: .count,
-                parameters: parameters.filter { $0.unit == .count }
-            )
-            ForEach($block.steps) { $step in
-                WorkoutTemplateStepEditor(step: $step, parameters: parameters)
-            }
-            .onDelete { viewModel.removeSteps(at: $0, fromBlock: block.id) }
-            .onMove { viewModel.moveSteps(from: $0, to: $1, inBlock: block.id) }
-            Button {
-                viewModel.addStep(toBlock: block.id)
-            } label: {
-                Label("Add Step", systemImage: "plus")
-            }
-            Button(role: .destructive) {
-                viewModel.removeBlock(id: block.id)
-            } label: {
-                Label("Remove Block", systemImage: "trash")
-            }
-        } header: {
-            Text("Block \(number)")
-        }
-    }
-}
-
-/// One step: its role, what ends it and the zone it aims for.
-private struct WorkoutTemplateStepEditor: View {
+    let blockID: UUID
     @Binding var step: WorkoutTemplateDraft.Step
     let parameters: [WorkoutTemplateDraft.Parameter]
+    @Environment(\.dismiss) private var dismiss
 
     private enum GoalKind: Hashable { case time, distance, open }
 
@@ -234,42 +300,54 @@ private struct WorkoutTemplateStepEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Picker("Step", selection: $step.kind) {
-                ForEach([StepKind.warmup, .work, .recovery, .cooldown], id: \.self) { kind in
-                    Text(kind.displayName).tag(kind)
+        Form {
+            Section {
+                Picker("Step", selection: $step.kind) {
+                    ForEach([StepKind.warmup, .work, .recovery, .cooldown], id: \.self) { kind in
+                        Label(kind.displayName, systemImage: kind.symbolName).tag(kind)
+                    }
                 }
-            }
-            Picker("Ends after", selection: goalKind) {
-                Text("Time").tag(GoalKind.time)
-                Text("Distance").tag(GoalKind.distance)
-                Text("Open").tag(GoalKind.open)
-            }
-            switch step.goal {
-            case .time:
-                SourceEditor(
-                    title: "Duration", source: timeSource, unit: .minutes,
-                    parameters: parameters.filter { $0.unit == .minutes }
-                )
-            case .distance:
-                SourceEditor(
-                    title: "Distance", source: distanceSource, unit: .meters,
-                    parameters: parameters.filter { $0.unit == .meters }
-                )
-            case .open:
-                EmptyView()
-            }
-            if case .preserved = step.target {
-                LabeledContent("Target", value: "Custom target")
-            } else {
-                Picker("Target", selection: zone) {
-                    Text("None").tag(0)
-                    ForEach(HeartRateZone.allCases, id: \.rawValue) { zone in
-                        Text("Zone \(zone.rawValue) · \(zone.displayName)").tag(zone.rawValue)
+                Picker("Ends after", selection: goalKind) {
+                    Text("Time").tag(GoalKind.time)
+                    Text("Distance").tag(GoalKind.distance)
+                    Text("Open").tag(GoalKind.open)
+                }
+                switch step.goal {
+                case .time:
+                    SourceEditor(
+                        title: "Duration", source: timeSource, unit: .minutes,
+                        parameters: parameters.filter { $0.unit == .minutes }
+                    )
+                case .distance:
+                    SourceEditor(
+                        title: "Distance", source: distanceSource, unit: .meters,
+                        parameters: parameters.filter { $0.unit == .meters }
+                    )
+                case .open:
+                    EmptyView()
+                }
+                if case .preserved = step.target {
+                    LabeledContent("Target", value: "Custom target")
+                } else {
+                    Picker("Target", selection: zone) {
+                        Text("None").tag(0)
+                        ForEach(HeartRateZone.allCases, id: \.rawValue) { zone in
+                            Text("HR Zone \(zone.rawValue) · \(zone.displayName)").tag(zone.rawValue)
+                        }
                     }
                 }
             }
+            Section {
+                Button("Remove Step", systemImage: "trash", role: .destructive) {
+                    dismiss()
+                    viewModel.removeStep(id: step.id, fromBlock: blockID)
+                }
+            }
         }
+        .navigationTitle(step.kind.displayName)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 
     private var timeSource: Binding<WorkoutTemplateDraft.Source> {
@@ -282,6 +360,37 @@ private struct WorkoutTemplateStepEditor: View {
         Binding {
             if case .distance(let source) = step.goal { source } else { .fixed(1000) }
         } set: { step.goal = .distance($0) }
+    }
+}
+
+/// A block's own screen: how often its steps repeat, and a way to remove it.
+private struct WorkoutTemplateBlockForm: View {
+    let viewModel: WorkoutTemplateEditorViewModel
+    @Binding var block: WorkoutTemplateDraft.Block
+    let parameters: [WorkoutTemplateDraft.Parameter]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Form {
+            Section {
+                SourceEditor(
+                    title: "Repeats", source: $block.repetitions, unit: .count,
+                    parameters: parameters.filter { $0.unit == .count }
+                )
+            } footer: {
+                Text("The block's steps run this many times in a row.")
+            }
+            Section {
+                Button("Remove Block", systemImage: "trash", role: .destructive) {
+                    dismiss()
+                    viewModel.removeBlock(id: block.id)
+                }
+            }
+        }
+        .navigationTitle("Repeats")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 }
 
@@ -335,9 +444,21 @@ private struct NumberField: View {
     @Binding var value: Double
     let unit: ParameterUnit
 
+    /// The field shows at most three decimals, and a text field can write what it shows back when it
+    /// loses focus: 8 seconds (0.1333 minutes) would become 0.133 without the athlete typing anything,
+    /// altering the template and counting as a change. A difference below what the field can show is
+    /// ignored.
+    private var guardedValue: Binding<Double> {
+        Binding {
+            value
+        } set: { newValue in
+            if abs(newValue - value) >= 0.0005 { value = newValue }
+        }
+    }
+
     var body: some View {
         HStack(spacing: 4) {
-            TextField("", value: $value, format: .number)
+            TextField("", value: guardedValue, format: .number)
                 .multilineTextAlignment(.trailing)
                 #if os(iOS)
                 .keyboardType(unit == .count ? .numberPad : .decimalPad)
@@ -375,17 +496,6 @@ private extension ParameterUnit {
         case .minutes: "min"
         case .meters: "m"
         case .count: "×"
-        }
-    }
-}
-
-private extension StepKind {
-    var displayName: String {
-        switch self {
-        case .warmup: "Warmup"
-        case .work: "Work"
-        case .recovery: "Recovery"
-        case .cooldown: "Cooldown"
         }
     }
 }
