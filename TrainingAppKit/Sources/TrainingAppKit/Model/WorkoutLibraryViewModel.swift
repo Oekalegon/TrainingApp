@@ -186,7 +186,7 @@ public final class WorkoutLibraryViewModel {
                 isCustom: customIDs.contains(template.id),
                 defaultTitle: template.defaultTitle(distanceSystem: distanceSystem),
                 stepLines: (workout?.blocks ?? []).map { PlannedWorkoutDetailViewModel.line(for: $0) },
-                blockCards: WorkoutBlockCard.cards(for: template),
+                blockCards: WorkoutBlockCard.cards(for: template, distanceSystem: distanceSystem),
                 expectedLoad: load?.value,
                 planCount: plans.count,
                 nextPlannedDate: plans

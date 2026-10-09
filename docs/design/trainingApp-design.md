@@ -709,7 +709,10 @@ lifts and follows the finger, and swaps places with each neighbour it passes the
 gesture of the editor's own rather than the system's drag and drop, since the cards are separate list
 rows whose positions it measures; the warm-up and cool-down never take part, and a step open for editing
 can't be dragged. Steps inside a repeat are moved from their touch-and-hold menu (Move Up, Move Down,
-Remove Step). A template needs at least one work or recovery step to be saved. Tapping a "Repeat" header opens the block's repeat count in place, the same way as a step's
+Remove Step). A card lifted by a gesture the system cancels is put back down, and VoiceOver users reorder
+with the "Move Up" and "Move Down" actions on each step or repeat. The step cards write distances by the
+same distance system as the default titles (the device's region unless a setting says otherwise), so the
+two never disagree. A template needs at least one work or recovery step to be saved. Tapping a "Repeat" header opens the block's repeat count in place, the same way as a step's
 duration: a "Repeats" row that says "Fixed" or "Parameter", with its value or parameter details under
 it on the lighter background, and a red "Delete Repeat" row; it closes the open step, and opening a
 step closes it. Adding is done with cards too:
@@ -729,8 +732,8 @@ nothing is saved until the check mark:
   summary under its label (the value, or the parameter's name, default and range); touching it, or
   switching it between fixed and parameter, opens it on a lighter background, with the details in a
   smaller font aligned with the label: "Value" for a fixed value, or "Name", "Default Value", "Minimum
-  Value" and "Maximum Value" for a parameter. Editing anything else in the step (its role, goal type
-  or target) closes it again. Switching to Parameter makes a parameter named after the step ("Recovery
+  Value" and "Maximum Value" for a parameter. Changing the step's role, goal type or target closes it
+  again (editing the parameter's own fields doesn't). Switching to Parameter makes a parameter named after the step ("Recovery
   duration") that starts at the fixed value, with a range of half to double it; switching back to
   Fixed keeps its default value. Each parameter becomes a slider in the planned-workout sheet. The
   repeat count of a block is set from its "Repeat" header, in the same way; an ordinary step has no

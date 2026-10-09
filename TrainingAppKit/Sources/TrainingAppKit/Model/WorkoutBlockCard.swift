@@ -57,14 +57,18 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
     /// The cards for `blocks`, numbering steps across the whole workout.
     ///
     /// - Parameter blocks: A workout's blocks, e.g. from ``WorkoutTemplate/instantiate(name:values:)``.
-    public static func cards(for blocks: [WorkoutBlock]) -> [WorkoutBlockCard] {
+    /// - Parameter distanceSystem: How distances are written; defaults to the device's measurement
+    ///   system, as for default titles (``WorkoutLibraryViewModel/distanceSystem``).
+    public static func cards(
+        for blocks: [WorkoutBlock], distanceSystem: DistanceSystem = .deviceDefault
+    ) -> [WorkoutBlockCard] {
         var stepNumber = 0
         return blocks.enumerated().map { index, block in
             let steps = block.steps.map { step in
                 defer { stepNumber += 1 }
                 return WorkoutStepCard(
                     id: stepNumber, kind: step.kind, title: step.kind.displayName,
-                    detail: goalText(step.goal), end: end(of: step.goal),
+                    detail: goalText(step.goal, distanceSystem: distanceSystem), end: end(of: step.goal),
                     target: step.target.map(targetText), targetSymbol: step.target.map(targetSymbol)
                 )
             }
@@ -76,10 +80,12 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
     /// distances and repeat counts (MVP2-143), so the detail screen shows where it can be tuned.
     ///
     /// - Parameter template: The template; one that can't be instantiated has no cards.
-    public static func cards(for template: WorkoutTemplate) -> [WorkoutBlockCard] {
+    public static func cards(
+        for template: WorkoutTemplate, distanceSystem: DistanceSystem = .deviceDefault
+    ) -> [WorkoutBlockCard] {
         guard let workout = try? template.instantiate() else { return [] }
         func name(_ key: String) -> String? { template.parameters.first { $0.key == key }?.name }
-        var cards = cards(for: workout.blocks)
+        var cards = cards(for: workout.blocks, distanceSystem: distanceSystem)
         for (blockIndex, block) in template.blocks.enumerated() where blockIndex < cards.count {
             if case .parameter(let key) = block.repetitions { cards[blockIndex].repetitionsParameterName = name(key) }
             for (stepIndex, step) in block.steps.enumerated() where stepIndex < cards[blockIndex].steps.count {
@@ -110,14 +116,31 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
     }
 
     /// What ends a step, as the cards write it.
-    static func goalText(_ goal: StepGoal) -> String {
+    static func goalText(_ goal: StepGoal, distanceSystem: DistanceSystem = .deviceDefault) -> String {
         switch goal {
         case .time(let seconds):
             Duration.seconds(seconds).formatted(.time(pattern: .minuteSecond))
         case .distance(let meters):
-            Measurement(value: meters, unit: UnitLength.meters).formatted(.measurement(width: .abbreviated))
+            distanceText(meters, in: distanceSystem)
         case .open:
             "Open"
+        }
+    }
+
+    /// A distance as "400 m" / "20 km", or "440 yd" / "13.1 mi" for imperial, whatever the device's
+    /// locale: the system is the caller's choice, so a test or a setting decides, not the machine.
+    static func distanceText(_ meters: Double, in system: DistanceSystem) -> String {
+        let style = Measurement<UnitLength>.FormatStyle(
+            width: .abbreviated, locale: Locale(identifier: "en_GB"), usage: .asProvided,
+            numberFormatStyle: .number.precision(.fractionLength(0...1))
+        )
+        let measurement = Measurement(value: meters, unit: UnitLength.meters)
+        switch system {
+        case .metric:
+            return (meters >= 1000 ? measurement.converted(to: .kilometers) : measurement).formatted(style)
+        case .imperial:
+            let yards = measurement.converted(to: .yards)
+            return (yards.value >= 880 ? measurement.converted(to: .miles) : yards).formatted(style)
         }
     }
 
@@ -159,5 +182,12 @@ extension StepKind {
         case .recovery: "Recovery"
         case .cooldown: "Cool-down"
         }
+    }
+}
+
+extension DistanceSystem {
+    /// The system the device's region uses; what cards and titles follow unless told otherwise.
+    public static var deviceDefault: DistanceSystem {
+        Locale.current.measurementSystem == .metric ? .metric : .imperial
     }
 }

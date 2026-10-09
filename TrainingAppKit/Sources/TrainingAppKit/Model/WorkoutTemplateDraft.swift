@@ -197,6 +197,30 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         blocks.move(fromOffsets: IndexSet(integer: from), toOffset: from < to ? to + 1 : to)
     }
 
+    /// The block that a dragged block should swap places with now, if any (the editor's reorder drag).
+    ///
+    /// The dragged card swaps with a movable neighbour once its centre passes that neighbour's middle,
+    /// and only one at a time, so a fast drag swaps step by step as the layout catches up.
+    ///
+    /// - Parameters:
+    ///   - id: The block being dragged.
+    ///   - centre: The vertical centre of the dragged card where the finger has taken it, in the same
+    ///     coordinates as `frames`.
+    ///   - frames: Each movable block's frame on screen, as laid out now.
+    /// - Returns: The block to pass to ``moveBlock(id:toPositionOf:)``, or `nil` for no swap.
+    public func blockToSwap(dragging id: UUID, centre: CGFloat, frames: [UUID: CGRect]) -> UUID? {
+        guard let frame = frames[id] else { return nil }
+        let candidates = blocks[movableRange].map(\.id).filter { $0 != id }
+        let passed = candidates.filter { other in
+            guard let otherFrame = frames[other] else { return false }
+            return otherFrame.minY > frame.minY ? centre > otherFrame.midY : centre < otherFrame.midY
+        }
+        // The nearest passed neighbour, whichever way the card is going.
+        return passed.min { lhs, rhs in
+            abs((frames[lhs]?.midY ?? 0) - centre) < abs((frames[rhs]?.midY ?? 0) - centre)
+        }
+    }
+
     /// Moves the block with id `id` up (`-1`) or down (`1`) among the movable blocks; does nothing at
     /// either end or if the block is pinned.
     public mutating func moveBlock(id: UUID, by offset: Int) {

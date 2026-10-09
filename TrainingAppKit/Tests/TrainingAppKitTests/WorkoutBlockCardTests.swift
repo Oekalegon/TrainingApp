@@ -9,7 +9,7 @@ struct WorkoutBlockCardTests {
     func groupsAndNumbering() throws {
         let workout = try BuiltInWorkoutTemplates.shortIntervalRun.instantiate()
 
-        let cards = WorkoutBlockCard.cards(for: workout.blocks)
+        let cards = WorkoutBlockCard.cards(for: workout.blocks, distanceSystem: .metric)
 
         #expect(cards.map(\.isGroup) == [false, false, true, false])
         #expect(cards.map(\.repetitions) == [1, 1, 8, 1])
@@ -29,7 +29,7 @@ struct WorkoutBlockCardTests {
             WorkoutStep(kind: .cooldown, goal: .open, target: .rpe(3))
         ])]
 
-        let steps = WorkoutBlockCard.cards(for: blocks)[0].steps
+        let steps = WorkoutBlockCard.cards(for: blocks, distanceSystem: .metric)[0].steps
 
         #expect(steps.map(\.title) == ["Warm-up", "Work", "Work", "Cool-down"])
         #expect(steps.map(\.detail) == ["5:00", "400 m", "Open", "Open"])
@@ -39,7 +39,7 @@ struct WorkoutBlockCardTests {
         #expect(WorkoutBlockCard.targetSymbol(.pace(3.0...3.5)) == WorkoutBlockCard.paceSymbol)
         #expect(WorkoutBlockCard.targetSymbol(.power(200...250)) == "bolt.horizontal.fill")
         // Several steps in one block belong together even when it runs once.
-        #expect(WorkoutBlockCard.cards(for: blocks)[0].isGroup)
+        #expect(WorkoutBlockCard.cards(for: blocks, distanceSystem: .metric)[0].isGroup)
     }
 
     @Test("no blocks, no cards")
@@ -58,8 +58,8 @@ struct WorkoutBlockCardTests {
         let block = WorkoutTemplateDraft.Block(steps: [step, fixed], repetitions: .parameter(reps.id))
 
         #expect(draft.card(for: step, number: 3) == WorkoutStepCard(id: 3, kind: .work, title: "Work", detail: "Effort · 1:00", end: .time, target: "HR Zone 4", targetSymbol: "heart.fill", parameterName: "Effort"))
-        #expect(draft.card(for: fixed, number: 4).detail == "200 m")
-        #expect(draft.card(for: fixed, number: 4).end == .distance)
+        #expect(draft.card(for: fixed, number: 4, distanceSystem: .metric).detail == "200 m")
+        #expect(draft.card(for: fixed, number: 4, distanceSystem: .metric).end == .distance)
         #expect(draft.repetitionsText(block) == "Repeats · 8")
         #expect(draft.repetitionsText(.init(steps: [], repetitions: .fixed(5))) == "5")
     }
@@ -280,5 +280,42 @@ struct WorkoutBlockCardTests {
         #expect(draft.card(for: fixed, number: 1).parameterName == nil)
         let block = WorkoutTemplateDraft.Block(steps: [variable], repetitions: .parameter(effort.id))
         #expect(draft.parameterName(block.repetitions) == "Effort")
+    }
+
+    @Test("distances are written by the chosen system, whatever the machine's locale")
+    func distanceSystems() {
+        #expect(WorkoutBlockCard.distanceText(400, in: .metric) == "400 m")
+        #expect(WorkoutBlockCard.distanceText(20_000, in: .metric) == "20 km")
+        #expect(WorkoutBlockCard.distanceText(1_500, in: .metric) == "1.5 km")
+        #expect(WorkoutBlockCard.distanceText(400, in: .imperial) == "437.4 yd")
+        #expect(WorkoutBlockCard.distanceText(20_000, in: .imperial) == "12.4 mi")
+        let blocks = [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .distance(400))])]
+        #expect(WorkoutBlockCard.cards(for: blocks, distanceSystem: .metric)[0].steps[0].detail == "400 m")
+        #expect(WorkoutBlockCard.cards(for: blocks, distanceSystem: .imperial)[0].steps[0].detail == "437.4 yd")
+    }
+
+    @Test("a dragged block swaps with the neighbour its centre has passed, one at a time, and never with a pinned one")
+    func swapDecision() {
+        func block(_ kind: StepKind) -> WorkoutTemplateDraft.Block { .init(steps: [.init(kind: kind, goal: .open)]) }
+        let warmup = block(.warmup), a = block(.work), b = block(.recovery), c = block(.work), cooldown = block(.cooldown)
+        let draft = WorkoutTemplateDraft(name: "x", blocks: [warmup, a, b, c, cooldown])
+        // Each card 100 high, 10 apart, from the top.
+        var frames: [UUID: CGRect] = [:]
+        for (index, item) in [warmup, a, b, c, cooldown].enumerated() {
+            frames[item.id] = CGRect(x: 0, y: CGFloat(index) * 110, width: 300, height: 100)
+        }
+        // Still within its own slot: nothing.
+        #expect(draft.blockToSwap(dragging: a.id, centre: 170, frames: frames) == nil)
+        // Past the middle of the next one (b: midY 270): swap down with b.
+        #expect(draft.blockToSwap(dragging: a.id, centre: 280, frames: frames) == b.id)
+        // Far down, past b and c: the nearest passed one is c.
+        #expect(draft.blockToSwap(dragging: a.id, centre: 390, frames: frames) == c.id)
+        // Upwards: c dragged above b's middle swaps with b.
+        #expect(draft.blockToSwap(dragging: c.id, centre: 260, frames: frames) == b.id)
+        // Past the cool-down or above the warm-up: pinned blocks are never a target.
+        #expect(draft.blockToSwap(dragging: c.id, centre: 520, frames: frames) == nil)
+        #expect(draft.blockToSwap(dragging: a.id, centre: 40, frames: frames) == nil)
+        // Unknown block: nothing.
+        #expect(draft.blockToSwap(dragging: UUID(), centre: 100, frames: frames) == nil)
     }
 }

@@ -20,6 +20,9 @@ struct WorkoutTemplateEditorSheet: View {
     @State private var blockFrames: [UUID: CGRect] = [:]
     /// The block being dragged, if any.
     @State private var draggingBlockID: UUID?
+    /// `true` while a reorder gesture is live; it resets itself if the system cancels the touch, which
+    /// `onEnded` never hears about, so a card isn't left lifted.
+    @GestureState private var isReorderGestureLive = false
     /// How far below the dragged card's top the finger grabbed it.
     @State private var grabOffset: CGFloat = 0
     /// The finger's vertical position on screen while dragging.
@@ -180,7 +183,7 @@ struct WorkoutTemplateEditorSheet: View {
         } header: {
             Text("Steps")
         } footer: {
-            Text("Touch and hold a step or repeat, then drag it to reorder; the warm-up stays first and the cool-down last, if you have them. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step in a repeat to move or remove it.")
+            Text("Touch and hold a step or repeat, then drag it to reorder; the warm-up stays first and the cool-down last, if you have them. A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step in a repeat for its move and remove options.")
         }
     }
 
@@ -212,7 +215,16 @@ struct WorkoutTemplateEditorSheet: View {
                     Color.clear.preference(key: BlockFramePreference.self, value: [block.id: proxy.frame(in: .global)])
                 }
             )
-            .onPreferenceChange(BlockFramePreference.self) { blockFrames.merge($0) { _, new in new } }
+            // Only when something moved: every write re-renders the list.
+            .onPreferenceChange(BlockFramePreference.self) { frames in
+                let merged = blockFrames.merging(frames) { _, new in new }
+                if merged != blockFrames { blockFrames = merged }
+            }
+            .onChange(of: isReorderGestureLive) { _, live in
+                if !live, draggingBlockID != nil { withAnimation(.snappy) { draggingBlockID = nil } }
+            }
+            .accessibilityAction(named: "Move Up") { withAnimation(.snappy) { viewModel.moveBlock(id: block.id, by: -1) } }
+            .accessibilityAction(named: "Move Down") { withAnimation(.snappy) { viewModel.moveBlock(id: block.id, by: 1) } }
             // Simultaneous, so the card's own button (which opens the step) and the list's scrolling don't
             // swallow the touch before the long press can lift it.
             .simultaneousGesture(isOpen ? nil : reorderGesture(for: block.id))
@@ -234,22 +246,17 @@ struct WorkoutTemplateEditorSheet: View {
                 dragY = drag.location.y
                 reorderIfPassed(id)
             }
+            .updating($isReorderGestureLive) { _, live, _ in live = true }
             .onEnded { _ in
                 withAnimation(.snappy) { draggingBlockID = nil }
             }
     }
 
-    /// Swaps the dragged block with the first movable neighbour whose middle the card's centre has passed.
+    /// Swaps the dragged block with the neighbour its centre has passed, if any.
     private func reorderIfPassed(_ id: UUID) {
         guard let frame = blockFrames[id] else { return }
         let centre = dragY - grabOffset + frame.height / 2
-        let movable = viewModel.draft.blocks[viewModel.draft.movableRange].map(\.id)
-        let target = movable.first { other in
-            guard other != id, let otherFrame = blockFrames[other] else { return false }
-            return otherFrame.minY > frame.minY ? centre > otherFrame.midY : centre < otherFrame.midY
-        }
-        // Only a neighbour the card is on the far side of; the one nearest in the direction of travel.
-        if let target, let targetFrame = blockFrames[target], abs(targetFrame.midY - centre) < max(frame.height, targetFrame.height) {
+        if let target = viewModel.draft.blockToSwap(dragging: id, centre: centre, frames: blockFrames) {
             withAnimation(.snappy) { viewModel.moveBlock(id: id, toPositionOf: target) }
         }
     }
@@ -258,7 +265,7 @@ struct WorkoutTemplateEditorSheet: View {
     private func blockCard(_ block: WorkoutTemplateDraft.Block, firstNumber: Int) -> some View {
         let draft = viewModel.draft
         let isGroup = block.steps.count > 1 || block.repetitions != .fixed(1)
-        let cards = block.steps.enumerated().map { draft.card(for: $1, number: firstNumber + $0) }
+        let cards = block.steps.enumerated().map { draft.card(for: $1, number: firstNumber + $0, distanceSystem: viewModel.distanceSystem) }
         if isGroup {
             WorkoutRepeatCard(steps: cards) {
                 VStack(spacing: 0) {
@@ -359,410 +366,6 @@ struct WorkoutTemplateEditorSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-        }
-    }
-}
-
-/// A step opened for editing in place (after the Fitness app's creator): its role, what ends it, the
-/// value, the zone it aims for and a delete row, inside the step's card.
-private struct WorkoutTemplateStepInlineEditor: View {
-    let viewModel: WorkoutTemplateEditorViewModel
-    @Binding var step: WorkoutTemplateDraft.Step
-    let card: WorkoutStepCard
-    let onCollapse: () -> Void
-    let onDelete: () -> Void
-
-    /// Whether the duration or distance is open to edit its value or parameter. Editing anything else
-    /// in the step closes it; touching it, or switching it between fixed and parameter, opens it.
-    @State private var isValueExpanded = false
-
-    private enum GoalKind: Hashable { case time, distance, open }
-
-    private var goalKind: Binding<GoalKind> {
-        Binding {
-            switch step.goal {
-            case .time: .time
-            case .distance: .distance
-            case .open: .open
-            }
-        } set: { kind in
-            switch kind {
-            case .time: if case .time = step.goal {} else { step.goal = .time(.fixed(10)) }
-            case .distance: if case .distance = step.goal {} else { step.goal = .distance(.fixed(1000)) }
-            case .open: step.goal = .open
-            }
-        }
-    }
-
-    private var zone: Binding<Int> {
-        Binding {
-            switch step.target {
-            case .zone(let zone): zone
-            case .none: 0
-            case .preserved: -1
-            }
-        } set: { zone in
-            step.target = zone == 0 ? .none : .zone(zone)
-        }
-    }
-
-    private var timeSource: Binding<WorkoutTemplateDraft.Source> {
-        Binding {
-            if case .time(let source) = step.goal { source } else { .fixed(10) }
-        } set: { step.goal = .time($0) }
-    }
-
-    private var distanceSource: Binding<WorkoutTemplateDraft.Source> {
-        Binding {
-            if case .distance(let source) = step.goal { source } else { .fixed(1000) }
-        } set: { step.goal = .distance($0) }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Button(action: onCollapse) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Image(systemName: step.kind.symbolName)
-                        .font(.headline)
-                        .foregroundStyle(card.end.tint)
-                        .frame(width: 28)
-                        .accessibilityHidden(true)
-                    Text(step.kind.displayName)
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Image(systemName: "chevron.up")
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(step.kind.displayName), editing")
-            .accessibilityHint("Collapses this step")
-            Divider()
-            kindRow
-            Divider()
-            row {
-                LabeledContent("Goal Type") {
-                    Picker("Goal Type", selection: goalKind) {
-                        Text("Time").tag(GoalKind.time)
-                        Text("Distance").tag(GoalKind.distance)
-                        Text("Open").tag(GoalKind.open)
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-            }
-            switch step.goal {
-            case .time:
-                Divider()
-                SourceEditor(
-                    viewModel: viewModel, title: "Duration", source: timeSource, unit: .minutes,
-                    suggestedName: "\(step.kind.displayName) duration", isExpanded: $isValueExpanded
-                )
-            case .distance:
-                Divider()
-                SourceEditor(
-                    viewModel: viewModel, title: "Distance", source: distanceSource, unit: .meters,
-                    suggestedName: "\(step.kind.displayName) distance", isExpanded: $isValueExpanded
-                )
-            case .open:
-                EmptyView()
-            }
-            Divider()
-            row {
-                if case .preserved = step.target {
-                    LabeledContent("Target", value: "Custom target")
-                } else {
-                    LabeledContent("Target") {
-                        Picker("Target", selection: zone) {
-                            Text("None").tag(0)
-                            ForEach(HeartRateZone.allCases, id: \.rawValue) { zone in
-                                Text("HR Zone \(zone.rawValue) · \(zone.displayName)").tag(zone.rawValue)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                    }
-                }
-            }
-            Divider()
-            Button(role: .destructive, action: onDelete) {
-                Label("Delete Step", systemImage: "trash")
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .onChange(of: step.kind) { isValueExpanded = false }
-        .onChange(of: step.target) { isValueExpanded = false }
-        .onChange(of: goalKind.wrappedValue) { isValueExpanded = false }
-    }
-
-    /// Work and recovery are a two-way switch, as in the Fitness app; a warm-up or cool-down, which
-    /// aren't either, pick from all four.
-    @ViewBuilder
-    private var kindRow: some View {
-        if step.kind == .work || step.kind == .recovery {
-            Picker("Step", selection: $step.kind) {
-                Text(StepKind.work.displayName).tag(StepKind.work)
-                Text(StepKind.recovery.displayName).tag(StepKind.recovery)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        } else {
-            row {
-                LabeledContent("Step") {
-                    // A warm-up or cool-down can become a work or recovery step, but a step can't become
-                    // one: they open and close the workout, and only exist there.
-                    Picker("Step", selection: $step.kind) {
-                        ForEach([step.kind, .work, .recovery], id: \.self) { kind in
-                            Text(kind.displayName).tag(kind)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-            }
-        }
-    }
-
-    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-    }
-}
-
-/// A repeat opened for editing in place, below its header, like an open step: how often its steps
-/// run (fixed or a parameter) and a delete row.
-private struct WorkoutRepeatInlineEditor: View {
-    let viewModel: WorkoutTemplateEditorViewModel
-    @Binding var block: WorkoutTemplateDraft.Block
-    let onDelete: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            SourceEditor(
-                viewModel: viewModel, title: "Repeats", source: $block.repetitions, unit: .count,
-                suggestedName: "Repeats", isExpanded: $isDetailExpanded
-            )
-            WorkoutCardDivider()
-            Button(role: .destructive, action: onDelete) {
-                Label("Delete Repeat", systemImage: "trash")
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    /// Open to start with, so the value is shown as soon as the repeat is.
-    @State private var isDetailExpanded = true
-}
-
-/// A value that is either a fixed number or a parameter of the template (MVP2-140): the athlete turns
-/// it into a parameter right where it is. The row reads "Fixed" or "Parameter"; open, it shows the
-/// fixed value or the parameter's name, default value and range, smaller and on a lighter background.
-/// Closed, it shows a one-line summary instead.
-private struct SourceEditor: View {
-    @Bindable var viewModel: WorkoutTemplateEditorViewModel
-    let title: String
-    @Binding var source: WorkoutTemplateDraft.Source
-    let unit: ParameterUnit
-    /// The name a parameter made here starts with, e.g. "Recovery duration".
-    let suggestedName: String
-    /// Whether the details are showing; set by the screen that holds the editor, which also closes it
-    /// when the athlete edits something else.
-    @Binding var isExpanded: Bool
-
-    private enum Choice: Hashable {
-        case fixed
-        case parameter
-    }
-
-    private var choice: Binding<Choice> {
-        Binding {
-            if case .parameter = source { .parameter } else { .fixed }
-        } set: { newChoice in
-            switch (newChoice, source) {
-            case (.fixed, .parameter(let current)):
-                if let parameter = viewModel.draft.parameters.first(where: { $0.id == current }) {
-                    source = .fixed(parameter.defaultValue)
-                }
-            case (.parameter, .fixed(let value)):
-                // Starts from the fixed value, so nothing changes until the athlete edits it.
-                source = .parameter(viewModel.addParameter(unit: unit, name: suggestedName, defaultValue: value))
-            default:
-                break
-            }
-            // What this value no longer uses would only be a slider that does nothing.
-            viewModel.pruneUnusedParameters()
-            withAnimation(.snappy) { isExpanded = true }
-        }
-    }
-
-    private var fixedValue: Binding<Double> {
-        Binding {
-            if case .fixed(let value) = source { value } else { 0 }
-        } set: { source = .fixed($0) }
-    }
-
-    private func parameterBinding(_ id: UUID) -> Binding<WorkoutTemplateDraft.Parameter>? {
-        guard let index = viewModel.draft.parameters.firstIndex(where: { $0.id == id }) else { return nil }
-        return $viewModel.draft.parameters[index]
-    }
-
-    /// One line for the closed row: the value, or the parameter's name, default and range.
-    private var summary: String {
-        switch source {
-        case .fixed(let value):
-            return WorkoutTemplateDraft.valueText(value, unit: unit)
-        case .parameter(let id):
-            guard let parameter = viewModel.draft.parameters.first(where: { $0.id == id }) else { return "" }
-            let low = WorkoutTemplateDraft.valueText(parameter.lowerBound, unit: unit)
-            let high = WorkoutTemplateDraft.valueText(parameter.upperBound, unit: unit)
-            return "\(parameter.name) · \(WorkoutTemplateDraft.valueText(parameter.defaultValue, unit: unit)) (\(low)–\(high))"
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button {
-                    withAnimation(.snappy) { isExpanded.toggle() }
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                        if !isExpanded {
-                            Text(summary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint(isExpanded ? "Collapses the details" : "Shows the details")
-                Picker(title, selection: choice) {
-                    Text("Fixed").tag(Choice.fixed)
-                    Text("Parameter").tag(Choice.parameter)
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                // No animation here: switching inserts and removes the rows below, and the menu's label
-                // otherwise slid to the edge for a moment.
-                .transaction { $0.animation = nil }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            if isExpanded {
-                VStack(spacing: 8) {
-                    switch source {
-                    case .fixed:
-                        LabeledContent("Value") { NumberField(label: title, value: fixedValue, unit: unit) }
-                    case .parameter(let id):
-                        if let parameter = parameterBinding(id) {
-                            ParameterFields(parameter: parameter)
-                        }
-                    }
-                }
-                .font(.subheadline)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-            }
-        }
-        .background(isExpanded ? Color.primary.opacity(0.06) : Color.clear)
-    }
-}
-
-/// A parameter's name, default value and range, in the unit it sets.
-private struct ParameterFields: View {
-    @Binding var parameter: WorkoutTemplateDraft.Parameter
-
-    var body: some View {
-        VStack(spacing: 8) {
-            LabeledContent("Name") {
-                TextField("Name", text: $parameter.name)
-                    .multilineTextAlignment(.trailing)
-            }
-            LabeledContent("Default Value") { NumberField(label: "Default value", value: $parameter.defaultValue, unit: parameter.unit) }
-            LabeledContent("Minimum Value") { NumberField(label: "Minimum value", value: $parameter.lowerBound, unit: parameter.unit) }
-            LabeledContent("Maximum Value") { NumberField(label: "Maximum value", value: $parameter.upperBound, unit: parameter.unit) }
-        }
-    }
-}
-
-/// A number field with its unit beside it.
-private struct NumberField: View {
-    /// What the field sets, read by VoiceOver together with the unit.
-    let label: String
-    @Binding var value: Double
-    let unit: ParameterUnit
-
-    /// The field shows at most three decimals, and a text field can write what it shows back when it
-    /// loses focus: 8 seconds (0.1333 minutes) would become 0.133 without the athlete typing anything,
-    /// altering the template and counting as a change. A difference below what the field can show is
-    /// ignored.
-    private var guardedValue: Binding<Double> {
-        Binding {
-            value
-        } set: { newValue in
-            if abs(newValue - value) >= 0.0005 { value = newValue }
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 4) {
-            TextField("", value: guardedValue, format: .number)
-                .multilineTextAlignment(.trailing)
-                #if os(iOS)
-                .keyboardType(unit == .count ? .numberPad : .decimalPad)
-                #endif
-                .frame(maxWidth: 90)
-                .accessibilityLabel("\(label), \(unit.spokenName)")
-            Text(unit.shortName)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-        }
-    }
-}
-
-private extension ParameterUnit {
-    var symbolName: String {
-        switch self {
-        case .minutes: "timer"
-        case .meters: "ruler"
-        case .count: "repeat"
-        }
-    }
-
-    /// The unit as VoiceOver says it.
-    var spokenName: String {
-        switch self {
-        case .minutes: "minutes"
-        case .meters: "metres"
-        case .count: "times"
-        }
-    }
-
-    /// The unit beside a number field, as the editor measures it (durations in minutes).
-    var shortName: String {
-        switch self {
-        case .minutes: "min"
-        case .meters: "m"
-        case .count: "×"
         }
     }
 }
