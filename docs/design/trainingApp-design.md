@@ -712,9 +712,14 @@ The editor works on a `WorkoutTemplateDraft`, in the units it shows (minutes, me
 nothing is saved until the check mark:
 
 - **Workout**: name and sport.
-- **Parameters**: a name, a starting value and a lowest and highest value, for a duration, a distance or
-  a repeat count. Each becomes a slider in the planned-workout sheet. Removing one leaves what used it
-  at the parameter's starting value.
+- **Parameters** belong to the step that uses them (there is no separate list). In an open step, its
+  duration or distance, and, for a block holding only that step, its repeats, each offer "Fixed", "New
+  Parameter" or a parameter of the same kind another step has (to share one slider). Choosing New
+  Parameter names it after the step ("Recovery duration"), makes the value a parameter and shows its
+  name, starting value, lowest and highest right under it; each becomes a slider in the planned-workout
+  sheet. A step can therefore have several, e.g. a duration and a repeat count; a block of several steps
+  sets its repeats from its "Repeat" header, in the same way. Going back to "Fixed", or removing the
+  step or block, drops a parameter nothing else uses, so no slider is left that does nothing.
 - **Steps**: the block cards above. A block has repeats (fixed or a count parameter) and steps. A step has a kind
   (warmup, work, recovery, cooldown), an end (time, distance or open; time and distance fixed or taken
   from a matching parameter) and a heart-rate zone target or none. Pace, power, RPE and heart-rate-range

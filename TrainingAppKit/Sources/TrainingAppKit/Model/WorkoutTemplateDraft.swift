@@ -205,6 +205,28 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         )
     }
 
+    /// The ids of the parameters a step or block actually uses. A parameter nothing uses would only be a
+    /// slider that does nothing, so the editor drops it and ``build()`` leaves it out.
+    var referencedParameterIDs: Set<UUID> {
+        var ids = Set<UUID>()
+        for block in blocks {
+            if case .parameter(let id) = block.repetitions { ids.insert(id) }
+            for step in block.steps {
+                switch step.goal {
+                case .time(.parameter(let id)), .distance(.parameter(let id)): ids.insert(id)
+                default: break
+                }
+            }
+        }
+        return ids
+    }
+
+    /// Removes the parameters nothing uses (see ``referencedParameterIDs``).
+    mutating func pruneUnusedParameters() {
+        let used = referencedParameterIDs
+        parameters.removeAll { !used.contains($0.id) }
+    }
+
     /// The parameters a value of `unit` can point at.
     public func parameters(for unit: ParameterUnit) -> [Parameter] {
         parameters.filter { $0.unit == unit }
@@ -217,7 +239,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             issues.append("Give the workout a name.")
         }
-        for parameter in parameters {
+        for parameter in parameters where referencedParameterIDs.contains(parameter.id) {
             let label = parameter.name.trimmingCharacters(in: .whitespacesAndNewlines)
             if label.isEmpty {
                 issues.append("Give every parameter a name.")
@@ -311,7 +333,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
             }
             return TemplateBlock(steps: steps, repetitions: repetitions)
         }
-        let templateParameters = parameters.map { parameter in
+        let used = referencedParameterIDs
+        let templateParameters = parameters.filter { used.contains($0.id) }.map { parameter in
             WorkoutTemplateParameter(
                 key: parameter.key,
                 name: parameter.name.trimmingCharacters(in: .whitespacesAndNewlines),

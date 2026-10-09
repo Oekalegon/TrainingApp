@@ -46,15 +46,13 @@ struct WorkoutTemplateEditorSheet: View {
                     }
                 }
 
-                parameterSection
-
                 stepsSection
 
                 summarySection(summary)
             }
             .navigationDestination(item: $editingBlock) { ref in
                 if let block = blockBinding(ref.blockID) {
-                    WorkoutTemplateBlockForm(viewModel: viewModel, block: block, parameters: viewModel.draft.parameters)
+                    WorkoutTemplateBlockForm(viewModel: viewModel, block: block)
                 }
             }
             // Swiping the sheet away would lose a long edit without asking.
@@ -114,30 +112,6 @@ struct WorkoutTemplateEditorSheet: View {
         return named.contains(viewModel.draft.sport) ? named : named + [viewModel.draft.sport]
     }
 
-    private var parameterSection: some View {
-        Section {
-            ForEach($viewModel.draft.parameters) { $parameter in
-                WorkoutTemplateParameterEditor(parameter: $parameter)
-            }
-            .onDelete { offsets in
-                for id in offsets.map({ viewModel.draft.parameters[$0].id }) {
-                    viewModel.removeParameter(id: id)
-                }
-            }
-            Menu {
-                Button("Duration", systemImage: "timer") { viewModel.addParameter(unit: .minutes) }
-                Button("Distance", systemImage: "ruler") { viewModel.addParameter(unit: .meters) }
-                Button("Repeats", systemImage: "repeat") { viewModel.addParameter(unit: .count) }
-            } label: {
-                Label("Add Parameter", systemImage: "plus")
-            }
-        } header: {
-            Text("Parameters")
-        } footer: {
-            Text("A parameter becomes a slider when you plan the workout, e.g. the duration of the main set.")
-        }
-    }
-
     /// The workout's steps as cards, like the Fitness app's list: tapping a step opens its fields, the
     /// "Repeat" header opens the block's repeats, and "Add Step" / "Add Repeat" are cards of their own.
     private var stepsSection: some View {
@@ -176,7 +150,7 @@ struct WorkoutTemplateEditorSheet: View {
         } header: {
             Text("Steps")
         } footer: {
-            Text("Touch and hold a step to move, repeat or remove it.")
+            Text("A duration, distance or repeat count can be a parameter: it becomes a slider when you plan the workout. Touch and hold a step to move, repeat or remove it.")
         }
     }
 
@@ -216,7 +190,8 @@ struct WorkoutTemplateEditorSheet: View {
         let step = block.steps[index]
         if expandedStepID == step.id, let binding = stepBinding(blockID: block.id, stepID: step.id) {
             WorkoutTemplateStepInlineEditor(
-                step: binding, card: card, parameters: viewModel.draft.parameters,
+                viewModel: viewModel, step: binding, card: card,
+                repetitions: block.steps.count == 1 ? blockBinding(block.id)?.repetitions : nil,
                 onCollapse: { expand(nil) },
                 onDelete: {
                     expand(nil)
@@ -276,31 +251,15 @@ struct WorkoutTemplateEditorSheet: View {
     }
 }
 
-/// One parameter's name, starting value and range, in the unit it sets.
-private struct WorkoutTemplateParameterEditor: View {
-    @Binding var parameter: WorkoutTemplateDraft.Parameter
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: parameter.unit.symbolName)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField("Name", text: $parameter.name)
-            }
-            LabeledContent("Starts at") { NumberField(label: "Starts at", value: $parameter.defaultValue, unit: parameter.unit) }
-            LabeledContent("Lowest") { NumberField(label: "Lowest", value: $parameter.lowerBound, unit: parameter.unit) }
-            LabeledContent("Highest") { NumberField(label: "Highest", value: $parameter.upperBound, unit: parameter.unit) }
-        }
-    }
-}
-
 /// A step opened for editing in place (after the Fitness app's creator): its role, what ends it, the
 /// value, the zone it aims for and a delete row, inside the step's card.
 private struct WorkoutTemplateStepInlineEditor: View {
+    let viewModel: WorkoutTemplateEditorViewModel
     @Binding var step: WorkoutTemplateDraft.Step
     let card: WorkoutStepCard
-    let parameters: [WorkoutTemplateDraft.Parameter]
+    /// How often the step's block repeats, when the block holds only this step (a block of several is
+    /// set from its "Repeat" header); lets one step carry both a duration and a repeat parameter.
+    let repetitions: Binding<WorkoutTemplateDraft.Source>?
     let onCollapse: () -> Void
     let onDelete: () -> Void
 
@@ -389,20 +348,29 @@ private struct WorkoutTemplateStepInlineEditor: View {
                 Divider()
                 row {
                     SourceEditor(
-                        title: "Duration", source: timeSource, unit: .minutes,
-                        parameters: parameters.filter { $0.unit == .minutes }
+                        viewModel: viewModel, title: "Duration", source: timeSource, unit: .minutes,
+                        suggestedName: "\(step.kind.displayName) duration"
                     )
                 }
             case .distance:
                 Divider()
                 row {
                     SourceEditor(
-                        title: "Distance", source: distanceSource, unit: .meters,
-                        parameters: parameters.filter { $0.unit == .meters }
+                        viewModel: viewModel, title: "Distance", source: distanceSource, unit: .meters,
+                        suggestedName: "\(step.kind.displayName) distance"
                     )
                 }
             case .open:
                 EmptyView()
+            }
+            if let repetitions {
+                Divider()
+                row {
+                    SourceEditor(
+                        viewModel: viewModel, title: "Repeats", source: repetitions, unit: .count,
+                        suggestedName: "\(step.kind.displayName) repeats"
+                    )
+                }
             }
             Divider()
             row {
@@ -472,15 +440,14 @@ private struct WorkoutTemplateStepInlineEditor: View {
 private struct WorkoutTemplateBlockForm: View {
     let viewModel: WorkoutTemplateEditorViewModel
     @Binding var block: WorkoutTemplateDraft.Block
-    let parameters: [WorkoutTemplateDraft.Parameter]
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Form {
             Section {
                 SourceEditor(
-                    title: "Repeats", source: $block.repetitions, unit: .count,
-                    parameters: parameters.filter { $0.unit == .count }
+                    viewModel: viewModel, title: "Repeats", source: $block.repetitions, unit: .count,
+                    suggestedName: "Repeats"
                 )
             } footer: {
                 Text("The block's steps run this many times in a row.")
@@ -499,23 +466,40 @@ private struct WorkoutTemplateBlockForm: View {
     }
 }
 
-/// A value that's either a fixed number or one of the template's parameters of the same unit.
+/// A value that is either a fixed number or a parameter of the template (MVP2-140): the athlete turns it
+/// into a parameter right where it is, and sets the parameter's name, starting value and range under it.
+/// A parameter another step already has of the same kind can be picked instead, to share one slider.
 private struct SourceEditor: View {
+    @Bindable var viewModel: WorkoutTemplateEditorViewModel
     let title: String
     @Binding var source: WorkoutTemplateDraft.Source
     let unit: ParameterUnit
-    let parameters: [WorkoutTemplateDraft.Parameter]
+    /// The name a parameter made here starts with, e.g. "Recovery duration".
+    let suggestedName: String
 
-    private var parameterID: Binding<UUID?> {
+    private enum Choice: Hashable {
+        case fixed
+        case new
+        case parameter(UUID)
+    }
+
+    private var choice: Binding<Choice> {
         Binding {
-            if case .parameter(let id) = source { id } else { nil }
-        } set: { id in
-            if let id {
+            if case .parameter(let id) = source { .parameter(id) } else { .fixed }
+        } set: { newChoice in
+            switch newChoice {
+            case .fixed:
+                if case .parameter(let current) = source,
+                   let parameter = viewModel.draft.parameters.first(where: { $0.id == current }) {
+                    source = .fixed(parameter.defaultValue)
+                }
+            case .new:
+                source = .parameter(viewModel.addParameter(unit: unit, name: suggestedName))
+            case .parameter(let id):
                 source = .parameter(id)
-            } else if case .parameter(let current) = source,
-                      let parameter = parameters.first(where: { $0.id == current }) {
-                source = .fixed(parameter.defaultValue)
             }
+            // What this value no longer uses would only be a slider that does nothing.
+            viewModel.pruneUnusedParameters()
         }
     }
 
@@ -525,24 +509,51 @@ private struct SourceEditor: View {
         } set: { source = .fixed($0) }
     }
 
+    private func parameterBinding(_ id: UUID) -> Binding<WorkoutTemplateDraft.Parameter>? {
+        guard let index = viewModel.draft.parameters.firstIndex(where: { $0.id == id }) else { return nil }
+        return $viewModel.draft.parameters[index]
+    }
+
     var body: some View {
-        if parameters.isEmpty {
-            LabeledContent(title) { NumberField(label: title, value: fixedValue, unit: unit) }
-        } else {
+        VStack(spacing: 8) {
             LabeledContent(title) {
-                Picker(title, selection: parameterID) {
-                    Text("Fixed").tag(nil as UUID?)
-                    ForEach(parameters) { parameter in
-                        Text(parameter.name).tag(parameter.id as UUID?)
+                Picker(title, selection: choice) {
+                    Text("Fixed").tag(Choice.fixed)
+                    Text("New Parameter").tag(Choice.new)
+                    ForEach(viewModel.draft.parameters(for: unit)) { parameter in
+                        Text(parameter.name).tag(Choice.parameter(parameter.id))
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
             }
-            if case .fixed = source {
+            switch source {
+            case .fixed:
                 LabeledContent("Value") { NumberField(label: title, value: fixedValue, unit: unit) }
+            case .parameter(let id):
+                if let parameter = parameterBinding(id) {
+                    ParameterFields(parameter: parameter)
+                }
             }
         }
+    }
+}
+
+/// A parameter's name, starting value and range, in the unit it sets.
+private struct ParameterFields: View {
+    @Binding var parameter: WorkoutTemplateDraft.Parameter
+
+    var body: some View {
+        VStack(spacing: 8) {
+            LabeledContent("Name") {
+                TextField("Name", text: $parameter.name)
+                    .multilineTextAlignment(.trailing)
+            }
+            LabeledContent("Starts at") { NumberField(label: "Starts at", value: $parameter.defaultValue, unit: parameter.unit) }
+            LabeledContent("Lowest") { NumberField(label: "Lowest", value: $parameter.lowerBound, unit: parameter.unit) }
+            LabeledContent("Highest") { NumberField(label: "Highest", value: $parameter.upperBound, unit: parameter.unit) }
+        }
+        .padding(.leading, 12)
     }
 }
 

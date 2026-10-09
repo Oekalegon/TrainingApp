@@ -74,24 +74,43 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
 
     // MARK: Parameters
 
-    /// Adds a parameter of `unit` with a name, starting value and range that make sense for it, and
-    /// returns its id.
+    /// Adds a parameter of `unit` with a starting value and range that make sense for it, and returns
+    /// its id. The step or block that asked for it points at it.
+    ///
+    /// - Parameter name: What the slider is called when planning, e.g. "Recovery duration"; made
+    ///   unique among the parameters ("… 2") so two sliders are never labelled alike. Defaults to a
+    ///   name for the unit.
     @discardableResult
-    public func addParameter(unit: ParameterUnit) -> UUID {
+    public func addParameter(unit: ParameterUnit, name: String? = nil) -> UUID {
         let keys = Set(draft.parameters.map(\.key))
         var number = draft.parameters.count + 1
         while keys.contains("parameter\(number)") { number += 1 }
+        let key = "parameter\(number)"
+        let baseName = name ?? { switch unit { case .minutes: "Duration"; case .meters: "Distance"; case .count: "Repeats" } }()
+        let names = Set(draft.parameters.map(\.name))
+        var uniqueName = baseName
+        var suffix = 2
+        while names.contains(uniqueName) {
+            uniqueName = "\(baseName) \(suffix)"
+            suffix += 1
+        }
         let parameter: WorkoutTemplateDraft.Parameter
         switch unit {
         case .minutes:
-            parameter = .init(key: "parameter\(number)", name: "Duration", unit: unit, defaultValue: 20, lowerBound: 10, upperBound: 40)
+            parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 20, lowerBound: 10, upperBound: 40)
         case .meters:
-            parameter = .init(key: "parameter\(number)", name: "Distance", unit: unit, defaultValue: 400, lowerBound: 200, upperBound: 1000)
+            parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 400, lowerBound: 200, upperBound: 1000)
         case .count:
-            parameter = .init(key: "parameter\(number)", name: "Repeats", unit: unit, defaultValue: 4, lowerBound: 2, upperBound: 10)
+            parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 4, lowerBound: 2, upperBound: 10)
         }
         draft.parameters.append(parameter)
         return parameter.id
+    }
+
+    /// Drops the parameters no step or block uses any more; called after a value stops using one and
+    /// after steps or blocks are removed.
+    public func pruneUnusedParameters() {
+        draft.pruneUnusedParameters()
     }
 
     /// Removes a parameter. A step or block that used it keeps the parameter's starting value as a
@@ -143,6 +162,7 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
     /// Removes the block with id `blockID`.
     public func removeBlock(id blockID: UUID) {
         draft.blocks.removeAll { $0.id == blockID }
+        draft.pruneUnusedParameters()
     }
 
     /// Adds a step to the end of the block with id `blockID`.
@@ -161,6 +181,7 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
     /// A block with no steps is meaningless, so removing its last step removes it.
     private func removeBlockIfEmpty(at index: Int) {
         if draft.blocks[index].steps.isEmpty { draft.blocks.remove(at: index) }
+        draft.pruneUnusedParameters()
     }
 
     /// Removes the step with id `stepID` from the block with id `blockID`.
