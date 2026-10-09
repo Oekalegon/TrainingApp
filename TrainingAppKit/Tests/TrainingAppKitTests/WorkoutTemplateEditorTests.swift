@@ -307,4 +307,23 @@ struct WorkoutTemplateEditorTests {
 
         #expect(editor.draft.parameters.isEmpty)
     }
+
+    @Test("a parameter made from a fixed value starts at that value, with a range around it")
+    func parameterStartsFromFixedValue() async throws {
+        let (_, model) = await makeModel()
+        let editor = WorkoutTemplateEditorViewModel(model: model)
+        let duration = editor.addParameter(unit: .minutes, name: "Rest", defaultValue: 5)
+        let distance = editor.addParameter(unit: .meters, name: "Rep", defaultValue: 400)
+        let count = editor.addParameter(unit: .count, name: "Reps", defaultValue: 6)
+        let unusable = editor.addParameter(unit: .count, name: "Odd", defaultValue: 0)
+
+        func parameter(_ id: UUID) throws -> WorkoutTemplateDraft.Parameter {
+            try #require(editor.draft.parameters.first { $0.id == id })
+        }
+        #expect(try (parameter(duration).lowerBound, parameter(duration).defaultValue, parameter(duration).upperBound) == (2.5, 5, 10))
+        #expect(try (parameter(distance).lowerBound, parameter(distance).upperBound) == (200, 800))
+        #expect(try (parameter(count).lowerBound, parameter(count).defaultValue, parameter(count).upperBound) == (4, 6, 10))
+        // No usable value: the unit's usual start.
+        #expect(try (parameter(unusable).lowerBound, parameter(unusable).defaultValue, parameter(unusable).upperBound) == (2, 4, 10))
+    }
 }

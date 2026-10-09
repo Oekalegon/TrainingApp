@@ -77,11 +77,16 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
     /// Adds a parameter of `unit` with a starting value and range that make sense for it, and returns
     /// its id. The step or block that asked for it points at it.
     ///
-    /// - Parameter name: What the slider is called when planning, e.g. "Recovery duration"; made
-    ///   unique among the parameters ("… 2") so two sliders are never labelled alike. Defaults to a
-    ///   name for the unit.
+    /// - Parameters:
+    ///   - name: What the slider is called when planning, e.g. "Recovery duration"; made unique among
+    ///     the parameters ("… 2") so two sliders are never labelled alike. Defaults to a name for the
+    ///     unit.
+    ///   - defaultValue: The starting value, in the editor's unit, when the parameter replaces a fixed
+    ///     value, so nothing changes until the athlete edits it; its range is built around it (half to
+    ///     double for a duration or distance; two below to four above for a count). Without one, or
+    ///     with one that isn't positive, the unit's usual starting value and range are used.
     @discardableResult
-    public func addParameter(unit: ParameterUnit, name: String? = nil) -> UUID {
+    public func addParameter(unit: ParameterUnit, name: String? = nil, defaultValue: Double? = nil) -> UUID {
         let keys = Set(draft.parameters.map(\.key))
         var number = draft.parameters.count + 1
         while keys.contains("parameter\(number)") { number += 1 }
@@ -95,13 +100,21 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
             suffix += 1
         }
         let parameter: WorkoutTemplateDraft.Parameter
-        switch unit {
-        case .minutes:
-            parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 20, lowerBound: 10, upperBound: 40)
-        case .meters:
-            parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 400, lowerBound: 200, upperBound: 1000)
-        case .count:
-            parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 4, lowerBound: 2, upperBound: 10)
+        if let value = defaultValue, value > 0 {
+            let range: ClosedRange<Double> = unit == .count ? max(1, value - 2)...(value + 4) : (value / 2)...(value * 2)
+            parameter = .init(
+                key: key, name: uniqueName, unit: unit,
+                defaultValue: value, lowerBound: range.lowerBound, upperBound: range.upperBound
+            )
+        } else {
+            switch unit {
+            case .minutes:
+                parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 20, lowerBound: 10, upperBound: 40)
+            case .meters:
+                parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 400, lowerBound: 200, upperBound: 1000)
+            case .count:
+                parameter = .init(key: key, name: uniqueName, unit: unit, defaultValue: 4, lowerBound: 2, upperBound: 10)
+            }
         }
         draft.parameters.append(parameter)
         return parameter.id

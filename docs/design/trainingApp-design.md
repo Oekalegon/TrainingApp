@@ -713,13 +713,17 @@ nothing is saved until the check mark:
 
 - **Workout**: name and sport.
 - **Parameters** belong to the step that uses them (there is no separate list). In an open step, its
-  duration or distance offers "Fixed", "New Parameter" or a parameter of the same kind another step has
-  (to share one slider). Choosing New Parameter names it after the step ("Recovery duration"), makes
-  the value a parameter and shows its name, starting value, lowest and highest right under it; each
-  becomes a slider in the planned-workout sheet. The repeat count of a block is set from its "Repeat"
-  header, in the same way; an ordinary step has no repeats of its own. Going back to "Fixed", or
-  removing the step or block, drops a parameter nothing else uses, so no slider is left that does
-  nothing.
+  duration or distance is a row that says "Fixed" or "Parameter". Closed, the row shows a one-line
+  summary under its label (the value, or the parameter's name, default and range); touching it, or
+  switching it between fixed and parameter, opens it on a lighter background, with the details in a
+  smaller font aligned with the label: "Value" for a fixed value, or "Name", "Default Value", "Minimum
+  Value" and "Maximum Value" for a parameter. Editing anything else in the step (its role, goal type
+  or target) closes it again. Switching to Parameter makes a parameter named after the step ("Recovery
+  duration") that starts at the fixed value, with a range of half to double it; switching back to
+  Fixed keeps its default value. Each parameter becomes a slider in the planned-workout sheet. The
+  repeat count of a block is set from its "Repeat" header, in the same way; an ordinary step has no
+  repeats of its own. Going back to "Fixed", or removing the step or block, drops a parameter nothing
+  else uses, so no slider is left that does nothing.
 - **Steps**: the block cards above. A block has repeats (fixed or a count parameter) and steps. A step has a kind
   (warmup, work, recovery, cooldown), an end (time, distance or open; time and distance fixed or taken
   from a matching parameter) and a heart-rate zone target or none. Pace, power, RPE and heart-rate-range
