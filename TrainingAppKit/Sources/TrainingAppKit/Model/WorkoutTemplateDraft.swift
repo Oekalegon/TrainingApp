@@ -237,7 +237,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     public var issues: [String] {
         var issues: [String] = []
         if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            issues.append("Give the workout a name.")
+            issues.append("Give the workout template a name.")
         }
         for parameter in parameters where referencedParameterIDs.contains(parameter.id) {
             let label = parameter.name.trimmingCharacters(in: .whitespacesAndNewlines)

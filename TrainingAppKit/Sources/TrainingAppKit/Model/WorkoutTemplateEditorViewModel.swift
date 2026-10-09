@@ -46,7 +46,7 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
     }
 
     /// The navigation title.
-    public var title: String { isNew ? "New Workout" : "Edit Workout" }
+    public var title: String { isNew ? "New Workout Template" : "Edit Workout Template" }
 
     /// Whether the athlete changed anything since the editor opened; the sheet then asks before
     /// discarding.
@@ -212,7 +212,7 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
             onSaved?()
             return true
         } catch {
-            saveError = "Couldn't save this workout: \(error.localizedDescription)"
+            saveError = "Couldn't save this workout template: \(error.localizedDescription)"
             return false
         }
     }

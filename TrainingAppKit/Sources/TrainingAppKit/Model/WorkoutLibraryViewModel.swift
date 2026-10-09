@@ -237,7 +237,7 @@ public final class WorkoutLibraryViewModel {
         do {
             return try await model.deleteTemplate(id: id)
         } catch {
-            actionError = "Couldn't delete this workout: \(error.localizedDescription)"
+            actionError = "Couldn't delete this workout template: \(error.localizedDescription)"
             return nil
         }
     }

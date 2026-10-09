@@ -51,7 +51,7 @@ struct WorkoutTemplateEditorTests {
     @Test("a blank draft needs a name; a name makes it a valid one-step template")
     func blankDraft() throws {
         var draft = WorkoutTemplateDraft.blank()
-        #expect(draft.issues == ["Give the workout a name."])
+        #expect(draft.issues == ["Give the workout template a name."])
         #expect(draft.build() == nil)
 
         draft.name = "  Steady 10  "
@@ -171,7 +171,7 @@ struct WorkoutTemplateEditorTests {
         again.draft.name = "Steady state"
         #expect(await again.save())
         #expect(model.templates.map(\.name) == ["Steady state"])
-        #expect(again.title == "Edit Workout")
+        #expect(again.title == "Edit Workout Template")
     }
 
     @Test("a second save while the first is running is ignored")
@@ -196,7 +196,7 @@ struct WorkoutTemplateEditorTests {
         let editor = WorkoutTemplateEditorViewModel(model: model)
         editor.distanceSystem = .metric
         #expect(!editor.hasChanges)
-        #expect(editor.summary.issues == ["Give the workout a name."])
+        #expect(editor.summary.issues == ["Give the workout template a name."])
         #expect(editor.summary.defaultTitle == nil)
 
         editor.draft.name = "easy run"
@@ -230,7 +230,7 @@ struct WorkoutTemplateEditorTests {
         editor.draft.name = "Steady"
 
         #expect(await !editor.save())
-        #expect(editor.saveError?.hasPrefix("Couldn't save this workout") == true)
+        #expect(editor.saveError?.hasPrefix("Couldn't save this workout template") == true)
     }
 
     @Test("steps can be added, moved and removed within a block; blocks can be added and removed")

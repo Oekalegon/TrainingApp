@@ -95,7 +95,7 @@ struct WorkoutTemplateEditorSheet: View {
                     .disabled(!summary.issues.isEmpty || viewModel.isSaving)
                 }
             }
-            .alert("Couldn't Save Workout", isPresented: $isShowingSaveError, presenting: viewModel.saveError) { _ in
+            .alert("Couldn't Save Workout Template", isPresented: $isShowingSaveError, presenting: viewModel.saveError) { _ in
                 Button("OK", role: .cancel) {}
             } message: { message in
                 Text(message)
