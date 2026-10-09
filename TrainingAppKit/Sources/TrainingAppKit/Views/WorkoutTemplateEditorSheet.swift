@@ -421,9 +421,9 @@ private struct WorkoutTemplateStepInlineEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             Button(action: onCollapse) {
-                HStack(spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Image(systemName: step.kind.symbolName)
-                        .font(.title3)
+                        .font(.headline)
                         .foregroundStyle(card.end.tint)
                         .frame(width: 28)
                         .accessibilityHidden(true)

@@ -126,9 +126,10 @@ struct WorkoutStepCardView: View {
     let step: WorkoutStepCard
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        // The icon is lined up with the title's first line and drawn at its size, not centred on the card.
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: step.kind.symbolName)
-                .font(.title3)
+                .font(.headline)
                 .foregroundStyle(step.end.tint)
                 .frame(width: 28)
                 .accessibilityHidden(true)
