@@ -8,8 +8,10 @@ struct WorkoutTemplateEditorSheet: View {
     @Bindable var viewModel: WorkoutTemplateEditorViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingSaveError = false
+    @State private var isConfirmingDiscard = false
 
     var body: some View {
+        let summary = viewModel.summary
         NavigationStack {
             Form {
                 Section("Workout") {
@@ -40,7 +42,12 @@ struct WorkoutTemplateEditorSheet: View {
                     Text("A block repeats its steps, e.g. a block of work and recovery repeated 6 times.")
                 }
 
-                summarySection
+                summarySection(summary)
+            }
+            // Swiping the sheet away would lose a long edit without asking.
+            .interactiveDismissDisabled(viewModel.hasChanges)
+            .confirmationDialog("Discard your changes?", isPresented: $isConfirmingDiscard, titleVisibility: .visible) {
+                Button("Discard Changes", role: .destructive) { dismiss() }
             }
             .navigationTitle(viewModel.title)
             #if os(iOS)
@@ -49,7 +56,11 @@ struct WorkoutTemplateEditorSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
-                        dismiss()
+                        if viewModel.hasChanges {
+                            isConfirmingDiscard = true
+                        } else {
+                            dismiss()
+                        }
                     } label: {
                         Image(systemName: "xmark")
                     }
@@ -68,7 +79,7 @@ struct WorkoutTemplateEditorSheet: View {
                         Image(systemName: "checkmark")
                     }
                     .accessibilityLabel("Save")
-                    .disabled(!viewModel.canSave)
+                    .disabled(!summary.issues.isEmpty || viewModel.isSaving)
                 }
             }
             .alert("Couldn't Save Workout", isPresented: $isShowingSaveError, presenting: viewModel.saveError) { _ in
@@ -113,10 +124,10 @@ struct WorkoutTemplateEditorSheet: View {
     }
 
     @ViewBuilder
-    private var summarySection: some View {
-        let issues = viewModel.issues
+    private func summarySection(_ summary: WorkoutTemplateEditorViewModel.Summary) -> some View {
+        let issues = summary.issues
         if issues.isEmpty {
-            if let title = viewModel.defaultTitlePreview {
+            if let title = summary.defaultTitle {
                 Section {
                     LabeledContent("Default title", value: title)
                 } footer: {
@@ -146,9 +157,9 @@ private struct WorkoutTemplateParameterEditor: View {
                     .accessibilityHidden(true)
                 TextField("Name", text: $parameter.name)
             }
-            LabeledContent("Starts at") { NumberField(value: $parameter.defaultValue, unit: parameter.unit) }
-            LabeledContent("Lowest") { NumberField(value: $parameter.lowerBound, unit: parameter.unit) }
-            LabeledContent("Highest") { NumberField(value: $parameter.upperBound, unit: parameter.unit) }
+            LabeledContent("Starts at") { NumberField(label: "Starts at", value: $parameter.defaultValue, unit: parameter.unit) }
+            LabeledContent("Lowest") { NumberField(label: "Lowest", value: $parameter.lowerBound, unit: parameter.unit) }
+            LabeledContent("Highest") { NumberField(label: "Highest", value: $parameter.upperBound, unit: parameter.unit) }
         }
     }
 }
@@ -235,18 +246,16 @@ private struct WorkoutTemplateStepEditor: View {
                 Text("Open").tag(GoalKind.open)
             }
             switch step.goal {
-            case .time(let source):
+            case .time:
                 SourceEditor(
                     title: "Duration", source: timeSource, unit: .minutes,
                     parameters: parameters.filter { $0.unit == .minutes }
                 )
-                .id(source.isFixed)
-            case .distance(let source):
+            case .distance:
                 SourceEditor(
                     title: "Distance", source: distanceSource, unit: .meters,
                     parameters: parameters.filter { $0.unit == .meters }
                 )
-                .id(source.isFixed)
             case .open:
                 EmptyView()
             }
@@ -304,7 +313,7 @@ private struct SourceEditor: View {
 
     var body: some View {
         if parameters.isEmpty {
-            LabeledContent(title) { NumberField(value: fixedValue, unit: unit) }
+            LabeledContent(title) { NumberField(label: title, value: fixedValue, unit: unit) }
         } else {
             Picker(title, selection: parameterID) {
                 Text("Fixed").tag(nil as UUID?)
@@ -313,7 +322,7 @@ private struct SourceEditor: View {
                 }
             }
             if case .fixed = source {
-                LabeledContent("Value") { NumberField(value: fixedValue, unit: unit) }
+                LabeledContent("Value") { NumberField(label: title, value: fixedValue, unit: unit) }
             }
         }
     }
@@ -321,6 +330,8 @@ private struct SourceEditor: View {
 
 /// A number field with its unit beside it.
 private struct NumberField: View {
+    /// What the field sets, read by VoiceOver together with the unit.
+    let label: String
     @Binding var value: Double
     let unit: ParameterUnit
 
@@ -332,15 +343,11 @@ private struct NumberField: View {
                 .keyboardType(unit == .count ? .numberPad : .decimalPad)
                 #endif
                 .frame(maxWidth: 90)
+                .accessibilityLabel("\(label), \(unit.spokenName)")
             Text(unit.shortName)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
-    }
-}
-
-private extension WorkoutTemplateDraft.Source {
-    var isFixed: Bool {
-        if case .fixed = self { true } else { false }
     }
 }
 
@@ -350,6 +357,15 @@ private extension ParameterUnit {
         case .minutes: "timer"
         case .meters: "ruler"
         case .count: "repeat"
+        }
+    }
+
+    /// The unit as VoiceOver says it.
+    var spokenName: String {
+        switch self {
+        case .minutes: "minutes"
+        case .meters: "metres"
+        case .count: "times"
         }
     }
 

@@ -15,6 +15,8 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
 
     /// The template being edited; the editor's fields are bound to it.
     public var draft: WorkoutTemplateDraft
+    /// What the draft was when the editor opened, to tell whether there is anything to lose.
+    private let initialDraft: WorkoutTemplateDraft
     /// `true` when ``save()`` adds a template (a new one or a copy), `false` when it replaces one.
     public let isNew: Bool
     /// How distances are written in the default-title preview; defaults to the device's measurement
@@ -39,23 +41,36 @@ public final class WorkoutTemplateEditorViewModel: Identifiable {
     public init(model: TrainingModel, draft: WorkoutTemplateDraft = .blank(), isNew: Bool = true) {
         self.model = model
         self.draft = draft
+        self.initialDraft = draft
         self.isNew = isNew
     }
 
     /// The navigation title.
     public var title: String { isNew ? "New Workout" : "Edit Workout" }
 
-    /// What stops the draft being saved, as ``WorkoutTemplateDraft/issues``.
-    public var issues: [String] { draft.issues }
+    /// Whether the athlete changed anything since the editor opened; the sheet then asks before
+    /// discarding.
+    public var hasChanges: Bool { draft != initialDraft }
+
+    /// What the sheet shows about the draft: what stops it being saved, or else the title it would get.
+    public struct Summary: Equatable, Sendable {
+        /// What stops the draft being saved, as ``WorkoutTemplateDraft/issues``; empty when it can be.
+        public let issues: [String]
+        /// The title the workout would get when planned at its default values, e.g. "40min Easy Run";
+        /// `nil` while ``issues`` isn't empty.
+        public let defaultTitle: String?
+    }
+
+    /// The draft checked once: the sheet reads this a single time per render instead of validating for
+    /// each of the save button, the issue list and the title.
+    public var summary: Summary {
+        let issues = draft.issues
+        let title = issues.isEmpty ? draft.buildUnchecked().defaultTitle(distanceSystem: distanceSystem) : nil
+        return Summary(issues: issues, defaultTitle: title)
+    }
 
     /// Whether ``save()`` has something valid to save.
     public var canSave: Bool { draft.issues.isEmpty && !isSaving }
-
-    /// The title the workout would get when planned at its default values, e.g. "40min Easy Run";
-    /// `nil` while the draft can't be saved.
-    public var defaultTitlePreview: String? {
-        draft.build()?.defaultTitle(distanceSystem: distanceSystem)
-    }
 
     // MARK: Parameters
 

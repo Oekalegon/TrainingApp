@@ -25,7 +25,7 @@ struct WorkoutTemplateEditorTests {
         }
     }
 
-    @Test("a duplicate gets a new id and a Copy name, and no short title")
+    @Test("a duplicate gets a new id and a Copy name, titled after the original until it is renamed")
     func duplicateIsANewTemplate() throws {
         let original = BuiltInWorkoutTemplates.easyRun
         let copy = try #require(WorkoutTemplateDraft(original, duplicating: true).build())
@@ -34,6 +34,18 @@ struct WorkoutTemplateEditorTests {
         #expect(copy.name == "Easy run Copy")
         #expect(copy.blocks == original.blocks)
         #expect(copy.parameters == original.parameters)
+        // Planned titles don't say "Copy".
+        #expect(copy.defaultTitle() == original.defaultTitle())
+
+        var renamed = WorkoutTemplateDraft(original, duplicating: true)
+        renamed.name = "My easy run"
+        #expect(try #require(renamed.build()).titleName == nil)
+        #expect(try #require(renamed.build()).defaultTitle().contains("My Easy Run"))
+
+        // Editing keeps the short title whatever the name.
+        var hills = WorkoutTemplateDraft(BuiltInWorkoutTemplates.all.first { $0.titleName != nil } ?? original)
+        hills.name = "Renamed"
+        #expect(hills.build()?.titleName == BuiltInWorkoutTemplates.all.first { $0.titleName != nil }?.titleName)
     }
 
     @Test("a blank draft needs a name; a name makes it a valid one-step template")
@@ -159,6 +171,40 @@ struct WorkoutTemplateEditorTests {
         #expect(again.title == "Edit Workout")
     }
 
+    @Test("a second save while the first is running is ignored")
+    func doubleSave() async {
+        let (_, model) = await makeModel()
+        let editor = WorkoutTemplateEditorViewModel(model: model)
+        editor.draft.name = "Steady"
+        var saved = 0
+        editor.onSaved = { saved += 1 }
+
+        async let first = editor.save()
+        async let second = editor.save()
+        let results = await [first, second]
+
+        #expect(results.filter { $0 }.count == 1)
+        #expect(saved == 1)
+    }
+
+    @Test("hasChanges follows the draft, and the summary checks it once for issues and title")
+    func changesAndSummary() async {
+        let (_, model) = await makeModel()
+        let editor = WorkoutTemplateEditorViewModel(model: model)
+        editor.distanceSystem = .metric
+        #expect(!editor.hasChanges)
+        #expect(editor.summary.issues == ["Give the workout a name."])
+        #expect(editor.summary.defaultTitle == nil)
+
+        editor.draft.name = "easy run"
+        #expect(editor.hasChanges)
+        #expect(editor.summary.issues.isEmpty)
+        #expect(editor.summary.defaultTitle == "10min Easy Run")
+
+        editor.draft.name = ""
+        #expect(editor.hasChanges == false)
+    }
+
     @Test("an invalid draft isn't saved")
     func invalidDraftIsNotSaved() async {
         let (_, model) = await makeModel()
@@ -182,17 +228,6 @@ struct WorkoutTemplateEditorTests {
 
         #expect(await !editor.save())
         #expect(editor.saveError?.hasPrefix("Couldn't save this workout") == true)
-    }
-
-    @Test("the default title preview follows the draft")
-    func titlePreview() async {
-        let (_, model) = await makeModel()
-        let editor = WorkoutTemplateEditorViewModel(model: model)
-        editor.distanceSystem = .metric
-        #expect(editor.defaultTitlePreview == nil)
-
-        editor.draft.name = "easy run"
-        #expect(editor.defaultTitlePreview == "10min Easy Run")
     }
 
     @Test("steps can be added, moved and removed within a block; blocks can be added and removed")

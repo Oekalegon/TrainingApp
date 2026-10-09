@@ -36,6 +36,8 @@ struct WorkoutLibraryView: View {
 /// Every template, grouped by sport, each pushing ``WorkoutTemplateDetailView``.
 private struct WorkoutLibraryList: View {
     let viewModel: WorkoutLibraryViewModel
+    /// The row a swipe asked to delete, until the athlete confirms.
+    @State private var pendingDelete: WorkoutLibraryViewModel.Entry?
 
     var body: some View {
         List {
@@ -52,7 +54,7 @@ private struct WorkoutLibraryList: View {
                         .swipeActions(edge: .trailing) {
                             if entry.isCustom {
                                 Button("Delete", systemImage: "trash", role: .destructive) {
-                                    Task { await viewModel.deleteTemplate(id: entry.id) }
+                                    pendingDelete = entry
                                 }
                             }
                         }
@@ -70,6 +72,17 @@ private struct WorkoutLibraryList: View {
         }
         // Each time the tab appears: plans made on the week view since count too.
         .task { await viewModel.reload() }
+        .confirmationDialog(
+            "Delete this workout?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible, presenting: pendingDelete
+        ) { entry in
+            Button("Delete Workout", role: .destructive) {
+                Task { await viewModel.deleteTemplate(id: entry.id) }
+            }
+        } message: { entry in
+            Text(WorkoutTemplateDetailView.deleteMessage(planCount: entry.planCount))
+        }
         .alert("Couldn't Delete Workout", isPresented: Binding(
             get: { viewModel.actionError != nil }, set: { if !$0 { viewModel.actionError = nil } }
         ), presenting: viewModel.actionError) { _ in
@@ -131,6 +144,13 @@ struct WorkoutTemplateDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     private static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
+
+    /// What the delete confirmation says: plans made from the template stay either way.
+    static func deleteMessage(planCount: Int) -> String {
+        planCount == 0
+            ? "This removes the workout from your library."
+            : "It leaves your library, but the plans already made from it stay in your calendar and keep their parameters."
+    }
 
     static func planCountText(_ count: Int) -> String {
         count == 1 ? "Planned once" : "Planned \(count) times"
@@ -282,12 +302,14 @@ struct WorkoutTemplateDetailView: View {
         ) {
             Button("Delete Workout", role: .destructive) {
                 Task {
-                    await viewModel.deleteTemplate(id: templateID)
-                    dismiss()
+                    // Stay on the screen when it failed: the library shows why.
+                    if await viewModel.deleteTemplate(id: templateID) != nil {
+                        dismiss()
+                    }
                 }
             }
         } message: {
-            Text("Plans already made from it stay in your calendar.")
+            Text(Self.deleteMessage(planCount: entry?.planCount ?? 0))
         }
     }
 }

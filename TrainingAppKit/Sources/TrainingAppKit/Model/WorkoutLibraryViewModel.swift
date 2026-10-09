@@ -43,9 +43,7 @@ public final class WorkoutLibraryViewModel {
     /// The templates the library offers: the built-in ones, then the athlete's own by name, as in the
     /// planned-workout sheet's picker (``TrainingModel/libraryTemplates``).
     public var templates: [WorkoutTemplate] {
-        builtInTemplates + model.templates.sorted {
-            $0.name.localizedStandardCompare($1.name) == .orderedAscending
-        }
+        builtInTemplates + model.activeTemplates
     }
     /// Set when deleting a template fails; the library shows it as a blocking alert.
     public var actionError: String?
@@ -175,7 +173,7 @@ public final class WorkoutLibraryViewModel {
             plansByTemplate[templateID, default: []].append(plan)
         }
 
-        let customIDs = Set(model.templates.map(\.id))
+        let customIDs = Set(model.activeTemplates.map(\.id))
         return templates.map { template in
             let plans = plansByTemplate[template.id] ?? []
             let workout = try? template.instantiate()
@@ -206,7 +204,7 @@ public final class WorkoutLibraryViewModel {
     /// The editor for `template`: for one of the athlete's own, one that replaces it when saved;
     /// for a built-in one, which can't be changed, a copy that's added as a new template.
     public func makeEditor(for template: WorkoutTemplate) -> WorkoutTemplateEditorViewModel {
-        let isCustom = model.templates.contains { $0.id == template.id }
+        let isCustom = model.activeTemplates.contains { $0.id == template.id }
         return makeEditor(draft: WorkoutTemplateDraft(template, duplicating: !isCustom), isNew: !isCustom)
     }
 
@@ -221,17 +219,22 @@ public final class WorkoutLibraryViewModel {
         return editor
     }
 
-    /// Deletes one of the athlete's own templates. Plans made from it keep their workouts, though
-    /// their parameters can't be changed any more. A built-in template can't be deleted: nothing
-    /// happens.
+    /// Deletes one of the athlete's own templates (MVP2-142). One that plans still use is archived
+    /// instead (``TemplateRemoval/archived``): it leaves the library, the picker and search, but those
+    /// plans keep it for editing their parameters and for exports. A built-in template can't be
+    /// deleted: nothing happens.
     ///
     /// - Parameter id: The template's id.
-    public func deleteTemplate(id: UUID) async {
-        guard model.templates.contains(where: { $0.id == id }) else { return }
+    /// - Returns: What happened, or `nil` when nothing was deleted (a built-in or unknown id, or a
+    ///   failure, which sets ``actionError``).
+    @discardableResult
+    public func deleteTemplate(id: UUID) async -> TemplateRemoval? {
+        guard model.activeTemplates.contains(where: { $0.id == id }) else { return nil }
         do {
-            try await model.deleteTemplate(id: id)
+            return try await model.deleteTemplate(id: id)
         } catch {
             actionError = "Couldn't delete this workout: \(error.localizedDescription)"
+            return nil
         }
     }
 

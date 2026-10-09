@@ -131,7 +131,7 @@ public final class CalendarExportViewModel {
         defer { isExporting = false }
         let (first, last) = (firstDay, lastDay)
         do {
-            let export = try await model.calendarExport(from: first, through: last, templates: model.libraryTemplates, asOf: today)
+            let export = try await model.calendarExport(from: first, through: last, templates: model.knownTemplates, asOf: today)
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("Training Calendar \(export.firstDay) to \(export.lastDay)")
                 .appendingPathExtension("json")

@@ -698,10 +698,23 @@ nothing is saved until the check mark:
   gets at its default values.
 
 Editing a template changes what the library offers from then on, not the plans already made from it:
-each plan instantiated a workout of its own (MVP2-15). Deleting one leaves those plans, but their
-parameters can't be edited any more (the edit sheet no longer finds the template). The planned-workout
-sheet's picker, search and the calendar export read `TrainingModel.libraryTemplates` (the built-in
-library, then the athlete's templates by name).
+each plan instantiated a workout of its own (MVP2-15). The exception is editing a plan afterwards:
+changing one of its parameters instantiates the template's *current* blocks, so a plan made before the
+template was edited takes the new structure; recorded values the template no longer has fall back to
+its defaults.
+
+Deleting a template asks first (from a swipe or the detail screen). One that any plan still uses, past
+or upcoming, is archived rather than removed (MVP2-142, `TrainingModel.deleteTemplate(id:asOf:)`): it
+leaves the library, the picker and search, but those plans keep it, so their parameters stay editable
+and an export still names it. One no plan uses is removed. The planned-workout sheet's picker and the
+Library read `TrainingModel.libraryTemplates` (the built-in library, then the athlete's active
+templates by name); plan editing and the calendar export read `knownTemplates`, which adds the archived
+ones. If a plan's template is gone altogether (deleted on another device before this existed), the edit
+sheet says the template no longer exists rather than that the workout never had one.
+
+A copy's name ends in "Copy", but planned titles don't: the copy keeps the original's short title
+until it is renamed. The editor asks before discarding changes, and swiping the sheet away is blocked
+while there are any.
 
 Not yet: reordering blocks, other target kinds, and the rest of the roadmap's 14-workout library
 (MVP2-106).

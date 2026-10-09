@@ -115,6 +115,10 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     /// The short name used in generated titles, kept from the template the draft started from; the
     /// editor doesn't change it.
     public var titleName: String?
+    /// For a copy, the name it was given ("… Copy"): ``titleName`` only applies while the name is still
+    /// that, so a title says "Short Interval Run" rather than "… Copy" until the athlete renames the
+    /// copy, after which it follows the new name. `nil` keeps ``titleName`` whatever the name.
+    public var titleNameAppliesTo: String?
     /// The sport the workout is for.
     public var sport: Sport
     /// The template's parameters.
@@ -124,9 +128,10 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
 
     /// Creates a draft.
     public init(
-        id: UUID = UUID(), name: String = "", titleName: String? = nil, sport: Sport = .running,
-        parameters: [Parameter] = [], blocks: [Block] = []
+        id: UUID = UUID(), name: String = "", titleName: String? = nil, titleNameAppliesTo: String? = nil,
+        sport: Sport = .running, parameters: [Parameter] = [], blocks: [Block] = []
     ) {
+        self.titleNameAppliesTo = titleNameAppliesTo
         self.id = id
         self.name = name
         self.titleName = titleName
@@ -194,7 +199,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         self.init(
             id: duplicating ? UUID() : template.id,
             name: duplicating ? "\(template.name) Copy" : template.name,
-            titleName: duplicating ? nil : template.titleName,
+            titleName: duplicating ? (template.titleName ?? template.name) : template.titleName,
+            titleNameAppliesTo: duplicating ? "\(template.name) Copy" : nil,
             sport: template.sport, parameters: parameters, blocks: blocks
         )
     }
@@ -272,7 +278,12 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
 
     /// The template this draft describes, or `nil` while ``issues`` isn't empty.
     public func build() -> WorkoutTemplate? {
-        guard issues.isEmpty else { return nil }
+        issues.isEmpty ? buildUnchecked() : nil
+    }
+
+    /// The template this draft describes, without checking ``issues`` first; for a caller that has
+    /// just done so and shouldn't pay for it twice. Meaningless while the draft has issues.
+    func buildUnchecked() -> WorkoutTemplate {
         func key(_ id: UUID) -> String { parameters.first { $0.id == id }?.key ?? "" }
         func value(_ source: Source, unit: ParameterUnit) -> TemplateValue<Double> {
             switch source {
@@ -309,8 +320,10 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
                 range: Self.storedValue(parameter.lowerBound, unit: parameter.unit)...Self.storedValue(parameter.upperBound, unit: parameter.unit)
             )
         }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keepsTitleName = titleNameAppliesTo == nil || titleNameAppliesTo == trimmedName
         return WorkoutTemplate(
-            id: id, name: name.trimmingCharacters(in: .whitespacesAndNewlines), titleName: titleName,
+            id: id, name: trimmedName, titleName: keepsTitleName ? titleName : nil,
             sport: sport, parameters: templateParameters, blocks: templateBlocks
         )
     }

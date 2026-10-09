@@ -40,9 +40,14 @@ public final class PlannedWorkoutSheetViewModel {
     private let editedWorkout: StructuredWorkout?
 
     /// The template ``editedWorkout`` was instantiated from, when its ``StructuredWorkout/templateID``
-    /// is set and that template is still in ``templates`` — what makes parameters editable in edit
-    /// mode (MVP2-41). `nil` for a workout built by hand, created before templates were recorded on
-    /// workouts, or whose template no longer exists.
+    /// is set and that template still exists, archived or not (``TrainingModel/knownTemplates``) — what
+    /// makes parameters editable in edit mode (MVP2-41). `nil` for a workout built by hand, created
+    /// before templates were recorded on workouts, or whose template is gone.
+    ///
+    /// The template as it is now, not as it was when the plan was made (MVP2-140): changing a
+    /// parameter instantiates the template's current blocks, so a plan made before the athlete
+    /// edited the template takes its new structure. Recorded values the template no longer has fall
+    /// back to its defaults.
     private let editedTemplate: WorkoutTemplate?
     /// ``editedWorkout``'s recorded parameter values (filled out with defaults), to detect whether the
     /// athlete changed any.
@@ -50,6 +55,10 @@ public final class PlannedWorkoutSheetViewModel {
 
     /// `true` when edit mode can change the workout's parameters (see ``editedTemplate``).
     public var canEditParameters: Bool { editedTemplate != nil }
+    /// `true` when edit mode's workout was made from a template that no longer exists, e.g. one deleted
+    /// on another device. A template deleted here while plans use it is archived instead (MVP2-142),
+    /// so this is rare; the sheet words it differently from a workout built without a template.
+    public var templateIsMissing: Bool { editedWorkout?.templateID != nil && editedTemplate == nil }
     /// The parameters edit mode offers, in the template's order — empty when ``canEditParameters`` is
     /// `false`.
     public var editableParameters: [WorkoutTemplateParameter] { editedTemplate?.parameters ?? [] }
@@ -226,7 +235,9 @@ public final class PlannedWorkoutSheetViewModel {
     ///   - model: The training model the plan lives in.
     ///   - plan: The plan to edit; its date and ``PlannedActivity/expectedLoadOverride`` seed
     ///     ``date``/``loadOverride``.
-    ///   - templates/estimator/scheduler: As for ``init(model:date:templates:estimator:scheduler:)``.
+    ///   - templates/estimator/scheduler: As for ``init(model:date:templates:estimator:scheduler:)``,
+    ///     except that `templates` defaults to ``TrainingModel/knownTemplates``, so a plan made from
+    ///     an archived template can still edit its parameters.
     public init(
         model: TrainingModel,
         editing plan: PlannedActivity,
@@ -237,7 +248,7 @@ public final class PlannedWorkoutSheetViewModel {
         self.model = model
         self.date = plan.date
         self.loadOverride = plan.expectedLoadOverride
-        let templates = templates ?? model.libraryTemplates
+        let templates = templates ?? model.knownTemplates
         self.templates = templates
         self.estimator = estimator
         self.scheduler = scheduler
