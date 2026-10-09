@@ -116,6 +116,7 @@ struct WorkoutStepCardView: View {
             Image(systemName: step.kind.symbolName)
                 .font(.title3)
                 .foregroundStyle(step.kind.tint)
+                .scaleEffect(x: step.kind.mirrorsSymbol ? -1 : 1)
                 .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
@@ -162,15 +163,19 @@ extension View {
 }
 
 extension StepKind {
-    /// An SF Symbol for the role: chevrons up for effort and down for recovery, as in the Fitness app.
+    /// An SF Symbol for the role, after the Fitness app's: chevrons up for effort and down for recovery,
+    /// a staircase up for the warm-up and down for the cool-down (see ``mirrorsSymbol``).
     var symbolName: String {
         switch self {
-        case .warmup: "flame"
+        case .warmup, .cooldown: "stairs"
         case .work: "chevron.up.2"
         case .recovery: "chevron.down.2"
-        case .cooldown: "figure.cooldown"
         }
     }
+
+    /// Whether the symbol is drawn flipped left to right: the cool-down is the warm-up's staircase
+    /// going down instead of up.
+    var mirrorsSymbol: Bool { self == .cooldown }
 
     /// The role's colour; the name beside it always says the same, so colour is never the only cue.
     var tint: Color {
