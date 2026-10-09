@@ -747,8 +747,8 @@ exists to support.
 Persistence is two stores in one `ModelContainer` (`TrainingPersistenceContainer.make`), because
 Apple's guideline 5.1.3(ii) forbids storing health information in iCloud:
 
-- **Synced through CloudKit:** planned workouts, the workout library, cycles, races, and the athlete's
-  own preferences (name, picture, time zone, week start, main sport, the pace history and the Apple
+- **Synced through CloudKit:** planned workouts, the workout library, cycles, races, goals (MVP2-139), and the
+  athlete's own preferences (name, picture, time zone, week start, main sport, the pace history and the Apple
   Health resting-heart-rate switch).
 - **Local to the device:** activities with their heart-rate samples, tombstones of deleted
   activities, joins, the fitness-metrics cache, and the whole profile including what comes from

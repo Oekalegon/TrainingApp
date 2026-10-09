@@ -80,7 +80,8 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         let store = SwiftDataStore(modelContainer: container)
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
-            cycleStore: store, raceStore: store, athleteStore: store, fitnessMetricsCacheStore: store
+            cycleStore: store, raceStore: store, athleteStore: store, fitnessMetricsCacheStore: store,
+            goalStore: store
         )
         let athlete = try await store.athleteProfile() ?? Self.placeholderAthlete()
         let model = TrainingModel(stores: stores, athlete: athlete)
