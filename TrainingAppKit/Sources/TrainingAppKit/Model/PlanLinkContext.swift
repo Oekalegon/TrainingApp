@@ -18,6 +18,9 @@ public struct PlanLinkContext: Equatable {
 
     /// The plan this activity currently completes, if any.
     public let linkedPlan: PlanOption?
+    /// The linked plan's workout as step cards (MVP2-144); empty without a linked plan or when its
+    /// workout is gone.
+    public var linkedPlanSteps: [WorkoutBlockCard] = []
     /// Whether the automatic match had a close runner-up, so the athlete should confirm or correct it
     /// (``TrainingModel/planMatchAmbiguities``).
     public let isAmbiguous: Bool

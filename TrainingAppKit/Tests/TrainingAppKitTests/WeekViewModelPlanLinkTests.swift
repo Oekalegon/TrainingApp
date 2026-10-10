@@ -63,6 +63,8 @@ struct WeekViewModelPlanLinkTests {
         #expect(context.linkedPlan?.title == "Run 0")
         #expect(!context.isAmbiguous)
         #expect(context.candidates.isEmpty)
+        // The linked plan's workout comes along as step cards (MVP2-144).
+        #expect(!context.linkedPlanSteps.isEmpty)
     }
 
     @Test("an activity started from a scheduled plan is linked to exactly that plan, with no ambiguity (MVP2-120)")

@@ -42,8 +42,8 @@ struct PlannedWorkoutDetailViewModelTests {
         return workout
     }
 
-    @Test("stepLines shows one line per block, with a repetition prefix and each step's goal")
-    func stepLinesDescribeBlocks() async throws {
+    @Test("stepCards shows the workout's blocks as step cards, repeats grouped")
+    func stepCardsDescribeBlocks() async throws {
         let model = try await makeModel()
         let workout = intervalWorkout()
         try await model.add(workout)
@@ -52,14 +52,12 @@ struct PlannedWorkoutDetailViewModelTests {
 
         let viewModel = PlannedWorkoutDetailViewModel(model: model, plan: plan, scheduler: nil)
 
-        // Distances follow the device's units (metric locally, imperial on a US CI runner), so the
-        // expectation is built with the same formatter rather than hard-coding "400 m".
-        let recoveryDistance = Measurement(value: 400, unit: UnitLength.meters).formatted(.measurement(width: .abbreviated))
-        #expect(viewModel.stepLines == [
-            "Warm-up 10:00",
-            "4 × Work 8:00, Recovery \(recoveryDistance)",
-            "Cool-down open",
-        ])
+        let cards = viewModel.stepCards
+        #expect(cards.map(\.repetitions) == [1, 4, 1])
+        #expect(cards.map(\.isGroup) == [false, true, false])
+        #expect(cards[1].steps.map(\.title) == ["Work", "Recovery"])
+        #expect(cards[0].steps[0].detail == "10:00")
+        #expect(cards[2].steps[0].end == .open)
     }
 
     @Test("a duration-based workout shows an estimated distance too, from the athlete's pace model")

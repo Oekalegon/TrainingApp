@@ -13,8 +13,10 @@ extension WeekViewModel {
             .filter { $0.completedActivityID == nil && $0.id != linked?.id }
             .map(planOption)
         guard linked != nil || !candidates.isEmpty else { return nil }
+        let workout = linked.flatMap { plan in model.workouts.first { $0.id == plan.workoutID } }
         return PlanLinkContext(
             linkedPlan: linked.map(planOption),
+            linkedPlanSteps: WorkoutBlockCard.cards(for: workout?.blocks ?? []),
             isAmbiguous: model.planMatchAmbiguities.contains { $0.activityID == activity.id },
             candidates: candidates
         )
