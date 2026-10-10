@@ -5,7 +5,7 @@ import TrainingCore
 /// workout: a role, what ends the step, and the intensity it aims for.
 ///
 /// Built from resolved values (``WorkoutBlockCard/cards(for:)``), so the template detail, the editor and
-/// later the planned-workout views (MVP2-144) all say a step the same way.
+/// the planned-workout sheet and the linked activity (MVP2-144) all say a step the same way.
 public struct WorkoutStepCard: Identifiable, Equatable, Sendable {
     /// What ends a step.
     public enum End: Equatable, Sendable {

@@ -22,7 +22,7 @@ struct WorkoutStepCardList: View {
 }
 
 /// A "Steps" section of a `Form` or `List` holding the step cards on the plain background, shared by
-/// the template detail and the planned-workout views (MVP2-144). The enclosing list sets
+/// the template detail, the planned-workout sheet and the activity detail's linked plan (MVP2-144). The enclosing list sets
 /// `defaultMinListRowHeight` to 1, or the spacer rows (``WorkoutStepListSpacerRow``) grow to the
 /// default row height.
 struct WorkoutStepCardSection: View {
