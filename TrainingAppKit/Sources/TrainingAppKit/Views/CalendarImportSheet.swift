@@ -87,6 +87,7 @@ struct CalendarImportSheet: View {
             row("Already in your calendar", count: report.skippedDuplicates)
             row("Before today (skipped)", count: report.skippedPast)
             row("Completed activities (not imported)", count: report.skippedCompleted)
+            ForEach(report.templateRows(future: future), id: \.title) { row($0.title, count: $0.count) }
         } header: {
             Text(title)
         } footer: {
