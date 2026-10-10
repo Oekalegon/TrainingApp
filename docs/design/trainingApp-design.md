@@ -487,7 +487,7 @@ with the reason its workout can't go on the Watch, when the plan's card shows th
 `WeekViewModel.watchStatus(for:asOf:)` as the card, so the two always agree); its expected duration,
 distance and load, a forecast value marked with a "~" and "Forecast" (an estimated load with a "~"
 and "Estimate", MVP2-8) and the section's footer saying how many
-similar workouts it came from (see "Pace forecasts" below); and a plain step list, one line per block (`4 × Work 8:00, Recovery 400 m`).
+similar workouts it came from (see "Pace forecasts" below); and the workout's steps as the same step cards the Library's template detail uses (a "Repeat N" card around a repeating block).
 Richer per-step targets/zones are deferred. A pencil in the toolbar opens `PlannedWorkoutSheet` in
 edit mode (date, load override, and — for a workout built from a template, which records its template id and parameter values — those parameters, e.g. an easy run's duration; changing one instantiates a new workout for this plan and removes the old one if no other plan uses it, so a workout shared with other plans is never altered; a workout without a recorded template keeps a read-only definition), and a
 Delete button at the bottom behind a confirmation alert removes only the plan

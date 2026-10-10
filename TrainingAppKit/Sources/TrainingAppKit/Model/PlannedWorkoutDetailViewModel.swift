@@ -2,7 +2,7 @@ import Foundation
 import TrainingCore
 
 /// Drives the read-only detail sheet shown when a planned activity's card is tapped (MVP2-38): the
-/// workout's name, sport, date, expected duration/distance/load, a plain step list, plus Delete and
+/// workout's name, sport, date, expected duration/distance/load, its step cards, plus Delete and
 /// (via ``makeEditor()``) the hand-off to ``PlannedWorkoutSheetViewModel``'s edit mode.
 ///
 /// Reads the plan from `model.plans` on every access rather than snapshotting it, so the sheet
@@ -164,10 +164,10 @@ public final class PlannedWorkoutDetailViewModel {
         expected?.isDistanceForecast ?? false
     }
 
-    /// One line per block, e.g. `"Warm-up 10:00"` or `"4 × Work 8:00, Recovery 2:00"`. Empty when the
-    /// workout is missing.
-    public var stepLines: [String] {
-        (workout?.blocks ?? []).map(Self.line(for:))
+    /// The workout's steps as the step cards show them (MVP2-144), the same as the library's template
+    /// detail. Empty when the workout is missing.
+    public var stepCards: [WorkoutBlockCard] {
+        WorkoutBlockCard.cards(for: workout?.blocks ?? [])
     }
 
     static func line(for block: WorkoutBlock) -> String {

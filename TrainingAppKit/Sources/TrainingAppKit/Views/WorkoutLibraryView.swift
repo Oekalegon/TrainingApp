@@ -213,14 +213,7 @@ struct WorkoutTemplateDetailView: View {
                 }
 
                 if !entry.blockCards.isEmpty {
-                    Section("Steps") {
-                        WorkoutStepListSpacerRow()
-                        WorkoutStepCardList(blocks: entry.blockCards)
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        WorkoutStepListSpacerRow()
-                    }
+                    WorkoutStepCardSection(blocks: entry.blockCards)
                 }
 
                 if let load = entry.expectedLoad {

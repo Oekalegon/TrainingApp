@@ -116,6 +116,9 @@ struct ActivityDetailView: View {
 
             if let planLinkContext = viewModel.planLinkContext {
                 planLinkSection(planLinkContext)
+                if !planLinkContext.linkedPlanSteps.isEmpty {
+                    WorkoutStepCardSection(blocks: planLinkContext.linkedPlanSteps, title: "Planned Steps")
+                }
             }
 
             Section {
@@ -199,6 +202,8 @@ struct ActivityDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
         }
+        // The planned step cards' spacer rows are one point high (``WorkoutStepListSpacerRow``).
+        .environment(\.defaultMinListRowHeight, 1)
         .navigationTitle(viewModel.activity.sport.displayName)
         .task { components = await loadComponents() }
         #if os(iOS)

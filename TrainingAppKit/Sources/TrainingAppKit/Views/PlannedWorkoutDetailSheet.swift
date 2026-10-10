@@ -4,7 +4,7 @@ import TrainingCore
 /// The sheet shown when a planned activity's card is tapped (MVP2-38): a read-only summary of the
 /// workout — name, sport, date, why it can't go on the Apple Watch if it can't (MVP2-122), expected
 /// duration/distance/load (estimates marked with a "~" and a "Forecast"/"Estimate" caption, MVP2-8),
-/// a plain step list — with a pencil that opens ``PlannedWorkoutSheet`` in
+/// the step cards — with a pencil that opens ``PlannedWorkoutSheet`` in
 /// edit mode and a Delete button at the bottom behind a confirmation alert. Own `NavigationStack`,
 /// icon-only toolbar buttons, matching `PlannedWorkoutSheet`'s conventions.
 struct PlannedWorkoutDetailSheet: View {
@@ -127,13 +127,9 @@ struct PlannedWorkoutDetailSheet: View {
                     }
                 }
 
-                let steps = viewModel.stepLines
+                let steps = viewModel.stepCards
                 if !steps.isEmpty {
-                    Section("Steps") {
-                        ForEach(Array(steps.enumerated()), id: \.offset) { _, line in
-                            Text(line)
-                        }
-                    }
+                    WorkoutStepCardSection(blocks: steps)
                 }
 
                 Section {
@@ -146,6 +142,7 @@ struct PlannedWorkoutDetailSheet: View {
                     .disabled(viewModel.isDeleting)
                 }
             }
+            .environment(\.defaultMinListRowHeight, 1)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

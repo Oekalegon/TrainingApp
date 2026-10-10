@@ -4,7 +4,7 @@ import TrainingCore
 /// The step list of a structured workout (MVP2-143), drawn like the Fitness app's: each step an
 /// outlined card with its role icon, name, what ends it and the zone it aims for, and a block that
 /// repeats one "Repeat N" card holding its steps. Shared by the template detail and the creator, and
-/// built to serve the planned-workout views too (MVP2-144).
+/// also used by the planned-workout views (MVP2-144).
 struct WorkoutStepCardList: View {
     let blocks: [WorkoutBlockCard]
 
@@ -17,6 +17,26 @@ struct WorkoutStepCardList: View {
                     ForEach(block.steps) { WorkoutStepCardView(step: $0).cardStyle() }
                 }
             }
+        }
+    }
+}
+
+/// A "Steps" section of a `Form` or `List` holding the step cards on the plain background, shared by
+/// the template detail and the planned-workout views (MVP2-144). The enclosing list sets
+/// `defaultMinListRowHeight` to 1, or the spacer rows (``WorkoutStepListSpacerRow``) grow to the
+/// default row height.
+struct WorkoutStepCardSection: View {
+    let blocks: [WorkoutBlockCard]
+    var title: LocalizedStringKey = "Steps"
+
+    var body: some View {
+        Section(title) {
+            WorkoutStepListSpacerRow()
+            WorkoutStepCardList(blocks: blocks)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            WorkoutStepListSpacerRow()
         }
     }
 }
