@@ -15,7 +15,7 @@ extension CalendarImportReport.RejectionReason {
 extension CalendarImportReport {
     /// One line of the import summary about templates (MVP2-141).
     struct TemplateRow: Equatable {
-        /// What the count counts, e.g. "Templates added to your library".
+        /// What the count counts, e.g. "Templates already in your library".
         let title: String
         /// How many.
         let count: Int
@@ -28,8 +28,11 @@ extension CalendarImportReport {
     func templateRows(future: Bool) -> [TemplateRow] {
         [
             TemplateRow(title: future ? "Templates that will be added" : "Templates added", count: templatesAdded),
+            // The athlete never sees ids: say it in terms of having a different template of the same identity.
             TemplateRow(
-                title: future ? "Templates that will be added as copies (the id is taken)" : "Templates added as copies (the id is taken)",
+                title: future
+                    ? "Templates that will be added as copies (you have a different template with the same identity)"
+                    : "Templates added as copies (you have a different template with the same identity)",
                 count: templatesCopied
             ),
             TemplateRow(title: "Templates already in your library", count: templatesLinked),

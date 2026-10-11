@@ -41,7 +41,8 @@ struct CalendarImportReportDisplayTests {
 
     @Test("a file with a template the library lacks shows it as added in the preview and in the result")
     func addedTemplateRow() async throws {
-        let file = try await export(using: customTemplate())
+        let template = customTemplate()
+        let file = try await export(using: template)
         let target = makeModel()
 
         let preview = try await target.calendarImportPreview(file, asOf: day(0))
@@ -49,6 +50,9 @@ struct CalendarImportReportDisplayTests {
 
         let result = try await target.importCalendar(file, asOf: day(0))
         #expect(result.templateRows(future: false) == [.init(title: "Templates added", count: 1)])
+        // What the athlete finds afterwards: the template in the library, and the plan's workout linked to it.
+        #expect(target.templates.map(\.id) == [template.id])
+        #expect(target.workouts.first?.templateID == template.id)
     }
 
     @Test("a template the library already has is shown as already there")
@@ -75,5 +79,43 @@ struct CalendarImportReportDisplayTests {
 
         #expect(preview.templateRows(future: true).isEmpty)
         #expect(preview.templateRows(future: false).isEmpty)
+    }
+
+    @Test("a different template with the same id is added as a copy, and the rows say so")
+    func copiedTemplateRow() async throws {
+        let template = customTemplate()
+        let file = try await export(using: template)
+        let target = makeModel()
+        var clashing = template
+        clashing.blocks = [TemplateBlock(steps: [TemplateStep(kind: .work, goal: .time(.fixed(60)))])]
+        try await target.add(clashing)
+
+        let preview = try await target.calendarImportPreview(file, asOf: day(0))
+        #expect(preview.templateRows(future: true).map(\.count) == [1])
+        #expect(preview.templateRows(future: true).first?.title.hasPrefix("Templates that will be added as copies") == true)
+
+        let result = try await target.importCalendar(file, asOf: day(0))
+        #expect(result.templateRows(future: false).first?.title.hasPrefix("Templates added as copies") == true)
+        #expect(target.templates.count == 2)
+    }
+
+    @Test("without a template store a template can't be used, and the row says the workouts keep their steps")
+    func rejectedTemplateRow() async throws {
+        let file = try await export(using: customTemplate())
+        let store = InMemoryStore()
+        let target = TrainingModel(
+            stores: StoreSet(
+                activityStore: store, planStore: store, workoutStore: store,
+                cycleStore: store, raceStore: store, athleteStore: store
+            ),
+            athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        )
+
+        let result = try await target.importCalendar(file, asOf: day(0))
+
+        #expect(result.templateRows(future: false) == [
+            .init(title: "Templates that can't be used (workouts keep their steps)", count: 1),
+        ])
+        #expect(target.workouts.first?.templateID == nil)
     }
 }
