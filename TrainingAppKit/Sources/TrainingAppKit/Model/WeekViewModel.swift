@@ -204,6 +204,19 @@ public final class WeekViewModel {
         !model.hasEverImportedActivities
     }
 
+    /// Whether the week view shows its "No training data yet" prompt instead of the calendar
+    /// (MVP2-108): nothing has been imported from Health **and** no plan is loaded.
+    ///
+    /// A plan makes the calendar worth showing even before Health is connected: on a fresh install a
+    /// calendar import (MVP2-103) or a new plan would otherwise show no sign it exists. It looks only
+    /// at the loaded plans (``TrainingModel/plans``, the weeks around the displayed one), so a plan
+    /// months away doesn't count until its weeks are shown; the empty state keeps its week
+    /// navigation, so moving there loads the plans and reveals the calendar. ``hasNoActivities``
+    /// stays about Health alone: the Athlete tab uses it to offer "Connect Apple Health".
+    public var showsEmptyState: Bool {
+        hasNoActivities && model.plans.isEmpty
+    }
+
     /// The athlete's timezone — views should format every date they show with this, not the
     /// device's default, so displayed dates agree with how `displayedWeekStart`/`weekDates` were
     /// actually computed.

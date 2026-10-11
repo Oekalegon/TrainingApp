@@ -392,9 +392,15 @@ across launches.
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
   import trigger in MVP 1 — see §3.4.
-- **Empty state**: if `TrainingModel.activities` is empty (e.g. first launch before HealthKit
-  authorization / initial sync), show an inline prompt — "Connect Health data" — that triggers
+- **Empty state**: until a HealthKit import has completed (`WeekViewModel.hasNoActivities`, e.g.
+  first launch before HealthKit authorization / initial sync) and while no plan is loaded
+  (`WeekViewModel.showsEmptyState`), show an inline prompt — "Connect Health data" — that triggers
   the HealthKit authorization request. No separate onboarding screen (deferred to MVP 2, see §6).
+  A loaded plan (a calendar import, MVP2-103, or a plan made in the Library) shows the calendar
+  instead (MVP2-108), so it isn't invisible before Health is connected; only the plans of the
+  loaded weeks count, and the empty state keeps its week navigation, so moving to a week with plans
+  reveals the calendar. "Connect Apple Health" stays on the Athlete tab (Connected Services) while
+  nothing has been imported.
 - **Overlap warning badge** (MVP1-63): an `Activity` card shows a small orange warning triangle
   when `WeekViewModel.overlapWarning(for:)` finds a real issue (`.duplicate`/`.merge`/`.conflict`/
   `.join` from `TrainingModel.overlapAdvice`; when an activity is named by several pairs the
