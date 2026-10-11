@@ -208,7 +208,8 @@ public final class WeekViewModel {
     /// (MVP2-108): nothing has been imported from Health **and** no plan is loaded.
     ///
     /// A plan makes the calendar worth showing even before Health is connected: on a fresh install a
-    /// calendar import (MVP2-103) or a new plan would otherwise show no sign it exists. It looks only
+    /// calendar import (MVP2-103) or a new plan would otherwise show no sign it exists. Any loaded plan
+    /// counts, a missed one on a past day too: it is something the athlete put in the calendar. It looks only
     /// at the loaded plans (``TrainingModel/plans``, the weeks around the displayed one), so a plan
     /// months away doesn't count until its weeks are shown; the empty state keeps its week
     /// navigation, so moving there loads the plans and reveals the calendar. ``hasNoActivities``

@@ -1476,8 +1476,24 @@ struct WeekViewModelTests {
         #expect(viewModel.showsEmptyState)
     }
 
-    @Test("a plan outside the loaded weeks doesn't count; an imported athlete never sees the empty state")
-    func emptyStateIgnoresUnloadedPlansAndFollowsImport() async throws {
+    @Test("a plan on a past day inside the loaded weeks counts too (MVP2-108)")
+    func emptyStateCountsPastPlans() async throws {
+        let (store, stores) = makeStores()
+        let workout = StructuredWorkout(
+            name: "Easy", sport: .running, blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800))])]
+        )
+        try await store.upsert([workout])
+        try await store.upsert([PlannedActivity(workoutID: workout.id, date: day(-3))])
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+
+        #expect(model.plans.count == 1)
+        #expect(!viewModel.showsEmptyState)
+    }
+
+    @Test("a plan outside the loaded weeks doesn't count, so the empty state stays")
+    func emptyStateIgnoresUnloadedPlans() async throws {
         let (store, stores) = makeStores()
         let workout = StructuredWorkout(
             name: "Easy", sport: .running, blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800))])]
@@ -1489,11 +1505,6 @@ struct WeekViewModelTests {
         await viewModel.load(asOf: day(0))
         #expect(model.plans.isEmpty)
         #expect(viewModel.showsEmptyState)
-
-        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
-        await viewModel.load(asOf: day(0))
-
-        #expect(!viewModel.showsEmptyState)
     }
 
     @Test("hasNoActivities stays false once imported, even if the current chart range has no activities")
