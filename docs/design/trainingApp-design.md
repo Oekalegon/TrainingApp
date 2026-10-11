@@ -357,7 +357,8 @@ across launches.
     planned (listed first, since a season plan is the main use), "Next 4 Weeks" and "Last 12 Weeks".
   - **The checkmark** (toolbar, labelled "Share Export") calls
     `TrainingModel.calendarExport(from:through:templates:asOf:)` (format in TrainingKit's design doc
-    §9.4, including each workout's steps), writes `Training Calendar <first> to <last>.json` to the
+    §9.4, including each workout's steps and, for a plan built from a custom template, the template's
+    definition and the plan's parameter values, archived templates too, MVP2-141), writes `Training Calendar <first> to <last>.json` to the
     temporary directory and opens the system share sheet (Files, AirDrop, Mail…). The X cancels.
     Sharing or saving closes the sheet; cancelling the share sheet keeps it open. On macOS the
     checkmark creates the file first and then becomes a `ShareLink`.
@@ -374,6 +375,12 @@ across launches.
     calendar (the same workout on the same day), how many are before today (skipped), and how many
     completed activities the file holds (not imported: they come from Health, and the file has no
     heart-rate data). Entries that can't be imported are listed with the reason.
+  - **Custom templates** (MVP2-141, MVP2-142): the preview adds lines for the templates that will be added, added as copies
+    (the library has a different template with the same id), already in the library (an equal one:
+    same sport, parameters and blocks, whatever its name), and that can't be used (the workouts then
+    keep their steps, without a template link). Only templates a new plan uses are added. Imported
+    workouts keep their template link, so they can be opened with the template's parameters.
+    `CalendarImportReport.templateRows(future:)` makes the lines and is tested.
   - **The checkmark** imports (`TrainingModel.importCalendar`); it is disabled when nothing would be
     added, so importing the same file twice is harmless. The sheet then shows the result, and Done
     closes it. A file that isn't an export, or comes from a newer version of the app, shows a message
