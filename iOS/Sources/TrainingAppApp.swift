@@ -26,7 +26,10 @@ struct TrainingAppApp: App {
     var body: some Scene {
         WindowGroup {
             if let environment {
-                AppTabView(model: environment.model, refresher: environment, watchSync: environment.watchSync)
+                AppTabView(
+                    model: environment.model, refresher: environment, watchSync: environment.watchSync,
+                    iCloud: CloudKitAccountChecker(containerIdentifier: TrainingAppEnvironment.cloudKitContainerIdentifier)
+                )
             } else {
                 LaunchingView(onReady: { environment = $0 })
             }

@@ -27,6 +27,7 @@ public struct WeekView: View {
     let viewModel: WeekViewModel
     /// Opens the Athlete tab's Apple Watch synchronisation screen, from the Watch permission banner (MVP2-117, MVP2-123).
     let onShowWatchSettings: () -> Void
+    @Environment(\.openURL) private var openURL
     #if os(iOS)
     @Environment(\.colorScheme) private var colorScheme
     #endif
@@ -175,15 +176,35 @@ public struct WeekView: View {
             // MVP2-117: an inset rather than an overlay, so the last day row can still scroll clear
             // of the banner; at the bottom, so the large title and the week swipe aren't touched.
             .safeAreaInset(edge: .bottom) {
-                if viewModel.showsWatchPermissionBanner {
-                    WatchPermissionBanner(
-                        onShowWatchSettings: onShowWatchSettings,
-                        onDismiss: { viewModel.dismissWatchPermissionBanner() }
-                    )
+                VStack(spacing: 0) {
+                    // The permission banners (MVP2-117, MVP2-147), each dismissible on its own.
+                    if viewModel.onboarding.showsICloudBanner {
+                        ICloudUnavailableBanner(
+                            onOpenSettings: { SystemSettings.url.map { openURL($0) } },
+                            onDismiss: { viewModel.onboarding.dismissICloudBanner() }
+                        )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    if viewModel.showsConnectHealthBanner {
+                        HealthConnectBanner(
+                            isConnecting: viewModel.isRefreshing,
+                            onConnect: { Task { await viewModel.connectHealthData() } },
+                            onDismiss: { viewModel.onboarding.dismissHealthBanner() }
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    if viewModel.showsWatchPermissionBanner {
+                        WatchPermissionBanner(
+                            onShowWatchSettings: onShowWatchSettings,
+                            onDismiss: { viewModel.dismissWatchPermissionBanner() }
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
             .animation(.default, value: viewModel.showsWatchPermissionBanner)
+            .animation(.default, value: viewModel.showsConnectHealthBanner)
+            .animation(.default, value: viewModel.onboarding.showsICloudBanner)
             // Covers the empty-state -> week-content swap once `showsEmptyState` flips (e.g. after
             // "Connect Health Data" completes, or a first plan is made): that happens asynchronously, well after the button's
             // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` —

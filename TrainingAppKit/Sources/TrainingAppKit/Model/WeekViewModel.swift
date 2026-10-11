@@ -165,6 +165,8 @@ public final class WeekViewModel {
     /// What the athlete has already declined, and whether the history scan has run.
     @ObservationIgnored
     let maxHeartRatePromptHistory: any MaxHeartRatePromptHistory
+    /// The first-run introduction and the Health and iCloud banners (MVP2-147).
+    public let onboarding: OnboardingViewModel
 
     /// Creates the week view model.
     ///
@@ -175,18 +177,26 @@ public final class WeekViewModel {
     ///     suggestions; defaults to the app's `UserDefaults`-backed record.
     ///   - watchSync: Run again after anything that changes plans or their links (MVP2-55,
     ///     MVP2-116); `nil` skips it.
+    ///   - onboardingProgress: What the athlete has already dismissed (MVP2-147); defaults to the
+    ///     app's `UserDefaults`-backed record.
+    ///   - iCloud: Looks up the iCloud account for the warning banner; `nil` never warns.
     ///   - today: The day whose week is shown first.
     public init(
         model: TrainingModel,
         refresher: any ActivityRefreshing,
         maxHeartRatePromptHistory: (any MaxHeartRatePromptHistory)? = nil,
         watchSync: WatchScheduleSync? = nil,
+        onboardingProgress: (any OnboardingProgress)? = nil,
+        iCloud: (any ICloudAccountChecking)? = nil,
         today: Date = .now
     ) {
         self.model = model
         self.refresher = refresher
         self.watchSync = watchSync
         self.maxHeartRatePromptHistory = maxHeartRatePromptHistory ?? UserDefaultsMaxHeartRatePromptHistory()
+        self.onboarding = OnboardingViewModel(
+            model: model, progress: onboardingProgress ?? UserDefaultsOnboardingProgress(), iCloud: iCloud
+        )
         let calendar = Self.calendar(for: model.athlete)
         self.calendarCache = (model.athlete.timeZone, model.athlete.weekStartsOn, calendar)
         self.displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
@@ -1222,8 +1232,19 @@ public final class WeekViewModel {
     /// swallowed — a failed load leaves `model` exactly as it was (`TrainingModel.load(in:)`'s own
     /// guarantee), so there's nothing for the view to reconcile; MVP 1 has no load-failure UI.
     public func load(asOf today: Date = .now) async {
-        try? await model.load(in: Self.loadRange(for: displayedWeekStart, calendar: calendar), asOf: today)
+        do {
+            try await model.load(in: Self.loadRange(for: displayedWeekStart, calendar: calendar), asOf: today)
+            // Only a load that worked says whether Health was ever imported (MVP2-147).
+            onboarding.markLoaded()
+        } catch {}
         await refreshWeekCachesIfNeeded(asOf: today)
+    }
+
+    /// Whether the week view shows the "Connect Health Data" banner (MVP2-147): nothing has been
+    /// imported from Health, the athlete hasn't dismissed it, and the calendar is showing because a
+    /// plan is loaded (see ``showsEmptyState``).
+    public var showsConnectHealthBanner: Bool {
+        onboarding.showsHealthBanner(showsCalendar: !showsEmptyState)
     }
 
     /// `model.metrics` restricted to `range`, in day order — for the metrics detail view's period

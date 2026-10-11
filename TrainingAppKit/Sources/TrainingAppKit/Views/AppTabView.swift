@@ -38,14 +38,20 @@ public struct AppTabView: View {
     /// The tab bar's search field (MVP2-21).
     @State private var searchText = ""
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
     private let watchSync: WatchScheduleSync?
 
     /// - Parameters:
     ///   - model: The app's training model.
     ///   - refresher: Imports activities from HealthKit.
     ///   - watchSync: Run on launch and every time the app becomes active again; `nil` skips it.
-    public init(model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil) {
-        let viewModel = WeekViewModel(model: model, refresher: refresher, watchSync: watchSync)
+    ///   - iCloud: Looks up the iCloud account, for the first-run introduction and the warning banner
+    ///     (MVP2-147); `nil` never warns.
+    public init(
+        model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil,
+        iCloud: (any ICloudAccountChecking)? = nil
+    ) {
+        let viewModel = WeekViewModel(model: model, refresher: refresher, watchSync: watchSync, iCloud: iCloud)
         _viewModel = State(initialValue: viewModel)
         let libraryViewModel = viewModel.workoutLibraryViewModel()
         _libraryViewModel = State(initialValue: libraryViewModel)
@@ -114,7 +120,22 @@ public struct AppTabView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             watchSync?.requestSync()
+            // The athlete may have signed in to iCloud in Settings meanwhile (MVP2-147).
+            Task { await viewModel.onboarding.refreshICloudStatus() }
         }
+        // First launch (MVP2-147): shown over everything, only once the first load says Health was
+        // never connected. Not available on macOS, where a sheet stands in.
+        .modifier(OnboardingPresentation(
+            isPresented: viewModel.onboarding.showsOnboarding,
+            content: {
+                OnboardingView(
+                    viewModel: viewModel.onboarding,
+                    isConnecting: viewModel.isRefreshing,
+                    onConnectHealth: { await viewModel.connectHealthData() },
+                    onOpenSettings: { SystemSettings.url.map { openURL($0) } }
+                )
+            }
+        ))
         // A workout imported in the background (MVP2-121) already synced the Watch; the caches are
         // this view model's own.
         .onReceive(NotificationCenter.default.publisher(for: .trainingAppDidImportWorkouts)) { _ in
