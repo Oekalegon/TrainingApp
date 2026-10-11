@@ -29,6 +29,14 @@ public final class OnboardingViewModel {
     /// Whether the week's first load has finished: until then `hasEverImportedActivities` can't be
     /// trusted, and an athlete who already connected would see the introduction flash up.
     private(set) var isLoaded = false
+    /// Whether this launch shows the introduction, decided once when the first load finishes. Not
+    /// re-derived while it is up: connecting Health flips `hasEverImportedActivities` (even when
+    /// access was denied, since the import still completes), and the introduction must stay to show
+    /// the result and the iCloud step until the athlete taps Continue.
+    private var needsOnboarding = false
+    /// Set before the first `await` of ``connectHealth(_:)``, so a second tap in the same moment
+    /// can't start a second connection.
+    public private(set) var isConnecting = false
     // Mirrors of `progress`, kept here so the views update when they change: the stored record
     // (`UserDefaults`) isn't observable.
     private var hasCompletedOnboarding: Bool
@@ -50,13 +58,15 @@ public final class OnboardingViewModel {
 
     /// Tells the view model the first load has finished (see `WeekViewModel.load(asOf:)`).
     func markLoaded() {
+        guard !isLoaded else { return }
         isLoaded = true
+        needsOnboarding = !hasCompletedOnboarding && !model.hasEverImportedActivities
     }
 
-    /// Whether the first-run introduction is up: only once the first load has finished, and never for
-    /// an athlete who has completed it or already connected Health (an existing install).
+    /// Whether the first-run introduction is up: from the first load until the athlete leaves it, and
+    /// never for an athlete who has completed it or already connected Health (an existing install).
     public var showsOnboarding: Bool {
-        isLoaded && !hasCompletedOnboarding && !model.hasEverImportedActivities
+        needsOnboarding && !hasCompletedOnboarding
     }
 
     /// Whether Health has been connected: an import has completed.
@@ -68,6 +78,9 @@ public final class OnboardingViewModel {
     ///
     /// - Parameter connect: Runs the Health connection (`WeekViewModel.connectHealthData(asOf:)`).
     public func connectHealth(_ connect: () async -> Void) async {
+        guard !isConnecting else { return }
+        isConnecting = true
+        defer { isConnecting = false }
         await connect()
         hasAskedForHealth = true
     }

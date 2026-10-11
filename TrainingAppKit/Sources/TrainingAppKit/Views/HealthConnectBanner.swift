@@ -18,7 +18,8 @@ struct HealthConnectBanner: View {
             title: "Connect Health Data",
             message: "Import your workouts from Apple Health to see your training load next to your plans.",
             actionTitle: isConnecting ? "Connecting…" : "Connect Apple Health",
-            onAction: { if !isConnecting { onConnect() } },
+            onAction: onConnect,
+            isActionEnabled: !isConnecting,
             dismissLabel: "Dismiss Connect Health Notice",
             onDismiss: onDismiss
         )

@@ -8,7 +8,7 @@ import SwiftUI
 /// Shown once, as a full-screen cover over the tabs (see ``AppTabView``), and not to anyone who has
 /// already connected Health.
 struct OnboardingView: View {
-    @Bindable var viewModel: OnboardingViewModel
+    let viewModel: OnboardingViewModel
     let isConnecting: Bool
     let onConnectHealth: () async -> Void
     let onOpenSettings: () -> Void
@@ -36,12 +36,14 @@ struct OnboardingView: View {
                         } label: {
                             HStack {
                                 Text(viewModel.hasAskedForHealth ? "Try Again" : "Connect Apple Health")
-                                if isConnecting { ProgressView() }
+                                if isConnecting || viewModel.isConnecting {
+                                    ProgressView().accessibilityLabel("Connecting")
+                                }
                             }
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(isConnecting)
+                        .disabled(isConnecting || viewModel.isConnecting)
                     }
                 }
 

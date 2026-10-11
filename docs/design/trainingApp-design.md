@@ -447,6 +447,9 @@ across launches.
     access and imports (`WeekViewModel.connectHealthData`). HealthKit says only whether an import
     completed, not whether access was granted, so the card reads "Connected" after an import, or else
     "Nothing was imported" with where to turn access on in Settings, and offers "Try Again".
+    Connecting doesn't end the introduction, even though an import marks Health as imported: whether
+    it is shown is decided once, at launch, so the result and the iCloud step stay in view until
+    Continue.
   - **iCloud**: that plans, templates, races and goals sync through iCloud. The account status
     (`ICloudAccountChecking`, CloudKit's `accountStatus`) shows as "Signed in", "Not signed in" or
     "Restricted", with "Open Settings"; the app works either way.

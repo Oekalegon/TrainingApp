@@ -90,6 +90,60 @@ struct OnboardingViewModelTests {
         #expect(!viewModel.isHealthConnected)  // nothing imported: the prompt may have been declined
     }
 
+    @Test("a Health connection that completes an import leaves the introduction up until Continue, with Health shown as connected")
+    func introductionStaysAfterImport() async throws {
+        let (store, stores) = makeStores()
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        let progress = FakeProgress()
+        let viewModel = OnboardingViewModel(model: model, progress: progress)
+        viewModel.markLoaded()
+        #expect(viewModel.showsOnboarding)
+
+        // What connecting does: the import completes and the anchor is saved, whether or not access was granted.
+        await viewModel.connectHealth {
+            try? await store.saveImportAnchor(ImportAnchor(data: Data([1])))
+            try? await model.load(in: day(0)...day(6), asOf: day(0))
+        }
+
+        #expect(viewModel.isHealthConnected)
+        #expect(viewModel.hasAskedForHealth)
+        #expect(viewModel.showsOnboarding)  // still up: Continue ends it
+
+        viewModel.finish()
+        #expect(!viewModel.showsOnboarding)
+        #expect(progress.hasCompletedOnboarding)
+    }
+
+    @Test("a second connect while one is running is ignored")
+    func connectIgnoresSecondTap() async {
+        let viewModel = OnboardingViewModel(model: makeModel(), progress: FakeProgress())
+        var runs = 0
+
+        await viewModel.connectHealth {
+            runs += 1
+            // A tap landing while the first connection is still running.
+            await viewModel.connectHealth { runs += 1 }
+        }
+
+        #expect(runs == 1)
+        #expect(!viewModel.isConnecting)
+    }
+
+    @Test("the introduction is decided once: an import later in the session doesn't create it")
+    func introductionDecidedOnce() async throws {
+        let (store, stores) = makeStores()
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        try await model.load(in: day(0)...day(6), asOf: day(0))
+        let viewModel = OnboardingViewModel(model: model, progress: FakeProgress())
+        viewModel.markLoaded()
+        #expect(!viewModel.showsOnboarding)
+
+        viewModel.markLoaded()
+
+        #expect(!viewModel.showsOnboarding)
+    }
+
     // MARK: iCloud
 
     @Test("no account and a restricted account are unavailable; unknown and available aren't")
@@ -209,6 +263,22 @@ struct OnboardingViewModelTests {
         #expect(!viewModel.showsConnectHealthBanner)
     }
 
+    @Test("a failed first load doesn't count as loaded, so the introduction doesn't guess")
+    func failedFirstLoadIsNotLoaded() async {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: UnreadablePlanStore(base: store), workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store
+        )
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        let viewModel = WeekViewModel(model: model, refresher: StubRefresher(), onboardingProgress: FakeProgress(), today: day(0))
+
+        await viewModel.load(asOf: day(0))
+
+        #expect(!viewModel.onboarding.isLoaded)
+        #expect(!viewModel.onboarding.showsOnboarding)
+    }
+
     // MARK: Stored progress
 
     @Test("UserDefaultsOnboardingProgress keeps each flag across instances")
@@ -234,4 +304,15 @@ private struct StubRefresher: ActivityRefreshing {
     func refreshActivities(asOf today: Date) async throws {}
     func resyncActivities(asOf today: Date) async throws {}
     func requestAuthorization() async throws {}
+}
+
+/// A plan store whose reads fail, so the model's first load fails.
+private struct UnreadablePlanStore: PlanStore {
+    struct Failure: Error {}
+    let base: InMemoryStore
+
+    func plans(in range: ClosedRange<Date>) async throws -> [PlannedActivity] { throw Failure() }
+    func upsert(_ plans: [PlannedActivity]) async throws { try await base.upsert(plans) }
+    func plan(id: UUID) async throws -> PlannedActivity? { try await base.plan(id: id) }
+    func deletePlan(id: UUID) async throws { try await base.deletePlan(id: id) }
 }

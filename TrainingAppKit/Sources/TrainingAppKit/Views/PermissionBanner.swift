@@ -14,6 +14,8 @@ struct PermissionBanner: View {
     /// The main action's label, e.g. "Open Watch Settings".
     let actionTitle: String
     let onAction: () -> Void
+    /// Whether the main action can be used; `false` while it is already running.
+    var isActionEnabled = true
     /// The close button's accessibility label, e.g. "Dismiss Watch Permission Notice".
     let dismissLabel: LocalizedStringKey
     let onDismiss: () -> Void
@@ -37,6 +39,7 @@ struct PermissionBanner: View {
                     .buttonStyle(.plain)
                     .frame(minHeight: 44, alignment: .leading)
                     .contentShape(Rectangle())
+                    .disabled(!isActionEnabled)
             }
             Spacer(minLength: 0)
             // A 44 pt hit area around the small glyph, pulled into the banner's padding so the
