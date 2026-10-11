@@ -40,6 +40,7 @@ public struct AppTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     private let watchSync: WatchScheduleSync?
+    private let workoutInspector: (any WorkoutInspecting)?
 
     /// - Parameters:
     ///   - model: The app's training model.
@@ -47,9 +48,11 @@ public struct AppTabView: View {
     ///   - watchSync: Run on launch and every time the app becomes active again; `nil` skips it.
     ///   - iCloud: Looks up the iCloud account, for the first-run introduction and the warning banner
     ///     (MVP2-147); `nil` never warns.
+    ///   - workoutInspector: Reads what HealthKit recorded for recent workouts, for the Developer
+    ///     screen (MVP2-146 spike); `nil` hides it.
     public init(
         model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil,
-        iCloud: (any ICloudAccountChecking)? = nil
+        iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
     ) {
         let viewModel = WeekViewModel(model: model, refresher: refresher, watchSync: watchSync, iCloud: iCloud)
         _viewModel = State(initialValue: viewModel)
@@ -57,6 +60,7 @@ public struct AppTabView: View {
         _libraryViewModel = State(initialValue: libraryViewModel)
         _searchViewModel = State(initialValue: viewModel.searchViewModel(library: libraryViewModel))
         self.watchSync = watchSync
+        self.workoutInspector = workoutInspector
     }
 
     public var body: some View {
@@ -101,7 +105,8 @@ public struct AppTabView: View {
                     loadJoinedComponents: { await viewModel.joinedComponents(of: $0) },
                     onLinkPlan: { await viewModel.linkActivity($0, toPlan: $1) },
                     onUnlinkPlan: { await viewModel.unlinkActivity($0) },
-                    watchSync: watchSync
+                    watchSync: watchSync,
+                    workoutInspector: workoutInspector
                 )
             }
             // Same live count `OverlapWarningBanner` shows on the Athlete screen itself (MVP1-67)

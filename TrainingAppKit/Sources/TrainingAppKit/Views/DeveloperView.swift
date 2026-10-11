@@ -10,6 +10,8 @@ struct DeveloperView: View {
     let onResync: () -> Void
     let isDeduplicating: Bool
     let onDeduplicate: () -> Void
+    /// Reads what HealthKit recorded for recent workouts (MVP2-146 spike); `nil` hides the row.
+    var workoutInspector: (any WorkoutInspecting)?
     @State private var isConfirmingResync = false
     @State private var isConfirmingDeduplicate = false
 
@@ -43,6 +45,15 @@ struct DeveloperView: View {
                 .disabled(isResyncing || isDeduplicating)
             } footer: {
                 Text("Force Full Resync re-imports every activity from HealthKit from scratch. Use this if an activity's sport or name looks wrong after an app update. Deduplicate Activities removes any duplicate activities left over from an older version of the app.")
+            }
+            if let workoutInspector {
+                Section {
+                    NavigationLink("Inspect Recent Workouts") {
+                        WorkoutInspectionView(inspector: workoutInspector)
+                    }
+                } footer: {
+                    Text("Lists the events and activities HealthKit recorded for your recent workouts, and which were started from a plan, to see whether the Watch records each step (MVP2-146). Nothing is changed.")
+                }
             }
         }
         .navigationTitle(AthleteRoute.developer.title)

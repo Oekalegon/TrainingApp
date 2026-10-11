@@ -686,7 +686,12 @@ The screens:
   footer says so. `WeekViewModel` rebuilds its calendar when either changes, keeps the displayed week on
   the day it showed (`setWeekStartsOn`/`setTimeZone`) and reloads. A dated time-zone history was
   considered and left out.
-- **Developer** (`DeveloperView`): **Force Full Resync** and **Deduplicate Activities**, moved here
+- **Developer** (`DeveloperView`): **Inspect Recent Workouts** (MVP2-146 spike, `WorkoutInspectionView`):
+  a read-only text report of what HealthKit recorded for the 30 most recent workouts: whether each was
+  started from a plan (`workout.workoutPlan`), its events (laps, segments, pauses, markers), its
+  sub-activities and metadata. It exists to see whether the Watch records each step of a plan-started
+  workout; the report can be copied or shared. Remove it once that is answered and acted on.
+  **Force Full Resync** and **Deduplicate Activities**, moved here
   from the bottom of the old single screen. Force Full Resync re-imports every activity from HealthKit
   from scratch, via `TrainingModel.resyncActivities(from:asOf:)` — a full import (cleared
   `ImportAnchor`) rather than the incremental one pull-to-refresh runs. It doesn't edit the athlete
