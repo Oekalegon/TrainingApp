@@ -395,7 +395,7 @@ across launches.
 - **Empty state**: until a HealthKit import has completed (`WeekViewModel.hasNoActivities`, e.g.
   first launch before HealthKit authorization / initial sync) and while no plan is loaded
   (`WeekViewModel.showsEmptyState`), show an inline prompt — "Connect Health data" — that triggers
-  the HealthKit authorization request. No separate onboarding screen (deferred to MVP 2, see §6).
+  the HealthKit authorization request. The first-run introduction (§2.1a) is separate.
   A loaded plan (a calendar import, MVP2-103, or a plan made in the Library) shows the calendar
   instead (MVP2-108), so it isn't invisible before Health is connected; only the plans of the
   loaded weeks count, and the empty state keeps its week navigation, so moving to a week with plans
@@ -436,6 +436,37 @@ across launches.
   heart-rate histogram cache hashes the activities' heart-rate samples (MVP2-130)). A
   changed max or resting heart rate rescores every activity's load and moves the zone
   boundaries, so it invalidates them the same way a new activity does.
+
+### 2.1a First-run introduction and permission banners (MVP2-147)
+
+- **Introduction**: on first launch, once the first load has finished and only if Health has never been
+  imported (so never for an existing install), a full-screen cover (`OnboardingView`, a sheet on
+  macOS) explains the two things the app can use and lets the athlete act on each:
+  - **Apple Health**: what is read (workouts, heart rate, resting heart rate, sex, date of birth), that
+    nothing is written, and that workouts never leave the device. "Connect Apple Health" asks for
+    access and imports (`WeekViewModel.connectHealthData`). HealthKit says only whether an import
+    completed, not whether access was granted, so the card reads "Connected" after an import, or else
+    "Nothing was imported" with where to turn access on in Settings, and offers "Try Again".
+    Connecting doesn't end the introduction, even though an import marks Health as imported: whether
+    it is shown is decided once, at launch, so the result and the iCloud step stay in view until
+    Continue.
+  - **iCloud**: that plans, templates, races and goals sync through iCloud. The account status
+    (`ICloudAccountChecking`, CloudKit's `accountStatus`) shows as "Signed in", "Not signed in" or
+    "Restricted", with "Open Settings"; the app works either way.
+  - **Continue** leaves it, connected or not. Nothing is required and nothing blocks the app: the
+    sheet can't be swiped away, so leaving it is always Continue, which is remembered
+    (`OnboardingProgress`, `UserDefaults`, per device).
+- **Banners** at the bottom of the week view, stacked with the Watch banner (MVP2-117), all the same
+  dismissible `PermissionBanner`:
+  - **iCloud isn't available**: while the account is signed out or restricted (not for "unknown",
+    so a failed check doesn't warn), once the introduction is done. Re-checked each time the app
+    becomes active. Dismissing hides it until iCloud has worked again and fails once more.
+  - **Connect Health Data**: while nothing has been imported and plans exist, i.e. the calendar is
+    showing and the full empty state isn't (MVP2-108). Dismissing hides it for good; the Athlete
+    tab's Apple Health row still offers "Connect Apple Health". It goes away once an import completes.
+- **What isn't detected**: a Health permission turned off later. HealthKit doesn't say, so there is no
+  revocation banner, only the Apple Health row's explanation of where to turn access back on.
+  `OnboardingViewModel` holds the logic and is tested.
 
 ### 2.2 Activity detail
 
@@ -1012,7 +1043,8 @@ HealthKit or CloudKit involved.
 ## 5. Out of scope for MVP 1 (tracked as follow-ups)
 
 - **Onboarding screen** (explain + request HealthKit access, show initial-sync progress) —
-  MVP 2 todo; MVP 1 ships with the inline empty-state prompt only.
+  MVP 2 (MVP2-147, §2.1a); MVP 1 shipped with the inline empty-state prompt only. Initial-sync
+  progress isn't shown.
 - **Sync status / conflict UI** — no such API exists in `TrainingPersistence` yet; not addressed
   in MVP 1 beyond a basic "loading" state.
 - **Multi-athlete roster UI** — data layer supports it (`AthleteProfile.id`), app doesn't expose
@@ -1033,4 +1065,4 @@ HealthKit or CloudKit involved.
    import).
 4. Build activity detail.
 5. Build the athlete account view (read-only).
-6. (MVP 2) Onboarding screen.
+6. (MVP 2) Onboarding screen (done, §2.1a).

@@ -42,6 +42,10 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         self.athleteReader = HealthKitAthleteReader(healthStore: healthStore)
     }
 
+    /// The app's CloudKit container, as in `iOS/Resources/TrainingApp.entitlements`: what the
+    /// introduction and the iCloud banner ask about (MVP2-147).
+    public static let cloudKitContainerIdentifier = "iCloud.org.oekalegon.trainingkit.shared"
+
     /// The environment this app instance runs on, created on first use and shared afterwards.
     ///
     /// Both the app delegate and the launch view ask for it, and two environments would open the
