@@ -159,7 +159,7 @@ public struct WeekView: View {
     public var body: some View {
         NavigationStack {
             Group {
-                if viewModel.hasNoActivities {
+                if viewModel.showsEmptyState {
                     EmptyStateView(isConnecting: viewModel.isRefreshing) {
                         Task { await viewModel.connectHealthData() }
                     }
@@ -184,11 +184,11 @@ public struct WeekView: View {
                 }
             }
             .animation(.default, value: viewModel.showsWatchPermissionBanner)
-            // Covers the empty-state -> week-content swap once `hasNoActivities` flips (e.g. after
-            // "Connect Health Data" completes): that happens asynchronously, well after the button's
+            // Covers the empty-state -> week-content swap once `showsEmptyState` flips (e.g. after
+            // "Connect Health Data" completes, or a first plan is made): that happens asynchronously, well after the button's
             // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` —
             // animating on the value change itself is the only way to catch it.
-            .animation(Self.weekChangeAnimation, value: viewModel.hasNoActivities)
+            .animation(Self.weekChangeAnimation, value: viewModel.showsEmptyState)
             // The native title/subtitle (MVP1-56), not a custom header view: this gets the toolbar
             // buttons' Liquid Glass styling for free, rather than reimplementing it by hand.
             // Left at the default (large) display mode, not forced `.inline`: `weekContent`'s single
