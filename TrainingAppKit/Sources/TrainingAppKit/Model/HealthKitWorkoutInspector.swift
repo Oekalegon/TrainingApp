@@ -12,6 +12,12 @@ struct HealthKitWorkoutInspector: WorkoutInspecting {
     let healthStore: HKHealthStore
 
     func inspectRecentWorkouts(limit: Int) async throws -> String {
+        // A workout activity's distance and speed summaries are only readable once the athlete has
+        // allowed those types, which the app doesn't otherwise ask for yet (MVP2-146). Read-only;
+        // HealthKit shows its sheet once, and not again for types already answered.
+        try await healthStore.requestAuthorization(toShare: [], read: [
+            HKQuantityType(.distanceWalkingRunning), HKQuantityType(.runningSpeed), HKQuantityType(.heartRate),
+        ])
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout()],
             sortDescriptors: [SortDescriptor(\.endDate, order: .reverse)],
@@ -48,7 +54,8 @@ struct HealthKitWorkoutInspector: WorkoutInspecting {
                     start: activity.startDate,
                     end: activity.endDate,
                     events: activity.workoutEvents.map(event),
-                    metadata: strings(activity.metadata)
+                    metadata: strings(activity.metadata),
+                    statistics: statistics(activity)
                 )
             },
             metadata: strings(workout.metadata)
@@ -60,6 +67,20 @@ struct HealthKitWorkoutInspector: WorkoutInspecting {
             type: name(of: event.type), start: event.dateInterval.start, end: event.dateInterval.end,
             metadata: strings(event.metadata)
         )
+    }
+
+    /// Every quantity HealthKit summarised for `activity`, as "sum 10.2 km, avg 150 count/min".
+    private static func statistics(_ activity: HKWorkoutActivity) -> [String: String] {
+        var result: [String: String] = [:]
+        for (type, statistics) in activity.allStatistics {
+            var parts: [String] = []
+            if let sum = statistics.sumQuantity() { parts.append("sum \(sum)") }
+            if let average = statistics.averageQuantity() { parts.append("avg \(average)") }
+            if let minimum = statistics.minimumQuantity() { parts.append("min \(minimum)") }
+            if let maximum = statistics.maximumQuantity() { parts.append("max \(maximum)") }
+            result[type.identifier.replacingOccurrences(of: "HKQuantityTypeIdentifier", with: "")] = parts.joined(separator: ", ")
+        }
+        return result
     }
 
     private static func strings(_ metadata: [String: Any]?) -> [String: String] {

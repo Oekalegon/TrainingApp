@@ -32,6 +32,9 @@ struct InspectedWorkout: Equatable {
         let end: Date?
         let events: [Event]
         let metadata: [String: String]
+        /// What HealthKit summarised for this sub-activity, by quantity type, e.g. distance or heart
+        /// rate: empty when it recorded none, or when read access to the type wasn't granted.
+        let statistics: [String: String]
     }
 
     let id: UUID
@@ -68,6 +71,7 @@ enum WorkoutInspectionReport {
                 let end = activity.end.map(timestamp) ?? "open"
                 lines.append("     - \(activity.activityType)  \(timestamp(activity.start)) to \(end)")
                 if !activity.metadata.isEmpty { lines.append("       metadata: \(describe(activity.metadata))") }
+                lines.append("       statistics: \(activity.statistics.isEmpty ? "none" : describe(activity.statistics))")
                 lines.append("       events: \(activity.events.count)")
                 lines += activity.events.map { "         " + describe($0) }
             }

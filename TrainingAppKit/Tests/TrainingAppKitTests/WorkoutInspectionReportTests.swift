@@ -37,7 +37,8 @@ struct WorkoutInspectionReportTests {
             type: "segment", start: base.addingTimeInterval(600), end: base.addingTimeInterval(660), metadata: [:]
         )
         let activity = InspectedWorkout.Activity(
-            activityType: "activityType(37)", start: base, end: nil, events: [segment], metadata: ["b": "2", "a": "1"]
+            activityType: "activityType(37)", start: base, end: nil, events: [segment], metadata: ["b": "2", "a": "1"],
+            statistics: ["DistanceWalkingRunning": "sum 5000 m"]
         )
 
         let text = WorkoutInspectionReport.format(
@@ -49,6 +50,7 @@ struct WorkoutInspectionReportTests {
         #expect(text.contains("lap  2023-11-14T00:05:00Z  step=2"))  // an instant: one time, not a range
         #expect(text.contains("2023-11-14T00:00:00Z to open"))  // an activity still running has no end
         #expect(text.contains("metadata: a=1, b=2"))  // sorted, so the same workout always reads the same
+        #expect(text.contains("statistics: DistanceWalkingRunning=sum 5000 m"))
         #expect(text.contains("segment  2023-11-14T00:10:00Z to 2023-11-14T00:11:00Z"))
     }
 
