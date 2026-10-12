@@ -7,19 +7,48 @@ import TrainingCore
 /// also used by the planned-workout views (MVP2-144).
 struct WorkoutStepCardList: View {
     let blocks: [WorkoutBlockCard]
+    /// The recorded step to highlight (MVP2-146): a step card that has one is a button that selects it,
+    /// and tapping the selected one clears it. `nil` makes the cards plain, as in the template views.
+    var selection: Binding<Int?>? = nil
 
     var body: some View {
         VStack(spacing: 10) {
             ForEach(blocks) { block in
                 if block.isGroup {
                     WorkoutRepeatCard(
-                        repetitions: block.repetitions.formatted(), repetitionNumber: block.repetitionNumber,
-                        parameterName: block.repetitionsParameterName, steps: block.steps
+                        steps: block.steps,
+                        header: {
+                            WorkoutRepeatHeader(
+                                count: block.repetitions.formatted(), repetitionNumber: block.repetitionNumber,
+                                parameterName: block.repetitionsParameterName
+                            )
+                        },
+                        stepView: { card($0) },
+                        footer: { EmptyView() }
                     )
                 } else {
-                    ForEach(block.steps) { WorkoutStepCardView(step: $0).cardStyle() }
+                    ForEach(block.steps) { card($0).cardStyle() }
                 }
             }
+        }
+    }
+
+    /// A step's card; a button that highlights the step on the charts when it has a recorded step and
+    /// the list has a selection.
+    @ViewBuilder private func card(_ step: WorkoutStepCard) -> some View {
+        let id = step.recordedStepID
+        let isSelected = id != nil && selection?.wrappedValue == id
+        if let selection, let id {
+            Button {
+                selection.wrappedValue = isSelected ? nil : id
+            } label: {
+                WorkoutStepCardView(step: step, isHighlighted: isSelected)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(isSelected ? "Stops highlighting this step on the charts" : "Highlights this step on the charts")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        } else {
+            WorkoutStepCardView(step: step)
         }
     }
 }
@@ -31,11 +60,13 @@ struct WorkoutStepCardList: View {
 struct WorkoutStepCardSection: View {
     let blocks: [WorkoutBlockCard]
     var title: LocalizedStringKey = "Steps"
+    /// The recorded step highlighted on the activity's charts; see ``WorkoutStepCardList/selection``.
+    var selection: Binding<Int?>? = nil
 
     var body: some View {
         Section(title) {
             WorkoutStepListSpacerRow()
-            WorkoutStepCardList(blocks: blocks)
+            WorkoutStepCardList(blocks: blocks, selection: selection)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -158,6 +189,8 @@ struct WorkoutRepeatHeader: View {
 /// One step: role icon, name and what ends it on the left, the intensity target on the right.
 struct WorkoutStepCardView: View {
     let step: WorkoutStepCard
+    /// Whether this is the step highlighted on the charts (MVP2-146): tinted so it reads as selected.
+    var isHighlighted = false
 
     var body: some View {
         // The icon is lined up with the title's first line and drawn at its size, not centred on the card.
@@ -210,6 +243,7 @@ struct WorkoutStepCardView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .background(isHighlighted ? Color.accentColor.opacity(0.15) : Color.clear)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(

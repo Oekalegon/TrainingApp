@@ -7,10 +7,12 @@ import TrainingCore
 /// started, so the plan's steps can be read straight off the curve.
 struct ActivityHeartRateChart: View {
     let data: ActivityChartData
+    /// The step to emphasise (MVP2-146); the others fade.
+    var highlightedStepID: Int? = nil
 
     var body: some View {
         Chart {
-            ActivityStepMarks(steps: data.steps)
+            ActivityStepMarks(steps: data.steps, highlightedID: highlightedStepID)
             ForEach(Array(data.heartRate.enumerated()), id: \.offset) { _, point in
                 LineMark(
                     x: .value("Time", point.elapsed), y: .value("Heart rate", point.value),
@@ -48,12 +50,14 @@ struct ActivityHeartRateChart: View {
 struct ActivityPaceChart: View {
     let data: ActivityChartData
     let distanceSystem: DistanceSystem
+    /// The step to emphasise (MVP2-146); the others fade.
+    var highlightedStepID: Int? = nil
 
     var body: some View {
         // Pace is plotted negated so that faster (a smaller number) is higher; the axis labels undo it.
         let domain = data.paceDomain ?? 0...1
         return Chart {
-            ActivityStepMarks(steps: data.steps)
+            ActivityStepMarks(steps: data.steps, highlightedID: highlightedStepID)
             ForEach(Array(data.pace.enumerated()), id: \.offset) { _, point in
                 LineMark(
                     x: .value("Time", point.elapsed), y: .value("Pace", -point.value),
@@ -115,19 +119,33 @@ func activityLonePoints(_ points: [ActivityChartData.Point], color: Color, negat
     }
 }
 
-/// The step bands and start lines both charts share.
+/// The step bands and start lines both charts share. With a step highlighted (MVP2-146) its band is
+/// strong and the others fade, and its start and end are drawn as solid lines.
 struct ActivityStepMarks: ChartContent {
     let steps: [ActivityChartData.StepSpan]
+    var highlightedID: Int? = nil
+
+    /// How opaque a step's band is: its usual tint, or with a step highlighted, strong for that step and
+    /// faint for the rest.
+    static func bandOpacity(of span: ActivityChartData.StepSpan, highlightedID: Int?) -> Double {
+        guard let highlightedID else { return span.kind == nil ? 0.12 : 0.18 }
+        return span.id == highlightedID ? 0.5 : 0.06
+    }
 
     var body: some ChartContent {
         ForEach(steps) { span in
             RectangleMark(xStart: .value("Step start", span.start), xEnd: .value("Step end", span.end))
-                .foregroundStyle(span.kind.chartColor(index: span.id).opacity(span.kind == nil ? 0.12 : 0.18))
+                .foregroundStyle(span.kind.chartColor(index: span.id).opacity(Self.bandOpacity(of: span, highlightedID: highlightedID)))
         }
         ForEach(steps) { span in
             RuleMark(x: .value("Step start", span.start))
-                .foregroundStyle(.secondary.opacity(0.5))
-                .lineStyle(StrokeStyle(lineWidth: 0.5))
+                .foregroundStyle(span.id == highlightedID ? Color.primary : Color.secondary.opacity(0.5))
+                .lineStyle(StrokeStyle(lineWidth: span.id == highlightedID ? 1.5 : 0.5))
+        }
+        ForEach(steps.filter { $0.id == highlightedID }) { span in
+            RuleMark(x: .value("Step end", span.end))
+                .foregroundStyle(Color.primary)
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
         }
     }
 }

@@ -41,6 +41,8 @@ struct ActivityDetailView: View {
     @State private var joinFailureMessage: String?
     /// Set when a link/unlink was refused, for the same reason as `joinFailureMessage`.
     @State private var planLinkFailureMessage: String?
+    /// The recorded step highlighted on the charts after a tap on its card (MVP2-146).
+    @State private var highlightedStepID: Int?
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
     /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
     @State private var isShowingDeleteConfirmation = false
@@ -116,29 +118,34 @@ struct ActivityDetailView: View {
 
             if let planLinkContext = viewModel.planLinkContext {
                 planLinkSection(planLinkContext)
-                if !planLinkContext.linkedPlanSteps.isEmpty {
-                    WorkoutStepCardSection(
-                        blocks: planLinkContext.linkedPlanSteps,
-                        title: planLinkContext.linkedPlanStepsAreRecorded ? "Recorded Steps" : "Planned Steps"
-                    )
-                }
             }
 
-            // The heart rate and pace over time (MVP2-146), with a band for each recorded step.
+            // The heart rate and pace over time (MVP2-146), with a band for each recorded step, above
+            // the step cards: a tap on a card highlights its span here.
             if viewModel.chartData.hasHeartRate {
                 Section("Heart Rate Over Time") {
-                    ActivityHeartRateChart(data: viewModel.chartData)
+                    ActivityHeartRateChart(data: viewModel.chartData, highlightedStepID: highlightedStepID)
                     ActivityStepLegend(steps: viewModel.chartData.steps)
                 }
             }
             if viewModel.chartData.hasPace {
                 Section {
-                    ActivityPaceChart(data: viewModel.chartData, distanceSystem: .deviceDefault)
+                    ActivityPaceChart(
+                        data: viewModel.chartData, distanceSystem: .deviceDefault, highlightedStepID: highlightedStepID
+                    )
                 } header: {
                     Text(DistanceSystem.deviceDefault == .metric ? "Pace Over Time (min/km)" : "Pace Over Time (min/mi)")
                 }
             }
 
+            if let planLinkContext = viewModel.planLinkContext, !planLinkContext.linkedPlanSteps.isEmpty {
+                WorkoutStepCardSection(
+                    blocks: planLinkContext.linkedPlanSteps,
+                    title: planLinkContext.linkedPlanStepsAreRecorded ? "Recorded Steps" : "Planned Steps",
+                    // Only recorded steps have a span to highlight.
+                    selection: planLinkContext.linkedPlanStepsAreRecorded ? $highlightedStepID : nil
+                )
+            }
             Section {
                 LabeledContent("Start", value: viewModel.activity.start.formatted(dateFormat))
                 LabeledContent("Duration", value: durationText)

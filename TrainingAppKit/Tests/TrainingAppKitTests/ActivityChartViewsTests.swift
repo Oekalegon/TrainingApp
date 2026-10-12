@@ -30,6 +30,17 @@ struct ActivityChartViewsTests {
         #expect(none.chartColor(index: 0) != none.chartColor(index: 1))
     }
 
+    @Test("with no step highlighted every band has its usual tint; with one, it is strong and the rest fade")
+    func bandOpacities() {
+        let work = span(0, .work)
+        let unknown = span(1, nil)
+
+        #expect(ActivityStepMarks.bandOpacity(of: work, highlightedID: nil) == 0.18)
+        #expect(ActivityStepMarks.bandOpacity(of: unknown, highlightedID: nil) == 0.12)
+        #expect(ActivityStepMarks.bandOpacity(of: work, highlightedID: 0) == 0.5)
+        #expect(ActivityStepMarks.bandOpacity(of: unknown, highlightedID: 0) == 0.06)
+    }
+
     @Test("pace on the axis is minutes and seconds in the device's unit, without the unit")
     func axisText() {
         #expect(ActivityPaceChart.axisText(secondsPerKilometer: 392.4, in: .metric) == "6:32")

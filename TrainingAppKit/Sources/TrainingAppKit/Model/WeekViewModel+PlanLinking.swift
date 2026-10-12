@@ -16,7 +16,12 @@ extension WeekViewModel {
         let workout = linked.flatMap { plan in model.workouts.first { $0.id == plan.workoutID } }
         // The recorded steps laid over the plan's (MVP2-146), when there are some and they fit.
         let recorded = workout.flatMap { ActivityStepAligner.align(activity.steps, with: $0) }
-        let planSteps = recorded.map { WorkoutBlockCard.cards(for: workout?.blocks ?? [], actuals: $0) }
+        // Each recorded step's position, so a tap on its card can highlight its span on the charts.
+        var recordedIDs: [ActivityStep: Int] = [:]
+        for (index, step) in activity.orderedSteps.enumerated() where recordedIDs[step] == nil { recordedIDs[step] = index }
+        let planSteps = recorded.map {
+            WorkoutBlockCard.cards(for: workout?.blocks ?? [], actuals: $0, recordedIDs: recordedIDs)
+        }
             ?? WorkoutBlockCard.cards(for: workout?.blocks ?? [])
         return PlanLinkContext(
             linkedPlan: linked.map(planOption),
