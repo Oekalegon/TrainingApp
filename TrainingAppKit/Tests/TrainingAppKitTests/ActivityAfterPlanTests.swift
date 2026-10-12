@@ -47,6 +47,24 @@ struct ActivityAfterPlanTests {
         #expect(heartRate > 100 && heartRate < 125)  // only the readings after the plan, not the 140s
     }
 
+    @Test("a pause during the steps isn't counted as time after the plan: it is the activity's time the steps don't account for")
+    func pausesAreNotAfterPlan() throws {
+        // The first step covers 300 s of the clock but only 240 s of workout time (a minute's pause);
+        // the activity's own duration is workout time, 60 s more than the steps' 539 s.
+        let paused = ActivityStep(
+            block: 0, repetition: 0, step: 0, start: start, end: start.addingTimeInterval(300), duration: 240
+        )
+        let rest = ActivityStep(
+            block: 1, repetition: 0, step: 0, start: start.addingTimeInterval(300), end: start.addingTimeInterval(599), duration: 299
+        )
+        let activity = Activity(source: .manual, sport: .running, start: start, duration: 599, steps: [paused, rest])
+
+        let after = try #require(ActivityAfterPlan.make(for: activity))
+
+        #expect(after.duration == 60)  // 599 less 240 and 299
+        #expect(after.start == 599)  // right after the last step, on the clock
+    }
+
     @Test("with no recorded steps, or a last step within half a minute of the end, there is no such stretch")
     func nothingAfter() {
         let none = Activity(source: .manual, sport: .running, start: start, duration: 600)

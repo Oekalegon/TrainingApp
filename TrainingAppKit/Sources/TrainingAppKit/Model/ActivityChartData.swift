@@ -114,13 +114,32 @@ public struct ActivityChartData: Equatable, Sendable {
     ///   - workout: The workout of the plan the activity completed, to say what each recorded step was
     ///     (warm-up, work...); `nil` leaves the steps without a role.
     public static func make(for activity: Activity, workout: StructuredWorkout?) -> ActivityChartData {
-        let duration = max(activity.duration, 0)
+        let duration = timeAxisEnd(of: activity)
         let heartRate = heartRatePoints(activity.heartRate, start: activity.start, duration: duration)
         let (pace, domain) = pacePoints(activity.speed, start: activity.start, duration: duration)
         return ActivityChartData(
             heartRate: heartRate, pace: pace, steps: stepSpans(of: activity, workout: workout, duration: duration),
             duration: duration, paceDomain: domain
         )
+    }
+
+    /// Where the charts' time axis ends, in seconds since the activity began: the activity's duration, or
+    /// the last reading or step if later. The duration can be shorter than the time the recording
+    /// spans, when the workout was paused (an auto-pause at a crossing), so ending the axis there would
+    /// cut off the readings and steps after the pause.
+    static func timeAxisEnd(of activity: Activity) -> TimeInterval {
+        var end = max(activity.duration, 0)
+        for sample in activity.heartRate where sample.bpm.isFinite {
+            end = max(end, sample.time.timeIntervalSince(activity.start))
+        }
+        for sample in activity.speed where sample.metersPerSecond.isFinite {
+            end = max(end, sample.time.timeIntervalSince(activity.start))
+        }
+        for step in activity.steps {
+            end = max(end, step.end.timeIntervalSince(activity.start))
+        }
+        if let afterPlan = ActivityAfterPlan.make(for: activity) { end = max(end, afterPlan.end) }
+        return end
     }
 
     /// One reading against time since the activity began, before it becomes a chart point.
@@ -152,7 +171,7 @@ public struct ActivityChartData: Equatable, Sendable {
         readings.reserveCapacity(samples.count)
         for sample in samples {
             let elapsed = sample.time.timeIntervalSince(start)
-            guard elapsed >= 0, elapsed <= duration, sample.bpm.isFinite, sample.bpm > 0 else { continue }
+            guard elapsed >= 0, sample.bpm.isFinite, sample.bpm > 0 else { continue }
             readings.append(Reading(elapsed: elapsed, value: sample.bpm))
         }
         readings.sort { $0.elapsed < $1.elapsed }
@@ -205,7 +224,7 @@ public struct ActivityChartData: Equatable, Sendable {
         readings.reserveCapacity(samples.count)
         for sample in samples {
             let elapsed = sample.time.timeIntervalSince(start)
-            guard elapsed >= 0, elapsed <= duration, sample.metersPerSecond.isFinite, sample.metersPerSecond >= 0 else { continue }
+            guard elapsed >= 0, sample.metersPerSecond.isFinite, sample.metersPerSecond >= 0 else { continue }
             readings.append(Reading(elapsed: elapsed, value: sample.metersPerSecond))
         }
         readings.sort { $0.elapsed < $1.elapsed }

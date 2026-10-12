@@ -29,14 +29,19 @@ public struct ActivityAfterPlan: Equatable, Sendable {
     /// How long the stretch lasts, in seconds.
     public var duration: TimeInterval { end - start }
 
-    /// The stretch after `activity`'s last recorded step, or `nil` when it has no steps or the last one
-    /// runs to within ``minimumSeconds`` of the end.
+    /// The stretch after `activity`'s last recorded step, or `nil` when it has no steps or the steps
+    /// account for all but ``minimumSeconds`` of the activity's time.
+    ///
+    /// How long it lasts is the activity's duration less the steps' own durations, not the clock time
+    /// between the last step and the end: a pause during the workout would otherwise be counted in
+    /// (or, with a duration that leaves it out, subtracted from) the time after the plan.
     public static func make(for activity: Activity) -> ActivityAfterPlan? {
         let steps = activity.orderedSteps
         guard let lastEnd = steps.map(\.end).max() else { return nil }
         let start = lastEnd.timeIntervalSince(activity.start)
-        let end = activity.duration
-        guard end - start >= minimumSeconds else { return nil }
+        let remaining = activity.duration - steps.reduce(0) { $0 + $1.duration }
+        guard remaining >= minimumSeconds else { return nil }
+        let end = start + remaining
 
         var distance: Double?
         if let total = activity.distanceMeters {

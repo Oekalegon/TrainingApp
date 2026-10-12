@@ -73,12 +73,25 @@ struct ActivityChartDataTests {
         #expect(Set(data.heartRate.map(\.segment)) == [0, 1])
     }
 
-    @Test("readings outside the activity or that aren't heart rates are ignored; none at all is no chart")
+    @Test("readings that aren't heart rates, or lie before the activity, are ignored; none at all is no chart")
     func heartRateFiltered() {
-        let data = ActivityChartData.make(for: activity(duration: 100, heartRate: [hr(-5, 120), hr(500, 120), hr(10, 0), hr(20, .nan)]), workout: nil)
+        let data = ActivityChartData.make(for: activity(duration: 100, heartRate: [hr(-5, 120), hr(10, 0), hr(20, .nan)]), workout: nil)
         #expect(data.heartRate.isEmpty)
         #expect(!data.hasHeartRate)
         #expect(!ActivityChartData.make(for: activity(), workout: nil).hasHeartRate)
+    }
+
+    @Test("a workout that was paused: readings and steps after the pause run past the active duration, and the axis goes with them")
+    func pausedWorkoutExtendsTheAxis() {
+        // Active time 100 s, but the recording runs to 160 s: a minute's pause somewhere.
+        let samples = [hr(10, 130), hr(60, 131), hr(120, 132), hr(160, 133)]
+        let steps = [step("0.0.0", from: 0, seconds: 80), step("1.0.0", from: 80, seconds: 80)]
+
+        let data = ActivityChartData.make(for: activity(duration: 100, heartRate: samples, steps: steps), workout: nil)
+
+        #expect(data.duration == 160)
+        #expect(data.heartRate.last?.elapsed == 160)
+        #expect(data.steps.map(\.end) == [80, 160])
     }
 
     // MARK: Pace
@@ -185,14 +198,17 @@ struct ActivityChartDataTests {
         #expect(mismatched.steps.allSatisfy { $0.kind == nil })
     }
 
-    @Test("a step that runs past the activity is clipped to it, and one with no time on the axis is dropped")
+    @Test("a step with no time on the axis is dropped, and one that starts before the activity is clipped to its start")
     func stepsClipped() {
-        let steps = [step("0.0.0", from: 0, seconds: 120), step("1.0.0", from: 80, seconds: 100), step("2.0.0", from: 500, seconds: 30)]
+        let early = ActivityStep(
+            block: 0, repetition: 0, step: 0, start: start.addingTimeInterval(-20), end: start.addingTimeInterval(100)
+        )
+        let steps = [early, step("1.0.0", from: 100, seconds: 0)]  // the second has no length
 
         let data = ActivityChartData.make(for: activity(duration: 100, steps: steps), workout: nil)
 
-        #expect(data.steps.count == 2)
-        #expect(data.steps.map(\.end) == [100, 100])
+        #expect(data.steps.count == 1)
+        #expect(data.steps.first?.start == 0)
     }
 
     @Test("time after the last step is a grey stretch of its own at the end, not counted as a step")
