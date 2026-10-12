@@ -161,10 +161,14 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         await startWorkoutObservation()
     }
 
-    /// See ``ActivityRefreshing/hasUnansweredPermissions()``: whether HealthKit would show its sheet
-    /// for any of ``HealthKitAuthorization/readTypes``.
-    public func hasUnansweredPermissions() async -> Bool {
-        let status = try? await healthStore.statusForAuthorizationRequest(toShare: [], read: HealthKitAuthorization.readTypes)
+    /// See ``ActivityRefreshing/hasUnansweredDistanceAccess()``: whether HealthKit would show its sheet
+    /// for the distance types, and only those, so the "Allow distance" banner never appears for some
+    /// other type it doesn't explain.
+    public func hasUnansweredDistanceAccess() async -> Bool {
+        let distanceTypes: Set<HKObjectType> = HealthKitAuthorization.readTypes.filter {
+            ($0 as? HKQuantityType)?.is(compatibleWith: .meter()) == true
+        }
+        let status = try? await healthStore.statusForAuthorizationRequest(toShare: [], read: distanceTypes)
         return status == .shouldRequest
     }
 

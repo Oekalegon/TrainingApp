@@ -250,13 +250,13 @@ struct OnboardingViewModelTests {
         viewModel.markLoaded()
         #expect(!viewModel.showsDistanceBanner)  // nothing is unanswered yet
 
-        viewModel.setHasUnansweredHealthPermissions(true)
+        viewModel.setHasUnansweredDistanceAccess(true)
         #expect(viewModel.showsDistanceBanner)
 
-        viewModel.setHasUnansweredHealthPermissions(false)  // the athlete answered the Health sheet, either way
+        viewModel.setHasUnansweredDistanceAccess(false)  // the athlete answered the Health sheet, either way
         #expect(!viewModel.showsDistanceBanner)
 
-        viewModel.setHasUnansweredHealthPermissions(true)
+        viewModel.setHasUnansweredDistanceAccess(true)
         viewModel.dismissDistanceBanner()
         #expect(!viewModel.showsDistanceBanner)
         #expect(progress.hasDismissedDistanceBanner)
@@ -268,7 +268,7 @@ struct OnboardingViewModelTests {
         viewModel.markLoaded()
         viewModel.finish()
 
-        viewModel.setHasUnansweredHealthPermissions(true)
+        viewModel.setHasUnansweredDistanceAccess(true)
 
         #expect(!viewModel.showsDistanceBanner)  // the Connect Health Data prompt covers it
     }
@@ -341,6 +341,26 @@ struct OnboardingViewModelTests {
         #expect(viewModel.bottomBanner == .iCloud)
     }
 
+    @Test("a second tap on Allow Distance while the first is still asking or re-reading is ignored")
+    func allowMoreHealthDataIgnoresSecondTap() async throws {
+        let (store, stores) = makeStores()
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        let refresher = RecordingRefresher(unanswered: true)
+        let progress = FakeProgress()
+        progress.hasCompletedOnboarding = true
+        let viewModel = WeekViewModel(model: model, refresher: refresher, onboardingProgress: progress, today: day(0))
+        await viewModel.load(asOf: day(0))
+        // A tap landing while the Health sheet is still up.
+        refresher.whileAuthorizing = { await viewModel.allowMoreHealthData(asOf: self.day(0)) }
+
+        await viewModel.allowMoreHealthData(asOf: day(0))
+
+        #expect(refresher.calls.filter { $0 == "authorize" }.count == 1)
+        #expect(refresher.calls.filter { $0 == "resync" }.count == 1)
+        #expect(!viewModel.isAllowingHealthData)
+    }
+
     // MARK: Week view model
 
     @Test("the week view model shows the Health banner once a plan is loaded and the introduction is done, and not before the first load")
@@ -396,10 +416,12 @@ struct OnboardingViewModelTests {
 
         first.hasCompletedOnboarding = true
         first.hasDismissedICloudBanner = true
+        first.hasDismissedDistanceBanner = true
 
         let second = UserDefaultsOnboardingProgress(defaults: defaults)
         #expect(second.hasCompletedOnboarding)
         #expect(second.hasDismissedICloudBanner)
+        #expect(second.hasDismissedDistanceBanner)
         #expect(!second.hasDismissedHealthBanner)
     }
 }
@@ -422,7 +444,7 @@ private struct UnreadablePlanStore: PlanStore {
     func deletePlan(id: UUID) async throws { try await base.deletePlan(id: id) }
 }
 
-/// A refresher that records what it was asked, and answers `hasUnansweredPermissions()`.
+/// A refresher that records what it was asked, and answers `hasUnansweredDistanceAccess()`.
 @MainActor
 private final class RecordingRefresher: ActivityRefreshing {
     var unanswered: Bool
@@ -432,8 +454,14 @@ private final class RecordingRefresher: ActivityRefreshing {
 
     func refreshActivities(asOf today: Date) async throws { calls.append("refresh") }
     func resyncActivities(asOf today: Date) async throws { calls.append("resync") }
-    func requestAuthorization() async throws { calls.append("authorize") }
-    func hasUnansweredPermissions() async -> Bool {
+    /// Runs while "asking", to simulate a second tap during the Health sheet.
+    var whileAuthorizing: (() async -> Void)?
+
+    func requestAuthorization() async throws {
+        calls.append("authorize")
+        await whileAuthorizing?()
+    }
+    func hasUnansweredDistanceAccess() async -> Bool {
         calls.append("unanswered")
         return unanswered
     }

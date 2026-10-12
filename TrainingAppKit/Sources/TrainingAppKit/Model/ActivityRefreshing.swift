@@ -19,13 +19,14 @@ public protocol ActivityRefreshing {
     /// "Connect Health data" button (design doc §2.1).
     func requestAuthorization() async throws
 
-    /// Whether the source has types the athlete has not been asked about yet (MVP2-146): an install
-    /// that connected Health before the app began reading distance has never been asked for it, and
-    /// nothing else would ask. `false` when everything has been answered, whatever the answers were.
-    func hasUnansweredPermissions() async -> Bool
+    /// Whether the athlete has not been asked about distance yet (MVP2-146): an install that connected
+    /// Health before the app began reading it has never been asked, and nothing else would ask. A
+    /// step's distance and pace need it. `false` once the question has been answered, whatever the
+    /// answer was.
+    func hasUnansweredDistanceAccess() async -> Bool
 }
 
 extension ActivityRefreshing {
     /// Sources that can't have unanswered permissions (tests, previews) report none.
-    public func hasUnansweredPermissions() async -> Bool { false }
+    public func hasUnansweredDistanceAccess() async -> Bool { false }
 }

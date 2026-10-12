@@ -187,7 +187,7 @@ public struct WeekView: View {
                         )
                     case .allowDistance:
                         HealthDistanceBanner(
-                            isUpdating: viewModel.isResyncing,
+                            isUpdating: viewModel.isAllowingHealthData || viewModel.isResyncing,
                             onAllow: { Task { await viewModel.allowMoreHealthData() } },
                             onDismiss: { viewModel.onboarding.dismissDistanceBanner() }
                         )

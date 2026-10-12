@@ -1240,10 +1240,10 @@ public final class WeekViewModel {
         await refreshWeekCachesIfNeeded(asOf: today)
     }
 
-    /// Looks up whether Health has types the athlete was never asked about (MVP2-146), for the "Allow
+    /// Looks up whether the athlete was never asked to allow distance (MVP2-146), for the "Allow
     /// distance" banner. Call it when the app becomes active.
     public func refreshHealthAccessStatus() async {
-        onboarding.setHasUnansweredHealthPermissions(await refresher.hasUnansweredPermissions())
+        onboarding.setHasUnansweredDistanceAccess(await refresher.hasUnansweredDistanceAccess())
     }
 
     /// Whether the week view shows the "Allow distance" banner (see ``OnboardingViewModel/showsDistanceBanner``).
@@ -1275,17 +1275,25 @@ public final class WeekViewModel {
         return nil
     }
 
-    /// Asks for the Health types the athlete was never asked about, then reads every workout again
+    /// Asks the athlete to allow distance, then reads every workout again
     /// (MVP2-146): workouts already imported have no per-step figures, and distance is only there once
     /// it was allowed. The same re-import as Force Full Resync, run once on the athlete's say-so.
     ///
     /// - Parameter today: The day the re-import is run for.
     public func allowMoreHealthData(asOf today: Date = .now) async {
-        guard !isResyncing else { return }
+        // Set before the first `await`: the Health sheet is up for a while, and a second tap in that
+        // time mustn't ask again or start a second re-import.
+        guard !isAllowingHealthData, !isResyncing else { return }
+        isAllowingHealthData = true
+        defer { isAllowingHealthData = false }
         try? await refresher.requestAuthorization()
         await refreshHealthAccessStatus()
         await resyncActivities(asOf: today)
     }
+
+    /// `true` from the tap on "Allow Distance" until the re-import has finished (MVP2-146): the banner
+    /// shows it and ignores further taps.
+    public private(set) var isAllowingHealthData = false
 
     /// Whether the week view shows the "Connect Health Data" banner (MVP2-147): nothing has been
     /// imported from Health, the athlete hasn't dismissed it, and the calendar is showing because a

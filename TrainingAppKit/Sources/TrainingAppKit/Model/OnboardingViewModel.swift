@@ -43,8 +43,8 @@ public final class OnboardingViewModel {
     private var hasDismissedHealthBanner: Bool
     private var hasDismissedICloudBanner: Bool
     private var hasDismissedDistanceBanner: Bool
-    /// Whether Health has types the athlete was never asked about, as last checked (MVP2-146).
-    public private(set) var hasUnansweredHealthPermissions = false
+    /// Whether the athlete was never asked to allow distance, as last checked (MVP2-146).
+    public private(set) var hasUnansweredDistanceAccess = false
 
     /// - Parameters:
     ///   - model: The training model; says whether Health has ever been imported.
@@ -141,10 +141,10 @@ public final class OnboardingViewModel {
         progress.hasDismissedICloudBanner = true
     }
 
-    /// Records whether Health has types the athlete was never asked about (see
-    /// ``ActivityRefreshing/hasUnansweredPermissions()``).
-    func setHasUnansweredHealthPermissions(_ value: Bool) {
-        hasUnansweredHealthPermissions = value
+    /// Records whether the athlete was never asked to allow distance (see
+    /// ``ActivityRefreshing/hasUnansweredDistanceAccess()``).
+    func setHasUnansweredDistanceAccess(_ value: Bool) {
+        hasUnansweredDistanceAccess = value
     }
 
     /// Whether the week view shows the "Allow distance" banner (MVP2-146): Health is connected but
@@ -152,7 +152,7 @@ public final class OnboardingViewModel {
     /// dismissed, and the introduction isn't up. It goes away once the athlete has answered the
     /// request, whichever way: a refusal only leaves steps without distance and pace.
     public var showsDistanceBanner: Bool {
-        isHealthConnected && hasUnansweredHealthPermissions && !hasDismissedDistanceBanner && !showsOnboarding
+        isHealthConnected && hasUnansweredDistanceAccess && !hasDismissedDistanceBanner && !showsOnboarding
     }
 
     /// Hides the "Allow distance" banner for good.

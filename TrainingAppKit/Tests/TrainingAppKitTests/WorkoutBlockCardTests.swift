@@ -387,6 +387,19 @@ struct WorkoutBlockCardTests {
         #expect(actual.wasGoalMet == true)
     }
 
+    @Test("VoiceOver reads a step's figures as phrases, with the pace spoken per kilometre")
+    func spokenFigures() {
+        let step = ActivityStep(
+            block: 1, repetition: 0, step: 0, start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 3922),
+            distanceMeters: 9993.82, averageHeartRateBPM: 137
+        )
+
+        let spoken = WorkoutBlockCard.actual(for: step, distanceSystem: .metric).spokenText
+
+        #expect(spoken == ["recorded 1:05:22", "9.99 km", "average heart rate 137", "average pace 6:32 per km"])
+        #expect(WorkoutBlockCard.actual(for: recorded(seconds: 60, distance: nil, heartRate: nil)).spokenText == ["recorded 1:00"])
+    }
+
     @Test("a step with no distance or heart rate leaves those out instead of showing zero")
     func missingFiguresLeftOut() {
         let actual = WorkoutBlockCard.actual(for: recorded(seconds: 472, distance: nil, heartRate: nil), distanceSystem: .metric)

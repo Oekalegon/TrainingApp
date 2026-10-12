@@ -466,8 +466,8 @@ across launches.
   - **Connect Health Data**: while nothing has been imported and plans exist, i.e. the calendar is
     showing and the full empty state isn't (MVP2-108). Dismissing hides it for good; the Athlete
     tab's Apple Health row still offers "Connect Apple Health". It goes away once an import completes.
-  - **Allow distance** (MVP2-146): while Health is connected but HealthKit has types the athlete was
-    never asked about (`ActivityRefreshing.hasUnansweredPermissions()`, checked whenever the app
+  - **Allow distance** (MVP2-146): while Health is connected but the athlete was never asked to allow
+    distance (`ActivityRefreshing.hasUnansweredDistanceAccess()`, checked whenever the app
     becomes active). An install that connected before the app read distance is never prompted
     otherwise, and a workout step's distance and pace need it. "Allow Distance" asks for access
     (`requestAuthorization`, which now includes the distance types) and then re-reads every workout
