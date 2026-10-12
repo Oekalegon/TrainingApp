@@ -346,11 +346,14 @@ struct ActivityDetailView: View {
         // A venue the new sport doesn't have is dropped.
         let allowed = newVenue.flatMap { Venue.choices(for: newSport).contains($0) || $0 == currentVenue && newSport == currentSport ? $0 : nil }
         sportFailureMessage = nil
+        // Shown at once, so the pickers don't sit on the old value until the save is done (and the
+        // list under them reflows); put back if the save fails.
+        let previous = (sport, venue)
+        sport = newSport
+        venue = allowed
         Task {
-            if await onSetSport(newSport, allowed) {
-                sport = newSport
-                venue = allowed
-            } else {
+            if await !onSetSport(newSport, allowed) {
+                (sport, venue) = previous
                 sportFailureMessage = "The sport couldn't be changed."
             }
         }

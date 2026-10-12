@@ -23,9 +23,21 @@ struct PersonalInformationView: View {
             ? Sport.selectable : Sport.selectable + [viewModel.athlete.mainSport]
     }
 
+    /// The sport and venue just chosen, shown at once while they save, so the pickers (and the venue
+    /// picker that comes and goes with the sport) don't wait for the profile to reload.
+    @State private var mainSport: Sport?
+    @State private var mainVenue: Venue?
+
+    private var shownMainSport: Sport { mainSport ?? viewModel.athlete.mainSport }
+
     private func setMainSport(_ sport: Sport, venue: Venue?) {
+        let allowed = venue.flatMap { Venue.choices(for: sport).contains($0) ? $0 : nil }
+        mainSport = sport
+        mainVenue = allowed
         Task {
             if await !weekViewModel.setAthleteMainSport(sport, venue: venue) { isShowingError = true }
+            mainSport = nil
+            mainVenue = nil
         }
     }
 
@@ -73,20 +85,20 @@ struct PersonalInformationView: View {
 
             Section {
                 Picker("Main Sport", selection: Binding(
-                    get: { viewModel.athlete.mainSport },
-                    set: { sport in setMainSport(sport, venue: viewModel.athlete.mainVenue) }
+                    get: { mainSport ?? viewModel.athlete.mainSport },
+                    set: { sport in setMainSport(sport, venue: mainSport == nil ? viewModel.athlete.mainVenue : mainVenue) }
                 )) {
                     ForEach(mainSports, id: \.self) { sport in
                         Text(sport.displayName).tag(sport)
                     }
                 }
-                if !Venue.choices(for: viewModel.athlete.mainSport).isEmpty {
+                if !Venue.choices(for: shownMainSport).isEmpty {
                     Picker("Usual Venue", selection: Binding(
-                        get: { viewModel.athlete.mainVenue },
-                        set: { venue in setMainSport(viewModel.athlete.mainSport, venue: venue) }
+                        get: { mainSport == nil ? viewModel.athlete.mainVenue : mainVenue },
+                        set: { venue in setMainSport(shownMainSport, venue: venue) }
                     )) {
                         Text("No Preference").tag(nil as Venue?)
-                        ForEach(Venue.choices(for: viewModel.athlete.mainSport), id: \.self) { venue in
+                        ForEach(Venue.choices(for: shownMainSport), id: \.self) { venue in
                             Text(venue.displayName).tag(venue as Venue?)
                         }
                     }
