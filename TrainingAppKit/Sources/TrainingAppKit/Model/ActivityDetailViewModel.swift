@@ -30,6 +30,8 @@ public struct ActivityDetailViewModel {
     /// This activity's link to a planned workout and what it could be linked to instead (MVP2-42);
     /// `nil` when there's nothing to show. See `WeekViewModel.planLinkContext(for:)`.
     public let planLinkContext: PlanLinkContext?
+    /// What the heart-rate and pace charts draw, with the recorded steps as markers (MVP2-146).
+    public let chartData: ActivityChartData
 
     /// Creates a detail view model for `activity`.
     ///
@@ -38,6 +40,8 @@ public struct ActivityDetailViewModel {
     ///   - athlete: Supplies the heart-rate zone settings effective on `activity.start`.
     ///   - overlapContext: This activity's overlap issue, if any (MVP1-63).
     ///   - planLinkContext: This activity's plan link and its alternatives, if any (MVP2-42).
+    ///   - planWorkout: The workout of the plan this activity completed, to say what each recorded
+    ///     step was on the charts (MVP2-146).
     ///   - calculator: Computes the summary; defaults to `StatisticsCalculator()`'s standard
     ///     calculators (the same ones `TrainingModel` uses for the fitness series), so the load
     ///     shown here always agrees with what fed the week view's chart.
@@ -46,6 +50,7 @@ public struct ActivityDetailViewModel {
         athlete: AthleteProfile,
         overlapContext: OverlapContext? = nil,
         planLinkContext: PlanLinkContext? = nil,
+        planWorkout: StructuredWorkout? = nil,
         calculator: StatisticsCalculator = StatisticsCalculator()
     ) {
         self.activity = activity
@@ -53,5 +58,6 @@ public struct ActivityDetailViewModel {
         self.timeZone = athlete.timeZone
         self.overlapContext = overlapContext
         self.planLinkContext = planLinkContext
+        self.chartData = ActivityChartData.make(for: activity, workout: planWorkout)
     }
 }

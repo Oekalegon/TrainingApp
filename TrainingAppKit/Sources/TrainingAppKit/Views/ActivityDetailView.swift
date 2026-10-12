@@ -124,6 +124,21 @@ struct ActivityDetailView: View {
                 }
             }
 
+            // The heart rate and pace over time (MVP2-146), with a band for each recorded step.
+            if viewModel.chartData.hasHeartRate {
+                Section("Heart Rate Over Time") {
+                    ActivityHeartRateChart(data: viewModel.chartData)
+                    ActivityStepLegend(steps: viewModel.chartData.steps)
+                }
+            }
+            if viewModel.chartData.hasPace {
+                Section {
+                    ActivityPaceChart(data: viewModel.chartData, distanceSystem: .deviceDefault)
+                } header: {
+                    Text(DistanceSystem.deviceDefault == .metric ? "Pace Over Time (min/km)" : "Pace Over Time (min/mi)")
+                }
+            }
+
             Section {
                 LabeledContent("Start", value: viewModel.activity.start.formatted(dateFormat))
                 LabeledContent("Duration", value: durationText)

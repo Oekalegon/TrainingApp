@@ -467,7 +467,7 @@ across launches.
     showing and the full empty state isn't (MVP2-108). Dismissing hides it for good; the Athlete
     tab's Apple Health row still offers "Connect Apple Health". It goes away once an import completes.
   - **Allow distance** (MVP2-146): while Health is connected but the athlete was never asked to allow
-    distance (`ActivityRefreshing.hasUnansweredDistanceAccess()`, checked whenever the app
+    distance and speed (`ActivityRefreshing.hasUnansweredDistanceAccess()`, checked whenever the app
     becomes active). An install that connected before the app read distance is never prompted
     otherwise, and a workout step's distance and pace need it. "Allow Distance" asks for access
     (`requestAuthorization`, which now includes the distance types) and then re-reads every workout
@@ -483,6 +483,19 @@ across launches.
 Presented as a sheet when an activity in the week view is tapped (dismissed via the standard
 swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 
+- **Charts over time** (MVP2-146): a "Heart Rate Over Time" chart and, with speed, a "Pace Over Time"
+  chart (fastest at the top, in min/km or min/mi), against time since the start, one under the other
+  with their plots lined up. The steps the Watch recorded show as a coloured band each (yellow
+  warm-up, red work, green recovery, blue cool-down, a legend under the heart-rate chart; two greys
+  for steps whose role the plan can't give) with a thin line where each began, so the plan's steps can
+  be read off the curves. `ActivityChartData` builds them once when the sheet opens: heart rate is
+  averaged into at most 400 points, speed is smoothed over about 35 seconds and turned into pace, a
+  silence of 30 seconds or a stop (under 0.5 m/s) leaves a gap instead of a line across it, and the
+  pace axis covers the middle 90% of the readings (a walk is drawn at the edge, not stretching the
+  axis). Axis values are round (every 10 minutes, every minute of pace). An activity with no steps
+  gets the curves without bands; one with neither heart rate nor speed gets no chart. The pace chart
+  needs the speed the importer now reads, so it appears for an activity imported after speed was
+  allowed (the "Allow distance" prompt covers distance and speed, and re-reads the workouts).
 - Sport, start time, duration, distance (if present).
 - Load/TRIMP for the activity, and time-in-zone breakdown if heart-rate samples are present
   (`Statistics`'s `TimeInZone`) — every zone 1 through 5 is listed, not just the ones this
