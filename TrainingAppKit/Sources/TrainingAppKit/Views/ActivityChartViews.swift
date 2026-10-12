@@ -19,6 +19,7 @@ struct ActivityHeartRateChart: View {
                 .foregroundStyle(.red)
                 .lineStyle(StrokeStyle(lineWidth: 1.5, lineJoin: .round))
             }
+            activityLonePoints(data.heartRate, color: .red)
         }
         .chartXScale(domain: 0...max(data.duration, 1))
         .chartYScale(domain: .automatic(includesZero: false))
@@ -61,6 +62,7 @@ struct ActivityPaceChart: View {
                 .foregroundStyle(.blue)
                 .lineStyle(StrokeStyle(lineWidth: 1.5, lineJoin: .round))
             }
+            activityLonePoints(data.pace, color: .blue, negated: true)
         }
         .chartXScale(domain: 0...max(data.duration, 1))
         .chartYScale(domain: -domain.upperBound...(-domain.lowerBound))
@@ -97,6 +99,19 @@ struct ActivityPaceChart: View {
         var text = "From \(axisText(secondsPerKilometer: fast, in: system)) to \(axisText(secondsPerKilometer: slow, in: system)) \(unit)"
         if !data.steps.isEmpty { text += ", \(data.steps.count) steps marked" }
         return text
+    }
+}
+
+/// A dot for each reading that is alone in its segment: a line needs two points, so without this a
+/// lone reading between two gaps would draw nothing.
+@ChartContentBuilder
+func activityLonePoints(_ points: [ActivityChartData.Point], color: Color, negated: Bool = false) -> some ChartContent {
+    let counts = Dictionary(points.map { ($0.segment, 1) }, uniquingKeysWith: +)
+    let lone = points.filter { counts[$0.segment] == 1 }
+    ForEach(lone, id: \.elapsed) { point in
+        PointMark(x: .value("Time", point.elapsed), y: .value("Value", negated ? -point.value : point.value))
+            .symbolSize(12)
+            .foregroundStyle(color)
     }
 }
 

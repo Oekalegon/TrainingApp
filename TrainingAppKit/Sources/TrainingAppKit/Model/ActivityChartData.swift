@@ -37,7 +37,8 @@ public struct ActivityChartData: Equatable, Sendable {
     public static let maximumPoints = 400
     /// Speed below this (meters a second, about 33 min/km) is a stop, not a pace.
     static let minimumMovingSpeed = 0.5
-    /// A silence this long, in seconds, starts a new segment.
+    /// A silence this long, in seconds, starts a new segment (longer for a source that records less
+    /// often than every few seconds: see `gapThreshold(of:)`).
     static let gapSeconds: TimeInterval = 30
     /// How many speed samples (5 s each) the pace is averaged over, centred: 35 s.
     static let paceSmoothingSamples = 7
@@ -102,70 +103,113 @@ public struct ActivityChartData: Equatable, Sendable {
         )
     }
 
+    /// One reading against time since the activity began, before it becomes a chart point.
+    private struct Reading {
+        let elapsed: TimeInterval
+        let value: Double
+    }
+
+    /// The silence, in seconds, after which a new segment starts: ``gapSeconds``, or five times the
+    /// readings' usual spacing when that is longer, so a source that records a heart rate a minute
+    /// draws a line instead of a row of one-point segments.
+    private static func gapThreshold(of readings: [Reading]) -> TimeInterval {
+        var intervals: [TimeInterval] = []
+        intervals.reserveCapacity(readings.count)
+        for index in readings.indices.dropFirst() {
+            let interval = readings[index].elapsed - readings[index - 1].elapsed
+            if interval > 0 { intervals.append(interval) }
+        }
+        guard !intervals.isEmpty else { return gapSeconds }
+        intervals.sort()
+        let median = intervals[intervals.count / 2]
+        return max(gapSeconds, median * 5)
+    }
+
     /// Heart rate averaged into buckets of `duration / maximumPoints` seconds (at least a second), a
-    /// new segment after any silence of ``gapSeconds``.
+    /// new segment after any silence (see ``gapThreshold(of:)``).
     private static func heartRatePoints(_ samples: [HeartRateSample], start: Date, duration: TimeInterval) -> [Point] {
-        let sorted = samples
-            .map { (elapsed: $0.time.timeIntervalSince(start), bpm: $0.bpm) }
-            .filter { $0.elapsed >= 0 && $0.elapsed <= duration && $0.bpm.isFinite && $0.bpm > 0 }
-            .sorted { $0.elapsed < $1.elapsed }
-        guard !sorted.isEmpty else { return [] }
+        var readings: [Reading] = []
+        readings.reserveCapacity(samples.count)
+        for sample in samples {
+            let elapsed = sample.time.timeIntervalSince(start)
+            guard elapsed >= 0, elapsed <= duration, sample.bpm.isFinite, sample.bpm > 0 else { continue }
+            readings.append(Reading(elapsed: elapsed, value: sample.bpm))
+        }
+        readings.sort { $0.elapsed < $1.elapsed }
+        guard !readings.isEmpty else { return [] }
+
+        let gap = gapThreshold(of: readings)
         let bucket = max(duration / Double(maximumPoints), 1)
         var points: [Point] = []
         var segment = 0
-        var current = (index: 0, elapsed: 0.0, bpm: 0.0, count: 0)
-        var lastElapsed = sorted[0].elapsed
+        var bucketIndex = 0
+        var elapsedSum = 0.0
+        var valueSum = 0.0
+        var count = 0
+        var last = readings[0].elapsed
 
         func flush() {
-            guard current.count > 0 else { return }
-            points.append(Point(
-                elapsed: current.elapsed / Double(current.count), value: current.bpm / Double(current.count), segment: segment
-            ))
-            current = (current.index, 0, 0, 0)
+            guard count > 0 else { return }
+            points.append(Point(elapsed: elapsedSum / Double(count), value: valueSum / Double(count), segment: segment))
+            elapsedSum = 0
+            valueSum = 0
+            count = 0
         }
-        for sample in sorted {
-            if sample.elapsed - lastElapsed > gapSeconds {
+        for reading in readings {
+            if reading.elapsed - last > gap {
                 flush()
                 segment += 1
             }
-            lastElapsed = sample.elapsed
-            let index = Int(sample.elapsed / bucket)
-            if index != current.index {
+            last = reading.elapsed
+            let index = Int(reading.elapsed / bucket)
+            if index != bucketIndex {
                 flush()
-                current.index = index
+                bucketIndex = index
             }
-            current.elapsed += sample.elapsed
-            current.bpm += sample.bpm
-            current.count += 1
+            elapsedSum += reading.elapsed
+            valueSum += reading.value
+            count += 1
         }
         flush()
         return points
     }
 
-    /// Pace from speed, smoothed over ``paceSmoothingSamples`` samples; a stop (below
-    /// ``minimumMovingSpeed``) or a silence of ``gapSeconds`` starts a new segment.
+    /// Pace from speed, averaged over the ``paceSmoothingSamples`` samples around each one that are
+    /// close in time to it (the stored samples are 5 s windows, so close is within half the smoothing
+    /// span), so a stop doesn't drag in the running either side of it. A stop (below
+    /// ``minimumMovingSpeed``) or a silence (see ``gapThreshold(of:)``) starts a new segment.
     private static func pacePoints(
         _ samples: [SpeedSample], start: Date, duration: TimeInterval
     ) -> ([Point], ClosedRange<Double>?) {
-        let sorted = samples
-            .map { (elapsed: $0.time.timeIntervalSince(start), speed: $0.metersPerSecond) }
-            .filter { $0.elapsed >= 0 && $0.elapsed <= duration && $0.speed.isFinite && $0.speed >= 0 }
-            .sorted { $0.elapsed < $1.elapsed }
-        guard !sorted.isEmpty else { return ([], nil) }
+        var readings: [Reading] = []
+        readings.reserveCapacity(samples.count)
+        for sample in samples {
+            let elapsed = sample.time.timeIntervalSince(start)
+            guard elapsed >= 0, elapsed <= duration, sample.metersPerSecond.isFinite, sample.metersPerSecond >= 0 else { continue }
+            readings.append(Reading(elapsed: elapsed, value: sample.metersPerSecond))
+        }
+        readings.sort { $0.elapsed < $1.elapsed }
+        guard !readings.isEmpty else { return ([], nil) }
 
+        let gap = gapThreshold(of: readings)
         let half = paceSmoothingSamples / 2
+        let reach = Double(half) * 5 + 1
         var points: [Point] = []
         var segment = 0
         var broken = false
-        var previous = sorted[0].elapsed
-        for (index, sample) in sorted.enumerated() {
-            if sample.elapsed - previous > gapSeconds { broken = true }
-            previous = sample.elapsed
-            // Averaged over the neighbours that are close in time, so a stop doesn't drag in the run
-            // either side of it.
-            let window = sorted[max(0, index - half)...min(sorted.count - 1, index + half)]
-                .filter { abs($0.elapsed - sample.elapsed) <= Double(half) * 5 + 1 }
-            let mean = window.map(\.speed).reduce(0, +) / Double(window.count)
+        var previous = readings[0].elapsed
+        for index in readings.indices {
+            let reading = readings[index]
+            if reading.elapsed - previous > gap { broken = true }
+            previous = reading.elapsed
+            var sum = 0.0
+            var members = 0
+            for neighbour in max(0, index - half)...min(readings.count - 1, index + half)
+            where abs(readings[neighbour].elapsed - reading.elapsed) <= reach {
+                sum += readings[neighbour].value
+                members += 1
+            }
+            let mean = sum / Double(members)
             guard mean >= minimumMovingSpeed else {
                 broken = true
                 continue
@@ -174,18 +218,24 @@ public struct ActivityChartData: Equatable, Sendable {
                 if !points.isEmpty { segment += 1 }
                 broken = false
             }
-            points.append(Point(elapsed: sample.elapsed, value: 1000 / mean, segment: segment))
+            points.append(Point(elapsed: reading.elapsed, value: 1000 / mean, segment: segment))
         }
         guard points.count > 1 else { return (points, nil) }
 
-        let values = points.map(\.value).sorted()
+        var values = points.map(\.value)
+        values.sort()
         let low = values[Int(Double(values.count - 1) * 0.05)]
         let high = values[Int(Double(values.count - 1) * 0.95)]
         let pad = max((high - low) * 0.1, 10)
         let domain = (low - pad)...(high + pad)
         // Values beyond the middle 90% (a walk, a slow start) are drawn at the axis's edge rather than
         // stretching the axis.
-        let clamped = points.map { Point(elapsed: $0.elapsed, value: min(max($0.value, domain.lowerBound), domain.upperBound), segment: $0.segment) }
+        var clamped: [Point] = []
+        clamped.reserveCapacity(points.count)
+        for point in points {
+            let value = min(max(point.value, domain.lowerBound), domain.upperBound)
+            clamped.append(Point(elapsed: point.elapsed, value: value, segment: point.segment))
+        }
         return (clamped, domain)
     }
 
@@ -194,20 +244,20 @@ public struct ActivityChartData: Equatable, Sendable {
     private static func stepSpans(of activity: Activity, workout: StructuredWorkout?, duration: TimeInterval) -> [StepSpan] {
         let recorded = activity.steps.sorted { $0.start < $1.start }
         guard !recorded.isEmpty else { return [] }
-        var kinds: [Date: StepKind] = [:]
+        var kinds: [ActivityStep: StepKind] = [:]
         if let workout, let aligned = ActivityStepAligner.align(recorded, with: workout) {
             let planned = workout.blocks.flatMap { block in
                 (0..<max(block.repetitions, 1)).flatMap { _ in block.steps.map(\.kind) }
             }
             for (index, step) in aligned.enumerated() where index < planned.count {
-                if let step { kinds[step.start] = planned[index] }
+                if let step { kinds[step] = planned[index] }
             }
         }
         return recorded.enumerated().compactMap { index, step in
             let start = max(0, step.start.timeIntervalSince(activity.start))
             let end = min(duration, step.end.timeIntervalSince(activity.start))
             guard end > start else { return nil }
-            return StepSpan(id: index, kind: kinds[step.start], start: start, end: end)
+            return StepSpan(id: index, kind: kinds[step], start: start, end: end)
         }
     }
 }

@@ -490,7 +490,7 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   for steps whose role the plan can't give) with a thin line where each began, so the plan's steps can
   be read off the curves. `ActivityChartData` builds them once when the sheet opens: heart rate is
   averaged into at most 400 points, speed is smoothed over about 35 seconds and turned into pace, a
-  silence of 30 seconds or a stop (under 0.5 m/s) leaves a gap instead of a line across it, and the
+  silence of 30 seconds (or five times the usual spacing, for a source that records less often) or a stop (under 0.5 m/s) leaves a gap instead of a line across it, and a lone reading between gaps is drawn as a dot, and the
   pace axis covers the middle 90% of the readings (a walk is drawn at the edge, not stretching the
   axis). Axis values are round (every 10 minutes, every minute of pace). An activity with no steps
   gets the curves without bands; one with neither heart rate nor speed gets no chart. The pace chart

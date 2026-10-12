@@ -53,6 +53,26 @@ struct ActivityChartDataTests {
         #expect(data.heartRate.last?.segment == 1)
     }
 
+    @Test("a source that records a heart rate every minute is one line, not a row of one-point segments")
+    func sparseHeartRateIsOneLine() {
+        let samples = (0..<60).map { hr(Double($0) * 60, 130 + Double($0 % 5)) }
+
+        let data = ActivityChartData.make(for: activity(duration: 3600, heartRate: samples), workout: nil)
+
+        #expect(Set(data.heartRate.map(\.segment)) == [0])
+        #expect(data.heartRate.count == 60)
+    }
+
+    @Test("a pause longer than five times the usual spacing still breaks the line, whatever the spacing")
+    func gapRelativeToSpacing() {
+        // One reading a minute, then nothing for twenty minutes.
+        let samples = (0..<10).map { hr(Double($0) * 60, 130) } + (30..<40).map { hr(Double($0) * 60, 130) }
+
+        let data = ActivityChartData.make(for: activity(duration: 2400, heartRate: samples), workout: nil)
+
+        #expect(Set(data.heartRate.map(\.segment)) == [0, 1])
+    }
+
     @Test("readings outside the activity or that aren't heart rates are ignored; none at all is no chart")
     func heartRateFiltered() {
         let data = ActivityChartData.make(for: activity(duration: 100, heartRate: [hr(-5, 120), hr(500, 120), hr(10, 0), hr(20, .nan)]), workout: nil)
@@ -135,6 +155,21 @@ struct ActivityChartDataTests {
         #expect(data.steps.map(\.start) == [0, 300, 360, 420, 480, 540])
         #expect(data.steps.last?.end == 840)
         #expect(data.steps.map(\.id) == Array(0..<6))
+    }
+
+    @Test("a zero-length step doesn't take the role of the step that starts where it does")
+    func zeroLengthStepDoesNotShareARole() {
+        let workout = StructuredWorkout(name: "Two", sport: .running, blocks: [
+            WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(60))]),
+            WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(60))]),
+        ])
+        // The warm-up has no time at all, and the work begins at the same instant.
+        let steps = [step("0.0.0", from: 0, seconds: 0), step("1.0.0", from: 0, seconds: 60)]
+
+        let data = ActivityChartData.make(for: activity(duration: 600, steps: steps), workout: workout)
+
+        #expect(data.steps.count == 1)
+        #expect(data.steps.first?.kind == .work)
     }
 
     @Test("without the plan's workout, or when the steps don't fit it, the spans have no role")
