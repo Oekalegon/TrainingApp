@@ -80,12 +80,12 @@ public struct AppTabView: View {
                     athletePath = AthleteRoute.watchSettings
                     selectedTab = .athlete
                 })
-                .searchResults(searchResultsView)
+                .searchResults(searchResultsView, text: $searchText)
             }
 
             Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
                 WorkoutLibraryView(viewModel: libraryViewModel)
-                    .searchResults(searchResultsView)
+                    .searchResults(searchResultsView, text: $searchText)
             }
 
             Tab("Athlete", systemImage: "person.circle", value: AppTab.athlete) {
@@ -114,7 +114,6 @@ public struct AppTabView: View {
                     watchSync: watchSync,
                     workoutInspector: workoutInspector
                 )
-                .searchResults(searchResultsView)
             }
             // Same live count `OverlapWarningBanner` shows on the Athlete screen itself (MVP1-67)
             // — both update together whenever an overlap is resolved, since they read the same
@@ -122,7 +121,6 @@ public struct AppTabView: View {
             // extra `nil`-vs-count branch is needed here.
             .badge(overlapReviewItems.count)
         }
-        .searchable(text: $searchText, prompt: "Workouts and Activities")
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             watchSync?.requestSync()
@@ -152,23 +150,34 @@ public struct AppTabView: View {
     }
 }
 
-/// Lays the search results over a tab while the search field is in use (MVP2-145).
+/// Gives a tab the search field and lays the search results over it while the field is in use
+/// (MVP2-145, MVP2-150).
 ///
-/// `isSearching` is only set inside the view `.searchable` is attached to, so each tab applies this
-/// itself rather than `AppTabView` reading it once for all of them.
-private struct SearchResultsOverlay: ViewModifier {
-    @Environment(\.isSearching) private var isSearching
+/// Applied to the tabs that can be searched from (Week and Library), not to the tab view, so the
+/// Athlete tab has no field. The overlay goes before `.searchable` because `isSearching` is only set
+/// inside the view `.searchable` is attached to.
+private struct SearchableTab: ViewModifier {
     let results: SearchView
+    @Binding var text: String
 
     func body(content: Content) -> some View {
-        content.overlay {
+        content
+            .overlay { Results(results: results) }
+            .searchable(text: $text, prompt: "Workouts and Activities")
+    }
+
+    private struct Results: View {
+        @Environment(\.isSearching) private var isSearching
+        let results: SearchView
+
+        var body: some View {
             if isSearching { results }
         }
     }
 }
 
 private extension View {
-    func searchResults(_ results: SearchView) -> some View {
-        modifier(SearchResultsOverlay(results: results))
+    func searchResults(_ results: SearchView, text: Binding<String>) -> some View {
+        modifier(SearchableTab(results: results, text: text))
     }
 }
