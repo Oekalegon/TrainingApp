@@ -66,6 +66,19 @@ struct WorkoutTemplateEditorSheet: View {
                             Label(sport.displayName, systemImage: sport.symbolName).tag(sport)
                         }
                     }
+                    .onChange(of: viewModel.draft.sport) { _, sport in
+                        if let venue = viewModel.draft.venue, !Venue.choices(for: sport).contains(venue) {
+                            viewModel.draft.venue = nil
+                        }
+                    }
+                    if !Venue.choices(for: viewModel.draft.sport).isEmpty {
+                        Picker("Venue", selection: $viewModel.draft.venue) {
+                            Text("Chosen when planning").tag(nil as Venue?)
+                            ForEach(Venue.choices(for: viewModel.draft.sport), id: \.self) { venue in
+                                Text(venue.displayName).tag(venue as Venue?)
+                            }
+                        }
+                    }
                 }
 
                 stepsSection
@@ -122,10 +135,7 @@ struct WorkoutTemplateEditorSheet: View {
 
     /// The sports a workout can be for: the named ones, plus the draft's own when it's another.
     private var sports: [Sport] {
-        let named: [Sport] = [
-            .running, .indoorRunning, .outdoorRunning, .cycling, .swimming, .walking, .hiking, .rowing,
-            .strength, .coreStrengthTraining
-        ]
+        let named = Sport.selectable
         return named.contains(viewModel.draft.sport) ? named : named + [viewModel.draft.sport]
     }
 

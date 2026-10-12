@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import TrainingCore
 
 /// Personal Information (MVP2-123, MVP2-132, design doc §2.3): the avatar, name, sex and age, and the
 /// two zone screens, Heart Rate Zones and Pace Zones. The name can be changed: tapping its row asks
@@ -15,6 +16,18 @@ struct PersonalInformationView: View {
     /// The photo the athlete picked, consumed as soon as it's loaded (MVP2-132).
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var isShowingPhotoError = false
+
+    /// The selectable sports, plus the athlete's own when it's another.
+    private var mainSports: [Sport] {
+        Sport.selectable.contains(viewModel.athlete.mainSport)
+            ? Sport.selectable : Sport.selectable + [viewModel.athlete.mainSport]
+    }
+
+    private func setMainSport(_ sport: Sport, venue: Venue?) {
+        Task {
+            if await !weekViewModel.setAthleteMainSport(sport, venue: venue) { isShowingError = true }
+        }
+    }
 
     var body: some View {
         List {
@@ -56,6 +69,30 @@ struct PersonalInformationView: View {
                 if let age = viewModel.ageText() {
                     LabeledContent("Age", value: age)
                 }
+            }
+
+            Section {
+                Picker("Main Sport", selection: Binding(
+                    get: { viewModel.athlete.mainSport },
+                    set: { sport in setMainSport(sport, venue: viewModel.athlete.mainVenue) }
+                )) {
+                    ForEach(mainSports, id: \.self) { sport in
+                        Text(sport.displayName).tag(sport)
+                    }
+                }
+                if !Venue.choices(for: viewModel.athlete.mainSport).isEmpty {
+                    Picker("Usual Venue", selection: Binding(
+                        get: { viewModel.athlete.mainVenue },
+                        set: { venue in setMainSport(viewModel.athlete.mainSport, venue: venue) }
+                    )) {
+                        Text("No Preference").tag(nil as Venue?)
+                        ForEach(Venue.choices(for: viewModel.athlete.mainSport), id: \.self) { venue in
+                            Text(venue.displayName).tag(venue as Venue?)
+                        }
+                    }
+                }
+            } footer: {
+                Text("New planned workouts start with this venue when the workout allows it.")
             }
 
             Section {

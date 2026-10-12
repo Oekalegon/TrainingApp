@@ -318,7 +318,8 @@ public struct WeekView: View {
                         onUnjoin: { await viewModel.unjoinActivity(activity) },
                         loadComponents: { await viewModel.joinedComponents(of: activity) },
                         onLinkPlan: { await viewModel.linkActivity(activity, toPlan: $0) },
-                        onUnlinkPlan: { await viewModel.unlinkActivity(activity) }
+                        onUnlinkPlan: { await viewModel.unlinkActivity(activity) },
+                        onSetSport: { await viewModel.setActivitySport(activity, sport: $0, venue: $1) }
                     )
                 }
             }

@@ -52,6 +52,8 @@ public final class PlannedWorkoutSheetViewModel {
     /// ``editedWorkout``'s recorded parameter values (filled out with defaults), to detect whether the
     /// athlete changed any.
     private let originalParameterValues: [String: Double]
+    /// ``editedWorkout``'s venue, to detect whether the athlete changed it.
+    private let originalVenue: Venue?
 
     /// `true` when edit mode can change the workout's parameters (see ``editedTemplate``).
     public var canEditParameters: Bool { editedTemplate != nil }
@@ -64,6 +66,9 @@ public final class PlannedWorkoutSheetViewModel {
     public var editableParameters: [WorkoutTemplateParameter] { editedTemplate?.parameters ?? [] }
     /// `true` when any parameter now differs from what the edited workout was built with.
     private var parametersChanged: Bool { editedTemplate != nil && parameterValues != originalParameterValues }
+    /// `true` when the venue now differs from what the edited workout was built with; only a workout
+    /// made from a template can change it.
+    private var venueChanged: Bool { editedTemplate != nil && venue != originalVenue }
     /// Whether edit mode's name field differs from the workout's saved name. An emptied field
     /// keeps the saved name.
     private var nameChanged: Bool {
@@ -72,7 +77,7 @@ public final class PlannedWorkoutSheetViewModel {
     }
     /// Whether saving an edit needs a new workout: a workout may be shared with other plans, so
     /// a new name or parameter value is never written into it.
-    private var workoutNeedsReplacing: Bool { parametersChanged || nameChanged }
+    private var workoutNeedsReplacing: Bool { parametersChanged || venueChanged || nameChanged }
 
     /// Whether ``save(asOf:)`` has something to save: an edit always does (date/load/parameters); a new plan
     /// needs a template picked first. The sheet's save button follows this — keying it off
@@ -116,6 +121,18 @@ public final class PlannedWorkoutSheetViewModel {
             seedFromSelectedTemplate()
         }
     }
+    /// Where the workout is done (MVP2-151), sent to the Watch so starting it doesn't ask "Indoor or
+    /// Outdoor?". Creating, it starts as the template's default for the athlete
+    /// (``WorkoutTemplate/defaultVenue(for:)``) whenever a template is picked; editing, as the
+    /// workout's own. `nil` for a sport without venues.
+    public var venue: Venue?
+    /// The venues the template allows, as the picker's options; empty for a sport without venue variants.
+    public var venueChoices: [Venue] { (selectedTemplate ?? editedTemplate)?.venueChoices ?? [] }
+    /// Whether the template fixes the venue (a track session is outdoors), so the sheet shows it but
+    /// doesn't offer a choice.
+    public var isVenueFixed: Bool { (selectedTemplate ?? editedTemplate)?.isVenueFixed ?? true }
+    /// Whether the sheet shows a venue picker: the template allows a choice.
+    public var offersVenueChoice: Bool { !isVenueFixed }
     /// The workout's name. When creating, it starts as the template's generated title (MVP2-110,
     /// e.g. "40min Easy Run") and follows ``parameterValues`` until the athlete edits it by hand,
     /// after which it is theirs until another template is picked. When editing, it starts as the
@@ -227,6 +244,7 @@ public final class PlannedWorkoutSheetViewModel {
         self.editedWorkout = nil
         self.editedTemplate = nil
         self.originalParameterValues = [:]
+        self.originalVenue = nil
     }
 
     /// Creates a view model that edits `plan` in place (MVP2-39).
@@ -266,6 +284,8 @@ public final class PlannedWorkoutSheetViewModel {
         } else {
             self.originalParameterValues = [:]
         }
+        self.originalVenue = workout?.venue
+        self.venue = workout?.venue
         // The saved name counts as the default title, still followed by the parameters, only if it
         // is exactly what the template would generate at the recorded values.
         workoutName = workout?.name ?? ""
@@ -290,6 +310,7 @@ public final class PlannedWorkoutSheetViewModel {
     private func seedFromSelectedTemplate() {
         guard let selectedTemplate else {
             parameterValues = [:]
+            venue = nil
             nameIsCustomized = false
             generatedTitle = ""
             workoutName = ""
@@ -301,6 +322,7 @@ public final class PlannedWorkoutSheetViewModel {
         parameterValues = Dictionary(
             uniqueKeysWithValues: selectedTemplate.parameters.map { ($0.key, $0.defaultValue) }
         )
+        venue = selectedTemplate.defaultVenue(for: model.athlete)
         nameIsCustomized = false
         refreshGeneratedTitle()
         recomputeExpectedLoad()
@@ -332,17 +354,17 @@ public final class PlannedWorkoutSheetViewModel {
         guard let editedWorkout else { return nil }
         guard workoutNeedsReplacing else { return editedWorkout }
         let name = workoutName.isEmpty ? editedWorkout.name : workoutName
-        if parametersChanged {
+        if parametersChanged || venueChanged {
             // A malformed template (not reachable from the UI) leaves the workout untouched, name
             // change included.
             guard let editedTemplate,
-                  let instantiated = try? editedTemplate.instantiate(name: name, values: parameterValues)
+                  let instantiated = try? editedTemplate.instantiate(name: name, venue: venue, values: parameterValues)
             else { return editedWorkout }
             return instantiated
         }
         // Renamed only: the same steps under a new identity.
         return StructuredWorkout(
-            name: name, sport: editedWorkout.sport, blocks: editedWorkout.blocks,
+            name: name, sport: editedWorkout.sport, venue: editedWorkout.venue, blocks: editedWorkout.blocks,
             templateID: editedWorkout.templateID, parameterValues: editedWorkout.parameterValues
         )
     }
@@ -403,7 +425,7 @@ public final class PlannedWorkoutSheetViewModel {
             plan = edited
         } else {
             guard let selectedTemplate, let instantiated = try? selectedTemplate.instantiate(
-                name: nameToSave(for: selectedTemplate), values: parameterValues
+                name: nameToSave(for: selectedTemplate), venue: venue, values: parameterValues
             ) else {
                 guardrailFindings = []
                 guardrailDiagnostic = nil
@@ -572,7 +594,7 @@ public final class PlannedWorkoutSheetViewModel {
         defer { isSaving = false }
         do {
             let workout = try selectedTemplate.instantiate(
-                name: nameToSave(for: selectedTemplate), values: parameterValues
+                name: nameToSave(for: selectedTemplate), venue: venue, values: parameterValues
             )
             let plan = PlannedActivity(workoutID: workout.id, date: date)
             if let scheduler {

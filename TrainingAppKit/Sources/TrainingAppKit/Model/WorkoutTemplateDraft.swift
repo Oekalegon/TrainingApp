@@ -121,6 +121,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     public var titleNameAppliesTo: String?
     /// The sport the workout is for.
     public var sport: Sport
+    /// Where the workout is done; `nil` leaves it to the plan.
+    public var venue: Venue?
     /// The template's parameters.
     public var parameters: [Parameter]
     /// The template's blocks.
@@ -129,13 +131,14 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     /// Creates a draft.
     public init(
         id: UUID = UUID(), name: String = "", titleName: String? = nil, titleNameAppliesTo: String? = nil,
-        sport: Sport = .running, parameters: [Parameter] = [], blocks: [Block] = []
+        sport: Sport = .running, venue: Venue? = nil, parameters: [Parameter] = [], blocks: [Block] = []
     ) {
         self.titleNameAppliesTo = titleNameAppliesTo
         self.id = id
         self.name = name
         self.titleName = titleName
         self.sport = sport
+        self.venue = venue
         self.parameters = parameters
         self.blocks = blocks
     }
@@ -285,7 +288,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
             name: duplicating ? "\(template.name) Copy" : template.name,
             titleName: duplicating ? (template.titleName ?? template.name) : template.titleName,
             titleNameAppliesTo: duplicating ? "\(template.name) Copy" : nil,
-            sport: template.sport, parameters: parameters, blocks: blocks
+            sport: template.sport, venue: template.venue, parameters: parameters, blocks: blocks
         )
     }
 
@@ -433,7 +436,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         let keepsTitleName = titleNameAppliesTo == nil || titleNameAppliesTo == trimmedName
         return WorkoutTemplate(
             id: id, name: trimmedName, titleName: keepsTitleName ? titleName : nil,
-            sport: sport, parameters: templateParameters, blocks: templateBlocks
+            sport: sport, venue: venue, parameters: templateParameters, blocks: templateBlocks
         )
     }
 }

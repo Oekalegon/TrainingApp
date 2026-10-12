@@ -35,6 +35,15 @@ public struct ActivityDetailViewModel {
     /// The sheet's title: the linked plan's workout name, else the sport's name (MVP2-152); see
     /// ``WeekViewModel/activityTitle(for:)``.
     public let title: String
+    /// The sport and venue of the plan this activity completed, if it has one (MVP2-151).
+    public let plannedSport: Sport?
+    public let plannedVenue: Venue?
+    /// Whether the activity's sport or venue differs from its plan's, so the sheet offers to use the
+    /// plan's. A plan without a venue never differs on venue.
+    public var differsFromPlan: Bool {
+        guard let plannedSport else { return false }
+        return plannedSport != activity.sport || (plannedVenue != nil && plannedVenue != activity.venue)
+    }
 
     /// Creates a detail view model for `activity`.
     ///
@@ -64,6 +73,8 @@ public struct ActivityDetailViewModel {
         self.overlapContext = overlapContext
         self.planLinkContext = planLinkContext
         self.title = title ?? activity.sport.displayName
+        self.plannedSport = planWorkout?.sport
+        self.plannedVenue = planWorkout?.venue
         self.chartData = ActivityChartData.make(for: activity, workout: planWorkout)
     }
 

@@ -42,6 +42,7 @@ struct AthleteView: View {
     let loadJoinedComponents: (Activity) async -> [Activity]
     let onLinkPlan: (Activity, UUID) async -> Bool
     let onUnlinkPlan: (Activity) async -> Bool
+    let onSetActivitySport: (Activity, Sport, Venue?) async -> Bool
     /// Backs the Apple Watch screens (MVP2-117); `nil` where WorkoutKit isn't available, which hides
     /// the Apple Watch row.
     let watchSync: WatchScheduleSync?
@@ -112,7 +113,8 @@ struct AthleteView: View {
                         onUnjoin: { await onUnjoinActivity(activity) },
                         loadComponents: { await loadJoinedComponents(activity) },
                         onLinkPlan: { await onLinkPlan(activity, $0) },
-                        onUnlinkPlan: { await onUnlinkPlan(activity) }
+                        onUnlinkPlan: { await onUnlinkPlan(activity) },
+                        onSetSport: { await onSetActivitySport(activity, $0, $1) }
                     )
                 }
             }

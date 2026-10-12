@@ -849,4 +849,63 @@ struct PlannedWorkoutSheetViewModelTests {
         // injectable-`today` convention, so this doesn't race a real midnight boundary.
         #expect(viewModel.minimumDate(asOf: day(5)) == calendar.startOfDay(for: day(5)))
     }
+
+    // MARK: Venue (MVP2-151)
+
+    @Test("selecting a template that leaves the venue open preselects the athlete's usual venue")
+    func selectingTemplatePreselectsAthleteVenue() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        #expect(viewModel.offersVenueChoice)
+        #expect(viewModel.venue == BuiltInWorkoutTemplates.easyRun.defaultVenue(for: model.athlete))
+
+        viewModel.venue = .indoor(.treadmill)
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.recoveryRun
+        #expect(viewModel.venue == BuiltInWorkoutTemplates.recoveryRun.defaultVenue(for: model.athlete))
+    }
+
+    @Test("a template that fixes the venue locks the picker")
+    func fixedVenueLocksPicker() async {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(0))
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.shortIntervalRunTrack
+
+        #expect(!viewModel.offersVenueChoice)
+        #expect(viewModel.venue == .outdoor(.track))
+    }
+
+    @Test("the chosen venue is saved on the workout")
+    func chosenVenueIsSaved() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(3), scheduler: nil)
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        viewModel.venue = .indoor(.treadmill)
+
+        #expect(await viewModel.save(asOf: day(0)))
+
+        #expect(model.workouts.last?.venue == .indoor(.treadmill))
+    }
+
+    @Test("changing the venue when editing saves a new workout with it")
+    func editingVenueReplacesWorkout() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let creating = PlannedWorkoutSheetViewModel(model: model, date: day(3), scheduler: nil)
+        creating.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        creating.venue = .outdoor(.road)
+        #expect(await creating.save(asOf: day(0)))
+        let plan = try #require(model.plans.last)
+
+        let editing = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+        #expect(editing.venue == .outdoor(.road))
+        editing.venue = .indoor(.treadmill)
+        #expect(await editing.save(asOf: day(0)))
+
+        let saved = try #require(model.plans.first { $0.id == plan.id })
+        #expect(model.workouts.first { $0.id == saved.workoutID }?.venue == .indoor(.treadmill))
+    }
 }
