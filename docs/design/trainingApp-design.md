@@ -689,8 +689,11 @@ The screens:
 - **Developer** (`DeveloperView`): **Inspect Recent Workouts** (MVP2-146 spike, `WorkoutInspectionView`):
   a read-only text report of what HealthKit recorded for the 30 most recent workouts: whether each was
   started from a plan (`workout.workoutPlan`), its events (laps, segments, pauses, markers), its
-  sub-activities and metadata. It exists to see whether the Watch records each step of a plan-started
-  workout; the report can be copied or shared. Remove it once that is answered and acted on.
+  sub-activities, each one's summaries (distance, heart rate, speed...) and metadata. It exists to see
+  what the Watch records for each step of a plan-started workout, and it asks for read access to
+  distance and speed the first time (an install that connected Health earlier was never asked for
+  distance). The report can be copied or shared. It stays to check workouts not yet seen (one with no
+  warm-up).
   **Force Full Resync** and **Deduplicate Activities**, moved here
   from the bottom of the old single screen. Force Full Resync re-imports every activity from HealthKit
   from scratch, via `TrainingModel.resyncActivities(from:asOf:)` — a full import (cleared

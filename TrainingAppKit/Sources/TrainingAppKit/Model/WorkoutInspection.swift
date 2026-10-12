@@ -10,8 +10,11 @@ import Foundation
 public protocol WorkoutInspecting {
     /// A report on the `limit` most recent workouts, newest first.
     ///
+    /// - Parameters:
+    ///   - limit: How many workouts to read.
+    ///   - today: The time written at the top of the report.
     /// - Throws: Whatever the HealthKit query throws, e.g. when access wasn't granted.
-    func inspectRecentWorkouts(limit: Int) async throws -> String
+    func inspectRecentWorkouts(limit: Int, asOf today: Date) async throws -> String
 }
 
 /// One workout as the spike's report shows it: plain values, so the formatting is tested without

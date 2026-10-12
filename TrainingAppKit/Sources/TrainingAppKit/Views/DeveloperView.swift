@@ -52,7 +52,7 @@ struct DeveloperView: View {
                         WorkoutInspectionView(inspector: workoutInspector)
                     }
                 } footer: {
-                    Text("Lists the events and activities HealthKit recorded for your recent workouts, and which were started from a plan, to see whether the Watch records each step (MVP2-146). Nothing is changed.")
+                    Text("Lists the events, activities and summaries HealthKit recorded for your recent workouts, and which were started from a plan, to see what the Watch records for each step (MVP2-146). It changes nothing, but the first time it asks for read access to distance and speed.")
                 }
             }
         }

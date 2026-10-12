@@ -1,6 +1,7 @@
 import Foundation
 #if canImport(HealthKit)
 import HealthKit
+import TrainingHealthKit
 #if canImport(WorkoutKit)
 import WorkoutKit
 #endif
@@ -11,13 +12,14 @@ import WorkoutKit
 struct HealthKitWorkoutInspector: WorkoutInspecting {
     let healthStore: HKHealthStore
 
-    func inspectRecentWorkouts(limit: Int) async throws -> String {
-        // A workout activity's distance and speed summaries are only readable once the athlete has
-        // allowed those types, which the app doesn't otherwise ask for yet (MVP2-146). Read-only;
-        // HealthKit shows its sheet once, and not again for types already answered.
-        try await healthStore.requestAuthorization(toShare: [], read: [
-            HKQuantityType(.distanceWalkingRunning), HKQuantityType(.runningSpeed), HKQuantityType(.heartRate),
-        ])
+    func inspectRecentWorkouts(limit: Int, asOf today: Date) async throws -> String {
+        // A workout activity's distance summary is only readable once the athlete has allowed the
+        // distance types, which an install that connected Health before MVP2-146 was never asked for;
+        // this asks, once (HealthKit shows its sheet only for types not yet answered). Speed is added
+        // for the report only: the app itself doesn't read it. Read-only.
+        try await healthStore.requestAuthorization(
+            toShare: [], read: HealthKitAuthorization.readTypes.union([HKQuantityType(.runningSpeed)])
+        )
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout()],
             sortDescriptors: [SortDescriptor(\.endDate, order: .reverse)],
@@ -28,7 +30,7 @@ struct HealthKitWorkoutInspector: WorkoutInspecting {
         for workout in workouts {
             inspected.append(await Self.inspect(workout))
         }
-        return WorkoutInspectionReport.format(inspected, generatedAt: .now)
+        return WorkoutInspectionReport.format(inspected, generatedAt: today)
     }
 
     private static func inspect(_ workout: HKWorkout) async -> InspectedWorkout {

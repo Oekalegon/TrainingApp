@@ -27,6 +27,18 @@ struct WorkoutInspectionReportTests {
         #expect(text.contains("2023-11-14T00:00:00Z to 2023-11-14T00:30:00Z"))
     }
 
+    @Test("an activity with no summaries says none, since a missing distance is the answer when access wasn't allowed")
+    func noStatistics() {
+        let activity = InspectedWorkout.Activity(
+            activityType: "activityType(37)", start: base, end: base.addingTimeInterval(300), events: [], metadata: [:],
+            statistics: [:]
+        )
+
+        let text = WorkoutInspectionReport.format([workout(activities: [activity])], generatedAt: base)
+
+        #expect(text.contains("statistics: none"))
+    }
+
     @Test("a plan-started workout shows the plan's id and summary, events with their times and metadata, and each activity's events")
     func planStartedWorkoutShowsEverything() {
         let planID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!

@@ -38,7 +38,7 @@ struct WorkoutInspectionView: View {
         }
         .task {
             do {
-                report = try await inspector.inspectRecentWorkouts(limit: limit)
+                report = try await inspector.inspectRecentWorkouts(limit: limit, asOf: .now)
             } catch {
                 errorMessage = error.localizedDescription
             }
