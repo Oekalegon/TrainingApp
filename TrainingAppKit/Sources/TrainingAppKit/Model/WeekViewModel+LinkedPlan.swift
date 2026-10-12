@@ -5,6 +5,9 @@ extension WeekViewModel {
     /// What the plan a completed activity is linked to expected, for the planned values its card
     /// shows next to and under the actual ones.
     public struct LinkedPlanExpectation: Equatable, Sendable {
+        /// The plan's workout name (e.g. "10 km Long Run"), which the activity's card shows as its
+        /// title instead of the sport's name (MVP2-152); `nil` when the workout has no name.
+        public let name: String?
         /// Expected TRIMP: the plan's override, else the estimator's figure.
         public let load: Double?
         /// Expected duration — exact for a duration-based workout, forecast from the athlete's
@@ -46,6 +49,7 @@ extension WeekViewModel {
             )
             let summary = plannedCardSummary(for: plan)
             return LinkedPlanExpectation(
+                name: summary.name,
                 load: summary.load,
                 duration: projection.duration,
                 distanceMeters: projection.distanceMeters,

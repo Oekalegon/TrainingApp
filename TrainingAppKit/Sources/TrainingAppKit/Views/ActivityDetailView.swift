@@ -230,7 +230,7 @@ struct ActivityDetailView: View {
         }
         // The planned step cards' spacer rows are one point high (``WorkoutStepListSpacerRow``).
         .environment(\.defaultMinListRowHeight, 1)
-        .navigationTitle(viewModel.activity.sport.displayName)
+        .navigationTitle(viewModel.title)
         .task { components = await loadComponents() }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

@@ -66,7 +66,7 @@ struct ActivityCard: View {
                     Image(systemName: activity.sport.symbolName)
                         .foregroundStyle(.primary)
                         .frame(width: TimelineCardStyle.iconWidth)
-                    Text(activity.sport.displayName)
+                    Text(planned?.name ?? activity.sport.displayName)
                         .bold()
                         .foregroundStyle(.primary)
                     if let overlapWarning {

@@ -246,6 +246,11 @@ across launches.
   (see "Estimated values" below), so a guess next to a real figure stays recognisable as one. The
   distance is left out when it can't be forecast (no zone settings recorded). Plans already matched to a completed activity get no row at all
   (`WeekViewModel.pendingPlans(on:)`). Tapping it opens the planned-workout detail sheet (below).
+- **Linked activity title** (MVP2-152). An activity matched to a plan is titled by the plan's workout name (e.g.
+  "10 km Long Run") on its card (`LinkedPlanExpectation.name`) and in its detail sheet
+  (`ActivityDetailViewModel.title`), not by the sport's name, which is the title when it has no plan or the
+  workout is gone. Activities carry no name of their own yet, so there is no manual name to protect; a
+  rename feature would have to take precedence here.
 - **Intensity** (MVP2-43). Each card is tinted by the session's intensity — very low, low, medium or
   high, from `TrainingModel.intensity(of:)`, which classifies from sustained time in heart-rate zones
   rather than from TRIMP or the highest zone reached (see TrainingKit's

@@ -60,4 +60,10 @@ public struct ActivityDetailViewModel {
         self.planLinkContext = planLinkContext
         self.chartData = ActivityChartData.make(for: activity, workout: planWorkout)
     }
+
+    /// The sheet's title: the linked plan's workout name (e.g. "10 km Long Run") while the activity
+    /// completes a plan, else the sport's name (MVP2-152). The same name the activity's card shows.
+    public var title: String {
+        planLinkContext?.linkedPlan?.title ?? activity.sport.displayName
+    }
 }
