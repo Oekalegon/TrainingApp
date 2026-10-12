@@ -17,6 +17,27 @@ public struct WorkoutStepActual: Equatable, Sendable {
     public let wasGoalMet: Bool?
 }
 
+/// The stretch after the plan's last step as the step list shows it (MVP2-146): a card of its own
+/// after the steps, with the same four figures.
+public struct WorkoutAfterPlanCard: Equatable, Sendable {
+    /// Its position among the recorded steps, which is its span's id on the charts; what a tap on the
+    /// card highlights.
+    public let recordedStepID: Int
+    /// What the athlete did after the plan.
+    public let actual: WorkoutStepActual
+
+    /// The card for `afterPlan`.
+    static func make(_ afterPlan: ActivityAfterPlan, distanceSystem: DistanceSystem = .deviceDefault) -> WorkoutAfterPlanCard {
+        WorkoutAfterPlanCard(
+            recordedStepID: afterPlan.id,
+            actual: WorkoutBlockCard.actual(
+                duration: afterPlan.duration, distanceMeters: afterPlan.distanceMeters,
+                averageHeartRateBPM: afterPlan.averageHeartRateBPM, wasGoalMet: nil, distanceSystem: distanceSystem
+            )
+        )
+    }
+}
+
 /// One step as the step cards show it (MVP2-143), after how the Fitness app lists a structured
 /// workout: a role, what ends the step, and the intensity it aims for.
 ///
@@ -151,12 +172,28 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
 
     /// What the athlete did in `step`, written as the cards show it.
     static func actual(for step: ActivityStep, distanceSystem: DistanceSystem = .deviceDefault) -> WorkoutStepActual {
-        WorkoutStepActual(
-            duration: durationText(step.duration),
-            distance: step.distanceMeters.map { actualDistanceText($0, in: distanceSystem) },
-            averageHeartRate: step.averageHeartRateBPM.map { Int($0.rounded()).formatted() },
-            averagePace: step.averagePaceSecondsPerKilometer.map { paceText(secondsPerKilometer: $0, in: distanceSystem) },
-            wasGoalMet: step.wasGoalMet
+        actual(
+            duration: step.duration, distanceMeters: step.distanceMeters, averageHeartRateBPM: step.averageHeartRateBPM,
+            wasGoalMet: step.wasGoalMet, distanceSystem: distanceSystem
+        )
+    }
+
+    /// The same four figures from their values, for a stretch that isn't a recorded step (the time after
+    /// the plan). Pace is duration over distance, left out under a meter.
+    static func actual(
+        duration: TimeInterval, distanceMeters: Double?, averageHeartRateBPM: Double?, wasGoalMet: Bool?,
+        distanceSystem: DistanceSystem = .deviceDefault
+    ) -> WorkoutStepActual {
+        var pace: String?
+        if let distanceMeters, distanceMeters >= 1, duration > 0 {
+            pace = paceText(secondsPerKilometer: duration / distanceMeters * 1000, in: distanceSystem)
+        }
+        return WorkoutStepActual(
+            duration: durationText(duration),
+            distance: distanceMeters.map { actualDistanceText($0, in: distanceSystem) },
+            averageHeartRate: averageHeartRateBPM.map { Int($0.rounded()).formatted() },
+            averagePace: pace,
+            wasGoalMet: wasGoalMet
         )
     }
 

@@ -143,7 +143,8 @@ struct ActivityDetailView: View {
                     blocks: planLinkContext.linkedPlanSteps,
                     title: planLinkContext.linkedPlanStepsAreRecorded ? "Recorded Steps" : "Planned Steps",
                     // Only recorded steps have a span to highlight.
-                    selection: planLinkContext.linkedPlanStepsAreRecorded ? $highlightedStepID : nil
+                    selection: planLinkContext.linkedPlanStepsAreRecorded ? $highlightedStepID : nil,
+                    afterPlan: planLinkContext.linkedPlanAfter
                 )
             }
             Section {

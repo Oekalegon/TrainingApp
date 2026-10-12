@@ -10,6 +10,8 @@ struct WorkoutStepCardList: View {
     /// The recorded step to highlight (MVP2-146): a step card that has one is a button that selects it,
     /// and tapping the selected one clears it. `nil` makes the cards plain, as in the template views.
     var selection: Binding<Int?>? = nil
+    /// The stretch after the last step, as a card of its own below the steps (MVP2-146).
+    var afterPlan: WorkoutAfterPlanCard? = nil
 
     var body: some View {
         VStack(spacing: 10) {
@@ -30,6 +32,26 @@ struct WorkoutStepCardList: View {
                     ForEach(block.steps) { card($0).cardStyle() }
                 }
             }
+            if let afterPlan {
+                afterPlanCard(afterPlan).cardStyle()
+            }
+        }
+    }
+
+    /// The card for the time after the plan; a button that highlights its span like a step's.
+    @ViewBuilder private func afterPlanCard(_ card: WorkoutAfterPlanCard) -> some View {
+        let isSelected = selection?.wrappedValue == card.recordedStepID
+        if let selection {
+            Button {
+                selection.wrappedValue = Self.toggled(selection.wrappedValue, tapping: card.recordedStepID)
+            } label: {
+                WorkoutAfterPlanCardView(card: card, isHighlighted: isSelected)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(isSelected ? "Stops highlighting this stretch on the charts" : "Highlights this stretch on the charts")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        } else {
+            WorkoutAfterPlanCardView(card: card)
         }
     }
 
@@ -68,11 +90,13 @@ struct WorkoutStepCardSection: View {
     var title: LocalizedStringKey = "Steps"
     /// The recorded step highlighted on the activity's charts; see ``WorkoutStepCardList/selection``.
     var selection: Binding<Int?>? = nil
+    /// The stretch after the last step; see ``WorkoutStepCardList/afterPlan``.
+    var afterPlan: WorkoutAfterPlanCard? = nil
 
     var body: some View {
         Section(title) {
             WorkoutStepListSpacerRow()
-            WorkoutStepCardList(blocks: blocks, selection: selection)
+            WorkoutStepCardList(blocks: blocks, selection: selection, afterPlan: afterPlan)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)

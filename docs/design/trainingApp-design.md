@@ -501,6 +501,11 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   gets the curves without bands; one with neither heart rate nor speed gets no chart. The pace chart
   needs the speed the importer now reads, so it appears for an activity imported after speed was
   allowed (the "Allow distance" prompt covers distance and speed, and re-reads the workouts).
+- **After the plan** (MVP2-146): when the athlete went on past the plan's last step (a run on after the
+  cool-down), the stretch with no step of its own shows as a card "After the plan" after the steps
+  (time, the distance left over after the steps', average heart rate and pace) and as a grey band at
+  the end of both charts, with a legend entry; tapping the card highlights it like a step. Not
+  shown when the last step ends within 30 seconds of the end (`ActivityAfterPlan`).
 - Sport, start time, duration, distance (if present).
 - Load/TRIMP for the activity, and time-in-zone breakdown if heart-rate samples are present
   (`Statistics`'s `TimeInZone`) — every zone 1 through 5 is listed, not just the ones this

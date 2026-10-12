@@ -27,6 +27,7 @@ extension WeekViewModel {
             linkedPlan: linked.map(planOption),
             linkedPlanSteps: planSteps,
             linkedPlanStepsAreRecorded: recorded != nil,
+            linkedPlanAfter: recorded == nil ? nil : ActivityAfterPlan.make(for: activity).map { WorkoutAfterPlanCard.make($0) },
             isAmbiguous: model.planMatchAmbiguities.contains { $0.activityID == activity.id },
             candidates: candidates
         )

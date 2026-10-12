@@ -148,7 +148,7 @@ struct ActivityChartDataTests {
 
     @Test("recorded steps are spans of the time axis with the role the plan gives each, in order")
     func stepsWithRoles() {
-        let data = ActivityChartData.make(for: activity(duration: 900, steps: recordedSteps()), workout: workout())
+        let data = ActivityChartData.make(for: activity(duration: 840, steps: recordedSteps()), workout: workout())
 
         #expect(data.steps.count == 6)
         #expect(data.steps.map(\.kind) == [.warmup, .work, .recovery, .work, .recovery, .cooldown])
@@ -166,7 +166,7 @@ struct ActivityChartDataTests {
         // The warm-up has no time at all, and the work begins at the same instant.
         let steps = [step("0.0.0", from: 0, seconds: 0), step("1.0.0", from: 0, seconds: 60)]
 
-        let data = ActivityChartData.make(for: activity(duration: 600, steps: steps), workout: workout)
+        let data = ActivityChartData.make(for: activity(duration: 60, steps: steps), workout: workout)
 
         #expect(data.steps.count == 1)
         #expect(data.steps.first?.kind == .work)
@@ -174,14 +174,14 @@ struct ActivityChartDataTests {
 
     @Test("without the plan's workout, or when the steps don't fit it, the spans have no role")
     func stepsWithoutRoles() {
-        let withoutWorkout = ActivityChartData.make(for: activity(duration: 900, steps: recordedSteps()), workout: nil)
+        let withoutWorkout = ActivityChartData.make(for: activity(duration: 840, steps: recordedSteps()), workout: nil)
         #expect(withoutWorkout.steps.count == 6)
         #expect(withoutWorkout.steps.allSatisfy { $0.kind == nil })
 
         // The plan was edited to one repetition: the six recorded steps no longer fit it.
         var edited = workout()
         edited.blocks[1] = WorkoutBlock(steps: edited.blocks[1].steps, repetitions: 1)
-        let mismatched = ActivityChartData.make(for: activity(duration: 900, steps: recordedSteps()), workout: edited)
+        let mismatched = ActivityChartData.make(for: activity(duration: 840, steps: recordedSteps()), workout: edited)
         #expect(mismatched.steps.allSatisfy { $0.kind == nil })
     }
 
@@ -193,6 +193,27 @@ struct ActivityChartDataTests {
 
         #expect(data.steps.count == 2)
         #expect(data.steps.map(\.end) == [100, 100])
+    }
+
+    @Test("time after the last step is a grey stretch of its own at the end, not counted as a step")
+    func afterPlanSpan() {
+        // The steps end at 840 s; the activity ran on to 1000 s.
+        let data = ActivityChartData.make(for: activity(duration: 1000, steps: recordedSteps()), workout: workout())
+
+        #expect(data.steps.count == 7)
+        #expect(data.planStepCount == 6)
+        let after = data.steps.last
+        #expect(after?.isOutsidePlan == true)
+        #expect(after?.start == 840 && after?.end == 1000)
+        #expect(after?.kind == nil)
+        #expect(after?.id == 6)  // one past the last step: the same number its card has
+        #expect(data.steps.dropLast().allSatisfy { !$0.isOutsidePlan })
+    }
+
+    @Test("a last step that runs to within half a minute of the end leaves no after-plan stretch")
+    func noAfterPlanWhenClose() {
+        #expect(ActivityChartData.make(for: activity(duration: 860, steps: recordedSteps()), workout: workout()).planStepCount == 6)
+        #expect(ActivityChartData.make(for: activity(duration: 860, steps: recordedSteps()), workout: workout()).steps.count == 6)
     }
 
     @Test("an activity with nothing recorded has nothing to chart")
