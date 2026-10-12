@@ -32,16 +32,23 @@ struct ActivityHeartRateChart: View {
         .frame(height: 160)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate over time")
-        .accessibilityValue(Self.spokenSummary(of: data))
+        .accessibilityValue(Self.spokenSummary(of: data, highlightedStepID: highlightedStepID))
     }
 
-    /// "From 113 to 171 beats per minute, 14 steps marked."
-    static func spokenSummary(of data: ActivityChartData) -> String {
+    /// "From 113 to 171 beats per minute, 14 steps marked, step 3 highlighted."
+    static func spokenSummary(of data: ActivityChartData, highlightedStepID: Int? = nil) -> String {
         let values = data.heartRate.map(\.value)
         guard let low = values.min(), let high = values.max() else { return "No heart rate recorded" }
         var text = "From \(Int(low.rounded())) to \(Int(high.rounded())) beats per minute"
         if !data.steps.isEmpty { text += ", \(data.steps.count) steps marked" }
+        text += highlightText(highlightedStepID, in: data)
         return text
+    }
+
+    /// ", step 3 highlighted", for a highlighted step that is on the chart; nothing otherwise.
+    static func highlightText(_ highlightedStepID: Int?, in data: ActivityChartData) -> String {
+        guard let id = ActivityStepMarks.effectiveHighlight(highlightedStepID, in: data.steps) else { return "" }
+        return ", step \(id + 1) highlighted"
     }
 }
 
@@ -86,7 +93,7 @@ struct ActivityPaceChart: View {
         .frame(height: 160)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Pace over time")
-        .accessibilityValue(Self.spokenSummary(of: data, in: distanceSystem))
+        .accessibilityValue(Self.spokenSummary(of: data, in: distanceSystem, highlightedStepID: highlightedStepID))
     }
 
     /// "6:32", the pace on the axis; the unit is in the section's caption.
@@ -95,13 +102,14 @@ struct ActivityPaceChart: View {
             .replacingOccurrences(of: " /km", with: "").replacingOccurrences(of: " /mi", with: "")
     }
 
-    /// "From 5:30 to 7:10 per kilometer, 14 steps marked."
-    static func spokenSummary(of data: ActivityChartData, in system: DistanceSystem) -> String {
+    /// "From 5:30 to 7:10 per kilometer, 14 steps marked, step 3 highlighted."
+    static func spokenSummary(of data: ActivityChartData, in system: DistanceSystem, highlightedStepID: Int? = nil) -> String {
         let values = data.pace.map(\.value)
         guard let fast = values.min(), let slow = values.max() else { return "No pace recorded" }
         let unit = system == .metric ? "per kilometer" : "per mile"
         var text = "From \(axisText(secondsPerKilometer: fast, in: system)) to \(axisText(secondsPerKilometer: slow, in: system)) \(unit)"
         if !data.steps.isEmpty { text += ", \(data.steps.count) steps marked" }
+        text += ActivityHeartRateChart.highlightText(highlightedStepID, in: data)
         return text
     }
 }
@@ -132,17 +140,25 @@ struct ActivityStepMarks: ChartContent {
         return span.id == highlightedID ? 0.5 : 0.06
     }
 
+    /// The highlighted id if one of `steps` has it, else `nil`: a recorded step with no time on the
+    /// axis (it was clipped away) has no band, and fading every band for a highlight that can't be
+    /// seen would only look broken.
+    static func effectiveHighlight(_ highlightedID: Int?, in steps: [ActivityChartData.StepSpan]) -> Int? {
+        highlightedID.flatMap { id in steps.contains { $0.id == id } ? id : nil }
+    }
+
     var body: some ChartContent {
+        let highlight = Self.effectiveHighlight(highlightedID, in: steps)
         ForEach(steps) { span in
             RectangleMark(xStart: .value("Step start", span.start), xEnd: .value("Step end", span.end))
-                .foregroundStyle(span.kind.chartColor(index: span.id).opacity(Self.bandOpacity(of: span, highlightedID: highlightedID)))
+                .foregroundStyle(span.kind.chartColor(index: span.id).opacity(Self.bandOpacity(of: span, highlightedID: highlight)))
         }
         ForEach(steps) { span in
             RuleMark(x: .value("Step start", span.start))
-                .foregroundStyle(span.id == highlightedID ? Color.primary : Color.secondary.opacity(0.5))
-                .lineStyle(StrokeStyle(lineWidth: span.id == highlightedID ? 1.5 : 0.5))
+                .foregroundStyle(span.id == highlight ? Color.primary : Color.secondary.opacity(0.5))
+                .lineStyle(StrokeStyle(lineWidth: span.id == highlight ? 1.5 : 0.5))
         }
-        ForEach(steps.filter { $0.id == highlightedID }) { span in
+        ForEach(steps.filter { $0.id == highlight }) { span in
             RuleMark(x: .value("Step end", span.end))
                 .foregroundStyle(Color.primary)
                 .lineStyle(StrokeStyle(lineWidth: 1.5))

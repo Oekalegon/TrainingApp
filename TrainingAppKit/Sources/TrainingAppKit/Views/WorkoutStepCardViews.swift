@@ -33,6 +33,12 @@ struct WorkoutStepCardList: View {
         }
     }
 
+    /// What the highlighted step becomes when the card of step `id` is tapped (MVP2-146): that step,
+    /// or none if it already was.
+    static func toggled(_ current: Int?, tapping id: Int) -> Int? {
+        current == id ? nil : id
+    }
+
     /// A step's card; a button that highlights the step on the charts when it has a recorded step and
     /// the list has a selection.
     @ViewBuilder private func card(_ step: WorkoutStepCard) -> some View {
@@ -40,7 +46,7 @@ struct WorkoutStepCardList: View {
         let isSelected = id != nil && selection?.wrappedValue == id
         if let selection, let id {
             Button {
-                selection.wrappedValue = isSelected ? nil : id
+                selection.wrappedValue = Self.toggled(selection.wrappedValue, tapping: id)
             } label: {
                 WorkoutStepCardView(step: step, isHighlighted: isSelected)
             }

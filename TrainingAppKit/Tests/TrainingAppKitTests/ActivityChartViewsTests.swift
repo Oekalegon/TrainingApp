@@ -41,6 +41,37 @@ struct ActivityChartViewsTests {
         #expect(ActivityStepMarks.bandOpacity(of: unknown, highlightedID: 0) == 0.06)
     }
 
+    @Test("a highlight for a step with no band on the chart is ignored, so no band fades for nothing")
+    func highlightWithoutABand() {
+        let steps = [span(0, .work), span(2, .recovery)]  // step 1 was clipped away
+
+        #expect(ActivityStepMarks.effectiveHighlight(2, in: steps) == 2)
+        #expect(ActivityStepMarks.effectiveHighlight(1, in: steps) == nil)
+        #expect(ActivityStepMarks.effectiveHighlight(nil, in: steps) == nil)
+    }
+
+    @Test("tapping a step's card selects it, tapping it again clears it, and tapping another moves the highlight")
+    func toggling() {
+        #expect(WorkoutStepCardList.toggled(nil, tapping: 3) == 3)
+        #expect(WorkoutStepCardList.toggled(3, tapping: 3) == nil)
+        #expect(WorkoutStepCardList.toggled(3, tapping: 5) == 5)
+    }
+
+    @Test("the chart summary says which step is highlighted, counting from 1, and only when it is on the chart")
+    func highlightSpoken() {
+        let start = Date(timeIntervalSince1970: 0)
+        let hr = (0..<20).map { HeartRateSample(time: start.addingTimeInterval(Double($0) * 5), bpm: 120) }
+        let steps = [
+            ActivityStep(block: 0, repetition: 0, step: 0, start: start, end: start.addingTimeInterval(50)),
+            ActivityStep(block: 1, repetition: 0, step: 0, start: start.addingTimeInterval(50), end: start.addingTimeInterval(100)),
+        ]
+        let data = ActivityChartData.make(for: Activity(source: .manual, sport: .running, start: start, duration: 100, heartRate: hr, steps: steps), workout: nil)
+
+        #expect(ActivityHeartRateChart.spokenSummary(of: data, highlightedStepID: 1).hasSuffix(", step 2 highlighted"))
+        #expect(!ActivityHeartRateChart.spokenSummary(of: data, highlightedStepID: 9).contains("highlighted"))
+        #expect(!ActivityHeartRateChart.spokenSummary(of: data).contains("highlighted"))
+    }
+
     @Test("pace on the axis is minutes and seconds in the device's unit, without the unit")
     func axisText() {
         #expect(ActivityPaceChart.axisText(secondsPerKilometer: 392.4, in: .metric) == "6:32")

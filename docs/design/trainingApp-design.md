@@ -490,7 +490,7 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   for steps whose role the plan can't give) with a thin line where each began, so the plan's steps can
   be read off the curves. Tapping a recorded step's card highlights its span on both charts (a
   strong band between solid start and end lines, the other bands fading; tapping it again, or another
-  card, changes or clears it), and tints the card; the charts sit above the step cards, which is the
+  card, changes or clears it), and tints the card (a step whose span was clipped off the time axis highlights nothing, and the others don't fade for it; VoiceOver hears "step 3 highlighted" in each chart's summary); the charts sit above the step cards, which is the
   order of the sheet, so a long step list means scrolling back up to see the highlight. A card's id
   and its span's id are the same number, the step's position in the order performed
   (`Activity.orderedSteps`). `ActivityChartData` builds them once when the sheet opens: heart rate is
