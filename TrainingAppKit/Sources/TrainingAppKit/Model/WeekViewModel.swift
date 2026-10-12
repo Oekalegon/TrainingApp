@@ -726,8 +726,9 @@ public final class WeekViewModel {
         return pages
     }
 
-    /// A hash of what each plan contributes to the week's totals — its id, date, workout and load
-    /// override — for the stats and daily-load cache keys. The counts alone miss an edit in place.
+    /// A hash of what each plan contributes to the week's totals — its id, date, workout, load
+    /// override and whether it's matched to a completed activity (a matched plan counts as that
+    /// activity, not as planned) — for the stats and daily-load cache keys. The counts alone miss an edit in place.
     /// Cheap enough for the swipe path: a handful of fields per loaded plan, no statistics.
     private func plansFingerprint() -> Int {
         var hasher = Hasher()
@@ -736,6 +737,7 @@ public final class WeekViewModel {
             hasher.combine(plan.date)
             hasher.combine(plan.workoutID)
             hasher.combine(plan.expectedLoadOverride)
+            hasher.combine(plan.completedActivityID)
         }
         return hasher.finalize()
     }
