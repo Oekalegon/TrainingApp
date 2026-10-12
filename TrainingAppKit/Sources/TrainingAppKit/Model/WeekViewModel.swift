@@ -1075,7 +1075,7 @@ public final class WeekViewModel {
     }
 
     /// ``isPast(_:asOf:)`` for any `calendar`, so code without a `WeekViewModel`'s own calendar
-    /// (the search tab's missed plans, MVP2-21) applies the same rule.
+    /// (the search results' missed plans, MVP2-21) applies the same rule.
     static func isPast(_ day: Date, asOf today: Date, calendar: Calendar) -> Bool {
         calendar.startOfDay(for: day) < calendar.startOfDay(for: today)
     }
@@ -1110,7 +1110,7 @@ public final class WeekViewModel {
         return viewModel
     }
 
-    /// The view model for the search tab (MVP2-21), sharing `library` with the Library tab. Opening
+    /// The view model for the search results (MVP2-21), sharing `library` with the Library tab. Opening
     /// a result first loads this model around its day (``ensureLoaded(around:asOf:)``).
     public func searchViewModel(library: WorkoutLibraryViewModel) -> SearchViewModel {
         let viewModel = SearchViewModel(model: model, library: library)
@@ -1213,7 +1213,7 @@ public final class WeekViewModel {
     }
 
     /// Loads the weeks around `date` into `model` as well as the displayed ones, so a detail sheet
-    /// opened from the search tab (MVP2-21) for a plan or activity outside the week view's window
+    /// opened from the search results (MVP2-21) for a plan or activity outside the week view's window
     /// finds its plan, workout, link and overlaps in `model`, and follows an edit made in it.
     /// Loads the *union* with the current window, for the same reason as ``metrics(in:asOf:)``.
     /// A failed load leaves `model` as it was, and the sheet opens anyway.

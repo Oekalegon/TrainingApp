@@ -91,7 +91,7 @@ extension WeekViewModel {
         plan.completedActivityID == nil && isPast(plan.date, asOf: today)
     }
 
-    /// ``isMissed(_:asOf:)``'s rule for any `calendar` — the search tab's plan results use it
+    /// ``isMissed(_:asOf:)``'s rule for any `calendar` — the search results for plans use it
     /// (MVP2-21), so a result and its card agree. Both go through `isPast`'s one day comparison.
     static func isMissed(_ plan: PlannedActivity, asOf today: Date, calendar: Calendar) -> Bool {
         plan.completedActivityID == nil && isPast(plan.date, asOf: today, calendar: calendar)

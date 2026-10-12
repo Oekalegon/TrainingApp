@@ -94,7 +94,7 @@ private struct WorkoutLibraryList: View {
 }
 
 /// One template's row: its sport symbol, name, default title and how often it's planned. Also
-/// used for the search tab's template results.
+/// used for the search results' templates.
 struct WorkoutTemplateRow: View {
     let entry: WorkoutLibraryViewModel.Entry
 
