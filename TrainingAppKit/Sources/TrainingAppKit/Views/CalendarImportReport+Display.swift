@@ -8,6 +8,7 @@ extension CalendarImportReport.RejectionReason {
         case .noSteps: "No steps (the file predates steps)"
         case .invalidStep: "A step couldn't be read"
         case .invalidDate: "The date isn't valid"
+        case .invalidActivity: "No start time or duration"
         }
     }
 }

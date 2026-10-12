@@ -51,9 +51,9 @@ public final class CalendarImportViewModel {
         self.today = today
     }
 
-    /// Whether the confirm button is enabled: a file is previewed and would add at least one plan.
+    /// Whether the confirm button is enabled: a file is previewed and would add at least one plan or completed activity (MVP2-107).
     public var canImport: Bool {
-        if case .preview(_, let report) = state { return report.added > 0 }
+        if case .preview(_, let report) = state { return report.added > 0 || report.activitiesAdded > 0 }
         return false
     }
 

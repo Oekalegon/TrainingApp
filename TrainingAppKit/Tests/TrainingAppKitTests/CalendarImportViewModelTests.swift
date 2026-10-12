@@ -71,6 +71,30 @@ struct CalendarImportViewModelTests {
         #expect(!viewModel.canImport, "nothing to add, so the confirm button stays disabled")
     }
 
+    @Test("a file with only a completed activity can be imported, and the activity is stored as a placeholder (MVP2-107)")
+    func completedActivityImported() async throws {
+        let (_, source) = makeModel()
+        let samples = (0..<360).map { HeartRateSample(time: day(1, hour: 7).addingTimeInterval(Double($0) * 5), bpm: 150) }
+        let ran = Activity(source: .healthKit(UUID()), sport: .running, start: day(1, hour: 7), duration: 1800, distanceMeters: 6000, heartRate: samples)
+        try await source.stores.activityStore.upsert([ran])
+        try await source.load(in: day(0)...day(6), asOf: day(3, hour: 9))
+        let export = try await source.calendarExport(from: day(0), through: day(6), asOf: day(3, hour: 9))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).json")
+        try export.jsonData().write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let (store, model) = makeModel()
+        let viewModel = CalendarImportViewModel(model: model, today: day(3, hour: 9))
+        await viewModel.load(from: url)
+        #expect(viewModel.canImport)
+        await viewModel.performImport()
+
+        guard case .imported(let report) = viewModel.state else { Issue.record("state was \(viewModel.state)"); return }
+        #expect(report.activitiesAdded == 1)
+        let stored = try #require(try await store.activity(source: ran.source))
+        #expect(stored.isCalendarImport && stored.heartRate.isEmpty)
+    }
+
     @Test("a store failure during the import keeps the preview and shows an error, and a retry can succeed")
     func failedImportKeepsPreview() async throws {
         let url = try await writeExportFile()
