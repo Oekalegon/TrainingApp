@@ -836,7 +836,8 @@ public final class WeekViewModel {
 
     /// Which of a week's stats-bar totals include an estimate (MVP2-8), from the same activities and
     /// plans `StatisticsCalculator.periodStatsSplit` counts: activities up to and including today,
-    /// plans from today on whose workout is still in the library.
+    /// plans from today on that aren't yet matched to a completed activity and whose workout is
+    /// still in the library.
     private struct WeekEstimates {
         /// An activity's load was scored from perceived effort rather than heart rate.
         var performedLoad = false
@@ -863,7 +864,8 @@ public final class WeekViewModel {
         let workoutsByID = Dictionary(model.workouts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for plan in model.plans {
             let day = calendar.startOfDay(for: plan.date)
-            guard day >= rangeStart, day <= rangeEnd, day >= todayStart,
+            guard plan.completedActivityID == nil,
+                  day >= rangeStart, day <= rangeEnd, day >= todayStart,
                   let workout = workoutsByID[plan.workoutID]
             else { continue }
             if plan.isExpectedLoadEstimated {
