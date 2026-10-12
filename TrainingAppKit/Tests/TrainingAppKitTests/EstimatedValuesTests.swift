@@ -323,6 +323,36 @@ struct EstimatedValuesTests {
         #expect(after.plannedLoad == 60)
     }
 
+    @Test("a plan matched to a completed activity adds nothing to the planned totals or estimate flags, and unlinking brings it back")
+    func matchedPlanCountsNowhereAsPlanned() async throws {
+        let (viewModel, _, store) = makeViewModel()
+        let today = viewModel.displayedWeekStart
+        let timed = workout([.time(1200)])
+        var plan = PlannedActivity(workoutID: timed.id, date: today.addingTimeInterval(86400))
+        try await store.upsert([timed])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: today)
+        let before = try #require(viewModel.sportStatsPages(asOf: today).first { $0.sport == .running })
+        #expect(before.plannedTime > 0)
+        #expect(before.isExpectedLoadEstimated)
+
+        // Matched from the plan side only: the activities (and so their fingerprint) don't change.
+        plan.completedActivityID = UUID()
+        try await store.upsert([plan])
+        await viewModel.load(asOf: today)
+        let matched = try #require(viewModel.sportStatsPages(asOf: today).first { $0.sport == .running })
+        #expect(matched.plannedTime == 0)
+        #expect(matched.plannedLoad == 0)
+        #expect(!matched.isExpectedLoadEstimated)
+
+        plan.completedActivityID = nil
+        try await store.upsert([plan])
+        await viewModel.load(asOf: today)
+        let unlinked = try #require(viewModel.sportStatsPages(asOf: today).first { $0.sport == .running })
+        #expect(unlinked.plannedTime > 0)
+        #expect(unlinked.isExpectedLoadEstimated)
+    }
+
     // MARK: - Day rows and metric detail
 
     @Test("dayMetrics(on:) marks a day's Form by the previous day, matching the static rule")

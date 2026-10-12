@@ -212,7 +212,9 @@ across launches.
     card's own body text is `.primary`, not `.secondary` — this is the screen's actual explanatory
     content, not a caption. A later "Options" section (e.g. jumping to the athlete's own zone
     settings) would be a further card appended below this one.
-- A pinned stats bar (MVP1-52) sits between the chart and the day list: a swipeable per-sport
+- A pinned stats bar (MVP1-52) sits between the chart and the day list. Its planned totals and
+  estimate markers leave out plans already matched to a completed activity, as the day list does
+  (MVP2-149). It is a swipeable per-sport
   pager (main sport first) showing that sport's Distance/Time/Load for the displayed week, each
   with its percentage change vs. the previous week, plus "LIT" ("Low Intensity Training", MVP1-48)
   — the fraction of that sport's own zone-classified time spent at low intensity (the 80/20
