@@ -27,6 +27,13 @@ extension WeekViewModel {
         )
     }
 
+    /// The workout of the plan `activity` completed, if it is linked to one still in the library.
+    func linkedWorkout(for activity: Activity) -> StructuredWorkout? {
+        activity.linkedPlanID
+            .flatMap { id in model.plans.first { $0.id == id } }
+            .flatMap { plan in model.workouts.first { $0.id == plan.workoutID } }
+    }
+
     /// Links `activity` to the plan `planID` (replacing its current link), or confirms the current
     /// one when they're the same.
     ///

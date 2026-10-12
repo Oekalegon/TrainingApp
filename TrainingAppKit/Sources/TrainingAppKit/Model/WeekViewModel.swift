@@ -1084,7 +1084,7 @@ public final class WeekViewModel {
     public func activityDetailViewModel(for activity: Activity) -> ActivityDetailViewModel {
         ActivityDetailViewModel(
             activity: activity, athlete: model.athlete, overlapContext: overlapContext(for: activity),
-            planLinkContext: planLinkContext(for: activity)
+            planLinkContext: planLinkContext(for: activity), planWorkout: linkedWorkout(for: activity)
         )
     }
 

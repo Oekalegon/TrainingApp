@@ -162,11 +162,13 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     }
 
     /// See ``ActivityRefreshing/hasUnansweredDistanceAccess()``: whether HealthKit would show its sheet
-    /// for the distance types, and only those, so the "Allow distance" banner never appears for some
-    /// other type it doesn't explain.
+    /// for the distance and speed types, and only those, so the "Allow distance" banner never appears
+    /// for some other type it doesn't explain.
     public func hasUnansweredDistanceAccess() async -> Bool {
+        let metersPerSecond = HKUnit.meter().unitDivided(by: .second())
         let distanceTypes: Set<HKObjectType> = HealthKitAuthorization.readTypes.filter {
-            ($0 as? HKQuantityType)?.is(compatibleWith: .meter()) == true
+            guard let type = $0 as? HKQuantityType else { return false }
+            return type.is(compatibleWith: .meter()) || type.is(compatibleWith: metersPerSecond)
         }
         let status = try? await healthStore.statusForAuthorizationRequest(toShare: [], read: distanceTypes)
         return status == .shouldRequest

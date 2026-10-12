@@ -84,6 +84,19 @@ struct WeekViewModelPlanLinkTests {
         #expect(actual.distance != nil && actual.averagePace != nil)
     }
 
+    @Test("the detail view model's charts carry the linked plan's roles for the recorded steps (MVP2-146)")
+    func chartsGetTheRolesOfTheLinkedPlan() async throws {
+        let recorded = ActivityStep(
+            block: 0, repetition: 0, step: 0, start: day(2), end: day(2).addingTimeInterval(1800)
+        )
+        let (viewModel, _, activity) = try await makeViewModel(planMinutes: [30], activityMinutes: 30, steps: [recorded])
+
+        let detail = viewModel.activityDetailViewModel(for: activity)
+
+        #expect(detail.chartData.steps.map(\.kind) == [.work])
+        #expect(detail.chartData.duration == 1800)
+    }
+
     @Test("a linked activity without recorded steps, or with steps that don't fit the plan, shows the plan alone")
     func plainPlanWithoutRecordedSteps() async throws {
         let (plain, _, plainActivity) = try await makeViewModel(planMinutes: [30], activityMinutes: 30)
