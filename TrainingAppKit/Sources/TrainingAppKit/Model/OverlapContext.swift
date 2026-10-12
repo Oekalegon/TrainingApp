@@ -8,4 +8,6 @@ public struct OverlapContext: Hashable {
     public let recommendation: OverlapRecommendation
     /// The other activity in the pair (not the one whose detail sheet this is showing).
     public let otherActivity: Activity
+    /// ``otherActivity``'s title (MVP2-152), as ``WeekViewModel/activityTitle(for:)`` gives it.
+    public let otherActivityTitle: String
 }

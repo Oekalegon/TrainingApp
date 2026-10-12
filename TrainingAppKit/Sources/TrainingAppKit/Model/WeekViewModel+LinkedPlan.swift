@@ -55,4 +55,17 @@ extension WeekViewModel {
             )
         }
     }
+
+    /// The title every surface shows for a completed `activity` (MVP2-152): the name of the workout
+    /// of the plan it completed (e.g. "10 km Long Run"), else the sport's name — for an activity with
+    /// no plan, one whose workout is gone, or a workout with an empty name. The card, the detail
+    /// sheet, the overlap review and the join text all take it from here so they can't disagree.
+    public func activityTitle(for activity: Activity) -> String {
+        if let planID = activity.linkedPlanID,
+           let plan = model.plans.first(where: { $0.id == planID }),
+           let name = workout(for: plan)?.name, !name.isEmpty {
+            return name
+        }
+        return activity.sport.displayName
+    }
 }

@@ -66,7 +66,7 @@ struct ActivityCard: View {
                     Image(systemName: activity.sport.symbolName)
                         .foregroundStyle(.primary)
                         .frame(width: TimelineCardStyle.iconWidth)
-                    Text(activity.sport.displayName)
+                    Text(content.title)
                         .bold()
                         .foregroundStyle(.primary)
                     if let overlapWarning {
@@ -111,7 +111,13 @@ struct ActivityCard: View {
         }
         .buttonStyle(.plain)
         // The marker is visual only; say what it means.
-        .accessibilityValue(intensity?.accessibilityDescription ?? "")
+        // The sport's icon is decorative, so a plan's name as the title (e.g. "Tempo") needs the sport
+        // said too (MVP2-152).
+        .accessibilityValue(
+            [content.title == activity.sport.displayName ? nil : activity.sport.displayName,
+             intensity?.accessibilityDescription]
+                .compactMap { $0 }.joined(separator: ", ")
+        )
     }
 
     /// "1:30:00   8 km   🏔120 m" — duration always shown as H:MM:SS, distance/climb omitted

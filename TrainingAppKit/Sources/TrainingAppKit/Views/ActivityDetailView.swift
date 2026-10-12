@@ -230,7 +230,7 @@ struct ActivityDetailView: View {
         }
         // The planned step cards' spacer rows are one point high (``WorkoutStepListSpacerRow``).
         .environment(\.defaultMinListRowHeight, 1)
-        .navigationTitle(viewModel.activity.sport.displayName)
+        .navigationTitle(viewModel.title)
         .task { components = await loadComponents() }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -373,7 +373,7 @@ private struct OverlapSectionContent: View {
     /// "Cycling at 14:32" — names the other side of the pair for the section's description text.
     private var otherActivityDescription: Text {
         let time = Text(context.otherActivity.start, format: Self.timeFormat(timeZone: timeZone))
-        return Text("\(context.otherActivity.sport.displayName) at \(time)")
+        return Text("\(context.otherActivityTitle) at \(time)")
     }
 
     var body: some View {
