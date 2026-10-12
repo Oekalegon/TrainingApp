@@ -111,6 +111,7 @@ public struct AppTabView: View {
                     loadJoinedComponents: { await viewModel.joinedComponents(of: $0) },
                     onLinkPlan: { await viewModel.linkActivity($0, toPlan: $1) },
                     onUnlinkPlan: { await viewModel.unlinkActivity($0) },
+                    onSetActivitySport: { await viewModel.setActivitySport($0, sport: $1, venue: $2) },
                     watchSync: watchSync,
                     workoutInspector: workoutInspector
                 )

@@ -96,6 +96,25 @@ struct PlannedWorkoutFormFields: View {
     fileprivate static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
     fileprivate static let dayRangeFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
 
+    /// The venue (MVP2-151): a picker when the template leaves it open, a read-only row when it fixes
+    /// it, nothing for a sport without venues. The sport is the template's, shown read-only.
+    @ViewBuilder
+    private var venueRow: some View {
+        if let sport = viewModel.sport {
+            LabeledContent("Sport", value: sport.displayName)
+        }
+        if viewModel.offersVenueChoice {
+            Picker("Venue", selection: $viewModel.venue) {
+                if viewModel.venue == nil { Text("Not Set").tag(nil as Venue?) }
+                ForEach(viewModel.venueOptions, id: \.self) { venue in
+                    Text(venue.displayName).tag(venue as Venue?)
+                }
+            }
+        } else if let venue = viewModel.venue {
+            LabeledContent("Venue", value: venue.displayName)
+        }
+    }
+
     var body: some View {
         // "Workout" in both modes: the section holds Name/Date (and, in create mode, the
         // template picker) throughout -- it isn't just about picking a template, which "Template"
@@ -126,6 +145,7 @@ struct PlannedWorkoutFormFields: View {
                 }
                 TextField("Name", text: $viewModel.workoutName)
             }
+            venueRow
             // Lower-bounded so this can't be used to route around the same past-date rule
             // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
             // sheet opened for today could still be scrolled back to yesterday from here.

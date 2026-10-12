@@ -76,6 +76,23 @@ extension WeekViewModel {
         return true
     }
 
+    /// Sets `activity`'s sport and venue (MVP2-151), e.g. when the Watch recorded a treadmill run as
+    /// outdoors. The choice survives a re-import. Refreshes the week's caches and the pace history,
+    /// which the sport and venue feed.
+    ///
+    /// - Returns: `true` if the change was saved.
+    @discardableResult
+    public func setActivitySport(_ activity: Activity, sport: Sport, venue: Venue?, asOf today: Date = .now) async -> Bool {
+        do {
+            try await model.setSport(sport, venue: venue, forActivityID: activity.id, asOf: today)
+        } catch {
+            return false
+        }
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPaceHistoryIfNeeded(asOf: today, force: true)
+        return true
+    }
+
     private func planOption(_ plan: PlannedActivity) -> PlanLinkContext.PlanOption {
         let summary = plannedCardSummary(for: plan)
         return PlanLinkContext.PlanOption(

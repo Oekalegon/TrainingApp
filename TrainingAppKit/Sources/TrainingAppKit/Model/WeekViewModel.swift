@@ -527,6 +527,8 @@ public final class WeekViewModel {
 
         /// `.running` when the plan's workout is no longer in the library.
         public let sport: Sport
+        /// Where the workout is done; `nil` when unset or when the workout is gone.
+        public let venue: Venue?
         /// `nil` when the plan's workout is no longer in the library.
         public let name: String?
         /// ``PlannedActivity/expectedLoadOverride``, else the estimator's figure; `nil` when the
@@ -578,7 +580,7 @@ public final class WeekViewModel {
         ) -> PlannedCardSummary {
             guard let workout else {
                 return PlannedCardSummary(
-                    sport: .running, name: nil, load: plan.expectedLoadOverride, isLoadEstimated: false,
+                    sport: .running, venue: nil, name: nil, load: plan.expectedLoadOverride, isLoadEstimated: false,
                     extent: nil, duration: nil, distanceMeters: nil,
                     isDurationEstimated: false, isDistanceEstimated: false, forecastActivityCount: 0
                 )
@@ -609,7 +611,7 @@ public final class WeekViewModel {
             }
 
             return PlannedCardSummary(
-                sport: workout.sport, name: workout.name, load: load, isLoadEstimated: plan.isExpectedLoadEstimated,
+                sport: workout.sport, venue: workout.venue, name: workout.name, load: load, isLoadEstimated: plan.isExpectedLoadEstimated,
                 extent: extent, duration: projection.duration,
                 distanceMeters: expectedDistance.flatMap { $0 > 0 ? $0 : nil },
                 isDurationEstimated: workout.isDurationForecast, isDistanceEstimated: workout.isDistanceForecast,

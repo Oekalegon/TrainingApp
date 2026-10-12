@@ -1,8 +1,9 @@
 import PhotosUI
 import SwiftUI
+import TrainingCore
 
-/// Personal Information (MVP2-123, MVP2-132, design doc §2.3): the avatar, name, sex and age, and the
-/// two zone screens, Heart Rate Zones and Pace Zones. The name can be changed: tapping its row asks
+/// Personal Information (MVP2-123, MVP2-132, design doc §2.3): the avatar, name, sex and age, the main
+/// sport and usual venue (MVP2-151), and the two zone screens, Heart Rate Zones and Pace Zones. The name can be changed: tapping its row asks
 /// for a new one. So can the avatar: tapping it picks a photo, and "Remove Photo" goes back to the
 /// initials. The age is shown once a date of birth is on record, which the HealthKit merge fills
 /// in (MVP2-124); sex and age come from Health and aren't edited here.
@@ -15,6 +16,35 @@ struct PersonalInformationView: View {
     /// The photo the athlete picked, consumed as soon as it's loaded (MVP2-132).
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var isShowingPhotoError = false
+
+    /// The selectable sports, plus the athlete's own when it's another.
+    private var mainSports: [Sport] {
+        Sport.selectable.contains(viewModel.athlete.mainSport)
+            ? Sport.selectable : Sport.selectable + [viewModel.athlete.mainSport]
+    }
+
+    /// The sport and venue just chosen, shown at once while they save, so the pickers (and the venue
+    /// picker that comes and goes with the sport) don't wait for the profile to reload.
+    @State private var mainSport: Sport?
+    @State private var mainVenue: Venue?
+    /// Counts the changes made, so the shown choice is given up only when the latest save is done.
+    @State private var mainSportChangeCount = 0
+
+    private var shownMainSport: Sport { mainSport ?? viewModel.athlete.mainSport }
+
+    private func setMainSport(_ sport: Sport, venue: Venue?) {
+        let allowed = venue.flatMap { Venue.choices(for: sport).contains($0) ? $0 : nil }
+        mainSport = sport
+        mainVenue = allowed
+        mainSportChangeCount += 1
+        let change = mainSportChangeCount
+        Task {
+            if await !weekViewModel.setAthleteMainSport(sport, venue: venue) { isShowingError = true }
+            guard change == mainSportChangeCount else { return }
+            mainSport = nil
+            mainVenue = nil
+        }
+    }
 
     var body: some View {
         List {
@@ -56,6 +86,30 @@ struct PersonalInformationView: View {
                 if let age = viewModel.ageText() {
                     LabeledContent("Age", value: age)
                 }
+            }
+
+            Section {
+                Picker("Main Sport", selection: Binding(
+                    get: { mainSport ?? viewModel.athlete.mainSport },
+                    set: { sport in setMainSport(sport, venue: mainSport == nil ? viewModel.athlete.mainVenue : mainVenue) }
+                )) {
+                    ForEach(mainSports, id: \.self) { sport in
+                        Text(sport.displayName).tag(sport)
+                    }
+                }
+                if !Venue.choices(for: shownMainSport).isEmpty {
+                    Picker("Usual Venue", selection: Binding(
+                        get: { mainSport == nil ? viewModel.athlete.mainVenue : mainVenue },
+                        set: { venue in setMainSport(shownMainSport, venue: venue) }
+                    )) {
+                        Text("No Preference").tag(nil as Venue?)
+                        ForEach(Venue.choices(for: shownMainSport), id: \.self) { venue in
+                            Text(venue.displayName).tag(venue as Venue?)
+                        }
+                    }
+                }
+            } footer: {
+                Text("New planned workouts start with this venue when the workout allows it.")
             }
 
             Section {

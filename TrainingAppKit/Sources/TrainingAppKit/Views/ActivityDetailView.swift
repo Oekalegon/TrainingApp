@@ -33,6 +33,8 @@ struct ActivityDetailView: View {
     let onLinkPlan: (UUID) async -> Bool
     /// Runs `WeekViewModel.unlinkActivity(_:)` (MVP2-42); same contract.
     let onUnlinkPlan: () async -> Bool
+    /// Runs `WeekViewModel.setActivitySport(_:sport:venue:)` (MVP2-151); returns whether it was saved.
+    let onSetSport: (Sport, Venue?) async -> Bool
     @Environment(\.dismiss) private var dismiss
     /// The pieces this activity was joined from, loaded once by `.task`; empty for an ordinary one.
     @State private var components: [Activity] = []
@@ -43,6 +45,13 @@ struct ActivityDetailView: View {
     @State private var planLinkFailureMessage: String?
     /// The recorded step highlighted on the charts after a tap on its card (MVP2-146).
     @State private var highlightedStepID: Int?
+    /// The sport and venue the pickers show, seeded from the activity and kept after a save, since
+    /// the view model doesn't change under the sheet.
+    @State private var sport: Sport?
+    @State private var venue: Venue?
+    @State private var sportFailureMessage: String?
+    /// Counts the changes made, so a save that finishes after a newer choice doesn't undo it.
+    @State private var sportChangeCount = 0
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
     /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
     @State private var isShowingDeleteConfirmation = false
@@ -119,6 +128,8 @@ struct ActivityDetailView: View {
             if let planLinkContext = viewModel.planLinkContext {
                 planLinkSection(planLinkContext)
             }
+
+            sportSection
 
             // The heart rate and pace over time (MVP2-146), with a band for each recorded step, above
             // the step cards: a tap on a card highlights its span here.
@@ -288,6 +299,68 @@ struct ActivityDetailView: View {
         } footer: {
             if context.linkedPlan == nil {
                 Text("This activity isn't linked to a planned workout. Only plans on the same day can be linked.")
+            }
+        }
+    }
+
+    private var currentSport: Sport { sport ?? viewModel.activity.sport }
+    private var currentVenue: Venue? { sport == nil ? viewModel.activity.venue : venue }
+
+    /// The sport and venue the athlete can correct (MVP2-151), e.g. a treadmill run the Watch
+    /// recorded as outdoors. A linked activity starts with its plan's (TrainingKit).
+    private var sportSection: some View {
+        Section {
+            Picker("Sport", selection: Binding(get: { currentSport }, set: { setSport($0, venue: currentVenue) })) {
+                ForEach(sportOptions, id: \.self) { sport in
+                    Text(sport.displayName).tag(sport)
+                }
+            }
+            if !Venue.choices(for: currentSport).isEmpty {
+                Picker("Venue", selection: Binding(get: { currentVenue }, set: { setSport(currentSport, venue: $0) })) {
+                    Text("Not Set").tag(nil as Venue?)
+                    ForEach(venueOptions, id: \.self) { venue in
+                        Text(venue.displayName).tag(venue as Venue?)
+                    }
+                }
+            }
+            if let sportFailureMessage {
+                Text(sportFailureMessage).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Sport")
+        }
+    }
+
+    /// The selectable sports, plus the activity's own when it's another (e.g. imported from Health).
+    private var sportOptions: [Sport] {
+        Sport.selectable.contains(currentSport) ? Sport.selectable : Sport.selectable + [currentSport]
+    }
+
+    /// The venues for the sport, plus the activity's own when it's not one of them, e.g. a plain
+    /// "outdoors" HealthKit recorded.
+    private var venueOptions: [Venue] {
+        let choices = Venue.choices(for: currentSport)
+        guard let venue = currentVenue, !choices.contains(venue) else { return choices }
+        return [venue] + choices
+    }
+
+    private func setSport(_ newSport: Sport, venue newVenue: Venue?) {
+        // A venue the new sport doesn't have is dropped, but the activity's own is kept while its sport
+        // is unchanged (e.g. a plain "outdoors" from Health).
+        let keepsOwnVenue = newSport == currentSport && newVenue == currentVenue
+        let allowed = newVenue.flatMap { keepsOwnVenue || Venue.choices(for: newSport).contains($0) ? $0 : nil }
+        sportFailureMessage = nil
+        // Shown at once, so the pickers don't sit on the old value until the save is done (and the
+        // list under them reflows); put back if the save fails.
+        let previous = (sport, venue)
+        sport = newSport
+        venue = allowed
+        sportChangeCount += 1
+        let change = sportChangeCount
+        Task {
+            if await !onSetSport(newSport, allowed), change == sportChangeCount {
+                (sport, venue) = previous
+                sportFailureMessage = "The sport couldn't be changed."
             }
         }
     }

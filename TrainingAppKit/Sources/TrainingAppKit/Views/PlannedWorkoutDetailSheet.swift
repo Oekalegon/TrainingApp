@@ -2,7 +2,7 @@ import SwiftUI
 import TrainingCore
 
 /// The sheet shown when a planned activity's card is tapped (MVP2-38): a read-only summary of the
-/// workout — name, sport, date, why it can't go on the Apple Watch if it can't (MVP2-122), expected
+/// workout — name, sport and venue, date, why it can't go on the Apple Watch if it can't (MVP2-122), expected
 /// duration/distance/load (estimates marked with a "~" and a "Forecast"/"Estimate" caption, MVP2-8),
 /// the step cards — with a pencil that opens ``PlannedWorkoutSheet`` in
 /// edit mode and a Delete button at the bottom behind a confirmation alert. Own `NavigationStack`,
@@ -40,12 +40,14 @@ struct PlannedWorkoutDetailSheet: View {
                 let summary = viewModel.summary
                 Section {
                     HStack(spacing: 12) {
-                        Image(systemName: summary.sport.symbolName)
+                        Image(systemName: summary.sport.symbolName(venue: summary.venue))
                             .font(.title2)
                             .frame(width: 32)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(summary.name ?? "Planned workout")
                                 .font(.headline)
+                            Text(summary.sport.displayName(venue: summary.venue))
+                                .font(.subheadline)
                             Text(dateText)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)

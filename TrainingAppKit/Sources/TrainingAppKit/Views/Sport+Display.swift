@@ -5,8 +5,6 @@ extension Sport {
     var displayName: String {
         switch self {
         case .running: "Running"
-        case .indoorRunning: "Indoor Running"
-        case .outdoorRunning: "Outdoor Running"
         case .cycling: "Cycling"
         case .swimming: "Swimming"
         case .strength: "Strength"
@@ -18,10 +16,33 @@ extension Sport {
         }
     }
 
+    /// The sports an athlete can choose between, e.g. for their main sport or a performed activity.
+    static let selectable: [Sport] = [
+        .running, .cycling, .swimming, .strength, .coreStrengthTraining, .walking, .rowing, .hiking
+    ]
+
+    /// The label with the venue when there is one, e.g. "Running · Trail".
+    func displayName(venue: Venue?) -> String {
+        guard let venue else { return displayName }
+        return "\(displayName) · \(venue.displayName)"
+    }
+
     /// An SF Symbol standing in for this sport in the week view's day list.
-    var symbolName: String {
-        switch self {
-        case .running, .indoorRunning, .outdoorRunning: "figure.run"
+    var symbolName: String { symbolName(venue: nil) }
+
+    /// The symbol for this sport done at `venue`: a treadmill, a track or an indoor bike where
+    /// there is one, else ``symbolName``'s.
+    func symbolName(venue: Venue?) -> String {
+        switch (self, venue) {
+        case (.running, .indoor(.treadmill)?): return "figure.run.treadmill"
+        case (.running, .indoor(.track)?), (.running, .outdoor(.track)?): return "figure.track.and.field"
+        case (.cycling, .indoor?): return "figure.indoor.cycle"
+        case (.walking, .indoor(.treadmill)?): return "figure.walk.treadmill"
+        case (.rowing, .indoor?): return "figure.indoor.rowing"
+        default: break
+        }
+        return switch self {
+        case .running: "figure.run"
         case .cycling: "figure.outdoor.cycle"
         case .swimming: "figure.pool.swim"
         case .strength: "figure.strengthtraining.traditional"
@@ -38,7 +59,7 @@ extension Sport {
     /// `.strength`/`.other` have no reliable distance, so they show just the headline line.
     var isEndurance: Bool {
         switch self {
-        case .running, .indoorRunning, .outdoorRunning, .cycling, .swimming, .walking, .rowing, .hiking: true
+        case .running, .cycling, .swimming, .walking, .rowing, .hiking: true
         case .strength, .coreStrengthTraining, .other: false
         }
     }
@@ -51,8 +72,24 @@ extension Sport {
     /// noise rather than a useful signal.
     var supportsLowIntensityTrainingSplit: Bool {
         switch self {
-        case .running, .indoorRunning, .outdoorRunning, .cycling: true
+        case .running, .cycling: true
         case .swimming, .strength, .coreStrengthTraining, .walking, .rowing, .hiking, .other: false
+        }
+    }
+}
+
+extension Venue {
+    /// A short, human-readable label.
+    var displayName: String {
+        switch self {
+        case .indoor(nil): "Indoors"
+        case .indoor(.treadmill): "Treadmill"
+        case .indoor(.track): "Indoor Track"
+        case .outdoor(nil): "Outdoors"
+        case .outdoor(.road): "Road"
+        case .outdoor(.track): "Outdoor Track"
+        case .outdoor(.trail): "Trail"
+        case .outdoor(.offtrail): "Off-Trail"
         }
     }
 }

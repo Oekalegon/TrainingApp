@@ -64,7 +64,7 @@ struct PlannedActivityCard: View {
                             }
                         }
                         .frame(width: TimelineCardStyle.intensityMarkerWidth)
-                        Image(systemName: summary.sport.symbolName)
+                        Image(systemName: summary.sport.symbolName(venue: summary.venue))
                             .foregroundStyle(isMissed ? .secondary : .primary)
                             .frame(width: TimelineCardStyle.iconWidth)
                         Text(summary.name ?? "Planned workout")
@@ -161,6 +161,7 @@ struct PlannedActivityCard: View {
 
     private var accessibilityLabel: String {
         var parts = ["\(isMissed ? "Missed" : "Planned"): \(summary.name ?? "Planned workout")"]
+        if let venue = summary.venue { parts.append(summary.sport.displayName(venue: venue)) }
         if !isMissed, let load = summary.load, load.rounded() > 0 {
             parts.append("load " + EstimateMarker.spoken(load.formatted(TimelineCardStyle.loadFormat), isEstimated: summary.isLoadEstimated))
         }

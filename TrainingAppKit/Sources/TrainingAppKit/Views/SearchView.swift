@@ -136,6 +136,11 @@ struct SearchView: View {
                             let unlinked = await weekViewModel.unlinkActivity(activity)
                             if unlinked { viewModel.markChanged() }
                             return unlinked
+                        },
+                        onSetSport: {
+                            let changed = await weekViewModel.setActivitySport(activity, sport: $0, venue: $1)
+                            if changed { viewModel.markChanged() }
+                            return changed
                         }
                     )
                 }

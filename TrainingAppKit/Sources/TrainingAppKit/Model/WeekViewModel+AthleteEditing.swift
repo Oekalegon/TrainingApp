@@ -24,6 +24,18 @@ extension WeekViewModel {
         return await applyAthleteChange(asOf: today) { $0.name = trimmed }
     }
 
+    /// Sets the athlete's main sport and where they usually do it (MVP2-151): the sport stats lead with
+    /// it, and a new planned workout starts with the venue. A venue the sport doesn't offer is dropped.
+    ///
+    /// - Returns: Whether the profile was saved.
+    public func setAthleteMainSport(_ sport: Sport, venue: Venue?, asOf today: Date = .now) async -> Bool {
+        let allowed = venue.flatMap { Venue.choices(for: sport).contains($0) ? $0 : nil }
+        return await applyAthleteChange(asOf: today) {
+            $0.mainSport = sport
+            $0.mainVenue = allowed
+        }
+    }
+
     /// Records heart-rate settings from a date, replacing the entry for that day.
     ///
     /// - Parameter settings: Resting and maximum heart rate, lactate threshold and zone method.
