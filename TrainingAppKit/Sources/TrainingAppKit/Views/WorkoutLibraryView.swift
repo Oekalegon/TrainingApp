@@ -100,7 +100,7 @@ struct WorkoutTemplateRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: entry.template.sport.symbolName)
+            Image(systemName: entry.template.sport.symbolName(venue: entry.template.venue))
                 .font(.title3)
                 .frame(width: 28)
                 .accessibilityHidden(true)
@@ -173,14 +173,14 @@ struct WorkoutTemplateDetailView: View {
             if let entry {
                 Section {
                     HStack(spacing: 12) {
-                        Image(systemName: entry.template.sport.symbolName)
+                        Image(systemName: entry.template.sport.symbolName(venue: entry.template.venue))
                             .font(.title2)
                             .frame(width: 32)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.template.name)
                                 .font(.headline)
-                            Text(entry.template.sport.displayName)
+                            Text(entry.template.sport.displayName(venue: entry.template.venue))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }

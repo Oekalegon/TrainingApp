@@ -25,4 +25,13 @@ struct SportDisplayTests {
         #expect(Sport.running.displayName(venue: .outdoor(.trail)) == "Running · Trail")
         #expect(Sport.running.displayName(venue: nil) == "Running")
     }
+
+    @Test("a treadmill, a track and an indoor bike have their own symbols")
+    func venueSymbols() {
+        #expect(Sport.running.symbolName(venue: .indoor(.treadmill)) == "figure.run.treadmill")
+        #expect(Sport.running.symbolName(venue: .outdoor(.track)) == "figure.track.and.field")
+        #expect(Sport.running.symbolName(venue: .outdoor(.trail)) == "figure.run")
+        #expect(Sport.cycling.symbolName(venue: .indoor(nil)) == "figure.indoor.cycle")
+        #expect(Sport.cycling.symbolName(venue: nil) == "figure.outdoor.cycle")
+    }
 }

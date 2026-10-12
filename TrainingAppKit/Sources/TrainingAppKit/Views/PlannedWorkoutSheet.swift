@@ -100,6 +100,11 @@ struct PlannedWorkoutFormFields: View {
     /// it, nothing for a sport without venues.
     @ViewBuilder
     private var venueRow: some View {
+        if let sport = viewModel.sport {
+            LabeledContent("Sport") {
+                Label(sport.displayName, systemImage: sport.symbolName(venue: viewModel.venue))
+            }
+        }
         if viewModel.offersVenueChoice {
             Picker("Venue", selection: $viewModel.venue) {
                 ForEach(viewModel.venueChoices, id: \.self) { venue in

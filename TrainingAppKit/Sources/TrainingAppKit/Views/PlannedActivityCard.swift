@@ -64,7 +64,7 @@ struct PlannedActivityCard: View {
                             }
                         }
                         .frame(width: TimelineCardStyle.intensityMarkerWidth)
-                        Image(systemName: summary.sport.symbolName)
+                        Image(systemName: summary.sport.symbolName(venue: summary.venue))
                             .foregroundStyle(isMissed ? .secondary : .primary)
                             .frame(width: TimelineCardStyle.iconWidth)
                         Text(summary.name ?? "Planned workout")

@@ -63,7 +63,7 @@ struct ActivityCard: View {
                         }
                     }
                     .frame(width: TimelineCardStyle.intensityMarkerWidth)
-                    Image(systemName: activity.sport.symbolName)
+                    Image(systemName: activity.sport.symbolName(venue: activity.venue))
                         .foregroundStyle(.primary)
                         .frame(width: TimelineCardStyle.iconWidth)
                     Text(content.title)

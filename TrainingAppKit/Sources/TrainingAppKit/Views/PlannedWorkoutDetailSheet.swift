@@ -40,12 +40,14 @@ struct PlannedWorkoutDetailSheet: View {
                 let summary = viewModel.summary
                 Section {
                     HStack(spacing: 12) {
-                        Image(systemName: summary.sport.symbolName)
+                        Image(systemName: summary.sport.symbolName(venue: summary.venue))
                             .font(.title2)
                             .frame(width: 32)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(summary.name ?? "Planned workout")
                                 .font(.headline)
+                            Text(summary.sport.displayName(venue: summary.venue))
+                                .font(.subheadline)
                             Text(dateText)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)

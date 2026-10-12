@@ -126,6 +126,8 @@ public final class PlannedWorkoutSheetViewModel {
     /// (``WorkoutTemplate/defaultVenue(for:)``) whenever a template is picked; editing, as the
     /// workout's own. `nil` for a sport without venues.
     public var venue: Venue?
+    /// The workout's sport: the picked template's, or the edited workout's; `nil` before a template is picked.
+    public var sport: Sport? { (selectedTemplate ?? editedTemplate)?.sport ?? editedWorkout?.sport }
     /// The venues the template allows, as the picker's options; empty for a sport without venue variants.
     public var venueChoices: [Venue] { (selectedTemplate ?? editedTemplate)?.venueChoices ?? [] }
     /// Whether the template fixes the venue (a track session is outdoors), so the sheet shows it but
