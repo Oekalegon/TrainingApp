@@ -69,7 +69,7 @@ struct CalendarImportSheet: View {
             if let message {
                 Text(message).foregroundStyle(.red)
             } else {
-                Text("Choose a JSON file made by Export Calendar. Planned workouts are added with their steps. Completed activities aren't imported: they come from Health. Daily fitness numbers aren't imported either: they are recalculated.")
+                Text("Choose a JSON file made by Export Calendar. Planned workouts are added with their steps. Completed activities are added without heart rate, with the load from the file, and are replaced by the real workout when Health has it. Daily fitness numbers aren't imported either: they are recalculated.")
             }
         }
     }
@@ -86,7 +86,8 @@ struct CalendarImportSheet: View {
             row(future ? "Will be added" : "Added", count: report.added)
             row("Already in your calendar", count: report.skippedDuplicates)
             row("Before today (skipped)", count: report.skippedPast)
-            row("Completed activities (not imported)", count: report.skippedCompleted)
+            row(future ? "Activities will be added" : "Activities added", count: report.activitiesAdded)
+            row("Activities already in your log", count: report.activitiesSkippedDuplicates)
             ForEach(report.templateRows(future: future), id: \.title) { row($0.title, count: $0.count) }
         } header: {
             Text(title)

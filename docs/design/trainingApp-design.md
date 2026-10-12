@@ -373,8 +373,9 @@ across launches.
     `CalendarImportViewModel.load(from:)` reads it and previews the import; nothing is saved yet.
   - **The preview** lists how many planned workouts will be added, how many are already in the
     calendar (the same workout on the same day), how many are before today (skipped), and how many
-    completed activities the file holds (not imported: they come from Health, and the file has no
-    heart-rate data). Entries that can't be imported are listed with the reason.
+    completed activities will be added or are already in the log (MVP2-107). A completed activity is added
+    as a placeholder with no heart rate and the file's load; when Health later reports the same workout
+    (by its id, or the same sport at about the same time and length) it replaces the placeholder. Entries that can't be imported are listed with the reason.
   - **Custom templates** (MVP2-141, MVP2-142): the preview adds lines for the templates that will be added, added as copies
     (the library has a different template with the same id), already in the library (an equal one:
     same sport, parameters and blocks, whatever its name), and that can't be used (the workouts then

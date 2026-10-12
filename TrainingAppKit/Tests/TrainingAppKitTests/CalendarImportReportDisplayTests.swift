@@ -55,6 +55,14 @@ struct CalendarImportReportDisplayTests {
         #expect(target.workouts.first?.templateID == template.id)
     }
 
+    @Test("every rejection reason has an explanation, including a completed activity without a start or duration (MVP2-107)")
+    func rejectionExplanations() {
+        for reason in [CalendarImportReport.RejectionReason.noSteps, .invalidStep, .invalidDate, .invalidActivity] {
+            #expect(!reason.explanation.isEmpty)
+        }
+        #expect(CalendarImportReport.RejectionReason.invalidActivity.explanation == "No start time or duration")
+    }
+
     @Test("a template the library already has is shown as already there")
     func linkedTemplateRow() async throws {
         let template = customTemplate()
