@@ -908,4 +908,25 @@ struct PlannedWorkoutSheetViewModelTests {
         let saved = try #require(model.plans.first { $0.id == plan.id })
         #expect(model.workouts.first { $0.id == saved.workoutID }?.venue == .indoor(.treadmill))
     }
+
+    @Test("the sport can be changed unless the template fixes it, and the saved workout has it")
+    func sportCanBeChosen() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(3), scheduler: nil)
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        #expect(!viewModel.isSportFixed)
+        viewModel.setSport(.cycling)
+        #expect(viewModel.venueChoices == Venue.choices(for: .cycling))
+        #expect(viewModel.venue.map { viewModel.venueChoices.contains($0) } == true)
+        viewModel.setSport(.strength)
+        #expect(viewModel.venue == nil)
+        viewModel.setSport(.cycling)
+        #expect(await viewModel.save(asOf: day(0)))
+        #expect(model.workouts.last?.sport == .cycling)
+
+        viewModel.selectedTemplate = BuiltInWorkoutTemplates.shortIntervalRunTrack
+        #expect(viewModel.isSportFixed)
+    }
 }
