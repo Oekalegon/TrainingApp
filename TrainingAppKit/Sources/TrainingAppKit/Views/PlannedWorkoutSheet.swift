@@ -105,7 +105,8 @@ struct PlannedWorkoutFormFields: View {
         }
         if viewModel.offersVenueChoice {
             Picker("Venue", selection: $viewModel.venue) {
-                ForEach(viewModel.venueChoices, id: \.self) { venue in
+                if viewModel.venue == nil { Text("Not Set").tag(nil as Venue?) }
+                ForEach(viewModel.venueOptions, id: \.self) { venue in
                     Text(venue.displayName).tag(venue as Venue?)
                 }
             }

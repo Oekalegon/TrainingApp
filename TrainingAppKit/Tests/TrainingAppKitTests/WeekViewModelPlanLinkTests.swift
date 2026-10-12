@@ -308,4 +308,29 @@ struct WeekViewModelPlanLinkTests {
         unlinked.linkedPlanID = nil
         #expect(viewModel.linkedPlanExpectation(for: unlinked) == nil)
     }
+
+    @Test("setActivitySport changes the activity's sport and venue and keeps them (MVP2-151)")
+    func setActivitySport() async throws {
+        let (viewModel, _, activity) = try await makeViewModel(planMinutes: [], activityMinutes: 30)
+
+        #expect(await viewModel.setActivitySport(activity, sport: .running, venue: .indoor(.treadmill), asOf: day(2)))
+
+        let changed = try #require(viewModel.activities(on: day(2)).first)
+        #expect(changed.venue == .indoor(.treadmill))
+        #expect(changed.isSportEdited)
+        #expect(viewModel.activityCardContent(for: changed).title == "Running")
+    }
+
+    @Test("a planned card summary carries its workout's venue (MVP2-151)")
+    func plannedSummaryVenue() async throws {
+        let (viewModel, plans, _) = try await makeViewModel(planMinutes: [30], activityMinutes: 30)
+        var withVenue = workout("Treadmill", minutes: 30)
+        withVenue.venue = .indoor(.treadmill)
+        try await viewModel.model.add(withVenue, asOf: day(2))
+        let plan = PlannedActivity(workoutID: withVenue.id, date: day(3))
+        try await viewModel.model.add(plan, asOf: day(2))
+
+        #expect(viewModel.plannedCardSummary(for: plan).venue == .indoor(.treadmill))
+        #expect(viewModel.plannedCardSummary(for: plans[0]).venue == nil)
+    }
 }

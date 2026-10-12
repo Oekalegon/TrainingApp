@@ -74,7 +74,7 @@ struct WorkoutTemplateEditorSheet: View {
                     if !Venue.choices(for: viewModel.draft.sport).isEmpty {
                         Picker("Venue", selection: $viewModel.draft.venue) {
                             Text("Chosen when planning").tag(nil as Venue?)
-                            ForEach(Venue.choices(for: viewModel.draft.sport), id: \.self) { venue in
+                            ForEach(venueOptions, id: \.self) { venue in
                                 Text(venue.displayName).tag(venue as Venue?)
                             }
                         }
@@ -131,6 +131,14 @@ struct WorkoutTemplateEditorSheet: View {
                 Text(message)
             }
         }
+    }
+
+    /// The venues offered for the draft's sport, plus its own when it's another (a copy of a template
+    /// that fixes only "outdoors"), so the picker never shows an empty selection.
+    private var venueOptions: [Venue] {
+        let choices = Venue.choices(for: viewModel.draft.sport)
+        guard let venue = viewModel.draft.venue, !choices.contains(venue) else { return choices }
+        return [venue] + choices
     }
 
     /// The sports a workout can be for: the named ones, plus the draft's own when it's another.

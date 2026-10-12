@@ -50,6 +50,8 @@ struct ActivityDetailView: View {
     @State private var sport: Sport?
     @State private var venue: Venue?
     @State private var sportFailureMessage: String?
+    /// Counts the changes made, so a save that finishes after a newer choice doesn't undo it.
+    @State private var sportChangeCount = 0
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
     /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
     @State private var isShowingDeleteConfirmation = false
@@ -343,16 +345,20 @@ struct ActivityDetailView: View {
     }
 
     private func setSport(_ newSport: Sport, venue newVenue: Venue?) {
-        // A venue the new sport doesn't have is dropped.
-        let allowed = newVenue.flatMap { Venue.choices(for: newSport).contains($0) || $0 == currentVenue && newSport == currentSport ? $0 : nil }
+        // A venue the new sport doesn't have is dropped, but the activity's own is kept while its sport
+        // is unchanged (e.g. a plain "outdoors" from Health).
+        let keepsOwnVenue = newSport == currentSport && newVenue == currentVenue
+        let allowed = newVenue.flatMap { keepsOwnVenue || Venue.choices(for: newSport).contains($0) ? $0 : nil }
         sportFailureMessage = nil
         // Shown at once, so the pickers don't sit on the old value until the save is done (and the
         // list under them reflows); put back if the save fails.
         let previous = (sport, venue)
         sport = newSport
         venue = allowed
+        sportChangeCount += 1
+        let change = sportChangeCount
         Task {
-            if await !onSetSport(newSport, allowed) {
+            if await !onSetSport(newSport, allowed), change == sportChangeCount {
                 (sport, venue) = previous
                 sportFailureMessage = "The sport couldn't be changed."
             }

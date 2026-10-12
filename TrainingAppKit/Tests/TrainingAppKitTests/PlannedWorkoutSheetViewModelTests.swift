@@ -920,4 +920,46 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(viewModel.sport == .running)
         #expect(viewModel.venueChoices == Venue.choices(for: .running))
     }
+
+    @Test("the venue options include a venue the template doesn't list, so the picker is never empty")
+    func venueOptionsKeepCurrentVenue() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        var workout = try BuiltInWorkoutTemplates.easyRun.instantiate()
+        workout.venue = .outdoor(nil)
+        try await model.add(workout)
+        let plan = PlannedActivity(workoutID: workout.id, date: day(3))
+        try await model.add(plan)
+
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+
+        #expect(viewModel.venueOptions.first == .outdoor(nil))
+        #expect(viewModel.venueOptions.dropFirst().elementsEqual(viewModel.venueChoices))
+    }
+
+    @Test("renaming in edit mode keeps the workout's venue, and a workout without a template can't change it")
+    func renameKeepsVenue() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let creating = PlannedWorkoutSheetViewModel(model: model, date: day(3), scheduler: nil)
+        creating.selectedTemplate = BuiltInWorkoutTemplates.easyRun
+        creating.venue = .indoor(.treadmill)
+        #expect(await creating.save(asOf: day(0)))
+        let plan = try #require(model.plans.last)
+
+        let renaming = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+        renaming.workoutName = "Shakeout"
+        #expect(await renaming.save(asOf: day(0)))
+        let saved = try #require(model.plans.first { $0.id == plan.id })
+        #expect(model.workouts.first { $0.id == saved.workoutID }?.venue == .indoor(.treadmill))
+
+        let handmade = StructuredWorkout(name: "By hand", sport: .running, venue: .outdoor(.road), blocks: [])
+        try await model.add(handmade)
+        let handmadePlan = PlannedActivity(workoutID: handmade.id, date: day(4))
+        try await model.add(handmadePlan)
+        let editing = PlannedWorkoutSheetViewModel(model: model, editing: handmadePlan, scheduler: nil)
+        #expect(editing.venue == .outdoor(.road))
+        #expect(editing.venueChoices.isEmpty)
+        #expect(editing.sport == .running)
+    }
 }

@@ -326,4 +326,15 @@ struct WorkoutTemplateEditorTests {
         // No usable value: the unit's usual start.
         #expect(try (parameter(unusable).lowerBound, parameter(unusable).defaultValue, parameter(unusable).upperBound) == (2, 4, 10))
     }
+
+    @Test("a template's venue survives the draft, and a copy keeps it (MVP2-151)")
+    func venueRoundTrips() throws {
+        let template = BuiltInWorkoutTemplates.shortIntervalRunTrack
+
+        let rebuilt = try #require(WorkoutTemplateDraft(template).build())
+        let copy = try #require(WorkoutTemplateDraft(template, duplicating: true).build())
+
+        #expect(rebuilt.venue == .outdoor(.track))
+        #expect(copy.venue == .outdoor(.track))
+    }
 }

@@ -2,8 +2,8 @@ import PhotosUI
 import SwiftUI
 import TrainingCore
 
-/// Personal Information (MVP2-123, MVP2-132, design doc §2.3): the avatar, name, sex and age, and the
-/// two zone screens, Heart Rate Zones and Pace Zones. The name can be changed: tapping its row asks
+/// Personal Information (MVP2-123, MVP2-132, design doc §2.3): the avatar, name, sex and age, the main
+/// sport and usual venue (MVP2-151), and the two zone screens, Heart Rate Zones and Pace Zones. The name can be changed: tapping its row asks
 /// for a new one. So can the avatar: tapping it picks a photo, and "Remove Photo" goes back to the
 /// initials. The age is shown once a date of birth is on record, which the HealthKit merge fills
 /// in (MVP2-124); sex and age come from Health and aren't edited here.
@@ -27,6 +27,8 @@ struct PersonalInformationView: View {
     /// picker that comes and goes with the sport) don't wait for the profile to reload.
     @State private var mainSport: Sport?
     @State private var mainVenue: Venue?
+    /// Counts the changes made, so the shown choice is given up only when the latest save is done.
+    @State private var mainSportChangeCount = 0
 
     private var shownMainSport: Sport { mainSport ?? viewModel.athlete.mainSport }
 
@@ -34,8 +36,11 @@ struct PersonalInformationView: View {
         let allowed = venue.flatMap { Venue.choices(for: sport).contains($0) ? $0 : nil }
         mainSport = sport
         mainVenue = allowed
+        mainSportChangeCount += 1
+        let change = mainSportChangeCount
         Task {
             if await !weekViewModel.setAthleteMainSport(sport, venue: venue) { isShowingError = true }
+            guard change == mainSportChangeCount else { return }
             mainSport = nil
             mainVenue = nil
         }

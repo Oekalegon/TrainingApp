@@ -545,6 +545,7 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   Activities" button (`WeekViewModel.unjoinActivity(_:)`). Both actions report success, and the
   sheet only closes when they worked — a refused join (different sports, a piece already joined
   elsewhere) leaves it open with an inline message.
+- **Sport and venue** (MVP2-151): a "Sport" section with a sport picker and, for a sport with venue variants, a venue picker, for the athlete to correct a recording (a treadmill run the Watch saved as outdoors). `WeekViewModel.setActivitySport(_:sport:venue:)` saves through `TrainingModel.setSport`, which marks the activity as edited so a re-import keeps the choice, and refreshes the week's caches and the pace history, which the sport and venue feed. The pickers show a choice at once and put it back if the save fails. A linked activity otherwise takes its plan's sport and venue, else the athlete's usual venue (TrainingKit). There is not yet a way to give an edited activity back to its plan.
 - **Planned workout link** (MVP2-42): a "Planned Workout" section, shown when the activity is linked
   to a plan or an unmatched plan exists on its day (`WeekViewModel.planLinkContext(for:)`). A linked
   plan's steps follow in a "Planned Steps" section of step cards, the same as the planned-workout
@@ -593,6 +594,8 @@ Delete button at the bottom behind a confirmation alert removes only the plan
 (`TrainingModel.deletePlan`), never the library workout, and its WorkoutKit entry best-effort (§3.5).
 
 The Name field of `PlannedWorkoutSheet` (MVP2-110) is a default title the athlete can always change. When creating, it starts as the template's generated title ("40min Easy Run", "23 km Long Run", "10x8sec Hill Sprints", from TrainingKit's `WorkoutTemplate.defaultTitle`; a steady run's time includes its warmup and cooldown) and follows the parameter controls until the athlete edits it by hand; picking another template starts over; a cleared field saves the generated title. When editing, the field starts as the saved name and follows parameter changes only if that name is still exactly the generated title. A new name saves as a new workout, like a parameter change, so a workout shared with other plans is never renamed under them; a cleared field keeps the saved name. Distances are written in km/m or miles/yards by the device's measurement system (`PlannedWorkoutSheetViewModel.distanceSystem`).
+
+**Sport and venue (MVP2-151).** A plan's sport is its template's, and it is shown read-only in `PlannedWorkoutSheet`; the athlete chooses only the **venue** (indoors or outdoors, with a surface: treadmill, track, road, trail, off-trail for a run), which TrainingKit's `Venue` models separately from `Sport` and which is sent in the WorkoutKit workout so starting it on the Watch doesn't ask "Indoor or Outdoor?". Creating, the picker starts at `WorkoutTemplate.defaultVenue(for: athlete)` (the athlete's usual venue, §2.3, when the template allows it) whenever a template is picked. A template that fixes its venue (the track session is outdoors on a track) shows a read-only row instead; a sport without venue variants shows none. Editing starts at the workout's own venue and, if it isn't one of the template's choices (a plan made before venues), the picker offers it too (`venueOptions`). A new venue makes a new workout, like a parameter change. The planned card, its detail sheet, the library and the template editor show the sport with its venue ("Running · Treadmill") and a symbol that follows it (`Sport.symbolName(venue:)`: treadmill, track, indoor bike). A template of the athlete's own can fix a venue in the editor ("Chosen when planning" leaves it to the plan).
 
 #### Pace forecasts (MVP2-35, MVP2-111)
 
@@ -706,6 +709,7 @@ The screens:
     history lists newest first with swipe to delete (never the last). A pace stored before the history
     existed shows as "Since the start", and editing it records a new entry from today. Planning uses the
     latest entry, like the heart-rate settings.
+  The same screen has the **main sport** and **usual venue** (MVP2-151, `WeekViewModel.setAthleteMainSport`): the sport the stats lead with, and where the athlete usually does it, which a new planned workout starts with. A venue the sport doesn't have is dropped.
 - **Connected Services** (`ConnectedServicesView`):
   - **Apple Health** (`AppleHealthView`, MVP2-126): what the app reads from Health, "Import Now" (the
     pull-to-refresh import) and, while nothing has ever been imported, "Connect Apple Health" (the

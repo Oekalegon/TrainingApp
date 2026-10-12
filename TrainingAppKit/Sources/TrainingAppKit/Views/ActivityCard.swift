@@ -114,7 +114,8 @@ struct ActivityCard: View {
         // The sport's icon is decorative, so a plan's name as the title (e.g. "Tempo") needs the sport
         // said too (MVP2-152).
         .accessibilityValue(
-            [content.title == activity.sport.displayName ? nil : activity.sport.displayName,
+            [content.title == activity.sport.displayName && activity.venue == nil
+                ? nil : activity.sport.displayName(venue: activity.venue),
              intensity?.accessibilityDescription]
                 .compactMap { $0 }.joined(separator: ", ")
         )

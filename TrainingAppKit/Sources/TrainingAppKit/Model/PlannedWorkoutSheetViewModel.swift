@@ -5,7 +5,7 @@ import TrainingWorkoutKit
 #endif
 
 /// Drives the "Create Planned Workout" sheet (MVP2-15): pick a ``WorkoutTemplate``, fill in its
-/// parameters with a live expected-load preview, see non-blocking ``PlanEvaluator`` guardrail
+/// parameters and venue (the sport is the template's) with a live expected-load preview, see non-blocking ``PlanEvaluator`` guardrail
 /// warnings for the hypothetical addition, then save — which instantiates the template, checks it maps to a
 /// WorkoutKit workout, and schedules it on the Watch if it's due within 7 days.
 ///
@@ -132,6 +132,13 @@ public final class PlannedWorkoutSheetViewModel {
     private var template: WorkoutTemplate? { selectedTemplate ?? editedTemplate }
     /// The venues the template allows, as the picker's options; empty for a sport without venue variants.
     public var venueChoices: [Venue] { template?.venueChoices ?? [] }
+    /// The venue picker's options: ``venueChoices``, plus the current ``venue`` when it isn't one of them
+    /// (a plan made before venues, or an open "outdoors" from a template), so the picker never shows an
+    /// empty selection.
+    public var venueOptions: [Venue] {
+        guard let venue, !venueChoices.contains(venue) else { return venueChoices }
+        return [venue] + venueChoices
+    }
     /// Whether the template fixes the venue (a track session is outdoors), so the sheet shows it but
     /// doesn't offer a choice.
     public var isVenueFixed: Bool { venueChoices.count <= 1 }

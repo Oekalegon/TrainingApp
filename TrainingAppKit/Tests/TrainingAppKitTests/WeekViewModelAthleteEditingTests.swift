@@ -178,4 +178,34 @@ struct WeekViewModelAthleteEditingTests {
         #expect(model.athlete == before)
         #expect(viewModel.athleteCalendar.firstWeekday == Weekday.monday.rawValue)
     }
+
+    @Test("the main sport and usual venue are saved, and a venue the sport doesn't have is dropped (MVP2-151)")
+    func mainSportAndVenue() async throws {
+        let (viewModel, model, store) = makeViewModel()
+
+        #expect(await viewModel.setAthleteMainSport(.running, venue: .indoor(.treadmill), asOf: now))
+        #expect(model.athlete.mainVenue == .indoor(.treadmill))
+        #expect(try await store.athleteProfile()?.mainVenue == .indoor(.treadmill))
+
+        #expect(await viewModel.setAthleteMainSport(.strength, venue: .indoor(.treadmill), asOf: now))
+        #expect(model.athlete.mainSport == .strength)
+        #expect(model.athlete.mainVenue == nil)
+    }
+
+    @Test("a failed save leaves the main sport and venue alone (MVP2-151)")
+    func mainSportFailedSave() async {
+        let store = InMemoryStore()
+        let failing = FailingAthleteStore(base: store)
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: failing
+        )
+        let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: now)
+        await failing.setFailsSaves(true)
+        let before = model.athlete
+
+        #expect(await viewModel.setAthleteMainSport(.cycling, venue: .outdoor(.road), asOf: now) == false)
+        #expect(model.athlete == before)
+    }
 }
