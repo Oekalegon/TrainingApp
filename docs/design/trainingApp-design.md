@@ -870,8 +870,8 @@ Not yet: reordering blocks, other target kinds, and the rest of the roadmap's 14
 
 ### 2.5 Search (MVP2-21)
 
-There is no search tab. `AppTabView` attaches one `.searchable` field to the tab view, so it shows at the
-top of every tab (pulling down on the week view or the Library reveals it). While it is in use
+There is no search tab. `AppTabView` attaches a `.searchable` field to the Week and Library tabs (not the
+Athlete tab, which has nothing to search from, MVP2-150); pulling down on either reveals it. While it is in use
 (`isSearching`) `SearchView`, driven by `SearchViewModel`, is laid over the tab, so all entry points show
 the same results (MVP2-21, MVP2-145); cancelling the search returns to the tab as it was.
 Results update as the athlete types, in three sections:
