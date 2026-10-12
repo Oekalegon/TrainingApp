@@ -42,6 +42,11 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         self.athleteReader = HealthKitAthleteReader(healthStore: healthStore)
     }
 
+    /// Reads what HealthKit recorded for recent workouts (MVP2-146 spike), for the Developer screen.
+    public var workoutInspector: any WorkoutInspecting {
+        HealthKitWorkoutInspector(healthStore: healthStore)
+    }
+
     /// The app's CloudKit container, as in `iOS/Resources/TrainingApp.entitlements`: what the
     /// introduction and the iCloud banner ask about (MVP2-147).
     public static let cloudKitContainerIdentifier = "iCloud.org.oekalegon.trainingkit.shared"

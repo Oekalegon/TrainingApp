@@ -28,7 +28,8 @@ struct TrainingAppApp: App {
             if let environment {
                 AppTabView(
                     model: environment.model, refresher: environment, watchSync: environment.watchSync,
-                    iCloud: CloudKitAccountChecker(containerIdentifier: TrainingAppEnvironment.cloudKitContainerIdentifier)
+                    iCloud: CloudKitAccountChecker(containerIdentifier: TrainingAppEnvironment.cloudKitContainerIdentifier),
+                    workoutInspector: environment.workoutInspector
                 )
             } else {
                 LaunchingView(onReady: { environment = $0 })
