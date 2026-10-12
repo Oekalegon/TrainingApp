@@ -106,7 +106,32 @@ New todos take the next free ID in their project; new IDs start at 100 (e.g. MVP
 
 ## MVP5: Plan Assistant
 
-- [ ] `PlanPreferences` (training days, per-day sport/session type, starting volume, weekly ramp)
+Scoping and design: `docs/design/mvp5-plan-assistant.md`.
+
+- [ ] **MVP5-100** Write down triphasic (Run Elite): session profiles (interval work lengths, race-target fractions) per phase (conditioning, base, structural, specific, taper); blocks MVP5-103. Micro length (7/10/14, athlete choice), 6-week structural/specific and athlete-set sessions per micro are decided
+- [ ] **MVP5-101** (TrainingKit) Audit `PlanGuardrails`/`PlanEvaluator` for 7-day-week assumptions (`maxMicrosWithoutRecovery` in days, build progression and recovery fraction per week/day, monotony window) and fix, with tests using 10- and 14-day micros
+- [ ] **MVP5-102** (TrainingKit) `TrainingParadigm` data type, `PlanGuardrails.Overrides`, and new paradigm rules (`intensityDistribution`, `hardSessionSpacing`, `hardSessionsPerMicro`)
+- [ ] **MVP5-103** (TrainingKit) Built-in paradigms: 80/20 polarized, triphasic
+- [ ] **MVP5-104** (TrainingKit) `PlanPreferences` with `runAvailability: [Weekday: Set<DaySlot>]` (morning, afternoon/evening), independent of the paradigm
+- [ ] **MVP5-110** (TrainingKit) `RunType` (easy, recovery, threshold, interval, long) mapped to `IntensityCategory`; `PlanPreferences.dayRunTypes: [Int: Set<RunType>]` (per micro day, several types allowed, tied to micro length); `maxWeeklyVolume` (peak, per 7 days); maps onto the generic `SessionType`, which stays small (the library's specifics live in the templates)
+- [ ] **MVP5-111** (TrainingKit) Key-race handling in the generator: primary race anchors the macro, secondary gets a mini-taper and recovery, tertiary has none
+- [ ] **MVP5-112** (App) Per-micro-day run type picker (multi-select; weekdays shown for 7/14-day micros, not 10) and the wizard; peak weekly volume field; key-race picker in the wizard
+- [ ] **MVP5-113** (TrainingKit) Split phase from load role: `CyclePhase` becomes a named, paradigm-defined value; add a micro load role (build/recovery/taper/race); backwards-compatible decoding of stored enum values; update rules that read `.recovery`/`.build`
+- [ ] **MVP5-114** (TrainingKit) Intensity target for the specific phase: goal pace, target HR, perceived effort or predicted from fitness; goal on `Race`/`Goal`
+- [ ] **MVP5-115** (TrainingKit) Generator compromises for short lead time (drop structural, then shorten specific) and conflict reporting (each overridden preference and why); optional conditioning phase
+- [ ] **MVP5-116** (TrainingKit) Replace the `maxBuildProgressionFraction` rule with a longest-run rule (+10% over the longest run of the previous 4 weeks); update `PlanRule`, evaluator, tests
+- [ ] **MVP5-117** (TrainingKit) Volume curve: per-micro targets in TRIMP/distance/time from start, ramp, peak (per 7 days), phase and role
+- [ ] **MVP5-118** (TrainingKit) Template content analysis (interval work-length ranges) and per-phase session profiles; hard filter, closest fit, rotation, parameter progression
+- [ ] **MVP5-119** (TrainingKit) Day assignment: availability by weekday, preferred run types by micro day, hard-session spacing, two-a-day
+- [ ] **MVP5-120** (TrainingKit) Bounded adjust loop against `PlanEvaluator` and a plan proposal type listing findings and compromises (preferences overridden, shortened phases, missing templates)
+- [ ] **MVP5-121** (App) Plan preview and commit: layout, workouts, projected form, compromises, list of planned workouts to be replaced
+- [ ] **MVP5-122** (TrainingKit) Resolve steps' intensity from athlete zones; fill work-step targets from a phase's fraction-of-race-target profile
+- [ ] **MVP5-123** (TrainingKit/App) Re-plan from today, keeping paradigm, race and cycles, starting from current fitness
+- [ ] **MVP5-105** (App) Running availability settings screen (weekdays, then slots per selected day)
+- [ ] **MVP5-106** (App) Make `WeekViewModel` period-aware (`DisplayPeriod`): no hard-coded 7 days in range, chart, load and cache keys; no visible change
+- [ ] **MVP5-107** (App) Show a 7/10/14-day micro-cycle when the selected date is inside a planned micro, else the calendar week; paging crosses the boundary; header shows macro › meso › micro and phase
+- [ ] **MVP5-108** (App) Rename `WeekView`/`WeekViewModel` to `MicroCycleView`/`MicroCycleViewModel` (mechanical PR, after MVP5-107)
+- [ ] `PlanPreferences` (training days, per-day sport/session type, starting volume, weekly ramp): see MVP5-104
 - [ ] Create Plan wizard sheet
 - [ ] `PlanGenerator`: lays out cycles with `CycleLayoutBuilder`, fills them with library workouts, iterates against `PlanEvaluator`
 - [ ] **MVP5-5** Generator chooses workouts by intensity category
