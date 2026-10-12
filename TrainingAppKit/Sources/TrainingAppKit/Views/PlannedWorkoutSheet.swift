@@ -97,19 +97,11 @@ struct PlannedWorkoutFormFields: View {
     fileprivate static let dayRangeFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
 
     /// The venue (MVP2-151): a picker when the template leaves it open, a read-only row when it fixes
-    /// it, nothing for a sport without venues. The sport is a picker unless the template fixes it.
+    /// it, nothing for a sport without venues. The sport is the template's, shown read-only.
     @ViewBuilder
     private var venueRow: some View {
         if let sport = viewModel.sport {
-            if viewModel.isSportFixed {
-                LabeledContent("Sport", value: sport.displayName)
-            } else {
-                Picker("Sport", selection: Binding(get: { sport }, set: { viewModel.setSport($0) })) {
-                    ForEach(viewModel.sportChoices, id: \.self) { choice in
-                        Text(choice.displayName).tag(choice)
-                    }
-                }
-            }
+            LabeledContent("Sport", value: sport.displayName)
         }
         if viewModel.offersVenueChoice {
             Picker("Venue", selection: $viewModel.venue) {

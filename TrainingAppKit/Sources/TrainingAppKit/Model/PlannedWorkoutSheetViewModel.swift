@@ -69,7 +69,6 @@ public final class PlannedWorkoutSheetViewModel {
     /// `true` when the venue now differs from what the edited workout was built with; only a workout
     /// made from a template can change it.
     private var venueChanged: Bool { editedTemplate != nil && venue != originalVenue }
-    private var sportChanged: Bool { editedTemplate != nil && sport != originalSport }
     /// Whether edit mode's name field differs from the workout's saved name. An emptied field
     /// keeps the saved name.
     private var nameChanged: Bool {
@@ -78,7 +77,7 @@ public final class PlannedWorkoutSheetViewModel {
     }
     /// Whether saving an edit needs a new workout: a workout may be shared with other plans, so
     /// a new name or parameter value is never written into it.
-    private var workoutNeedsReplacing: Bool { parametersChanged || venueChanged || sportChanged || nameChanged }
+    private var workoutNeedsReplacing: Bool { parametersChanged || venueChanged || nameChanged }
 
     /// Whether ``save(asOf:)`` has something to save: an edit always does (date/load/parameters); a new plan
     /// needs a template picked first. The sheet's save button follows this — keying it off
@@ -127,39 +126,12 @@ public final class PlannedWorkoutSheetViewModel {
     /// (``WorkoutTemplate/defaultVenue(for:)``) whenever a template is picked; editing, as the
     /// workout's own. `nil` for a sport without venues.
     public var venue: Venue?
-    /// The workout's sport. Creating, it starts as the template's whenever a template is picked;
-    /// editing, as the workout's own. The athlete can choose another unless the template fixes it
-    /// (``isSportFixed``); the venue then follows, since not every sport has the same venues. `nil`
-    /// before a template is picked.
-    public private(set) var sport: Sport?
-
-    /// Chooses the workout's sport, and a venue it allows if the current one isn't.
-    public func setSport(_ newSport: Sport) {
-        guard newSport != sport else { return }
-        sport = newSport
-        if venue == nil || venue.map({ !venueChoices.contains($0) }) == true {
-            venue = venueChoices.first { !$0.isIndoor } ?? venueChoices.first
-        }
-        recomputeExpectedLoad()
-        recomputeGuardrails()
-    }
-    /// ``editedWorkout``'s sport, to detect whether the athlete changed it.
-    private var originalSport: Sport? { editedWorkout?.sport }
+    /// The workout's sport: the template's, which the plan inherits and can't change; `nil` before a
+    /// template is picked.
+    public var sport: Sport? { template?.sport ?? editedWorkout?.sport }
     private var template: WorkoutTemplate? { selectedTemplate ?? editedTemplate }
-    /// The sports the picker offers: the selectable ones, plus the template's own when it's another.
-    public var sportChoices: [Sport] {
-        guard let template else { return [] }
-        return Sport.selectable.contains(template.sport) ? Sport.selectable : Sport.selectable + [template.sport]
-    }
-    /// Whether the template fixes the sport (it fixes a venue, like the track session), or the workout
-    /// has no template to change it from, so the sheet shows the sport but doesn't offer a choice.
-    public var isSportFixed: Bool { template.map { $0.venue != nil } ?? true }
-    /// The venues the sport allows, as the picker's options; empty for a sport without venue variants.
-    /// The template narrows them while the sport is its own.
-    public var venueChoices: [Venue] {
-        guard let template, let sport else { return [] }
-        return sport == template.sport ? template.venueChoices : Venue.choices(for: sport)
-    }
+    /// The venues the template allows, as the picker's options; empty for a sport without venue variants.
+    public var venueChoices: [Venue] { template?.venueChoices ?? [] }
     /// Whether the template fixes the venue (a track session is outdoors), so the sheet shows it but
     /// doesn't offer a choice.
     public var isVenueFixed: Bool { venueChoices.count <= 1 }
@@ -318,7 +290,6 @@ public final class PlannedWorkoutSheetViewModel {
         }
         self.originalVenue = workout?.venue
         self.venue = workout?.venue
-        self.sport = workout?.sport
         // The saved name counts as the default title, still followed by the parameters, only if it
         // is exactly what the template would generate at the recorded values.
         workoutName = workout?.name ?? ""
@@ -340,17 +311,14 @@ public final class PlannedWorkoutSheetViewModel {
         recomputeGuardrails()
     }
 
-    /// `template` instantiated with the current values, venue and sport.
+    /// `template` instantiated with the current values and venue.
     private func instantiate(_ template: WorkoutTemplate, name: String) throws -> StructuredWorkout {
-        var workout = try template.instantiate(name: name, venue: venue, values: parameterValues)
-        if let sport { workout.sport = sport }
-        return workout
+        try template.instantiate(name: name, venue: venue, values: parameterValues)
     }
 
     private func seedFromSelectedTemplate() {
         guard let selectedTemplate else {
             parameterValues = [:]
-            sport = nil
             venue = nil
             nameIsCustomized = false
             generatedTitle = ""
@@ -363,7 +331,6 @@ public final class PlannedWorkoutSheetViewModel {
         parameterValues = Dictionary(
             uniqueKeysWithValues: selectedTemplate.parameters.map { ($0.key, $0.defaultValue) }
         )
-        sport = selectedTemplate.sport
         venue = selectedTemplate.defaultVenue(for: model.athlete)
         nameIsCustomized = false
         refreshGeneratedTitle()
@@ -396,7 +363,7 @@ public final class PlannedWorkoutSheetViewModel {
         guard let editedWorkout else { return nil }
         guard workoutNeedsReplacing else { return editedWorkout }
         let name = workoutName.isEmpty ? editedWorkout.name : workoutName
-        if parametersChanged || venueChanged || sportChanged {
+        if parametersChanged || venueChanged {
             // A malformed template (not reachable from the UI) leaves the workout untouched, name
             // change included.
             guard let editedTemplate,
