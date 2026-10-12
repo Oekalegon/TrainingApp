@@ -50,7 +50,7 @@ extension WeekViewModel {
             // Highest-priority pair wins, so a real issue (or a join) is never hidden behind a
             // possibleMultisport pairing that merely sorted earlier.
             if let best, best.recommendation.priority <= advice.recommendation.priority { continue }
-            best = OverlapContext(recommendation: advice.recommendation, otherActivity: other)
+            best = OverlapContext(recommendation: advice.recommendation, otherActivity: other, otherActivityTitle: activityTitle(for: other))
         }
         return best
     }
@@ -65,7 +65,7 @@ extension WeekViewModel {
         let warnings = overlapWarningsByActivityID
         return model.activities
             .compactMap { activity in
-                warnings[activity.id].map { OverlapReviewItem(activity: activity, recommendation: $0) }
+                warnings[activity.id].map { OverlapReviewItem(activity: activity, recommendation: $0, title: activityTitle(for: activity)) }
             }
             .sorted { $0.activity.start < $1.activity.start }
     }

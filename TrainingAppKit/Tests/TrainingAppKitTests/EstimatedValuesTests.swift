@@ -211,10 +211,10 @@ struct EstimatedValuesTests {
         #expect(!fromDistance.isDistanceEstimated)
     }
 
-    @Test("a linked activity is titled by its plan's workout name, on the card and the sheet, until the link is gone (MVP2-152)")
+    @Test("a linked activity is titled by its plan's workout name on every surface, else by its sport (MVP2-152)")
     func linkedActivityTitledByPlan() async throws {
-        let (viewModel, model, _) = makeViewModel()
-        let named = workout([.time(1200)])
+        let (viewModel, model, store) = makeViewModel()
+        var named = workout([.time(1200)])
         try await model.add(named, asOf: day(2))
         let plan = PlannedActivity(workoutID: named.id, date: day(2))
         try await model.add(plan, asOf: day(2))
@@ -222,10 +222,31 @@ struct EstimatedValuesTests {
         linked.linkedPlanID = plan.id
         let unlinked = heartRateActivity(on: day(3))
 
-        #expect(viewModel.linkedPlanExpectation(for: linked)?.name == "Run")
+        #expect(viewModel.activityTitle(for: linked) == "Run")
+        #expect(viewModel.activityCardContent(for: linked).title == "Run")
         #expect(viewModel.activityDetailViewModel(for: linked).title == "Run")
-        #expect(viewModel.linkedPlanExpectation(for: unlinked) == nil)
+        #expect(viewModel.activityTitle(for: unlinked) == unlinked.sport.displayName)
         #expect(viewModel.activityDetailViewModel(for: unlinked).title == unlinked.sport.displayName)
+
+        // Renaming the workout shows on the next read, though no count changed.
+        named.name = "12 km Long Run"
+        try await store.upsert([named])
+        await viewModel.load(asOf: day(2))
+        #expect(viewModel.activityCardContent(for: linked).title == "12 km Long Run")
+
+        // An empty name falls back to the sport's.
+        named.name = ""
+        try await store.upsert([named])
+        await viewModel.load(asOf: day(2))
+        #expect(viewModel.activityTitle(for: linked) == linked.sport.displayName)
+
+        // A plan whose workout is gone falls back too.
+        var orphan = heartRateActivity(on: day(2))
+        let orphanPlan = PlannedActivity(workoutID: UUID(), date: day(2))
+        try await store.upsert([orphanPlan])
+        await viewModel.load(asOf: day(2))
+        orphan.linkedPlanID = orphanPlan.id
+        #expect(viewModel.activityTitle(for: orphan) == orphan.sport.displayName)
     }
 
     @Test("an activity's card marks a load scored from perceived effort, not one from heart rate")

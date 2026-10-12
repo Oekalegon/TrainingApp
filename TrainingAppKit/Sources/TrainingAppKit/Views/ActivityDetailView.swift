@@ -373,7 +373,7 @@ private struct OverlapSectionContent: View {
     /// "Cycling at 14:32" — names the other side of the pair for the section's description text.
     private var otherActivityDescription: Text {
         let time = Text(context.otherActivity.start, format: Self.timeFormat(timeZone: timeZone))
-        return Text("\(context.otherActivity.sport.displayName) at \(time)")
+        return Text("\(context.otherActivityTitle) at \(time)")
     }
 
     var body: some View {

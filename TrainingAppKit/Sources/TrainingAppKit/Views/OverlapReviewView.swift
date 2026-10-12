@@ -68,7 +68,7 @@ struct OverlapReviewView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.activity.sport.displayName)
+                                Text(item.title)
                                     .foregroundStyle(.primary)
                                 Text(item.activity.start, format: Self.dateFormat(timeZone: timeZone))
                                     .font(.caption)

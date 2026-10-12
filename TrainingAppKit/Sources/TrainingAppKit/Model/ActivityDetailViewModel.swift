@@ -32,6 +32,9 @@ public struct ActivityDetailViewModel {
     public let planLinkContext: PlanLinkContext?
     /// What the heart-rate and pace charts draw, with the recorded steps as markers (MVP2-146).
     public let chartData: ActivityChartData
+    /// The sheet's title: the linked plan's workout name, else the sport's name (MVP2-152); see
+    /// ``WeekViewModel/activityTitle(for:)``.
+    public let title: String
 
     /// Creates a detail view model for `activity`.
     ///
@@ -42,6 +45,7 @@ public struct ActivityDetailViewModel {
     ///   - planLinkContext: This activity's plan link and its alternatives, if any (MVP2-42).
     ///   - planWorkout: The workout of the plan this activity completed, to say what each recorded
     ///     step was on the charts (MVP2-146).
+    ///   - title: The sheet's title; the sport's name when `nil`.
     ///   - calculator: Computes the summary; defaults to `StatisticsCalculator()`'s standard
     ///     calculators (the same ones `TrainingModel` uses for the fitness series), so the load
     ///     shown here always agrees with what fed the week view's chart.
@@ -51,6 +55,7 @@ public struct ActivityDetailViewModel {
         overlapContext: OverlapContext? = nil,
         planLinkContext: PlanLinkContext? = nil,
         planWorkout: StructuredWorkout? = nil,
+        title: String? = nil,
         calculator: StatisticsCalculator = StatisticsCalculator()
     ) {
         self.activity = activity
@@ -58,12 +63,8 @@ public struct ActivityDetailViewModel {
         self.timeZone = athlete.timeZone
         self.overlapContext = overlapContext
         self.planLinkContext = planLinkContext
+        self.title = title ?? activity.sport.displayName
         self.chartData = ActivityChartData.make(for: activity, workout: planWorkout)
     }
 
-    /// The sheet's title: the linked plan's workout name (e.g. "10 km Long Run") while the activity
-    /// completes a plan, else the sport's name (MVP2-152). The same name the activity's card shows.
-    public var title: String {
-        planLinkContext?.linkedPlan?.title ?? activity.sport.displayName
-    }
 }
