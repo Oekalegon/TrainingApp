@@ -5,8 +5,8 @@ import TrainingCore
 /// written by Export Calendar, show what importing it would do, then import it.
 ///
 /// Nothing is saved until ``performImport()``. ``load(from:)`` only reads the file and previews the
-/// import, so the athlete can see how many plans would be added, how many are already in the
-/// calendar, and which entries can't be imported before confirming.
+/// import, so the athlete can see how many plans and completed activities would be added (MVP2-107), how many
+/// are already in the calendar or log, and which entries can't be imported before confirming.
 @Observable
 @MainActor
 public final class CalendarImportViewModel {

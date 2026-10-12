@@ -93,6 +93,12 @@ struct CalendarImportViewModelTests {
         #expect(report.activitiesAdded == 1)
         let stored = try #require(try await store.activity(source: ran.source))
         #expect(stored.isCalendarImport && stored.heartRate.isEmpty)
+
+        viewModel.reset()
+        await viewModel.load(from: url)
+        guard case .preview(_, let again) = viewModel.state else { Issue.record("state was \(viewModel.state)"); return }
+        #expect(again.activitiesAdded == 0 && again.activitiesSkippedDuplicates == 1)
+        #expect(!viewModel.canImport, "the activity is already in the log")
     }
 
     @Test("a store failure during the import keeps the preview and shows an error, and a retry can succeed")
