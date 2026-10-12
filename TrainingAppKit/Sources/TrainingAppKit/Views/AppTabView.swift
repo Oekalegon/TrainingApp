@@ -152,7 +152,7 @@ public struct AppTabView: View {
     }
 }
 
-/// Lays the search results over a tab while the tab bar's search field is in use (MVP2-145).
+/// Lays the search results over a tab while the search field is in use (MVP2-145).
 ///
 /// `isSearching` is only set inside the view `.searchable` is attached to, so each tab applies this
 /// itself rather than `AppTabView` reading it once for all of them.

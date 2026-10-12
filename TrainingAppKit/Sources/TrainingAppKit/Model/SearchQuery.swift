@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the athlete typed in the tab bar's search field (MVP2-21), split into words. A set of
+/// What the athlete typed in the search field (MVP2-21), split into words. A set of
 /// fields matches when every word appears in one of them, ignoring case and diacritics, so
 /// "long km" finds "20 km Long Run".
 struct SearchQuery: Equatable, Sendable {

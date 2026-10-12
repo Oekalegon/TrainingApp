@@ -889,7 +889,7 @@ dates match as written in the athlete's timezone and locale ("Saturday, Septembe
 "Sep 20"), so "september" or "2025" work. Plans and activities are newest first. A blank field
 shows a prompt; no match shows the standard "No Results" view.
 
-Plans and activities are read from the stores over all dates each time the tab appears, since
+Plans and activities are read from the stores over all dates each time the search results appear, since
 `TrainingModel` only holds the week view's window, and again when a detail sheet closes after it
 changed something (an edit, delete, link or join). Each result's searchable text, dates included,
 is written once at that reload, so typing only compares strings. A reload that finishes after a
