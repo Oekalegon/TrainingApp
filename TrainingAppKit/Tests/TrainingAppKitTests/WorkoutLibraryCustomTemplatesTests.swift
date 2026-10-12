@@ -199,7 +199,7 @@ struct WorkoutLibraryCustomTemplatesTests {
         #expect(editor.templateIsMissing)
     }
 
-    @Test("the search tab finds a custom template by name")
+    @Test("the search finds a custom template by name")
     func searchFindsCustom() async throws {
         let (_, model) = await makeModel()
         let library = makeLibrary(model)

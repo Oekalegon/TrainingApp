@@ -1,6 +1,6 @@
 import Foundation
 
-/// A push to a workout template's detail screen (MVP2-21), from the Library or search tab. A type
+/// A push to a workout template's detail screen (MVP2-21), from the Library or the search results. A type
 /// of its own rather than a bare `UUID`, so another UUID-keyed screen pushed onto the same stack
 /// can't be routed here by mistake.
 struct TemplateRoute: Hashable {

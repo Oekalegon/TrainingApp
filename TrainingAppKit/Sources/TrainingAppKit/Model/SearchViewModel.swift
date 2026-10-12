@@ -1,8 +1,8 @@
 import Foundation
 import TrainingCore
 
-/// Drives the search tab (MVP2-21, design doc §2.5): instant results across the workout templates,
-/// the planned workouts and the activities as the athlete types in the tab bar's search field,
+/// Drives the search results (MVP2-21, design doc §2.5): instant results across the workout templates,
+/// the planned workouts and the activities as the athlete types in the search field,
 /// which is there from every tab.
 ///
 /// Plans and activities come from the stores, over all dates, read by ``reload()``:

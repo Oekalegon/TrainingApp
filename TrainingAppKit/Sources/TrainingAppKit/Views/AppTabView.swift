@@ -3,8 +3,8 @@ import TrainingCore
 
 /// The app's top-level screen (design doc §2.0): a bottom tab bar switching between the week view
 /// ("Week"), the workout library ("Library", MVP2-21) and the athlete account screen ("Athlete") —
-/// replacing the week view's former "Athlete" toolbar button + sheet — plus a search tab, there from
-/// every tab, whose field sits in the tab bar and searches workout templates, planned workouts and
+/// replacing the week view's former "Athlete" toolbar button + sheet — plus a search field on every tab
+/// that searches workout templates, planned workouts and
 /// activities as the athlete types.
 ///
 /// Owns the single `WeekViewModel` for the app's lifetime so both tabs share it: `WeekView` reads
@@ -20,14 +20,13 @@ public struct AppTabView: View {
         case week
         case library
         case athlete
-        case search
     }
 
     @State private var viewModel: WeekViewModel
     /// The Library tab's view model (MVP2-21), kept for the app's lifetime so its plan counts
     /// survive switching tabs.
     @State private var libraryViewModel: WorkoutLibraryViewModel
-    /// The search tab's view model (MVP2-21); shares the library's so both show the same counts.
+    /// The search results' view model (MVP2-21); shares the library's so both show the same counts.
     @State private var searchViewModel: SearchViewModel
     /// The visible tab. Kept so the week view's Watch permission banner (MVP2-117) can open the
     /// Athlete tab; not remembered across launches.
@@ -63,6 +62,11 @@ public struct AppTabView: View {
         self.workoutInspector = workoutInspector
     }
 
+    /// The search results, laid over a tab while its search field is in use (MVP2-145).
+    private var searchResultsView: SearchView {
+        SearchView(viewModel: searchViewModel, weekViewModel: viewModel, query: searchText)
+    }
+
     public var body: some View {
         // Read once per render, not once for the badge and again for AthleteView's own copy:
         // `TrainingModel.overlapAdvice` reruns `ActivityOverlapChecker.findOverlaps(in:)` on every
@@ -76,10 +80,12 @@ public struct AppTabView: View {
                     athletePath = AthleteRoute.watchSettings
                     selectedTab = .athlete
                 })
+                .searchResults(searchResultsView)
             }
 
             Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
                 WorkoutLibraryView(viewModel: libraryViewModel)
+                    .searchResults(searchResultsView)
             }
 
             Tab("Athlete", systemImage: "person.circle", value: AppTab.athlete) {
@@ -108,18 +114,13 @@ public struct AppTabView: View {
                     watchSync: watchSync,
                     workoutInspector: workoutInspector
                 )
+                .searchResults(searchResultsView)
             }
             // Same live count `OverlapWarningBanner` shows on the Athlete screen itself (MVP1-67)
             // — both update together whenever an overlap is resolved, since they read the same
             // `WeekViewModel.overlapReviewItems`. `.badge(0)` hides the badge on its own, so no
             // extra `nil`-vs-count branch is needed here.
             .badge(overlapReviewItems.count)
-
-            // The search role puts this tab apart at the trailing end of the tab bar, on every
-            // tab, where it turns into the search field when selected — as in Mail (MVP2-21).
-            Tab(value: AppTab.search, role: .search) {
-                SearchView(viewModel: searchViewModel, weekViewModel: viewModel, query: searchText)
-            }
         }
         .searchable(text: $searchText, prompt: "Workouts and Activities")
         .onChange(of: scenePhase, initial: true) { _, phase in
@@ -148,5 +149,26 @@ public struct AppTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .trainingAppDidImportWorkouts)) { _ in
             Task { await viewModel.activitiesImportedElsewhere() }
         }
+    }
+}
+
+/// Lays the search results over a tab while the search field is in use (MVP2-145).
+///
+/// `isSearching` is only set inside the view `.searchable` is attached to, so each tab applies this
+/// itself rather than `AppTabView` reading it once for all of them.
+private struct SearchResultsOverlay: ViewModifier {
+    @Environment(\.isSearching) private var isSearching
+    let results: SearchView
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            if isSearching { results }
+        }
+    }
+}
+
+private extension View {
+    func searchResults(_ results: SearchView) -> some View {
+        modifier(SearchResultsOverlay(results: results))
     }
 }

@@ -77,9 +77,9 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 ### 2.0 Top-level navigation
 
 `AppTabView` is the app's root: a bottom tab bar with three tabs, "Week" (§2.1), "Library" (§2.4,
-MVP2-21) and "Athlete" (§2.3), plus a search tab (§2.5). All are built from the same
+MVP2-21) and "Athlete" (§2.3), with a search field on every tab (§2.5). All are built from the same
 `WeekViewModel` instance (`AthleteView` reads it via `WeekViewModel.athleteViewModel`, the Library
-and search tabs via `WeekViewModel.workoutLibraryViewModel()` and `searchViewModel(library:)`),
+and the search results via `WeekViewModel.workoutLibraryViewModel()` and `searchViewModel(library:)`),
 owned by `AppTabView` and constructed once for the app's lifetime, as are the Library and search
 tabs' view models. `AppTabView` holds the selected tab and the Athlete tab's pushed screens
 (`[AthleteRoute]`) only so the week view's Watch permission banner can open the Athlete tab's Apple
@@ -870,8 +870,10 @@ Not yet: reordering blocks, other target kinds, and the rest of the roadmap's 14
 
 ### 2.5 Search (MVP2-21)
 
-A search tab (`Tab(role: .search)`, `SearchView` driven by `SearchViewModel`) sits apart at the
-trailing end of the tab bar on every tab and turns into the search field when tapped, as in Mail.
+There is no search tab. `AppTabView` attaches one `.searchable` field to the tab view, so it shows at the
+top of every tab (pulling down on the week view or the Library reveals it). While it is in use
+(`isSearching`) `SearchView`, driven by `SearchViewModel`, is laid over the tab, so all entry points show
+the same results (MVP2-21, MVP2-145); cancelling the search returns to the tab as it was.
 Results update as the athlete types, in three sections:
 
 - **Workout Templates**: name, default title or sport (`WorkoutLibraryViewModel.entries(matching:)`);
@@ -887,7 +889,7 @@ dates match as written in the athlete's timezone and locale ("Saturday, Septembe
 "Sep 20"), so "september" or "2025" work. Plans and activities are newest first. A blank field
 shows a prompt; no match shows the standard "No Results" view.
 
-Plans and activities are read from the stores over all dates each time the tab appears, since
+Plans and activities are read from the stores over all dates each time the search results appear, since
 `TrainingModel` only holds the week view's window, and again when a detail sheet closes after it
 changed something (an edit, delete, link or join). Each result's searchable text, dates included,
 is written once at that reload, so typing only compares strings. A reload that finishes after a

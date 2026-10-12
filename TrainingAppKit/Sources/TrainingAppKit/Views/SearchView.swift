@@ -1,9 +1,9 @@
 import SwiftUI
 import TrainingCore
 
-/// The search tab (MVP2-21, design doc §2.5): instant results across workout templates, planned
-/// workouts and activities as the athlete types in the tab bar's search field, which `AppTabView`
-/// attaches with `.searchable` and shows from every tab. A template pushes its library detail; a
+/// The search results (MVP2-21, design doc §2.5): instant results across workout templates, planned
+/// workouts and activities as the athlete types in the search field, which `AppTabView` attaches with
+/// `.searchable` to every tab and lays this view over the tab while it is in use (MVP2-145). A template pushes its library detail; a
 /// planned workout opens its detail sheet and an activity its detail, as on the week view, once
 /// ``SearchViewModel`` has loaded the week view's model around the result's day.
 struct SearchView: View {
@@ -95,7 +95,7 @@ struct SearchView: View {
             .navigationDestination(for: TemplateRoute.self) { route in
                 WorkoutTemplateDetailView(viewModel: viewModel.library, templateID: route.id)
             }
-            // Each time the tab appears, so plans and activities added since are found.
+            // Each time the results appear (the search field is used), so plans and activities added since are found.
             .task { await viewModel.reload() }
             // Closing a sheet that changed something reloads, so an edited or deleted plan or
             // activity shows that way in the results afterwards.

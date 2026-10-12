@@ -143,7 +143,7 @@ public final class WorkoutLibraryViewModel {
         }
     }
 
-    /// The entries matching `query`, in ``templates``' order, for the search tab (MVP2-21). A
+    /// The entries matching `query`, in ``templates``' order, for the search results (MVP2-21). A
     /// template matches when its name, its default title or its sport's name contains every word
     /// of `query`, ignoring case and diacritics; an empty query matches all.
     ///
