@@ -9,6 +9,7 @@ public final class UserDefaultsOnboardingProgress: OnboardingProgress {
     private static let completedKey = "onboarding.hasCompleted"
     private static let healthBannerKey = "onboarding.hasDismissedHealthBanner"
     private static let iCloudBannerKey = "onboarding.hasDismissedICloudBanner"
+    private static let distanceBannerKey = "onboarding.hasDismissedDistanceBanner"
     private let defaults: UserDefaults
 
     /// - Parameter defaults: Where to store the progress; defaults to `.standard`.
@@ -29,5 +30,10 @@ public final class UserDefaultsOnboardingProgress: OnboardingProgress {
     public var hasDismissedICloudBanner: Bool {
         get { defaults.bool(forKey: Self.iCloudBannerKey) }
         set { defaults.set(newValue, forKey: Self.iCloudBannerKey) }
+    }
+
+    public var hasDismissedDistanceBanner: Bool {
+        get { defaults.bool(forKey: Self.distanceBannerKey) }
+        set { defaults.set(newValue, forKey: Self.distanceBannerKey) }
     }
 }

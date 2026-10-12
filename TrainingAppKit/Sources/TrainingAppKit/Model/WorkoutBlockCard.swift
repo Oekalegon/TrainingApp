@@ -1,6 +1,22 @@
 import Foundation
 import TrainingCore
 
+/// What the athlete did in one step, as the step cards write it (MVP2-146): the Watch's own figures
+/// for that step. Distance and pace are missing when the step recorded no distance, or the app may
+/// not read it (see `HealthKitAuthorization.readTypes`).
+public struct WorkoutStepActual: Equatable, Sendable {
+    /// Time spent in the step, e.g. "7:52" or "1:05:22".
+    public let duration: String
+    /// Distance covered, e.g. "802 m" or "9.99 km".
+    public let distance: String?
+    /// Average heart rate in beats per minute, e.g. "152".
+    public let averageHeartRate: String?
+    /// Average pace, e.g. "6:32 /km".
+    public let averagePace: String?
+    /// Whether the Watch counted the step's goal as met; `nil` when it didn't say.
+    public let wasGoalMet: Bool?
+}
+
 /// One step as the step cards show it (MVP2-143), after how the Fitness app lists a structured
 /// workout: a role, what ends the step, and the intensity it aims for.
 ///
@@ -36,6 +52,11 @@ public struct WorkoutStepCard: Identifiable, Equatable, Sendable {
     /// in place of ``detail``'s value so the card says where the template can be tuned; `nil` for a
     /// fixed value.
     public var parameterName: String? = nil
+    /// What the athlete did in this step, when the activity recorded it (MVP2-146); `nil` otherwise.
+    public var actual: WorkoutStepActual? = nil
+    /// `true` for a planned step with no recorded step in an activity that has them: skipped, or the
+    /// workout ended before it.
+    public var isNotRecorded = false
 }
 
 /// Steps that repeat together, as one card in the step list. A block that runs once shows its steps as
@@ -49,6 +70,9 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
     public var steps: [WorkoutStepCard]
     /// The name of the template parameter that sets the repeat count; `nil` for a fixed count.
     public var repetitionsParameterName: String? = nil
+    /// Which repetition (from 1) this card is, when a repeating block is shown one card per repetition
+    /// so each can carry its own recorded figures (MVP2-146); `nil` for a block shown once.
+    public var repetitionNumber: Int? = nil
 
     /// Whether the block is drawn as a "Repeat" card: it repeats, or holds several steps that belong
     /// together. A single step run once is a plain step card.
@@ -74,6 +98,88 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
             }
             return WorkoutBlockCard(id: index, repetitions: block.repetitions, steps: steps)
         }
+    }
+
+    /// The cards for `blocks` with what the athlete did in each step (MVP2-146): a repeating block is
+    /// shown one card per repetition ("Repeat 2 of 5"), since each repetition has its own figures.
+    ///
+    /// - Parameters:
+    ///   - blocks: A workout's blocks.
+    ///   - actuals: The recorded step for each planned step in the order they are performed with
+    ///     repetitions expanded, from ``ActivityStepAligner/align(_:with:)``; `nil` elements are planned
+    ///     steps with no recorded step.
+    ///   - distanceSystem: How distances and paces are written; defaults to the device's.
+    public static func cards(
+        for blocks: [WorkoutBlock], actuals: [ActivityStep?], distanceSystem: DistanceSystem = .deviceDefault
+    ) -> [WorkoutBlockCard] {
+        var index = 0
+        var result: [WorkoutBlockCard] = []
+        for (blockIndex, block) in blocks.enumerated() {
+            let repetitions = max(block.repetitions, 1)
+            for repetition in 1...repetitions {
+                let steps = block.steps.map { step -> WorkoutStepCard in
+                    defer { index += 1 }
+                    var card = WorkoutStepCard(
+                        id: index, kind: step.kind, title: step.kind.displayName,
+                        detail: goalText(step.goal, distanceSystem: distanceSystem), end: end(of: step.goal),
+                        target: step.target.map(targetText), targetSymbol: step.target.map(targetSymbol)
+                    )
+                    if index < actuals.count, let recorded = actuals[index] {
+                        card.actual = actual(for: recorded, distanceSystem: distanceSystem)
+                    } else {
+                        card.isNotRecorded = true
+                    }
+                    return card
+                }
+                var card = WorkoutBlockCard(
+                    id: blockIndex * 10_000 + repetition, repetitions: repetitions, steps: steps
+                )
+                if repetitions > 1 { card.repetitionNumber = repetition }
+                result.append(card)
+            }
+        }
+        return result
+    }
+
+    /// What the athlete did in `step`, written as the cards show it.
+    static func actual(for step: ActivityStep, distanceSystem: DistanceSystem = .deviceDefault) -> WorkoutStepActual {
+        WorkoutStepActual(
+            duration: durationText(step.duration),
+            distance: step.distanceMeters.map { actualDistanceText($0, in: distanceSystem) },
+            averageHeartRate: step.averageHeartRateBPM.map { Int($0.rounded()).formatted() },
+            averagePace: step.averagePaceSecondsPerKilometer.map { paceText(secondsPerKilometer: $0, in: distanceSystem) },
+            wasGoalMet: step.wasGoalMet
+        )
+    }
+
+    /// "7:52", or "1:05:22" from an hour up.
+    static func durationText(_ seconds: TimeInterval) -> String {
+        let whole = Int(seconds.rounded())
+        return Duration.seconds(whole).formatted(.time(pattern: whole >= 3600 ? .hourMinuteSecond : .minuteSecond))
+    }
+
+    /// A distance covered, to the meter under a kilometer (or a quarter mile) and to two decimals above:
+    /// "802 m", "9.99 km", "0.31 mi". The unit follows `system`; the digits don't follow the device's
+    /// locale, like ``distanceText(_:in:)``.
+    static func actualDistanceText(_ meters: Double, in system: DistanceSystem) -> String {
+        let number = FloatingPointFormatStyle<Double>.number
+            .locale(Locale(identifier: "en_GB")).precision(.fractionLength(0...2))
+        switch system {
+        case .metric:
+            if meters < 1000 { return "\(Int(meters.rounded())) m" }
+            return "\((meters / 1000).formatted(number)) km"
+        case .imperial:
+            let miles = meters / 1609.344
+            if miles < 0.25 { return "\(Int((meters / 0.9144).rounded())) yd" }
+            return "\(miles.formatted(number)) mi"
+        }
+    }
+
+    /// "6:32 /km" or "10:32 /mi".
+    static func paceText(secondsPerKilometer: Double, in system: DistanceSystem) -> String {
+        let seconds = system == .metric ? secondsPerKilometer : secondsPerKilometer * 1.609344
+        let whole = Int(seconds.rounded())
+        return "\(Duration.seconds(whole).formatted(.time(pattern: .minuteSecond))) /\(system == .metric ? "km" : "mi")"
     }
 
     /// The cards for a template at its default values, naming the parameters that set its durations,

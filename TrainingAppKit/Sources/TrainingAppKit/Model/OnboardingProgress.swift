@@ -13,4 +13,6 @@ public protocol OnboardingProgress: AnyObject {
     var hasDismissedHealthBanner: Bool { get set }
     /// Whether the athlete dismissed the "iCloud isn't available" banner.
     var hasDismissedICloudBanner: Bool { get set }
+    /// Whether the athlete dismissed the "Allow distance" banner (MVP2-146).
+    var hasDismissedDistanceBanner: Bool { get set }
 }

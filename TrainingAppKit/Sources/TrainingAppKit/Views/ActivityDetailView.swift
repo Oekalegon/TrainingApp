@@ -117,7 +117,10 @@ struct ActivityDetailView: View {
             if let planLinkContext = viewModel.planLinkContext {
                 planLinkSection(planLinkContext)
                 if !planLinkContext.linkedPlanSteps.isEmpty {
-                    WorkoutStepCardSection(blocks: planLinkContext.linkedPlanSteps, title: "Planned Steps")
+                    WorkoutStepCardSection(
+                        blocks: planLinkContext.linkedPlanSteps,
+                        title: planLinkContext.linkedPlanStepsAreRecorded ? "Recorded Steps" : "Planned Steps"
+                    )
                 }
             }
 

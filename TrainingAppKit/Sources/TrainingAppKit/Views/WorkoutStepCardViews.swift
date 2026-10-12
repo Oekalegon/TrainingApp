@@ -12,7 +12,10 @@ struct WorkoutStepCardList: View {
         VStack(spacing: 10) {
             ForEach(blocks) { block in
                 if block.isGroup {
-                    WorkoutRepeatCard(repetitions: block.repetitions.formatted(), parameterName: block.repetitionsParameterName, steps: block.steps)
+                    WorkoutRepeatCard(
+                        repetitions: block.repetitions.formatted(), repetitionNumber: block.repetitionNumber,
+                        parameterName: block.repetitionsParameterName, steps: block.steps
+                    )
                 } else {
                     ForEach(block.steps) { WorkoutStepCardView(step: $0).cardStyle() }
                 }
@@ -76,9 +79,12 @@ struct WorkoutRepeatCard<Header: View, StepView: View, Footer: View>: View {
 
 extension WorkoutRepeatCard where Header == WorkoutRepeatHeader, StepView == WorkoutStepCardView, Footer == EmptyView {
     /// The read-only card: "Repeat" with `repetitions`, then plain steps.
-    init(repetitions: String, parameterName: String? = nil, steps: [WorkoutStepCard]) {
+    init(repetitions: String, repetitionNumber: Int? = nil, parameterName: String? = nil, steps: [WorkoutStepCard]) {
         self.init(
-            steps: steps, header: { WorkoutRepeatHeader(count: repetitions, parameterName: parameterName) },
+            steps: steps,
+            header: {
+                WorkoutRepeatHeader(count: repetitions, repetitionNumber: repetitionNumber, parameterName: parameterName)
+            },
             stepView: { WorkoutStepCardView(step: $0) }, footer: { EmptyView() }
         )
     }
@@ -110,16 +116,21 @@ struct WorkoutAddCardLabel: View {
 struct WorkoutRepeatHeader: View {
     /// The count as written, e.g. "5".
     let count: String
+    /// Which repetition this card is, when a repeat is shown one card per repetition (MVP2-146):
+    /// the header then reads "Repeat 2 of 5".
+    var repetitionNumber: Int? = nil
     /// The parameter that sets the count, shown in place of it; `nil` for a fixed count.
     var parameterName: String? = nil
 
     var body: some View {
         HStack {
-            Text("Repeat")
+            Text(repetitionNumber.map { "Repeat \($0) of \(count)" } ?? "Repeat")
             Spacer()
             Image(systemName: "repeat")
                 .accessibilityHidden(true)
-            if let parameterName {
+            if repetitionNumber != nil {
+                EmptyView()
+            } else if let parameterName {
                 // Smaller than the "Repeat" label: it names the parameter, the count isn't shown.
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Image(systemName: WorkoutBlockCard.parameterSymbol)
@@ -137,7 +148,10 @@ struct WorkoutRepeatHeader: View {
         // The whole row, not just the text and the symbol, so the editor's tap target is the header.
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(parameterName.map { "Repeat \($0), a parameter" } ?? "Repeat \(count) times")
+        .accessibilityLabel(
+            repetitionNumber.map { "Repeat \($0) of \(count)" }
+                ?? parameterName.map { "Repeat \($0), a parameter" } ?? "Repeat \(count) times"
+        )
     }
 }
 
@@ -182,6 +196,16 @@ struct WorkoutStepCardView: View {
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                // What was recorded (MVP2-146), in the title's column, so it lines up with the title.
+                if let actual = step.actual {
+                    WorkoutStepActualFigures(actual: actual)
+                        .padding(.top, 6)
+                } else if step.isNotRecorded {
+                    Text("Not recorded")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -189,8 +213,9 @@ struct WorkoutStepCardView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            [step.title, step.parameterName.map { "\($0), a parameter" } ?? step.detail, step.target]
-                .compactMap { $0 }.joined(separator: ", ")
+            ([step.title, step.parameterName.map { "\($0), a parameter" } ?? step.detail, step.target]
+                .compactMap { $0 } + (step.actual.map(\.spokenText) ?? (step.isNotRecorded ? ["not recorded"] : [])))
+                .joined(separator: ", ")
         )
     }
 }
