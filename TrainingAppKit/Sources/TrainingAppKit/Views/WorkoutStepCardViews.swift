@@ -160,7 +160,6 @@ struct WorkoutStepCardView: View {
     let step: WorkoutStepCard
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
         // The icon is lined up with the title's first line and drawn at its size, not centred on the card.
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: step.kind.symbolName)
@@ -197,17 +196,17 @@ struct WorkoutStepCardView: View {
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                // What was recorded (MVP2-146), in the title's column, so it lines up with the title.
+                if let actual = step.actual {
+                    WorkoutStepActualFigures(actual: actual)
+                        .padding(.top, 6)
+                } else if step.isNotRecorded {
+                    Text("Not recorded")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                }
             }
-        }
-        // What was recorded (MVP2-146) spans the card's whole width, under the icon too, so the four
-        // figures fit on one line instead of wrapping beside the icon's column.
-        if let actual = step.actual {
-            WorkoutStepActualFigures(actual: actual)
-        } else if step.isNotRecorded {
-            Text("Not recorded")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

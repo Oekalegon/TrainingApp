@@ -4,26 +4,35 @@ import SwiftUI
 /// a value over a small caption each. A figure the step didn't record (no distance, or no access to
 /// it) is left out rather than shown as zero.
 ///
-/// The figures sit in an adaptive grid, so at large text sizes they wrap onto a second row instead
-/// of being cut off.
+/// The figures sit in one row at their natural widths, in the title's column. When they don't fit that
+/// row (large text sizes) they wrap into two columns instead of being cut off.
 struct WorkoutStepActualFigures: View {
     let actual: WorkoutStepActual
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), alignment: .leading)], alignment: .leading, spacing: 8) {
-            figure(actual.duration, caption: "Time")
-            if let distance = actual.distance { figure(distance, caption: "Distance") }
-            if let heartRate = actual.averageHeartRate { figure(heartRate, caption: "Avg HR") }
-            if let pace = actual.averagePace { figure(pace, caption: "Avg pace") }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 16) { figures }
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 8) {
+                figures
+            }
         }
         // Read as the one sentence of ``WorkoutStepActual/spokenText`` by the card, not figure by figure.
         .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private var figures: some View {
+        figure(actual.duration, caption: "Time")
+        if let distance = actual.distance { figure(distance, caption: "Distance") }
+        if let heartRate = actual.averageHeartRate { figure(heartRate, caption: "Avg HR") }
+        if let pace = actual.averagePace { figure(pace, caption: "Avg pace") }
     }
 
     private func figure(_ value: String, caption: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(value)
                 .font(.subheadline.weight(.semibold).monospacedDigit())
+                .lineLimit(1)
+                .fixedSize()
             Text(caption)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
