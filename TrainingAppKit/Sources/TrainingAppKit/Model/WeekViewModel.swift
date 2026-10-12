@@ -1240,6 +1240,53 @@ public final class WeekViewModel {
         await refreshWeekCachesIfNeeded(asOf: today)
     }
 
+    /// Looks up whether Health has types the athlete was never asked about (MVP2-146), for the "Allow
+    /// distance" banner. Call it when the app becomes active.
+    public func refreshHealthAccessStatus() async {
+        onboarding.setHasUnansweredHealthPermissions(await refresher.hasUnansweredPermissions())
+    }
+
+    /// Whether the week view shows the "Allow distance" banner (see ``OnboardingViewModel/showsDistanceBanner``).
+    public var showsDistanceBanner: Bool {
+        onboarding.showsDistanceBanner
+    }
+
+    /// The banner at the bottom of the week view (MVP2-117, MVP2-147, MVP2-146).
+    public enum BottomBanner: Equatable, Sendable {
+        /// Nothing has been imported from Health but plans exist.
+        case connectHealth
+        /// Health is connected but distance was never asked for.
+        case allowDistance
+        /// Planned workouts can't reach the Watch.
+        case watchPermission
+        /// iCloud isn't available.
+        case iCloud
+    }
+
+    /// The one banner the week view shows, if any. Several can apply at once, and stacked they would
+    /// cover most of the calendar, so only the most important shows: Health (without it there is no
+    /// training data) before the Watch (planned workouts won't arrive) before iCloud (data stays on
+    /// the device). Dismissing or resolving it brings up the next.
+    public var bottomBanner: BottomBanner? {
+        if showsConnectHealthBanner { return .connectHealth }
+        if showsDistanceBanner { return .allowDistance }
+        if showsWatchPermissionBanner { return .watchPermission }
+        if onboarding.showsICloudBanner { return .iCloud }
+        return nil
+    }
+
+    /// Asks for the Health types the athlete was never asked about, then reads every workout again
+    /// (MVP2-146): workouts already imported have no per-step figures, and distance is only there once
+    /// it was allowed. The same re-import as Force Full Resync, run once on the athlete's say-so.
+    ///
+    /// - Parameter today: The day the re-import is run for.
+    public func allowMoreHealthData(asOf today: Date = .now) async {
+        guard !isResyncing else { return }
+        try? await refresher.requestAuthorization()
+        await refreshHealthAccessStatus()
+        await resyncActivities(asOf: today)
+    }
+
     /// Whether the week view shows the "Connect Health Data" banner (MVP2-147): nothing has been
     /// imported from Health, the athlete hasn't dismissed it, and the calendar is showing because a
     /// plan is loaded (see ``showsEmptyState``).

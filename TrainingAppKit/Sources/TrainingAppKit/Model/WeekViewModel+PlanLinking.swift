@@ -14,9 +14,14 @@ extension WeekViewModel {
             .map(planOption)
         guard linked != nil || !candidates.isEmpty else { return nil }
         let workout = linked.flatMap { plan in model.workouts.first { $0.id == plan.workoutID } }
+        // The recorded steps laid over the plan's (MVP2-146), when there are some and they fit.
+        let recorded = workout.flatMap { ActivityStepAligner.align(activity.steps, with: $0) }
+        let planSteps = recorded.map { WorkoutBlockCard.cards(for: workout?.blocks ?? [], actuals: $0) }
+            ?? WorkoutBlockCard.cards(for: workout?.blocks ?? [])
         return PlanLinkContext(
             linkedPlan: linked.map(planOption),
-            linkedPlanSteps: WorkoutBlockCard.cards(for: workout?.blocks ?? []),
+            linkedPlanSteps: planSteps,
+            linkedPlanStepsAreRecorded: recorded != nil,
             isAmbiguous: model.planMatchAmbiguities.contains { $0.activityID == activity.id },
             candidates: candidates
         )

@@ -127,6 +127,8 @@ public struct AppTabView: View {
             watchSync?.requestSync()
             // The athlete may have signed in to iCloud in Settings meanwhile (MVP2-147).
             Task { await viewModel.onboarding.refreshICloudStatus() }
+            // Health types the athlete was never asked about, e.g. distance (MVP2-146).
+            Task { await viewModel.refreshHealthAccessStatus() }
         }
         // First launch (MVP2-147): shown over everything, only once the first load says Health was
         // never connected. Not available on macOS, where a sheet stands in.

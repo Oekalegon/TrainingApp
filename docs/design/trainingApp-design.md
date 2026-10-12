@@ -456,14 +456,24 @@ across launches.
   - **Continue** leaves it, connected or not. Nothing is required and nothing blocks the app: the
     sheet can't be swiped away, so leaving it is always Continue, which is remembered
     (`OnboardingProgress`, `UserDefaults`, per device).
-- **Banners** at the bottom of the week view, stacked with the Watch banner (MVP2-117), all the same
-  dismissible `PermissionBanner`:
+- **Banners** at the bottom of the week view, all the same dismissible `PermissionBanner`, **one at a
+  time** (`WeekViewModel.bottomBanner`, MVP2-146): several can apply at once and stacked they would
+  cover most of the calendar, so the most important shows (Health, then the Watch (MVP2-117), then
+  iCloud) and dismissing it brings up the next:
   - **iCloud isn't available**: while the account is signed out or restricted (not for "unknown",
     so a failed check doesn't warn), once the introduction is done. Re-checked each time the app
     becomes active. Dismissing hides it until iCloud has worked again and fails once more.
   - **Connect Health Data**: while nothing has been imported and plans exist, i.e. the calendar is
     showing and the full empty state isn't (MVP2-108). Dismissing hides it for good; the Athlete
     tab's Apple Health row still offers "Connect Apple Health". It goes away once an import completes.
+  - **Allow distance** (MVP2-146): while Health is connected but HealthKit has types the athlete was
+    never asked about (`ActivityRefreshing.hasUnansweredPermissions()`, checked whenever the app
+    becomes active). An install that connected before the app read distance is never prompted
+    otherwise, and a workout step's distance and pace need it. "Allow Distance" asks for access
+    (`requestAuthorization`, which now includes the distance types) and then re-reads every workout
+    once (the same re-import as Force Full Resync), since activities imported earlier have no steps
+    either. The banner goes once the athlete has answered the Health sheet, allowing or not (steps
+    then have times and heart rate but no distance); dismissing it hides it for good.
 - **What isn't detected**: a Health permission turned off later. HealthKit doesn't say, so there is no
   revocation banner, only the Apple Health row's explanation of where to turn access back on.
   `OnboardingViewModel` holds the logic and is tested.
@@ -503,7 +513,15 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 - **Planned workout link** (MVP2-42): a "Planned Workout" section, shown when the activity is linked
   to a plan or an unmatched plan exists on its day (`WeekViewModel.planLinkContext(for:)`). A linked
   plan's steps follow in a "Planned Steps" section of step cards, the same as the planned-workout
-  sheet's (`PlanLinkContext.linkedPlanSteps`, MVP2-144). Matching
+  sheet's (`PlanLinkContext.linkedPlanSteps`, MVP2-144). When the activity has the steps the Watch
+  recorded (`Activity.steps`, TrainingKit's `ActivityStepAligner` lays them over the plan's steps)
+  the section is "Recorded Steps" instead (MVP2-146): each step card also shows what was done in
+  it, as four figures under the plan: time, distance, average heart rate and average pace
+  (`WorkoutStepActual`, the Watch's own figures for that step, pace being time over distance), with
+  a figure the step didn't record left out. A repeating block is then one card per repetition
+  ("Repeat 2 of 5"), since each repetition has its own figures, and a planned step with no recorded
+  step says "Not recorded". An activity without recorded steps, or whose steps no longer fit the
+  plan (it was edited), shows the plan alone. Matching
   itself is automatic (TrainingKit's import runs `PlanReconciler`); this section is how the athlete
   checks and corrects it. A workout started from a scheduled Watch entry links to exactly that plan
   (MVP2-120): the importer reads the plan the workout came from, whose id is the `PlannedActivity`'s,

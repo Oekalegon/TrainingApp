@@ -176,35 +176,38 @@ public struct WeekView: View {
             // MVP2-117: an inset rather than an overlay, so the last day row can still scroll clear
             // of the banner; at the bottom, so the large title and the week swipe aren't touched.
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0) {
-                    // The permission banners (MVP2-117, MVP2-147), each dismissible on its own.
-                    if viewModel.onboarding.showsICloudBanner {
-                        ICloudUnavailableBanner(
-                            onOpenSettings: { SystemSettings.url.map { openURL($0) } },
-                            onDismiss: { viewModel.onboarding.dismissICloudBanner() }
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    if viewModel.showsConnectHealthBanner {
+                // One banner at a time (MVP2-146): see ``WeekViewModel/bottomBanner``.
+                Group {
+                    switch viewModel.bottomBanner {
+                    case .connectHealth:
                         HealthConnectBanner(
                             isConnecting: viewModel.isRefreshing,
                             onConnect: { Task { await viewModel.connectHealthData() } },
                             onDismiss: { viewModel.onboarding.dismissHealthBanner() }
                         )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    if viewModel.showsWatchPermissionBanner {
+                    case .allowDistance:
+                        HealthDistanceBanner(
+                            isUpdating: viewModel.isResyncing,
+                            onAllow: { Task { await viewModel.allowMoreHealthData() } },
+                            onDismiss: { viewModel.onboarding.dismissDistanceBanner() }
+                        )
+                    case .watchPermission:
                         WatchPermissionBanner(
                             onShowWatchSettings: onShowWatchSettings,
                             onDismiss: { viewModel.dismissWatchPermissionBanner() }
                         )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    case .iCloud:
+                        ICloudUnavailableBanner(
+                            onOpenSettings: { SystemSettings.url.map { openURL($0) } },
+                            onDismiss: { viewModel.onboarding.dismissICloudBanner() }
+                        )
+                    case nil:
+                        EmptyView()
                     }
                 }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .animation(.default, value: viewModel.showsWatchPermissionBanner)
-            .animation(.default, value: viewModel.showsConnectHealthBanner)
-            .animation(.default, value: viewModel.onboarding.showsICloudBanner)
+            .animation(.default, value: viewModel.bottomBanner)
             // Covers the empty-state -> week-content swap once `showsEmptyState` flips (e.g. after
             // "Connect Health Data" completes, or a first plan is made): that happens asynchronously, well after the button's
             // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` —

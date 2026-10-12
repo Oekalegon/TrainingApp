@@ -18,4 +18,14 @@ public protocol ActivityRefreshing {
     /// can return real data — e.g. the HealthKit read-authorization prompt, for the empty-state
     /// "Connect Health data" button (design doc §2.1).
     func requestAuthorization() async throws
+
+    /// Whether the source has types the athlete has not been asked about yet (MVP2-146): an install
+    /// that connected Health before the app began reading distance has never been asked for it, and
+    /// nothing else would ask. `false` when everything has been answered, whatever the answers were.
+    func hasUnansweredPermissions() async -> Bool
+}
+
+extension ActivityRefreshing {
+    /// Sources that can't have unanswered permissions (tests, previews) report none.
+    public func hasUnansweredPermissions() async -> Bool { false }
 }

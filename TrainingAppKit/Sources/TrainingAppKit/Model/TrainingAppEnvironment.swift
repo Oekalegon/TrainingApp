@@ -161,6 +161,13 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         await startWorkoutObservation()
     }
 
+    /// See ``ActivityRefreshing/hasUnansweredPermissions()``: whether HealthKit would show its sheet
+    /// for any of ``HealthKitAuthorization/readTypes``.
+    public func hasUnansweredPermissions() async -> Bool {
+        let status = try? await healthStore.statusForAuthorizationRequest(toShare: [], read: HealthKitAuthorization.readTypes)
+        return status == .shouldRequest
+    }
+
     /// A blank athlete profile used until the first HealthKit import populates real biometrics.
     nonisolated static func placeholderAthlete() -> AthleteProfile {
         AthleteProfile(

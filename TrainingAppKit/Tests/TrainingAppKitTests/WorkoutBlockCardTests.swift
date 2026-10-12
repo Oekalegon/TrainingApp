@@ -318,4 +318,93 @@ struct WorkoutBlockCardTests {
         // Unknown block: nothing.
         #expect(draft.blockToSwap(dragging: UUID(), centre: 100, frames: frames) == nil)
     }
+
+    // MARK: Recorded steps (MVP2-146)
+
+    /// Warm-up, an open run, three sprint-and-recovery repetitions, a cool-down: nine steps.
+    private func sprintWorkout() -> [WorkoutBlock] {
+        [
+            WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(300))]),
+            WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .open)]),
+            WorkoutBlock(
+                steps: [WorkoutStep(kind: .work, goal: .time(8)), WorkoutStep(kind: .recovery, goal: .time(300))],
+                repetitions: 3
+            ),
+            WorkoutBlock(steps: [WorkoutStep(kind: .cooldown, goal: .time(300))]),
+        ]
+    }
+
+    private func recorded(seconds: Double, distance: Double?, heartRate: Double?) -> ActivityStep {
+        ActivityStep(
+            block: 0, repetition: 0, step: 0, start: Date(timeIntervalSince1970: 0),
+            end: Date(timeIntervalSince1970: seconds), distanceMeters: distance, averageHeartRateBPM: heartRate
+        )
+    }
+
+    @Test("with recorded steps a repeating block is one card per repetition, each with its own figures, and every step is numbered once")
+    func repetitionsExpanded() {
+        let steps = (0..<9).map { index in recorded(seconds: Double(index + 1) * 10, distance: Double(index) * 100, heartRate: 140 + Double(index)) }
+
+        let cards = WorkoutBlockCard.cards(for: sprintWorkout(), actuals: steps, distanceSystem: .metric)
+
+        // Warm-up, open run, then three repetitions, then the cool-down.
+        #expect(cards.count == 6)
+        #expect(cards.map(\.repetitionNumber) == [nil, nil, 1, 2, 3, nil])
+        #expect(cards.map(\.id).count == Set(cards.map(\.id)).count)
+        #expect(cards.flatMap(\.steps).map(\.id) == Array(0..<9))
+        // Each repetition's recovery has its own figures: planned step 3 for the first, 5 for the second.
+        #expect(cards[2].steps[1].actual?.averageHeartRate == "143")
+        #expect(cards[3].steps[1].actual?.averageHeartRate == "145")
+    }
+
+    @Test("a planned step with no recorded step is marked not recorded, the others carry their figures")
+    func skippedStepNotRecorded() {
+        var steps: [ActivityStep?] = (0..<9).map { _ in recorded(seconds: 60, distance: 200, heartRate: 150) }
+        steps[4] = nil  // the second sprint
+
+        let cards = WorkoutBlockCard.cards(for: sprintWorkout(), actuals: steps, distanceSystem: .metric)
+
+        #expect(cards[3].steps[0].isNotRecorded)  // repetition 2, step 0
+        #expect(cards[3].steps[0].actual == nil)
+        #expect(!cards[2].steps[0].isNotRecorded)
+        #expect(cards[2].steps[0].actual != nil)
+    }
+
+    @Test("a step's figures are written as the Watch recorded them: time, distance, average heart rate and pace per kilometre")
+    func actualFigures() {
+        // The long run's 10 km step: 65:22, 9993.82 m, average 2.29042 beats a second.
+        let step = ActivityStep(
+            block: 1, repetition: 0, step: 0, start: Date(timeIntervalSince1970: 0), end: Date(timeIntervalSince1970: 3922),
+            distanceMeters: 9993.82, averageHeartRateBPM: 137.4252, wasGoalMet: true
+        )
+
+        let actual = WorkoutBlockCard.actual(for: step, distanceSystem: .metric)
+
+        #expect(actual.duration == "1:05:22")
+        #expect(actual.distance == "9.99 km")
+        #expect(actual.averageHeartRate == "137")
+        #expect(actual.averagePace == "6:32 /km")
+        #expect(actual.wasGoalMet == true)
+    }
+
+    @Test("a step with no distance or heart rate leaves those out instead of showing zero")
+    func missingFiguresLeftOut() {
+        let actual = WorkoutBlockCard.actual(for: recorded(seconds: 472, distance: nil, heartRate: nil), distanceSystem: .metric)
+
+        #expect(actual.duration == "7:52")
+        #expect(actual.distance == nil)
+        #expect(actual.averageHeartRate == nil)
+        #expect(actual.averagePace == nil)
+    }
+
+    @Test("distances and paces follow the unit system: meters under a kilometre, miles with a pace per mile")
+    func unitSystems() {
+        #expect(WorkoutBlockCard.actualDistanceText(801.65, in: .metric) == "802 m")
+        #expect(WorkoutBlockCard.actualDistanceText(9993.82, in: .metric) == "9.99 km")
+        #expect(WorkoutBlockCard.actualDistanceText(5000, in: .imperial) == "3.11 mi")
+        #expect(WorkoutBlockCard.actualDistanceText(150, in: .imperial) == "164 yd")
+        #expect(WorkoutBlockCard.paceText(secondsPerKilometer: 392.4, in: .metric) == "6:32 /km")
+        #expect(WorkoutBlockCard.paceText(secondsPerKilometer: 392.4, in: .imperial) == "10:32 /mi")
+        #expect(WorkoutBlockCard.durationText(59.6) == "1:00")
+    }
 }

@@ -27,7 +27,7 @@ struct WeekViewModelPlanLinkTests {
     /// A model with one workout/plan per entry of `minutes` on day 2, and the activity imported
     /// (so it's auto-matched, as in the app).
     private func makeViewModel(
-        planMinutes: [Double], activityMinutes: Double, startedFromPlan: Int? = nil
+        planMinutes: [Double], activityMinutes: Double, startedFromPlan: Int? = nil, steps: [ActivityStep] = []
     ) async throws -> (WeekViewModel, [PlannedActivity], Activity) {
         let store = InMemoryStore()
         let stores = StoreSet(
@@ -46,7 +46,7 @@ struct WeekViewModelPlanLinkTests {
         try await model.load(in: day(0)...day(6), asOf: day(2))
         let activity = Activity(
             source: .healthKit(UUID()), sport: .running, start: day(2), duration: activityMinutes * 60,
-            scheduledPlanID: startedFromPlan.map { plans[$0].id }
+            scheduledPlanID: startedFromPlan.map { plans[$0].id }, steps: steps
         )
         try await model.importActivities(from: StubImporter(activities: [activity]), asOf: day(2))
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(2))
@@ -65,6 +65,42 @@ struct WeekViewModelPlanLinkTests {
         #expect(context.candidates.isEmpty)
         // The linked plan's workout comes along as step cards (MVP2-144).
         #expect(!context.linkedPlanSteps.isEmpty)
+    }
+
+    @Test("a linked activity with recorded steps shows them against the plan's step, as recorded steps (MVP2-146)")
+    func recordedStepsShownAgainstThePlan() async throws {
+        let recorded = ActivityStep(
+            block: 0, repetition: 0, step: 0, start: day(2), end: day(2).addingTimeInterval(1800),
+            distanceMeters: 5000, averageHeartRateBPM: 152
+        )
+        let (viewModel, _, activity) = try await makeViewModel(planMinutes: [30], activityMinutes: 30, steps: [recorded])
+
+        let context = try #require(viewModel.planLinkContext(for: activity))
+
+        #expect(context.linkedPlanStepsAreRecorded)
+        let actual = try #require(context.linkedPlanSteps.first?.steps.first?.actual)
+        #expect(actual.duration == "30:00")
+        #expect(actual.averageHeartRate == "152")
+        #expect(actual.distance != nil && actual.averagePace != nil)
+    }
+
+    @Test("a linked activity without recorded steps, or with steps that don't fit the plan, shows the plan alone")
+    func plainPlanWithoutRecordedSteps() async throws {
+        let (plain, _, plainActivity) = try await makeViewModel(planMinutes: [30], activityMinutes: 30)
+        let plainContext = try #require(plain.planLinkContext(for: plainActivity))
+        #expect(!plainContext.linkedPlanStepsAreRecorded)
+        #expect(plainContext.linkedPlanSteps.first?.steps.first?.actual == nil)
+
+        // Two recorded steps for a plan of one: the plan was edited after the workout.
+        let extra = (0..<2).map {
+            ActivityStep(
+                block: 5 + $0, repetition: 0, step: 0, start: day(2).addingTimeInterval(Double($0) * 60),
+                end: day(2).addingTimeInterval(Double($0 + 1) * 60)
+            )
+        }
+        let (edited, _, editedActivity) = try await makeViewModel(planMinutes: [30], activityMinutes: 30, steps: extra)
+        let editedContext = try #require(edited.planLinkContext(for: editedActivity))
+        #expect(!editedContext.linkedPlanStepsAreRecorded)
     }
 
     @Test("an activity started from a scheduled plan is linked to exactly that plan, with no ambiguity (MVP2-120)")

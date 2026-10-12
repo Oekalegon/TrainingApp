@@ -42,6 +42,9 @@ public final class OnboardingViewModel {
     private var hasCompletedOnboarding: Bool
     private var hasDismissedHealthBanner: Bool
     private var hasDismissedICloudBanner: Bool
+    private var hasDismissedDistanceBanner: Bool
+    /// Whether Health has types the athlete was never asked about, as last checked (MVP2-146).
+    public private(set) var hasUnansweredHealthPermissions = false
 
     /// - Parameters:
     ///   - model: The training model; says whether Health has ever been imported.
@@ -54,6 +57,7 @@ public final class OnboardingViewModel {
         hasCompletedOnboarding = progress.hasCompletedOnboarding
         hasDismissedHealthBanner = progress.hasDismissedHealthBanner
         hasDismissedICloudBanner = progress.hasDismissedICloudBanner
+        hasDismissedDistanceBanner = progress.hasDismissedDistanceBanner
     }
 
     /// Tells the view model the first load has finished (see `WeekViewModel.load(asOf:)`).
@@ -135,5 +139,25 @@ public final class OnboardingViewModel {
     public func dismissICloudBanner() {
         hasDismissedICloudBanner = true
         progress.hasDismissedICloudBanner = true
+    }
+
+    /// Records whether Health has types the athlete was never asked about (see
+    /// ``ActivityRefreshing/hasUnansweredPermissions()``).
+    func setHasUnansweredHealthPermissions(_ value: Bool) {
+        hasUnansweredHealthPermissions = value
+    }
+
+    /// Whether the week view shows the "Allow distance" banner (MVP2-146): Health is connected but
+    /// the distance types were never asked about (the install predates reading them), it wasn't
+    /// dismissed, and the introduction isn't up. It goes away once the athlete has answered the
+    /// request, whichever way: a refusal only leaves steps without distance and pace.
+    public var showsDistanceBanner: Bool {
+        isHealthConnected && hasUnansweredHealthPermissions && !hasDismissedDistanceBanner && !showsOnboarding
+    }
+
+    /// Hides the "Allow distance" banner for good.
+    public func dismissDistanceBanner() {
+        hasDismissedDistanceBanner = true
+        progress.hasDismissedDistanceBanner = true
     }
 }

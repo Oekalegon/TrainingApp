@@ -8,6 +8,7 @@ private final class FakeProgress: OnboardingProgress {
     var hasCompletedOnboarding = false
     var hasDismissedHealthBanner = false
     var hasDismissedICloudBanner = false
+    var hasDismissedDistanceBanner = false
 }
 
 @MainActor
@@ -236,6 +237,110 @@ struct OnboardingViewModelTests {
         #expect(viewModel.showsHealthBanner(showsCalendar: true))
     }
 
+    // MARK: Distance access (MVP2-146)
+
+    @Test("the Allow distance banner needs Health connected, a type never asked about, and no dismissal")
+    func distanceBannerRules() async throws {
+        let (store, stores) = makeStores()
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        try await model.load(in: day(0)...day(6), asOf: day(0))
+        let progress = FakeProgress()
+        let viewModel = OnboardingViewModel(model: model, progress: progress)
+        viewModel.markLoaded()
+        #expect(!viewModel.showsDistanceBanner)  // nothing is unanswered yet
+
+        viewModel.setHasUnansweredHealthPermissions(true)
+        #expect(viewModel.showsDistanceBanner)
+
+        viewModel.setHasUnansweredHealthPermissions(false)  // the athlete answered the Health sheet, either way
+        #expect(!viewModel.showsDistanceBanner)
+
+        viewModel.setHasUnansweredHealthPermissions(true)
+        viewModel.dismissDistanceBanner()
+        #expect(!viewModel.showsDistanceBanner)
+        #expect(progress.hasDismissedDistanceBanner)
+    }
+
+    @Test("an install that never connected Health isn't asked about distance by a banner")
+    func distanceBannerNeedsHealthConnected() {
+        let viewModel = OnboardingViewModel(model: makeModel(), progress: FakeProgress())
+        viewModel.markLoaded()
+        viewModel.finish()
+
+        viewModel.setHasUnansweredHealthPermissions(true)
+
+        #expect(!viewModel.showsDistanceBanner)  // the Connect Health Data prompt covers it
+    }
+
+    @Test("allowing distance asks for access, then reads the workouts again, then checks what is still unanswered")
+    func allowMoreHealthData() async throws {
+        let (store, stores) = makeStores()
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        let refresher = RecordingRefresher(unanswered: true)
+        let progress = FakeProgress()
+        progress.hasCompletedOnboarding = true
+        let viewModel = WeekViewModel(model: model, refresher: refresher, onboardingProgress: progress, today: day(0))
+        await viewModel.load(asOf: day(0))
+        await viewModel.refreshHealthAccessStatus()
+        #expect(viewModel.showsDistanceBanner)
+
+        refresher.unanswered = false  // what Health reports once the sheet has been answered
+        await viewModel.allowMoreHealthData(asOf: day(0))
+
+        #expect(refresher.calls == ["unanswered", "authorize", "unanswered", "resync"])
+        #expect(!viewModel.showsDistanceBanner)
+    }
+
+    @Test("only one banner shows at a time, the most important first, and dismissing it brings up the next")
+    func oneBannerAtATime() async throws {
+        let progress = FakeProgress()
+        progress.hasCompletedOnboarding = true
+        let model = makeModel()
+        let viewModel = WeekViewModel(
+            model: model, refresher: StubRefresher(), onboardingProgress: progress, iCloud: FakeICloud(.noAccount), today: day(0)
+        )
+        await viewModel.load(asOf: day(0))
+        await viewModel.onboarding.refreshICloudStatus()
+        #expect(viewModel.bottomBanner == .iCloud)  // only iCloud applies: no plans, so the empty state is showing
+
+        // A plan makes the calendar show, and with Health never connected, that banner outranks iCloud.
+        let workout = StructuredWorkout(
+            name: "Easy", sport: .running, blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800))])]
+        )
+        try await model.add(workout, asOf: day(0))
+        try await model.add(PlannedActivity(workoutID: workout.id, date: day(2)), asOf: day(0))
+        #expect(viewModel.bottomBanner == .connectHealth)
+
+        viewModel.onboarding.dismissHealthBanner()
+        #expect(viewModel.bottomBanner == .iCloud)
+
+        viewModel.onboarding.dismissICloudBanner()
+        #expect(viewModel.bottomBanner == nil)
+    }
+
+    @Test("with Health connected, the Allow distance banner outranks the iCloud one")
+    func distanceOutranksICloud() async throws {
+        let (store, stores) = makeStores()
+        try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        let progress = FakeProgress()
+        progress.hasCompletedOnboarding = true
+        let viewModel = WeekViewModel(
+            model: model, refresher: RecordingRefresher(unanswered: true), onboardingProgress: progress,
+            iCloud: FakeICloud(.noAccount), today: day(0)
+        )
+        await viewModel.load(asOf: day(0))
+        await viewModel.onboarding.refreshICloudStatus()
+        await viewModel.refreshHealthAccessStatus()
+
+        #expect(viewModel.bottomBanner == .allowDistance)
+
+        viewModel.onboarding.dismissDistanceBanner()
+        #expect(viewModel.bottomBanner == .iCloud)
+    }
+
     // MARK: Week view model
 
     @Test("the week view model shows the Health banner once a plan is loaded and the introduction is done, and not before the first load")
@@ -315,4 +420,21 @@ private struct UnreadablePlanStore: PlanStore {
     func upsert(_ plans: [PlannedActivity]) async throws { try await base.upsert(plans) }
     func plan(id: UUID) async throws -> PlannedActivity? { try await base.plan(id: id) }
     func deletePlan(id: UUID) async throws { try await base.deletePlan(id: id) }
+}
+
+/// A refresher that records what it was asked, and answers `hasUnansweredPermissions()`.
+@MainActor
+private final class RecordingRefresher: ActivityRefreshing {
+    var unanswered: Bool
+    private(set) var calls: [String] = []
+
+    init(unanswered: Bool) { self.unanswered = unanswered }
+
+    func refreshActivities(asOf today: Date) async throws { calls.append("refresh") }
+    func resyncActivities(asOf today: Date) async throws { calls.append("resync") }
+    func requestAuthorization() async throws { calls.append("authorize") }
+    func hasUnansweredPermissions() async -> Bool {
+        calls.append("unanswered")
+        return unanswered
+    }
 }
