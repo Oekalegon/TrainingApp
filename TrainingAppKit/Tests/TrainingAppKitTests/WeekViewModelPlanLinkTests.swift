@@ -97,6 +97,50 @@ struct WeekViewModelPlanLinkTests {
         #expect(detail.chartData.duration == 1800)
     }
 
+    @Test("a step card's id and its span on the charts are the same number, so a tap highlights the right band (MVP2-146)")
+    func cardIDsMatchChartSpans() async throws {
+        // Two planned steps recorded out of order in the activity's list.
+        let workouts = StructuredWorkout(name: "Two", sport: .running, blocks: [
+            WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(300))]),
+            WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1500))]),
+        ])
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store
+        )
+        let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
+        try await model.add(workouts, asOf: day(2))
+        let plan = PlannedActivity(workoutID: workouts.id, date: day(2))
+        try await model.add(plan, asOf: day(2))
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let warmup = ActivityStep(block: 0, repetition: 0, step: 0, start: day(2), end: day(2).addingTimeInterval(300))
+        let work = ActivityStep(block: 1, repetition: 0, step: 0, start: day(2).addingTimeInterval(300), end: day(2).addingTimeInterval(1800))
+        let activity = Activity(
+            source: .healthKit(UUID()), sport: .running, start: day(2), duration: 1800,
+            scheduledPlanID: plan.id, steps: [work, warmup]  // not in order
+        )
+        try await model.importActivities(from: StubImporter(activities: [activity]), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(2))
+
+        let detail = viewModel.activityDetailViewModel(for: model.activities[0])
+
+        let cardIDs = try #require(detail.planLinkContext).linkedPlanSteps.flatMap(\.steps).map(\.recordedStepID)
+        #expect(cardIDs == [0, 1])  // the warm-up is first in time
+        #expect(detail.chartData.steps.map(\.id) == [0, 1])
+        #expect(detail.chartData.steps.map(\.kind) == [.warmup, .work])
+    }
+
+    @Test("steps that start at the same instant are ordered by the Watch's own numbering")
+    func orderedStepsTieBreak() {
+        let start = day(2)
+        let later = ActivityStep(block: 1, repetition: 0, step: 1, start: start, end: start.addingTimeInterval(10))
+        let earlier = ActivityStep(block: 1, repetition: 0, step: 0, start: start, end: start.addingTimeInterval(10))
+        let activity = Activity(source: .manual, sport: .running, start: start, duration: 60, steps: [later, earlier])
+
+        #expect(activity.orderedSteps == [earlier, later])
+    }
+
     @Test("a linked activity without recorded steps, or with steps that don't fit the plan, shows the plan alone")
     func plainPlanWithoutRecordedSteps() async throws {
         let (plain, _, plainActivity) = try await makeViewModel(planMinutes: [30], activityMinutes: 30)

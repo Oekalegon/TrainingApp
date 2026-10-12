@@ -57,6 +57,10 @@ public struct WorkoutStepCard: Identifiable, Equatable, Sendable {
     /// `true` for a planned step with no recorded step in an activity that has them: skipped, or the
     /// workout ended before it.
     public var isNotRecorded = false
+    /// The recorded step's position among the activity's steps in the order performed
+    /// (``Activity/orderedSteps``), which is also its span's id on the activity charts; `nil` without
+    /// one. What a tap on the card highlights.
+    public var recordedStepID: Int? = nil
 }
 
 /// Steps that repeat together, as one card in the step list. A block that runs once shows its steps as
@@ -108,9 +112,12 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
     ///   - actuals: The recorded step for each planned step in the order they are performed with
     ///     repetitions expanded, from ``ActivityStepAligner/align(_:with:)``; `nil` elements are planned
     ///     steps with no recorded step.
+    ///   - recordedIDs: Each recorded step's position in the activity's ordered steps, to give the cards
+    ///     the ids a tap highlights on the charts; empty leaves them without.
     ///   - distanceSystem: How distances and paces are written; defaults to the device's.
     public static func cards(
-        for blocks: [WorkoutBlock], actuals: [ActivityStep?], distanceSystem: DistanceSystem = .deviceDefault
+        for blocks: [WorkoutBlock], actuals: [ActivityStep?], recordedIDs: [ActivityStep: Int] = [:],
+        distanceSystem: DistanceSystem = .deviceDefault
     ) -> [WorkoutBlockCard] {
         var index = 0
         var result: [WorkoutBlockCard] = []
@@ -126,6 +133,7 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
                     )
                     if index < actuals.count, let recorded = actuals[index] {
                         card.actual = actual(for: recorded, distanceSystem: distanceSystem)
+                        card.recordedStepID = recordedIDs[recorded]
                     } else {
                         card.isNotRecorded = true
                     }

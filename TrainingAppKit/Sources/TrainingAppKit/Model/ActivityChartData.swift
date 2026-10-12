@@ -1,6 +1,19 @@
 import Foundation
 import TrainingCore
 
+extension Activity {
+    /// The recorded steps in the order they were performed (MVP2-146), the order that numbers them
+    /// everywhere they are shown together: a chart's ``ActivityChartData/StepSpan/id`` and the step
+    /// cards' ``WorkoutStepCard/recordedStepID`` are positions in this list, so tapping a card can
+    /// highlight its span. Steps that start at the same instant are put in the Watch's own order.
+    var orderedSteps: [ActivityStep] {
+        steps.sorted { lhs, rhs in
+            if lhs.start != rhs.start { return lhs.start < rhs.start }
+            return (lhs.block, lhs.repetition, lhs.step) < (rhs.block, rhs.repetition, rhs.step)
+        }
+    }
+}
+
 /// What the activity detail's heart-rate and pace charts draw (MVP2-146): the two series against time
 /// since the activity began, and the steps the Watch recorded as spans of that same time, so each
 /// step's start shows as a marker aligned with the plan's steps.
@@ -242,7 +255,7 @@ public struct ActivityChartData: Equatable, Sendable {
     /// The recorded steps as spans of the time axis, each with the role the plan gives it when the
     /// steps could be laid over `workout`.
     private static func stepSpans(of activity: Activity, workout: StructuredWorkout?, duration: TimeInterval) -> [StepSpan] {
-        let recorded = activity.steps.sorted { $0.start < $1.start }
+        let recorded = activity.orderedSteps
         guard !recorded.isEmpty else { return [] }
         var kinds: [ActivityStep: StepKind] = [:]
         if let workout, let aligned = ActivityStepAligner.align(recorded, with: workout) {

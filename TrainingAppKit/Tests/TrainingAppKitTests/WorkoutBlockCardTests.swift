@@ -357,6 +357,22 @@ struct WorkoutBlockCardTests {
         #expect(cards[3].steps[1].actual?.averageHeartRate == "145")
     }
 
+    @Test("each card with a recorded step gets that step's position, to highlight its span; none without positions")
+    func recordedStepIDs() {
+        let blocks = [WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(300))]), WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(600))])]
+        let first = recorded(seconds: 300, distance: 800, heartRate: 110)
+        let second = recorded(seconds: 600, distance: 1700, heartRate: 150)
+
+        let withIDs = WorkoutBlockCard.cards(for: blocks, actuals: [first, second], recordedIDs: [first: 0, second: 1], distanceSystem: .metric)
+        let without = WorkoutBlockCard.cards(for: blocks, actuals: [first, second], distanceSystem: .metric)
+
+        #expect(withIDs.flatMap(\.steps).map(\.recordedStepID) == [0, 1])
+        #expect(without.flatMap(\.steps).allSatisfy { $0.recordedStepID == nil })
+        // A planned step nobody recorded has nothing to highlight.
+        let skipped = WorkoutBlockCard.cards(for: blocks, actuals: [first, nil], recordedIDs: [first: 0], distanceSystem: .metric)
+        #expect(skipped.flatMap(\.steps).map(\.recordedStepID) == [0, nil])
+    }
+
     @Test("a planned step with no recorded step is marked not recorded, the others carry their figures")
     func skippedStepNotRecorded() {
         var steps: [ActivityStep?] = (0..<9).map { _ in recorded(seconds: 60, distance: 200, heartRate: 150) }
