@@ -59,16 +59,4 @@ struct ActivityDetailViewModelTests {
 
         #expect(viewModel.summary.load.confidence == 0)
     }
-
-    @Test("offers the plan's sport and venue only when the activity differs from them (MVP2-151)")
-    func differsFromPlan() {
-        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
-        let plan = StructuredWorkout(name: "Easy", sport: .running, venue: .indoor(.treadmill), blocks: [])
-        let outdoors = Activity(source: .manual, sport: .running, venue: .outdoor(nil), start: day(0), duration: 1800)
-        let treadmill = Activity(source: .manual, sport: .running, venue: .indoor(.treadmill), start: day(0), duration: 1800)
-
-        #expect(ActivityDetailViewModel(activity: outdoors, athlete: athlete, planWorkout: plan).differsFromPlan)
-        #expect(!ActivityDetailViewModel(activity: treadmill, athlete: athlete, planWorkout: plan).differsFromPlan)
-        #expect(!ActivityDetailViewModel(activity: outdoors, athlete: athlete).differsFromPlan)
-    }
 }

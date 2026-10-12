@@ -305,7 +305,7 @@ struct ActivityDetailView: View {
     private var currentVenue: Venue? { sport == nil ? viewModel.activity.venue : venue }
 
     /// The sport and venue the athlete can correct (MVP2-151), e.g. a treadmill run the Watch
-    /// recorded as outdoors, with the plan's when it differs.
+    /// recorded as outdoors. A linked activity starts with its plan's (TrainingKit).
     private var sportSection: some View {
         Section {
             Picker("Sport", selection: Binding(get: { currentSport }, set: { setSport($0, venue: currentVenue) })) {
@@ -319,11 +319,6 @@ struct ActivityDetailView: View {
                     ForEach(venueOptions, id: \.self) { venue in
                         Text(venue.displayName).tag(venue as Venue?)
                     }
-                }
-            }
-            if viewModel.differsFromPlan, let plannedSport = viewModel.plannedSport {
-                Button("Use Planned \(plannedSport.displayName(venue: viewModel.plannedVenue))") {
-                    setSport(plannedSport, venue: viewModel.plannedVenue ?? currentVenue)
                 }
             }
             if let sportFailureMessage {
