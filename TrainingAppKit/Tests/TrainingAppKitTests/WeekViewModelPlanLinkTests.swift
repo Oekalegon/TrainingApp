@@ -131,6 +131,23 @@ struct WeekViewModelPlanLinkTests {
         #expect(detail.chartData.steps.map(\.kind) == [.warmup, .work])
     }
 
+    @Test("a linked activity that went on past its plan gets a card for it, numbered after the steps; without recorded steps it gets none")
+    func afterPlanCardInTheContext() async throws {
+        let recorded = ActivityStep(block: 0, repetition: 0, step: 0, start: day(2), end: day(2).addingTimeInterval(1200))
+        // 30 minutes of activity, the plan's one step recorded for 20.
+        let (viewModel, _, activity) = try await makeViewModel(planMinutes: [20], activityMinutes: 30, steps: [recorded])
+
+        let context = try #require(viewModel.planLinkContext(for: activity))
+
+        let after = try #require(context.linkedPlanAfter)
+        #expect(after.recordedStepID == 1)
+        #expect(after.actual.duration == "10:00")
+        #expect(viewModel.activityDetailViewModel(for: activity).chartData.steps.last?.id == 1)
+
+        let (plain, _, plainActivity) = try await makeViewModel(planMinutes: [20], activityMinutes: 30)
+        #expect(try #require(plain.planLinkContext(for: plainActivity)).linkedPlanAfter == nil)
+    }
+
     @Test("steps that start at the same instant are ordered by the Watch's own numbering")
     func orderedStepsTieBreak() {
         let start = day(2)

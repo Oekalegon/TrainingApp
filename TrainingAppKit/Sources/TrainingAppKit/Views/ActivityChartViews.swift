@@ -40,7 +40,7 @@ struct ActivityHeartRateChart: View {
         let values = data.heartRate.map(\.value)
         guard let low = values.min(), let high = values.max() else { return "No heart rate recorded" }
         var text = "From \(Int(low.rounded())) to \(Int(high.rounded())) beats per minute"
-        if !data.steps.isEmpty { text += ", \(data.steps.count) steps marked" }
+        if data.planStepCount > 0 { text += ", \(data.planStepCount) steps marked" }
         text += highlightText(highlightedStepID, in: data)
         return text
     }
@@ -48,7 +48,8 @@ struct ActivityHeartRateChart: View {
     /// ", step 3 highlighted", for a highlighted step that is on the chart; nothing otherwise.
     static func highlightText(_ highlightedStepID: Int?, in data: ActivityChartData) -> String {
         guard let id = ActivityStepMarks.effectiveHighlight(highlightedStepID, in: data.steps) else { return "" }
-        return ", step \(id + 1) highlighted"
+        let isAfterPlan = data.steps.first { $0.id == id }?.isOutsidePlan == true
+        return isAfterPlan ? ", the time after the plan highlighted" : ", step \(id + 1) highlighted"
     }
 }
 
@@ -108,7 +109,7 @@ struct ActivityPaceChart: View {
         guard let fast = values.min(), let slow = values.max() else { return "No pace recorded" }
         let unit = system == .metric ? "per kilometer" : "per mile"
         var text = "From \(axisText(secondsPerKilometer: fast, in: system)) to \(axisText(secondsPerKilometer: slow, in: system)) \(unit)"
-        if !data.steps.isEmpty { text += ", \(data.steps.count) steps marked" }
+        if data.planStepCount > 0 { text += ", \(data.planStepCount) steps marked" }
         text += ActivityHeartRateChart.highlightText(highlightedStepID, in: data)
         return text
     }
@@ -151,7 +152,8 @@ struct ActivityStepMarks: ChartContent {
         let highlight = Self.effectiveHighlight(highlightedID, in: steps)
         ForEach(steps) { span in
             RectangleMark(xStart: .value("Step start", span.start), xEnd: .value("Step end", span.end))
-                .foregroundStyle(span.kind.chartColor(index: span.id).opacity(Self.bandOpacity(of: span, highlightedID: highlight)))
+                // The time after the plan is plain grey: it isn't a step, so it has no role colour.
+                .foregroundStyle((span.isOutsidePlan ? Color.gray : span.kind.chartColor(index: span.id)).opacity(Self.bandOpacity(of: span, highlightedID: highlight)))
         }
         ForEach(steps) { span in
             RuleMark(x: .value("Step start", span.start))
@@ -185,14 +187,23 @@ struct ActivityStepLegend: View {
 
     var body: some View {
         let kinds = Self.kinds(in: steps)
-        HStack(spacing: 12) {
-            if kinds.isEmpty {
+        let hasAfterPlan = steps.contains { $0.isOutsidePlan }
+        // A grid that wraps whole entries onto the next row, so five of them (every role and the time
+        // after the plan) don't break a name across lines.
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8, alignment: .leading)], alignment: .leading, spacing: 4) {
+            if kinds.isEmpty && !hasAfterPlan {
                 Text("Bands show the recorded steps.")
             } else {
                 ForEach(kinds, id: \.self) { kind in
                     HStack(spacing: 4) {
                         Circle().fill(Optional(kind).chartColor(index: 0)).frame(width: 8, height: 8).accessibilityHidden(true)
-                        Text(kind.displayName)
+                        Text(kind.displayName).lineLimit(1)
+                    }
+                }
+                if hasAfterPlan {
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.gray).frame(width: 8, height: 8).accessibilityHidden(true)
+                        Text("After the plan").lineLimit(1)
                     }
                 }
             }

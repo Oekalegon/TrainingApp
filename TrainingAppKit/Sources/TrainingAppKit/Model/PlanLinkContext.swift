@@ -25,6 +25,9 @@ public struct PlanLinkContext: Equatable {
     /// the steps the Watch recorded and they fit the plan. A repeating block is then one card per
     /// repetition. `false` shows the plan alone.
     public var linkedPlanStepsAreRecorded = false
+    /// The stretch after the plan's last step, when the athlete went on past it (MVP2-146); shown as a
+    /// card after the steps. `nil` without recorded steps or without such a stretch.
+    public var linkedPlanAfter: WorkoutAfterPlanCard?
     /// Whether the automatic match had a close runner-up, so the athlete should confirm or correct it
     /// (``TrainingModel/planMatchAmbiguities``).
     public let isAmbiguous: Bool

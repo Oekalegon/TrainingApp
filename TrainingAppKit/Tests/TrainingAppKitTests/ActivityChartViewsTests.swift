@@ -72,6 +72,22 @@ struct ActivityChartViewsTests {
         #expect(!ActivityHeartRateChart.spokenSummary(of: data).contains("highlighted"))
     }
 
+    @Test("the time after the plan is not counted as a step, and its highlight is spoken as that")
+    func afterPlanSpoken() {
+        let start = Date(timeIntervalSince1970: 0)
+        let hr = (0..<40).map { HeartRateSample(time: start.addingTimeInterval(Double($0) * 5), bpm: 130) }
+        let step = ActivityStep(block: 0, repetition: 0, step: 0, start: start, end: start.addingTimeInterval(100))
+        let activity = Activity(source: .manual, sport: .running, start: start, duration: 200, heartRate: hr, steps: [step])
+
+        let data = ActivityChartData.make(for: activity, workout: nil)
+
+        #expect(data.steps.count == 2 && data.planStepCount == 1)
+        let spoken = ActivityHeartRateChart.spokenSummary(of: data, highlightedStepID: 1)
+        #expect(spoken.contains("1 steps marked"))
+        #expect(spoken.hasSuffix(", the time after the plan highlighted"))
+        #expect(ActivityStepLegend.kinds(in: data.steps).isEmpty)  // it has no role of its own
+    }
+
     @Test("pace on the axis is minutes and seconds in the device's unit, without the unit")
     func axisText() {
         #expect(ActivityPaceChart.axisText(secondsPerKilometer: 392.4, in: .metric) == "6:32")
