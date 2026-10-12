@@ -122,6 +122,11 @@ public struct AppTabView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Workouts and Activities")
+        // The field is shared by every tab (pulling down on the week view or the Library shows it too),
+        // but the results are the search tab's content, so typing anywhere opens it (MVP2-145).
+        .onChange(of: searchText) { _, text in
+            if selectedTab != .search, !text.isEmpty { selectedTab = .search }
+        }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             watchSync?.requestSync()

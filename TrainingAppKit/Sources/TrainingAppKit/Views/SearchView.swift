@@ -3,7 +3,7 @@ import TrainingCore
 
 /// The search tab (MVP2-21, design doc §2.5): instant results across workout templates, planned
 /// workouts and activities as the athlete types in the tab bar's search field, which `AppTabView`
-/// attaches with `.searchable` and shows from every tab. A template pushes its library detail; a
+/// attaches with `.searchable` and shows from every tab; typing in it on another tab opens this tab (MVP2-145). A template pushes its library detail; a
 /// planned workout opens its detail sheet and an activity its detail, as on the week view, once
 /// ``SearchViewModel`` has loaded the week view's model around the result's day.
 struct SearchView: View {

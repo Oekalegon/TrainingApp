@@ -872,6 +872,9 @@ Not yet: reordering blocks, other target kinds, and the rest of the roadmap's 14
 
 A search tab (`Tab(role: .search)`, `SearchView` driven by `SearchViewModel`) sits apart at the
 trailing end of the tab bar on every tab and turns into the search field when tapped, as in Mail.
+The field is shared by every tab, so it also shows inline at the top of the week view and the Library
+(pulling down). The results are the search tab's content, so the first character typed in the field on
+another tab opens the search tab (MVP2-145); all three entry points show the same results.
 Results update as the athlete types, in three sections:
 
 - **Workout Templates**: name, default title or sport (`WorkoutLibraryViewModel.entries(matching:)`);
