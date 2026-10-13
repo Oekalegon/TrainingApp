@@ -45,10 +45,12 @@ struct WeekViewModelRefinedLoadTests {
         let actualLoad: Double
     }
 
-    private func makeFixture(bpm: Double = 165) async throws -> Fixture {
+    private func makeFixture(
+        bpm: Double = 165, wrappingActivityStore: ((InMemoryStore) -> any ActivityStore)? = nil
+    ) async throws -> Fixture {
         let store = InMemoryStore()
         let stores = StoreSet(
-            activityStore: store, planStore: store, workoutStore: store,
+            activityStore: wrappingActivityStore?(store) ?? store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
@@ -152,8 +154,8 @@ struct WeekViewModelRefinedLoadTests {
         #expect(after != fixture.actualLoad)
     }
 
-    @Test("the planned-workout sheets and the detail sheet use the same refined estimator as the cards")
-    func sheetsShareTheEstimator() async throws {
+    @Test("the plan's detail sheet agrees with its card")
+    func detailSheetAgreesWithTheCard() async throws {
         let fixture = try await makeFixture()
         await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
 
@@ -161,5 +163,107 @@ struct WeekViewModelRefinedLoadTests {
         let card = fixture.viewModel.plannedCardSummary(for: fixture.futurePlan)
 
         #expect(abs((detail.summary.load ?? 0) - (card.load ?? -1)) < 1e-6)
+    }
+
+    @Test("the edit sheet opened from a plan's detail sheet expects the refined load")
+    func editSheetUsesTheRefinement() async throws {
+        let fixture = try await makeFixture()
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+
+        let editor = fixture.viewModel.plannedWorkoutDetailViewModel(for: fixture.futurePlan, asOf: day(0)).makeEditor()
+
+        #expect(abs((editor.expectedLoad?.value ?? 0) - fixture.actualLoad) < 1e-6)
+    }
+
+    @Test("the library and the planner it opens follow a refinement that lands after the tab was created")
+    func libraryFollowsTheRefinement() async throws {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store
+        )
+        let athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        // The tab is created first, as the app does, before any refinement exists.
+        let library = viewModel.workoutLibraryViewModel()
+        let template = BuiltInWorkoutTemplates.easyRun
+        func expectedLoad() throws -> Double {
+            try #require(library.entries(asOf: day(0)).first { $0.template.id == template.id }?.expectedLoad)
+        }
+        let before = try expectedLoad()
+
+        let workout = try template.instantiate()
+        try await model.add(workout, asOf: day(0))
+        let plan = PlannedActivity(workoutID: workout.id, date: day(-3))
+        try await model.add(plan, asOf: day(0))
+        try await model.load(in: day(-10)...day(10), asOf: day(0))
+        let seconds = WorkoutDurationEstimator().duration(for: workout, athlete: athlete)
+        let samples = stride(from: 0.0, through: seconds, by: 5).map {
+            HeartRateSample(time: day(-3).addingTimeInterval($0), bpm: 170)
+        }
+        try await model.importActivities(
+            from: StubImporter(activities: [Activity(
+                source: .healthKit(UUID()), sport: workout.sport, start: day(-3), duration: seconds,
+                heartRate: samples, scheduledPlanID: plan.id
+            )]),
+            asOf: day(0)
+        )
+        await viewModel.refreshPlannedLoadIfNeeded(force: true)
+
+        let after = try expectedLoad()
+        #expect(after != before)
+        #expect(abs((library.makePlanner(for: template, date: day(5)).expectedLoad?.value ?? 0) - after) < 1e-6)
+    }
+
+    @Test("a failed read keeps the refinement the cards already show")
+    func failedReadKeepsThePreviousEstimator() async throws {
+        var failing: FailingActivityStore?
+        let fixture = try await makeFixture(wrappingActivityStore: {
+            let wrapped = FailingActivityStore(base: $0)
+            failing = wrapped
+            return wrapped
+        })
+        let activityStore = try #require(failing)
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+        #expect(fixture.viewModel.plannedLoadGeneration == 1)
+
+        await activityStore.setFailsIDReads(true)
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+
+        #expect(fixture.viewModel.plannedLoadGeneration == 1)
+        #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.actualLoad) < 1e-6)
+
+        // The next refresh, once the store reads again, is not stuck on the failed key.
+        await activityStore.setFailsIDReads(false)
+        await fixture.viewModel.refreshPlannedLoadIfNeeded()
+        #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.actualLoad) < 1e-6)
+    }
+
+    @Test("overlapping refreshes leave one consistent estimator")
+    func overlappingRefreshes() async throws {
+        let fixture = try await makeFixture()
+
+        async let first: Void = fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+        async let second: Void = fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+        _ = await (first, second)
+
+        #expect(fixture.viewModel.plannedLoadGeneration == 1)
+        #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.actualLoad) < 1e-6)
+    }
+
+    @Test("editing a completed plan's workout in place refreshes the references without a force")
+    func workoutEditRefreshes() async throws {
+        let fixture = try await makeFixture()
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+        #expect(fixture.viewModel.plannedLoadGeneration == 1)
+
+        // Same id and count, a step a minute longer: still within the comparable-duration check.
+        var edited = fixture.workout
+        edited.blocks = [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1260), target: .heartRateZone(2))])]
+        try await fixture.model.add(edited, asOf: day(0))
+        await fixture.viewModel.refreshPlannedLoadIfNeeded()
+
+        #expect(fixture.viewModel.plannedLoadGeneration == 2)
     }
 }

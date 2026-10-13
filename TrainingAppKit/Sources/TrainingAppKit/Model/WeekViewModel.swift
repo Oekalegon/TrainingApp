@@ -57,6 +57,10 @@ public final class WeekViewModel {
     /// What the refined estimator was built under, for ``refreshPlannedLoadIfNeeded(force:)``.
     @ObservationIgnored
     var plannedLoadKey: PlannedLoadKey?
+    /// Taken by each ``refreshPlannedLoadIfNeeded(force:)`` before it reads the store, so only the
+    /// newest of overlapping refreshes applies its result.
+    @ObservationIgnored
+    var plannedLoadRefreshToken = 0
     /// The refined estimator itself, to estimate a completed plan as it was before it was done
     /// (``plannedLoadCalculator(before:)``); `nil` while there are no completed plans or before the
     /// first refresh.
@@ -114,7 +118,8 @@ public final class WeekViewModel {
     /// athlete, whose heart-rate settings every activity's load is scored with (MVP2-56), plus
     /// ``plansFingerprint()``, since an edited override, date or workout moves a planned bar without
     /// changing any count, plus ``activitiesFingerprint()``, since an activity changed in place (a
-    /// resync) moves a performed bar without changing the count (MVP2-54).
+    /// resync) moves a performed bar without changing the count (MVP2-54), plus ``plannedLoadGeneration``,
+    /// since a refined planned estimate moves a planned bar without any of those changing.
     @ObservationIgnored
     private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, plans: Int, activities: Int, plannedLoadGeneration: Int)?
 
@@ -742,7 +747,8 @@ public final class WeekViewModel {
     /// — any of those can shift every cached week's own figures at once, and a plan/workout can
     /// change independently of `model.activities` (e.g. saving a new planned workout via
     /// `PlannedWorkoutSheet`). A new ``paceHistory`` invalidates it too: the planned distance and
-    /// time are forecast from it.
+    /// time are forecast from it. So does a new ``plannedLoadGeneration``: the planned load is refined
+    /// from completed plans.
     public func sportStatsPages(for weekStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
         let plans = plansFingerprint()
@@ -1028,8 +1034,8 @@ public final class WeekViewModel {
     /// - Parameters:
     ///   - today: The day the pace history is read up to (see ``refreshPaceHistoryIfNeeded(asOf:force:)``).
     ///   - activitiesChanged: `true` after an import, resync, dedup, link, join or delete, which can
-    ///     change the stored activities the pace history is built from without anything the week
-    ///     view itself keys on changing; forces a pace-history refresh.
+    ///     change the stored activities the pace history and the refined planned load are built from
+    ///     without anything the week view itself keys on changing; forces a refresh of both.
     public func refreshWeekCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
         if activitiesChanged { fieldTestFailures.removeAll() }
         let fingerprint = histogramFingerprint()
@@ -1051,8 +1057,8 @@ public final class WeekViewModel {
             && (inputsChanged || weekGraphCaches[weekStart] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
-        await refreshPlannedLoadIfNeeded(force: activitiesChanged)
         await refreshPaceHistoryIfNeeded(asOf: today, force: activitiesChanged)
+        await refreshPlannedLoadIfNeeded(force: activitiesChanged)
     }
 
     /// Computes one week's heart-rate histogram off the main actor and stores it in
@@ -1152,7 +1158,11 @@ public final class WeekViewModel {
     /// setting at the time (MVP2-118) and runs the Watch sync afterwards.
     public func workoutLibraryViewModel() -> WorkoutLibraryViewModel {
         // `nil` while sending to the Watch is off, so no fallback to the live bridge here.
-        let viewModel = WorkoutLibraryViewModel(model: model, estimator: statisticsCalculator.estimator) { [weak self] in
+        let viewModel = WorkoutLibraryViewModel(model: model, estimator: { [weak self] in
+            // Reading the generation makes a view that asks for the estimator re-read once a refinement lands.
+            _ = self?.plannedLoadGeneration
+            return self?.statisticsCalculator.estimator ?? TRIMPPlanEstimator()
+        }) { [weak self] in
             guard let self else { return nil }
             return self.plannedWorkoutScheduler
         }
