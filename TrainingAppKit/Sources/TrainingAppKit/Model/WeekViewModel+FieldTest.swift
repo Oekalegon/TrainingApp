@@ -15,7 +15,8 @@ extension WeekViewModel {
     /// Only activities linked to a plan whose workout is a test are measured. Skipped: activities
     /// already declined, and those whose result is already the source of the athlete's max heart rate
     /// or lactate threshold. A result equal to the value on record is still offered, since accepting it
-    /// replaces an estimate's source with the measured one. A test that can't be measured (no heart
+    /// replaces an estimate's source with the measured one, unless that would replace a more reliable
+    /// source such as a lab test. A test that can't be measured (no heart
     /// rate, the effort not found, ...) is skipped without an alert; its reason is kept in
     /// ``fieldTestFailures`` for the activity's detail sheet (MVP2-157), and it isn't tried again until
     /// the next import.
@@ -40,7 +41,9 @@ extension WeekViewModel {
                 // A store failure may pass; the next check tries again.
                 continue
             }
-            guard let result else { continue }
+            // An equal value over a more reliable source (a lab test) would only swap in a weaker
+            // source, so there's nothing to ask (MVP2-158).
+            guard let result, !(result.currentBPM == result.valueBPM && result.replacesMoreReliableSource) else { continue }
             // The athlete may have answered, or another check set one, while this one was measuring.
             guard fieldTestResult == nil, !isApplyingFieldTest else { return }
             fieldTestResult = result
@@ -179,7 +182,9 @@ extension WeekViewModel {
     /// A sentence for an alert that would replace a more reliable max heart rate than it measured,
     /// e.g. " This replaces a lab-tested value." (MVP2-158); empty when the value in effect on `date`
     /// isn't a lab or field test. TrainingKit says whether a result replaces a more reliable source
-    /// (`replacesMoreReliableSource`); this names it, from the profile as of the activity.
+    /// (`replacesMoreReliableSource`); this names it, from the profile as of the activity (which can
+    /// differ from the one TrainingKit checked if the profile changed since, in which case the note may
+    /// name a different source than the one replaced).
     ///
     /// - Parameter date: The start of the activity whose value would be replaced.
     func replacedMaxSourceNote(at date: Date) -> String {

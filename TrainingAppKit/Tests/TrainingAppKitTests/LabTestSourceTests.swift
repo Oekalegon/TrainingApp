@@ -33,7 +33,7 @@ struct LabTestSourceTests {
         #expect(!draft.hasLabTest)
 
         draft.maxHeartRateIsLabTest = true
-        draft.labTestDate = labDay
+        draft.maxLabTestDate = labDay
 
         #expect(draft.hasLabTest)
         #expect(draft.settings().maxHeartRateSource == .labTest(measuredOn: labDay))
@@ -47,9 +47,57 @@ struct LabTestSourceTests {
 
         #expect(draft.maxHeartRateIsLabTest)
         #expect(draft.lactateThresholdIsLabTest)
-        #expect(draft.labTestDate == labDay)
+        #expect(draft.maxLabTestDate == labDay)
+        #expect(draft.lactateLabTestDate == labDay)
         #expect(draft.settings().maxHeartRateSource == .labTest(measuredOn: labDay))
         #expect(draft.settings().lactateThresholdSource == .labTest(measuredOn: labDay))
+    }
+
+    @Test("each value keeps its own lab test date, so saving unchanged doesn't move the other's")
+    func datesStayApart() {
+        let thresholdDay = labDay.addingTimeInterval(-20 * 86400)
+        let source = settings(maxSource: .labTest(measuredOn: labDay), lactateSource: .labTest(measuredOn: thresholdDay))
+        var draft = HeartRateSettingsDraft(prefilling: source, effectiveDate: day)
+
+        draft.zoneMethod = .percentageOfMaxHeartRate
+
+        #expect(draft.settings().maxHeartRateSource == .labTest(measuredOn: labDay))
+        #expect(draft.settings().lactateThresholdSource == .labTest(measuredOn: thresholdDay))
+    }
+
+    @Test("a lab test can't be in the future or after the day the settings take effect")
+    func labDateValidation() {
+        var draft = HeartRateSettingsDraft(prefilling: settings(), effectiveDate: day)
+        draft.maxHeartRateIsLabTest = true
+        #expect(draft.validationMessage(asOf: day) == nil)
+
+        draft.maxLabTestDate = day.addingTimeInterval(3 * 86400)
+        #expect(draft.validationMessage(asOf: day) == "A lab test can't be in the future.")
+        // Not future, but later than the day the settings start.
+        #expect(draft.validationMessage(asOf: day.addingTimeInterval(10 * 86400))
+            == "A lab test can't be after the day the settings take effect.")
+
+        // A date that's only checked while its switch is on.
+        draft.maxHeartRateIsLabTest = false
+        #expect(draft.validationMessage(asOf: day) == nil)
+    }
+
+    @Test("a new lab test's date starts at the effective date, but never in the future")
+    func labDateDefault() {
+        let future = day.addingTimeInterval(5 * 86400)
+        let draft = HeartRateSettingsDraft(prefilling: settings(), effectiveDate: future, asOf: day)
+        #expect(draft.maxLabTestDate == day)
+        #expect(draft.lactateLabTestDate == day)
+
+        let past = HeartRateSettingsDraft(prefilling: settings(), effectiveDate: labDay, asOf: day)
+        #expect(past.maxLabTestDate == labDay)
+    }
+
+    @Test("the footer's freshness windows come from TrainingKit")
+    func freshnessText() {
+        let text = HeartRateSettingsDraft.labTestFreshnessText
+        #expect(text.max == "2 years")
+        #expect(text.lactateThreshold == "90 days")
     }
 
     @Test("turning the toggle off makes the value the athlete's own")
@@ -69,7 +117,7 @@ struct LabTestSourceTests {
         #expect(draft.settings().lactateThresholdSource == .manual)
 
         draft.lactateThresholdHeartRate = 165
-        draft.labTestDate = labDay
+        draft.lactateLabTestDate = labDay
         #expect(draft.hasLabTest)
         #expect(draft.settings().lactateThresholdSource == .labTest(measuredOn: labDay))
         #expect(draft.settings().maxHeartRateSource == .formula)
@@ -145,6 +193,14 @@ struct LabTestSourceTests {
             activityID: UUID(), sport: .running, activityStart: day, peakBPM: 196, currentMaxBPM: 190
         )
         #expect(!lab.maxHeartRatePromptMessage(for: plain).contains("This replaces"))
+    }
+
+    @Test("no note is added when the value in effect isn't a lab or field test")
+    func noNoteForOtherSources() {
+        for source: MaxHeartRateSource in [.formula, .manual, .workout(activityID: UUID())] {
+            #expect(viewModel(with: settings(maxSource: source)).replacedMaxSourceNote(at: day).isEmpty)
+        }
+        #expect(viewModel(with: settings(lactateSource: .manual)).replacedLactateSourceNote(at: day).isEmpty)
     }
 
     @Test("the field-test prompt says when it would replace a lab-tested value, for either setting")

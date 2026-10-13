@@ -720,13 +720,15 @@ The screens:
     newest first, and a swipe deletes one (never the last). A maximum the athlete changes is stored with
     the source `.manual` ("Set by you on …"); one left alone keeps its source, as does a lactate
     threshold. **Lab tests** (MVP2-158): a "Maximum from a Lab Test" switch, and a "Threshold from a Lab
-    Test" one while there is a threshold, mark a value as `.labTest(measuredOn:)`, with a "Lab Test
-    Date" that is separate from the day the settings take effect (a March test can be recorded in May;
+    Test" one while there is a threshold, mark a value as `.labTest(measuredOn:)`, each with its own
+    "Lab Test Date", separate from the day the settings take effect (a March test can be recorded in
+    May, but a lab test can't be in the future or after that day;
     its age decides whether a field test or workout may replace it: TrainingKit ranks sources, and a
     lab test ranks below a field test after 2 years for the maximum and 90 days for the threshold).
     An age estimate is never offered over a lab-tested maximum. When the max heart rate raise prompt
     (MVP2-56) or the field-test prompt (MVP2-155) would replace a more reliable value, its message
-    adds "This replaces a lab-tested value." (or "field-tested").
+    adds "This replaces a lab-tested value." (or "field-tested"). A field-test result equal to a
+    lab-tested value isn't offered at all, since it would only swap in a weaker source.
 
     While Apple Health is connected (an import has happened), a switch, "Use Apple Health"
     (`AthleteProfile.usesHealthKitRestingHeartRate`, on by default), decides who owns the

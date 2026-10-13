@@ -4,7 +4,8 @@ import TrainingCore
 /// The sheet for recording heart-rate settings from a date (MVP2-132, design doc §2.3): the date they
 /// take effect, resting and maximum heart rate, an optional lactate threshold and the zone method.
 /// Saving on a day that already has an entry replaces it. While the resting heart rate follows Apple
-/// Health, it's shown but can't be edited here.
+/// Health, it's shown but can't be edited here. The maximum and the lactate threshold can each be marked
+/// as a lab test with its own date (MVP2-158).
 struct HeartRateSettingsSheet: View {
     @State var draft: HeartRateSettingsDraft
     /// Whether the resting heart rate comes from Apple Health and so isn't editable.
@@ -32,6 +33,9 @@ struct HeartRateSettingsSheet: View {
                     }
                     Stepper("Maximum Heart Rate: \(draft.maxHeartRate) bpm", value: $draft.maxHeartRate, in: 100...230)
                     Toggle("Maximum from a Lab Test", isOn: $draft.maxHeartRateIsLabTest)
+                    if draft.maxHeartRateIsLabTest {
+                        DatePicker("Lab Test Date", selection: $draft.maxLabTestDate, in: ...Date.now, displayedComponents: .date)
+                    }
                     Toggle("Lactate Threshold", isOn: Binding(
                         get: { draft.lactateThresholdHeartRate != nil },
                         set: { draft.lactateThresholdHeartRate = $0 ? min(draft.maxHeartRate - 10, 170) : nil }
@@ -43,9 +47,9 @@ struct HeartRateSettingsSheet: View {
                             in: 60...230
                         )
                         Toggle("Threshold from a Lab Test", isOn: $draft.lactateThresholdIsLabTest)
-                    }
-                    if draft.hasLabTest {
-                        DatePicker("Lab Test Date", selection: $draft.labTestDate, in: ...Date.now, displayedComponents: .date)
+                        if draft.lactateThresholdIsLabTest {
+                            DatePicker("Lab Test Date", selection: $draft.lactateLabTestDate, in: ...Date.now, displayedComponents: .date)
+                        }
                     }
                     Picker("Zone Method", selection: $draft.zoneMethod) {
                         ForEach(HeartRateSettingsSheet.methods, id: \.self) { method in
@@ -58,7 +62,8 @@ struct HeartRateSettingsSheet: View {
                     } else if let message = draft.validationMessage {
                         Text(message).foregroundStyle(.red)
                     } else if draft.hasLabTest {
-                        Text("A lab test is the most reliable source. A field test or workout won't replace it for two years (maximum) or 90 days (lactate threshold).")
+                        let freshness = HeartRateSettingsDraft.labTestFreshnessText
+                        Text("A lab test is the most reliable source. A field test or workout won't replace it for \(freshness.max) (maximum) or \(freshness.lactateThreshold) (lactate threshold).")
                     }
                 }
             }
