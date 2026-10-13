@@ -642,14 +642,18 @@ completed plans of the same workout or template actually scored, as a recency-we
 `expectedLoadOverride` still wins. TrainingKit uses it for the load series and the calendar export;
 the app uses the same estimator everywhere it shows a planned load, so the surfaces agree.
 
-- `WeekViewModel.refreshPlannedLoadIfNeeded(force:)` asks `TrainingModel.refinedEstimator()` (which
-  reads the whole plan history, so it isn't called per swipe) and swaps `statisticsCalculator` for one
-  built on it. It runs with the week caches: when the athlete or the library changed, and always after
-  an import, resync, link, join or delete, and last in the cache refresh so the graphs and the pace
-  history don't wait for it. Overlapping refreshes keep only the newest result. When a refresh gets
-  the base estimator back after a refined one it is treated as a failed store read and the previous
-  estimator is kept (TrainingKit can't tell the two apart yet, MVP2-160). `plannedLoadGeneration` moves
-  only when the references changed; the daily-load split, the stats pages and the card caches are keyed on it.
+- `WeekViewModel.refreshPlannedLoadIfNeeded(force:)` asks `TrainingModel.loadRefinedEstimator()` and swaps
+  `statisticsCalculator` for one built on it. The model builds the estimator once (it reads the whole
+  plan history and scores every completed activity: about 0.4 s for 400 one-hour runs in a debug build,
+  linear in the history) and keeps it until the next `recompute`, which every import, link, join,
+  delete or edit goes through; so right after one of those the app's call shares that build and costs
+  nothing (MVP2-160, TrainingKit#103). It runs with the week caches: when the athlete or the library's
+  workouts changed, and always after an import, resync, link, join or delete, and last in the cache
+  refresh so the graphs and the pace history don't wait for it. Overlapping refreshes keep only the
+  newest result. When a store can't be read the call throws and the previous estimator stays, with a
+  retry at the next refresh; a base estimator that does arrive (every completed plan was undone) is a
+  real change and applies. `plannedLoadGeneration` moves only when the references changed;
+  the daily-load split, the stats pages and the card caches are keyed on it.
 - The planned-workout sheets (create, edit) and the plan's detail sheet take the same estimator when
   they open. The Library tab is created at launch, before any refinement exists, so it asks for the
   estimator each time it works out its entries (`WorkoutLibraryViewModel`'s `estimator` closure, which

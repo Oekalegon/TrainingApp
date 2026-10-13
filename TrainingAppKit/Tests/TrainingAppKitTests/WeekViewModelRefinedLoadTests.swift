@@ -240,6 +240,20 @@ struct WeekViewModelRefinedLoadTests {
         #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.actualLoad) < 1e-6)
     }
 
+    @Test("undoing the only completed plan is a real change: the cards go back to the base estimate")
+    func lastCompletionRemovedApplies() async throws {
+        let fixture = try await makeFixture()
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+        #expect(fixture.viewModel.plannedLoadGeneration == 1)
+
+        try await fixture.model.unlinkActivity(id: fixture.activity.id, asOf: day(0))
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+
+        #expect(fixture.viewModel.plannedLoadGeneration == 2)
+        #expect(fixture.viewModel.refinedLoadEstimator == nil)
+        #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.baseLoad) < 1e-6)
+    }
+
     @Test("overlapping refreshes leave one consistent estimator")
     func overlappingRefreshes() async throws {
         let fixture = try await makeFixture()
