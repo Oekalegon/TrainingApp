@@ -40,7 +40,28 @@ public final class WeekViewModel {
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
     /// uses, so a card's headline Load number always agrees with the detail sheet's own figure.
     /// Not `private` only because `WeekViewModel+LinkedPlan.swift` projects workouts with it too.
-    let statisticsCalculator = StatisticsCalculator()
+    ///
+    /// Its planned-load estimator is refined with what completed plans actually scored
+    /// (MVP2-159, see ``refreshPlannedLoadIfNeeded(force:)``), so the cards and stats agree
+    /// with TrainingKit's own load series; everything else about it is the default.
+    @ObservationIgnored
+    var statisticsCalculator = StatisticsCalculator()
+    /// Bumped whenever the refined planned-load estimator changes, so the caches that hold planned
+    /// loads (the daily-load split, the stats pages and the card caches) recompute. Observed, so cards
+    /// on screen re-read once a refinement lands, like ``paceHistoryGeneration``.
+    var plannedLoadGeneration = 0
+    /// The references the current refined estimator was built from, to tell whether a refresh changed
+    /// anything.
+    @ObservationIgnored
+    var plannedLoadReferences: [LinkedActivityRefinedEstimator.Reference]?
+    /// What the refined estimator was built under, for ``refreshPlannedLoadIfNeeded(force:)``.
+    @ObservationIgnored
+    var plannedLoadKey: PlannedLoadKey?
+    /// The refined estimator itself, to estimate a completed plan as it was before it was done
+    /// (``plannedLoadCalculator(before:)``); `nil` while there are no completed plans or before the
+    /// first refresh.
+    @ObservationIgnored
+    var refinedLoadEstimator: LinkedActivityRefinedEstimator?
 
     /// Sport-stats pages, cached per week (keyed by that week's `weekStart`) — see
     /// ``sportStatsPages(for:asOf:)``'s own doc comment. Not `@ObservationIgnored`: `WeekView`
@@ -58,7 +79,7 @@ public final class WeekViewModel {
     /// which of them are estimates (MVP2-8). And ``activitiesFingerprint()``: a resync can change an
     /// activity's sport, distance or effort without changing the count (MVP2-54).
     @ObservationIgnored
-    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int, plans: Int, activities: Int)?
+    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int, plannedLoadGeneration: Int, plans: Int, activities: Int)?
 
     /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
     /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
@@ -95,7 +116,7 @@ public final class WeekViewModel {
     /// changing any count, plus ``activitiesFingerprint()``, since an activity changed in place (a
     /// resync) moves a performed bar without changing the count (MVP2-54).
     @ObservationIgnored
-    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, plans: Int, activities: Int)?
+    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, plans: Int, activities: Int, plannedLoadGeneration: Int)?
 
     /// The card caches: ``plannedCardSummary(for:)``, ``linkedPlanExpectation(for:)`` and
     /// ``intensity(for:)-(Activity)``/``intensity(for:)-(PlannedActivity)`` results. The day list
@@ -393,10 +414,11 @@ public final class WeekViewModel {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
                 && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
                 && $0.plans == plans && $0.activities == activities
+                && $0.plannedLoadGeneration == plannedLoadGeneration
         } ?? false
         if !keyIsCurrent {
             dailyLoadSplitCaches.removeAll()
-            dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today, plans, activities)
+            dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today, plans, activities, plannedLoadGeneration)
         }
         if let cached = dailyLoadSplitCaches[weekStart] {
             return cached
@@ -728,12 +750,15 @@ public final class WeekViewModel {
         let keyIsCurrent = sportStatsPagesCachesKey.map {
             $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
                 && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
-                && $0.paceHistoryGeneration == paceHistoryGeneration && $0.plans == plans
+                && $0.paceHistoryGeneration == paceHistoryGeneration
+                && $0.plannedLoadGeneration == plannedLoadGeneration && $0.plans == plans
                 && $0.activities == activities
         } ?? false
         if !keyIsCurrent {
             sportStatsPagesCaches.removeAll()
-            sportStatsPagesCachesKey = (key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration, plans, activities)
+            sportStatsPagesCachesKey = (
+                key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration, plannedLoadGeneration, plans, activities
+            )
         }
         if let cached = sportStatsPagesCaches[weekStart] {
             return cached
@@ -1026,6 +1051,7 @@ public final class WeekViewModel {
             && (inputsChanged || weekGraphCaches[weekStart] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
+        await refreshPlannedLoadIfNeeded(force: activitiesChanged)
         await refreshPaceHistoryIfNeeded(asOf: today, force: activitiesChanged)
     }
 
@@ -1116,7 +1142,7 @@ public final class WeekViewModel {
     /// add affordance — `date` defaults the sheet to that day, still editable inside it.
     public func plannedWorkoutSheetViewModel(date: Date) -> PlannedWorkoutSheetViewModel {
         let viewModel = PlannedWorkoutSheetViewModel(
-            model: model, date: date, scheduler: plannedWorkoutScheduler
+            model: model, date: date, estimator: statisticsCalculator.estimator, scheduler: plannedWorkoutScheduler
         )
         viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
         return viewModel
@@ -1126,7 +1152,7 @@ public final class WeekViewModel {
     /// setting at the time (MVP2-118) and runs the Watch sync afterwards.
     public func workoutLibraryViewModel() -> WorkoutLibraryViewModel {
         // `nil` while sending to the Watch is off, so no fallback to the live bridge here.
-        let viewModel = WorkoutLibraryViewModel(model: model) { [weak self] in
+        let viewModel = WorkoutLibraryViewModel(model: model, estimator: statisticsCalculator.estimator) { [weak self] in
             guard let self else { return nil }
             return self.plannedWorkoutScheduler
         }
@@ -1173,7 +1199,7 @@ public final class WeekViewModel {
         for plan: PlannedActivity, asOf today: Date = .now
     ) -> PlannedWorkoutDetailViewModel {
         let viewModel = PlannedWorkoutDetailViewModel(
-            model: model, plan: plan, scheduler: plannedWorkoutScheduler
+            model: model, plan: plan, statisticsCalculator: statisticsCalculator, scheduler: plannedWorkoutScheduler
         )
         viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
         viewModel.watchStatus = { [weak self] in self?.watchStatus(for: $0, asOf: today) }

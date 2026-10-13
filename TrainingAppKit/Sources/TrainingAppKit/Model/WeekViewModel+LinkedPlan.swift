@@ -40,11 +40,16 @@ extension WeekViewModel {
         refreshCardCachesIfNeeded()
         let inputs = projectionInputs(for: plan, workout: workout) + [activity.id.hashValue, activity.start.hashValue]
         return linkedExpectationCache.value(for: plan.id, inputs: inputs) {
-            let projection = statisticsCalculator.projection(
+            // Estimated as it was before this activity: its own load is among the refinement's
+            // references, and a plan's expectation mustn't be informed by how it was actually done.
+            let calculator = plannedLoadCalculator(before: activity.start)
+            let projection = calculator.projection(
                 for: workout, athlete: model.athlete, paceHistory: paceHistory,
                 before: activity.start, excluding: activity.id
             )
-            let summary = plannedCardSummary(for: plan)
+            let summary = PlannedCardSummary.make(
+                plan: plan, workout: workout, athlete: model.athlete, calculator: calculator, history: paceHistory
+            )
             return LinkedPlanExpectation(
                 load: summary.load,
                 duration: projection.duration,
