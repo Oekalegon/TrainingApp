@@ -19,7 +19,7 @@ actor FailingActivityStore: ActivityStore {
         failsRangeReads = fails
     }
 
-    /// Makes ``activity(id:)`` throw (or stop throwing).
+    /// Makes ``activity(id:)`` and ``activities(ids:)`` throw (or stop throwing).
     func setFailsIDReads(_ fails: Bool) {
         failsIDReads = fails
     }
@@ -35,7 +35,10 @@ actor FailingActivityStore: ActivityStore {
         if failsIDReads { throw ReadFailure() }
         return try await base.activity(id: id)
     }
-    func activities(ids: [UUID]) async throws -> [UUID: Activity] { try await base.activities(ids: ids) }
+    func activities(ids: [UUID]) async throws -> [UUID: Activity] {
+        if failsIDReads { throw ReadFailure() }
+        return try await base.activities(ids: ids)
+    }
     func deleteActivity(source: ActivitySource) async throws { try await base.deleteActivity(source: source) }
     func deleteActivity(id: UUID) async throws { try await base.deleteActivity(id: id) }
     func tombstonedSources(among sources: [ActivitySource]) async throws -> Set<ActivitySource> {

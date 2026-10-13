@@ -630,7 +630,34 @@ open step such as the run to the hill — has to be forecast. TrainingKit foreca
 athlete's own earlier, similar workouts rather than from `AthleteProfile.paceModel` alone (see
 "Pace forecasts" in TrainingKit's design doc): per heart-rate zone, kept slower in lower zones;
 per step kind and zone, so a recovery jog isn't forecast at steady pace; and open steps from the
-median time they took in earlier runs of the same workout or template.
+recency-weighted median time they took in earlier runs of the same workout or template (a run's
+weight halves for every 60 days it is older than the newest; a run of the same workout that stopped
+well short of its fixed steps is skipped; TrainingKit#102).
+
+#### Refined planned load (MVP2-159)
+
+A planned workout's expected TRIMP is the plan estimator's figure scaled by what the athlete's
+completed plans of the same workout or template actually scored, as a recency-weighted median of
+`actual ÷ estimate` (TrainingKit's `LinkedActivityRefinedEstimator`, TrainingKit#100); a plan's own
+`expectedLoadOverride` still wins. TrainingKit uses it for the load series and the calendar export;
+the app uses the same estimator everywhere it shows a planned load, so the surfaces agree.
+
+- `WeekViewModel.refreshPlannedLoadIfNeeded(force:)` asks `TrainingModel.refinedEstimator()` (which
+  reads the whole plan history, so it isn't called per swipe) and swaps `statisticsCalculator` for one
+  built on it. It runs with the week caches: when the athlete or the library changed, and always after
+  an import, resync, link, join or delete, and last in the cache refresh so the graphs and the pace
+  history don't wait for it. Overlapping refreshes keep only the newest result. When a refresh gets
+  the base estimator back after a refined one it is treated as a failed store read and the previous
+  estimator is kept (TrainingKit can't tell the two apart yet, MVP2-160). `plannedLoadGeneration` moves
+  only when the references changed; the daily-load split, the stats pages and the card caches are keyed on it.
+- The planned-workout sheets (create, edit) and the plan's detail sheet take the same estimator when
+  they open. The Library tab is created at launch, before any refinement exists, so it asks for the
+  estimator each time it works out its entries (`WorkoutLibraryViewModel`'s `estimator` closure, which
+  also reads `plannedLoadGeneration` so the tab redraws when a refinement lands), and the planner it
+  opens gets the current one.
+- A linked activity's card compares the run with what was expected *before* it
+  (`plannedLoadCalculator(before:)`, the refinement without that run and later ones), not with a
+  figure its own load has already pulled towards itself.
 
 - `WeekViewModel.refreshPaceHistoryIfNeeded(asOf:force:)` has `TrainingModel.refreshPaceHistory(in:)`
   read the last 180 days of activities from the store into `TrainingModel.paceHistory`. It runs with

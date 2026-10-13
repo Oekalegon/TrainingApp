@@ -31,8 +31,9 @@ extension WeekViewModel {
         }
     }
 
-    /// What a plan's cached values depend on: its load override and its workout's steps.
+    /// What a plan's cached values depend on: its load override, its workout's steps and the refined
+    /// planned-load estimator (``plannedLoadGeneration``).
     func cardInputs(for plan: PlannedActivity, workout: StructuredWorkout?) -> [Int] {
-        [plan.expectedLoadOverride?.hashValue ?? 0, workout?.hashValue ?? 0]
+        [plan.expectedLoadOverride?.hashValue ?? 0, workout?.hashValue ?? 0, plannedLoadGeneration]
     }
 }

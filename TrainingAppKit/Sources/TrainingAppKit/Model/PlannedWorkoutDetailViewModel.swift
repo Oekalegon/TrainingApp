@@ -25,7 +25,7 @@ public final class PlannedWorkoutDetailViewModel {
     /// always agree (MVP2-122); `nil` shows no status.
     @ObservationIgnored
     public var watchStatus: (@MainActor (PlannedActivity) -> WeekViewModel.PlannedWatchStatus?)?
-    private let statisticsCalculator = StatisticsCalculator()
+    private let statisticsCalculator: StatisticsCalculator
 
     /// Set when ``delete()`` fails; the sheet shows it as an alert.
     public private(set) var deleteError: String?
@@ -36,15 +36,19 @@ public final class PlannedWorkoutDetailViewModel {
     /// - Parameters:
     ///   - model: The training model `plan` lives in.
     ///   - plan: The plan to show.
+    ///   - statisticsCalculator: Estimates the plan's expected load; `WeekViewModel` passes its own, whose
+    ///     estimator is refined from completed plans, so the sheet agrees with the plan's card.
     ///   - scheduler: Removes the plan's WorkoutKit entry on delete and reschedules on edit; defaults
     ///     to the real bridge where available, `nil` otherwise (tests pass `nil` — see
     ///     ``PlannedWorkoutScheduling``).
     public init(
         model: TrainingModel,
         plan: PlannedActivity,
+        statisticsCalculator: StatisticsCalculator = StatisticsCalculator(),
         scheduler: (any PlannedWorkoutScheduling)? = PlannedWorkoutSchedulers.live
     ) {
         self.model = model
+        self.statisticsCalculator = statisticsCalculator
         self.planID = plan.id
         self.openedPlan = plan
         self.scheduler = scheduler
@@ -204,7 +208,9 @@ public final class PlannedWorkoutDetailViewModel {
 
     /// The edit-mode view model for this plan, presented by the sheet's pencil button (MVP2-39).
     public func makeEditor() -> PlannedWorkoutSheetViewModel {
-        let editor = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: scheduler)
+        let editor = PlannedWorkoutSheetViewModel(
+            model: model, editing: plan, estimator: statisticsCalculator.estimator, scheduler: scheduler
+        )
         editor.onPlansChanged = onPlansChanged
         return editor
     }

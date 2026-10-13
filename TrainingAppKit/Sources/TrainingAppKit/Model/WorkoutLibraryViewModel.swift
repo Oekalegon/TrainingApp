@@ -19,7 +19,7 @@ import TrainingCore
 @MainActor
 public final class WorkoutLibraryViewModel {
     private let model: TrainingModel
-    private let estimator: any PlannedLoadEstimator
+    private let estimator: @MainActor () -> any PlannedLoadEstimator
     private let scheduler: @MainActor () -> (any PlannedWorkoutScheduling)?
     /// Called after a plan is saved from the tab, so the Watch sync can run again (MVP2-55).
     @ObservationIgnored
@@ -93,15 +93,17 @@ public final class WorkoutLibraryViewModel {
     ///     that a plan made from the tab is saved into.
     ///   - templates: The built-in templates to list, followed by the athlete's own; defaults to the
     ///     built-in library.
-    ///   - estimator: Estimates each entry's load; defaults to the same ``TRIMPPlanEstimator`` the
-    ///     planned-workout sheet uses, so the two agree.
+    ///   - estimator: Asked for the estimator each time the entries are worked out, so a refinement from
+    ///     completed plans that lands after the tab was created still reaches it (`WeekViewModel`
+    ///     returns its own, which also reads `plannedLoadGeneration` so the tab updates). Defaults to
+    ///     the plain ``TRIMPPlanEstimator`` the planned-workout sheet defaults to, so the two agree.
     ///   - scheduler: Asked for the planned-workout sheet's scheduler each time one opens (see
     ///     ``makePlanner(for:date:)``), so it follows the Watch setting: `WeekViewModel` returns
     ///     `nil` while sending to the Watch is turned off (MVP2-118). Tests return `nil`.
     public init(
         model: TrainingModel,
         templates: [WorkoutTemplate] = BuiltInWorkoutTemplates.all,
-        estimator: any PlannedLoadEstimator = TRIMPPlanEstimator(),
+        estimator: @escaping @MainActor () -> any PlannedLoadEstimator = { TRIMPPlanEstimator() },
         scheduler: @escaping @MainActor () -> (any PlannedWorkoutScheduling)? = { PlannedWorkoutSchedulers.live }
     ) {
         self.model = model
@@ -180,7 +182,7 @@ public final class WorkoutLibraryViewModel {
         return templates.map { template in
             let plans = plansByTemplate[template.id] ?? []
             let workout = try? template.instantiate()
-            let load = try? template.expectedLoad(estimator: estimator, athlete: athlete)
+            let load = try? template.expectedLoad(estimator: estimator(), athlete: athlete)
             return Entry(
                 template: template,
                 isCustom: customIDs.contains(template.id),
@@ -251,7 +253,7 @@ public final class WorkoutLibraryViewModel {
     ///   - date: The day the sheet starts on; defaults to today, still editable inside it.
     public func makePlanner(for template: WorkoutTemplate, date: Date = .now) -> PlannedWorkoutSheetViewModel {
         let planner = PlannedWorkoutSheetViewModel(
-            model: model, date: date, templates: templates, estimator: estimator, scheduler: scheduler()
+            model: model, date: date, templates: templates, estimator: estimator(), scheduler: scheduler()
         )
         planner.distanceSystem = distanceSystem
         planner.selectedTemplate = template
