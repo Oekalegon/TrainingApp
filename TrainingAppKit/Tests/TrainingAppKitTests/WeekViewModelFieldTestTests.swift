@@ -207,10 +207,34 @@ struct WeekViewModelFieldTestTests {
 
         #expect(viewModel.fieldTestResult == nil)
         #expect(!viewModel.fieldTestUpdateFailed)
-        #expect(viewModel.unmeasurableFieldTestActivityIDs == [activity.id])
+        #expect(viewModel.fieldTestFailures[activity.id] != nil)
+        #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == viewModel.fieldTestFailures[activity.id]?.explanation)
 
         await viewModel.refreshWeekCachesIfNeeded(asOf: day(3), activitiesChanged: true)
-        #expect(viewModel.unmeasurableFieldTestActivityIDs.isEmpty)
+        #expect(viewModel.fieldTestFailures.isEmpty)
+        #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == nil)
+    }
+
+    @Test("every reason a test couldn't be measured has its own explanation, with a way forward")
+    func explanations() {
+        let errors: [FieldTestError] = [
+            .noHeartRate, .effortNotLocated, .effortTooShort(recordedSeconds: 600),
+            .insufficientHeartRate, .implausibleValue(bpm: 48)
+        ]
+        let texts = errors.map(\.explanation)
+        #expect(Set(texts).count == errors.count)
+        #expect(texts[1].contains("Start the test from its scheduled workout"))
+        #expect(texts[2].contains("10 minutes"))
+        #expect(texts[4].contains("48 bpm"))
+    }
+
+    @Test("a measured test, or an ordinary workout, has no failure on its detail sheet")
+    func noFailureWhenMeasured() async throws {
+        let (_, viewModel, activity) = try await makeViewModel(peak: 171)
+        await viewModel.checkForFieldTestResult()
+
+        #expect(viewModel.fieldTestResult != nil)
+        #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == nil)
     }
 
     @Test("a failed save reports the failure, changes nothing and doesn't record a decline")

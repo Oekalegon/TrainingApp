@@ -16,8 +16,9 @@ extension WeekViewModel {
     /// already declined, and those whose result is already the source of the athlete's max heart rate
     /// or lactate threshold. A result equal to the value on record is still offered, since accepting it
     /// replaces an estimate's source with the measured one. A test that can't be measured (no heart
-    /// rate, the effort not found, ...) is skipped without a message and not tried again until the next
-    /// import (``unmeasurableFieldTestActivityIDs``).
+    /// rate, the effort not found, ...) is skipped without an alert; its reason is kept in
+    /// ``fieldTestFailures`` for the activity's detail sheet (MVP2-157), and it isn't tried again until
+    /// the next import.
     ///
     /// Does nothing while a result is already waiting, or while an accepted one is still being saved
     /// (see ``isApplyingFieldTest``). Called with the max heart rate check, after every import and
@@ -28,12 +29,15 @@ extension WeekViewModel {
         let applied = appliedFieldTestActivityIDs
         for activity in model.activities.sorted(by: { $0.start > $1.start })
         where activity.linkedPlanID != nil && !declined.contains(activity.id) && !applied.contains(activity.id)
-            && !unmeasurableFieldTestActivityIDs.contains(activity.id) && mayBeFieldTest(activity) {
+            && fieldTestFailures[activity.id] == nil && mayBeFieldTest(activity) {
             let result: FieldTestResult?
             do {
                 result = try await model.fieldTestResult(forActivity: activity.id)
+            } catch let error as FieldTestError {
+                fieldTestFailures[activity.id] = error
+                continue
             } catch {
-                unmeasurableFieldTestActivityIDs.insert(activity.id)
+                // A store failure may pass; the next check tries again.
                 continue
             }
             guard let result else { continue }

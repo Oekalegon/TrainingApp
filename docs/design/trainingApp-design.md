@@ -455,8 +455,10 @@ across launches.
   - **Keep Current** records the activity in the same declined set as the max heart rate prompt, so
     it isn't asked about again and isn't offered as an ordinary raise either.
   - Skipped: activities already the source of the max or lactate threshold, and tests that can't
-    be measured (no heart rate, effort not found). Those stay silent and aren't tried again until an
-    import changes the activities. A result equal to the current value is still offered, as
+    be measured (no heart rate, effort not found, ...). Those raise no alert and aren't tried again
+    until an import changes the activities; the activity's detail sheet shows a "Field Test" section
+    saying why and what to do next (MVP2-157: for example "Start the test from its scheduled
+    workout on your Watch"). A result equal to the current value is still offered, as
     "Record N bpm", so an estimate's source becomes the measured one.
   - Checks look at the loaded plans' workouts first, so ordinary linked workouts cost no store read.
 - **Caches follow the athlete**: the sport-stats pages, daily-load split and heart-rate histogram

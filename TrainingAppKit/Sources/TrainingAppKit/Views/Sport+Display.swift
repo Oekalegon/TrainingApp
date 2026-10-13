@@ -113,3 +113,27 @@ extension WorkoutPurpose {
         }
     }
 }
+
+extension FieldTestError {
+    /// Why the test couldn't be measured and what to do about it, for the activity's detail sheet
+    /// (MVP2-157).
+    var explanation: String {
+        switch self {
+        case .noHeartRate:
+            "No usable heart rate was recorded, so the test couldn't be measured. "
+                + "Check that the watch sits snugly on your wrist next time."
+        case .effortNotLocated:
+            "The test's effort couldn't be found in this activity. "
+                + "Start the test from its scheduled workout on your Watch, so the steps are recorded."
+        case .effortTooShort(let recordedSeconds):
+            "The effort lasted \(Int((recordedSeconds / 60).rounded())) minutes, much shorter than planned, "
+                + "so its last 20 minutes aren't the test's. Repeat the test to measure it."
+        case .insufficientHeartRate:
+            "Heart rate was recorded for too little of the last 20 minutes to average. "
+                + "Check that the watch sits snugly on your wrist next time."
+        case .implausibleValue(let bpm):
+            "The measured \(Int(bpm)) bpm isn't above your resting heart rate, so it can't be right. "
+                + "Repeat the test to measure it."
+        }
+    }
+}
