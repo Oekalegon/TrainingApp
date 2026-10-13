@@ -19,25 +19,27 @@ extension WeekViewModel {
         let workouts: Int
     }
 
-    /// Rebuilds the refined planned-load estimator (`TrainingModel.refinedEstimator()`) when its key
+    /// Rebuilds the refined planned-load estimator (`TrainingModel.loadRefinedEstimator()`) when its key
     /// changed or `force` is set, and replaces ``statisticsCalculator`` with one that uses it.
     ///
     /// ``plannedLoadGeneration`` (and with it every cached planned load) only moves when the
     /// references actually changed, so a refresh that read the same completed plans costs the read but
-    /// no recomputation. The model reads the whole plan history and scores every completed activity on
-    /// each call, which is why this runs after imports, links and library or athlete changes, not on
-    /// every week swipe, and why it runs last in ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)``:
-    /// the graphs and the pace history don't wait for it.
+    /// no recomputation. Building the estimator reads the whole plan history and scores every completed
+    /// activity (see below for how the model avoids doing that more than once per change), which is why
+    /// this runs after imports, links and library or athlete changes, not on every week swipe, and why
+    /// it runs last in ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)``: the graphs and the pace
+    /// history don't wait for it.
     ///
     /// Overlapping refreshes (a pull-to-refresh during a link, say) each take a token, and only the
     /// newest applies its result, so a slow, older read can't replace a newer one.
     ///
-    /// TrainingKit returns the base estimator, with the failure only logged, when a store can't be read,
-    /// which looks the same as having no completed plans. So a base estimator arriving after a refined
-    /// one is treated as a failed read and the previous estimator is kept: the cards don't flip back to
-    /// unrefined figures on a transient error. The price is that deleting every completed plan leaves
-    /// the old refinement in place until the app restarts; a throwing variant in TrainingKit would
-    /// remove it (MVP2-160).
+    /// The model keeps the estimator it built until the next `recompute`, so right after an import,
+    /// link or other change that went through it this costs nothing: `recompute` just built it
+    /// (MVP2-160). It uses the throwing variant: when a store can't be read, the previous estimator is
+    /// kept and the next refresh tries again (including the one a week swipe triggers, for as long as the
+    /// store stays unreadable), so the cards don't flip back to unrefined figures on a
+    /// transient error. A base estimator that does arrive (every completed plan was deleted) is a real
+    /// change and applies.
     ///
     /// - Parameter force: Rebuild even if the key is unchanged.
     func refreshPlannedLoadIfNeeded(force: Bool = false) async {
@@ -49,14 +51,16 @@ extension WeekViewModel {
         plannedLoadRefreshToken += 1
         let token = plannedLoadRefreshToken
 
-        let estimator = await model.refinedEstimator()
-        guard token == plannedLoadRefreshToken else { return }
-        let refined = estimator as? LinkedActivityRefinedEstimator
-        if refined == nil, plannedLoadReferences != nil {
-            // Probably a failed read; retry on the next refresh.
-            plannedLoadKey = nil
+        let estimator: any PlannedLoadEstimator
+        do {
+            estimator = try await model.loadRefinedEstimator()
+        } catch {
+            // Keep what the cards show and try again on the next refresh, unless a newer one has taken over.
+            if token == plannedLoadRefreshToken { plannedLoadKey = nil }
             return
         }
+        guard token == plannedLoadRefreshToken else { return }
+        let refined = estimator as? LinkedActivityRefinedEstimator
         guard refined?.references != plannedLoadReferences else { return }
         plannedLoadReferences = refined?.references
         refinedLoadEstimator = refined

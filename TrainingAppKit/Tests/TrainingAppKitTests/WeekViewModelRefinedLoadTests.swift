@@ -228,9 +228,12 @@ struct WeekViewModelRefinedLoadTests {
         await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
         #expect(fixture.viewModel.plannedLoadGeneration == 1)
 
+        // The model keeps what it built until its next recompute, which is when reads would fail.
         await activityStore.setFailsIDReads(true)
+        await fixture.model.recompute(asOf: day(0))
         await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
 
+        #expect(fixture.viewModel.plannedLoadKey == nil)
         #expect(fixture.viewModel.plannedLoadGeneration == 1)
         #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.actualLoad) < 1e-6)
 
@@ -238,6 +241,48 @@ struct WeekViewModelRefinedLoadTests {
         await activityStore.setFailsIDReads(false)
         await fixture.viewModel.refreshPlannedLoadIfNeeded()
         #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.actualLoad) < 1e-6)
+    }
+
+    @Test("undoing the only completed plan is a real change: the cards go back to the base estimate")
+    func lastCompletionRemovedApplies() async throws {
+        let fixture = try await makeFixture()
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+        #expect(fixture.viewModel.plannedLoadGeneration == 1)
+
+        try await fixture.model.unlinkActivity(id: fixture.activity.id, asOf: day(0))
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+
+        #expect(fixture.viewModel.plannedLoadGeneration == 2)
+        #expect(fixture.viewModel.refinedLoadEstimator == nil)
+        #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.baseLoad) < 1e-6)
+    }
+
+    @Test("a failed read, then the only completed plan undone, then a good read ends on the base figures once")
+    func failureThenRealChange() async throws {
+        var failing: FailingActivityStore?
+        let fixture = try await makeFixture(wrappingActivityStore: {
+            let wrapped = FailingActivityStore(base: $0)
+            failing = wrapped
+            return wrapped
+        })
+        let activityStore = try #require(failing)
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+        #expect(fixture.viewModel.plannedLoadGeneration == 1)
+
+        await activityStore.setFailsIDReads(true)
+        await fixture.model.recompute(asOf: day(0))
+        await fixture.viewModel.refreshPlannedLoadIfNeeded(force: true)
+        #expect(fixture.viewModel.plannedLoadKey == nil)
+        #expect(fixture.viewModel.plannedLoadGeneration == 1)
+
+        // Reads recover, and the plan is undone: the next refresh isn't stuck on the failure and applies it.
+        await activityStore.setFailsIDReads(false)
+        try await fixture.model.unlinkActivity(id: fixture.activity.id, asOf: day(0))
+        await fixture.viewModel.refreshPlannedLoadIfNeeded()
+
+        #expect(fixture.viewModel.plannedLoadGeneration == 2)
+        #expect(fixture.viewModel.refinedLoadEstimator == nil)
+        #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.baseLoad) < 1e-6)
     }
 
     @Test("overlapping refreshes leave one consistent estimator")
