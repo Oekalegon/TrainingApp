@@ -93,3 +93,23 @@ extension Venue {
         }
     }
 }
+
+extension WorkoutPurpose {
+    /// A short, human-readable label.
+    var displayName: String {
+        switch self {
+        case .general: "Training"
+        case .maxHRTest: "Max Heart Rate Test"
+        case .lthrTest: "Lactate Threshold Test"
+        }
+    }
+
+    /// What a field test measures, shown under the picker.
+    var explanation: String {
+        switch self {
+        case .general: ""
+        case .maxHRTest: "Done to measure your maximum heart rate, read from the highest rate reached."
+        case .lthrTest: "Done to measure your lactate threshold heart rate, read from the last 20 minutes of the effort."
+        }
+    }
+}

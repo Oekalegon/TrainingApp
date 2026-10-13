@@ -123,6 +123,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     public var sport: Sport
     /// Where the workout is done; `nil` leaves it to the plan.
     public var venue: Venue?
+    /// What workouts made from the template are for: ordinary training, or a field test (MVP2-156).
+    public var purpose: WorkoutPurpose
     /// The template's parameters.
     public var parameters: [Parameter]
     /// The template's blocks.
@@ -131,7 +133,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     /// Creates a draft.
     public init(
         id: UUID = UUID(), name: String = "", titleName: String? = nil, titleNameAppliesTo: String? = nil,
-        sport: Sport = .running, venue: Venue? = nil, parameters: [Parameter] = [], blocks: [Block] = []
+        sport: Sport = .running, venue: Venue? = nil, purpose: WorkoutPurpose = .general,
+        parameters: [Parameter] = [], blocks: [Block] = []
     ) {
         self.titleNameAppliesTo = titleNameAppliesTo
         self.id = id
@@ -139,6 +142,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         self.titleName = titleName
         self.sport = sport
         self.venue = venue
+        self.purpose = purpose
         self.parameters = parameters
         self.blocks = blocks
     }
@@ -288,7 +292,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
             name: duplicating ? "\(template.name) Copy" : template.name,
             titleName: duplicating ? (template.titleName ?? template.name) : template.titleName,
             titleNameAppliesTo: duplicating ? "\(template.name) Copy" : nil,
-            sport: template.sport, venue: template.venue, parameters: parameters, blocks: blocks
+            sport: template.sport, venue: template.venue, purpose: template.purpose,
+            parameters: parameters, blocks: blocks
         )
     }
 
@@ -436,7 +441,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         let keepsTitleName = titleNameAppliesTo == nil || titleNameAppliesTo == trimmedName
         return WorkoutTemplate(
             id: id, name: trimmedName, titleName: keepsTitleName ? titleName : nil,
-            sport: sport, venue: venue, parameters: templateParameters, blocks: templateBlocks
+            sport: sport, venue: venue, parameters: templateParameters, blocks: templateBlocks,
+            purpose: purpose
         )
     }
 }
