@@ -592,6 +592,10 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   → `TrainingModel.linkActivity`/`unlinkActivity`. Like join, each action closes the sheet on success
   and leaves it open with an inline message when refused. An unlink sticks: only newly imported
   activities are auto-matched.
+- **Field test** (MVP2-157): for a test activity whose result couldn't be measured, a "Field Test"
+  section with the reason and what to do next (the prompt for measured results is in §2.1). It
+  comes from the sheet's snapshot, so it appears once the check has run; linking or unlinking a plan
+  runs the check again.
 - **Delete Activity** (MVP1-65): a centered red text button in its own section at the bottom of the
   list — matching a Settings-style "Delete Account" pattern, not a toolbar icon — independent of
   the Overlap section above

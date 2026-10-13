@@ -131,7 +131,11 @@ struct ActivityDetailView: View {
 
             if let message = viewModel.fieldTestFailureMessage {
                 Section {
-                    Label(message, systemImage: "exclamationmark.triangle")
+                    Label {
+                        Text(message)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                    }
                 } header: {
                     Text("Field Test")
                 }

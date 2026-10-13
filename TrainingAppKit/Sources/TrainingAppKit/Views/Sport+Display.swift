@@ -129,11 +129,11 @@ extension FieldTestError {
             "The effort lasted \(Int((recordedSeconds / 60).rounded())) minutes, much shorter than planned, "
                 + "so its last 20 minutes aren't the test's. Repeat the test to measure it."
         case .insufficientHeartRate:
-            "Heart rate was recorded for too little of the last 20 minutes to average. "
+            "Heart rate was recorded for too little of the effort's last 20 minutes to average. "
                 + "Check that the watch sits snugly on your wrist next time."
         case .implausibleValue(let bpm):
             "The measured \(Int(bpm)) bpm isn't above your resting heart rate, so it can't be right. "
-                + "Repeat the test to measure it."
+                + "Check the sensor, then repeat the test."
         }
     }
 }
