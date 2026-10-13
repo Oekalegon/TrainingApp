@@ -337,4 +337,15 @@ struct WorkoutTemplateEditorTests {
         #expect(rebuilt.venue == .outdoor(.track))
         #expect(copy.venue == .outdoor(.track))
     }
+
+    @Test("a template's purpose survives the draft, and a copy keeps it (MVP2-156)")
+    func purposeRoundTrips() throws {
+        for template in [BuiltInWorkoutTemplates.maxHRTest, BuiltInWorkoutTemplates.lthrTest] {
+            let rebuilt = try #require(WorkoutTemplateDraft(template).build())
+            let copy = try #require(WorkoutTemplateDraft(template, duplicating: true).build())
+            #expect(rebuilt.purpose == template.purpose)
+            #expect(copy.purpose == template.purpose)
+        }
+        #expect(WorkoutTemplateDraft.blank().purpose == .general)
+    }
 }

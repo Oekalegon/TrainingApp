@@ -59,7 +59,7 @@ struct WorkoutTemplateEditorSheet: View {
         let summary = viewModel.summary
         NavigationStack {
             Form {
-                Section("Workout") {
+                Section {
                     TextField("Name", text: $viewModel.draft.name)
                     Picker("Sport", selection: $viewModel.draft.sport) {
                         ForEach(sports, id: \.self) { sport in
@@ -78,6 +78,15 @@ struct WorkoutTemplateEditorSheet: View {
                                 Text(venue.displayName).tag(venue as Venue?)
                             }
                         }
+                    }
+                    Picker("Purpose", selection: $viewModel.draft.purpose) {
+                        ForEach(WorkoutPurpose.allCases, id: \.self) { purpose in
+                            Text(purpose.displayName).tag(purpose)
+                        }
+                    }
+                } footer: {
+                    if viewModel.draft.purpose != .general {
+                        Text(viewModel.draft.purpose.explanation)
                     }
                 }
 
