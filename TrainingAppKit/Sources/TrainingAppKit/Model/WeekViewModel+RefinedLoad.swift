@@ -24,10 +24,11 @@ extension WeekViewModel {
     ///
     /// ``plannedLoadGeneration`` (and with it every cached planned load) only moves when the
     /// references actually changed, so a refresh that read the same completed plans costs the read but
-    /// no recomputation. The model reads the whole plan history and scores every completed activity on
-    /// each call, which is why this runs after imports, links and library or athlete changes, not on
-    /// every week swipe, and why it runs last in ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)``:
-    /// the graphs and the pace history don't wait for it.
+    /// no recomputation. Building the estimator reads the whole plan history and scores every completed
+    /// activity (see below for how the model avoids doing that more than once per change), which is why
+    /// this runs after imports, links and library or athlete changes, not on every week swipe, and why
+    /// it runs last in ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)``: the graphs and the pace
+    /// history don't wait for it.
     ///
     /// Overlapping refreshes (a pull-to-refresh during a link, say) each take a token, and only the
     /// newest applies its result, so a slow, older read can't replace a newer one.
@@ -35,7 +36,8 @@ extension WeekViewModel {
     /// The model keeps the estimator it built until the next `recompute`, so right after an import,
     /// link or other change that went through it this costs nothing: `recompute` just built it
     /// (MVP2-160). It uses the throwing variant: when a store can't be read, the previous estimator is
-    /// kept and the next refresh tries again, so the cards don't flip back to unrefined figures on a
+    /// kept and the next refresh tries again (including the one a week swipe triggers, for as long as the
+    /// store stays unreadable), so the cards don't flip back to unrefined figures on a
     /// transient error. A base estimator that does arrive (every completed plan was deleted) is a real
     /// change and applies.
     ///
