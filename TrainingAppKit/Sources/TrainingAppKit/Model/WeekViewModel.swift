@@ -162,7 +162,18 @@ public final class WeekViewModel {
     /// still has the old max, so a check in that window would ask about the same workout again.
     @ObservationIgnored
     var isApplyingMaxHeartRate = false
-    /// What the athlete has already declined, and whether the history scan has run.
+    /// What a field test measured, waiting for the athlete to confirm or decline it (MVP2-155).
+    /// `WeekView` shows it as an alert. See ``checkForFieldTestResult(asOf:)``.
+    public internal(set) var fieldTestResult: FieldTestResult?
+    /// Set when saving an accepted field-test result failed, for `WeekView` to report; cleared when
+    /// shown.
+    public internal(set) var fieldTestUpdateFailed = false
+    /// `true` while an accepted field-test result is being saved, so a check in that window doesn't
+    /// ask about the same test again.
+    @ObservationIgnored
+    var isApplyingFieldTest = false
+    /// What the athlete has already declined (max heart rate suggestions and field-test results, which
+    /// share it: both are keyed by activity), and whether the history scan has run.
     @ObservationIgnored
     let maxHeartRatePromptHistory: any MaxHeartRatePromptHistory
     /// The first-run introduction and the Health and iCloud banners (MVP2-147).
