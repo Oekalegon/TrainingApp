@@ -35,6 +35,9 @@ public struct ActivityDetailViewModel {
     /// The sheet's title: the linked plan's workout name, else the sport's name (MVP2-152); see
     /// ``WeekViewModel/activityTitle(for:)``.
     public let title: String
+    /// Why this test activity's result couldn't be measured, with what to do about it, or `nil` when
+    /// it isn't a test or was measured (MVP2-157). See ``WeekViewModel/checkForFieldTestResult()``.
+    public let fieldTestFailureMessage: String?
 
     /// Creates a detail view model for `activity`.
     ///
@@ -46,6 +49,7 @@ public struct ActivityDetailViewModel {
     ///   - planWorkout: The workout of the plan this activity completed, to say what each recorded
     ///     step was on the charts (MVP2-146).
     ///   - title: The sheet's title; the sport's name when `nil`.
+    ///   - fieldTestFailureMessage: Why a field test's result couldn't be measured, if it couldn't.
     ///   - calculator: Computes the summary; defaults to `StatisticsCalculator()`'s standard
     ///     calculators (the same ones `TrainingModel` uses for the fitness series), so the load
     ///     shown here always agrees with what fed the week view's chart.
@@ -56,6 +60,7 @@ public struct ActivityDetailViewModel {
         planLinkContext: PlanLinkContext? = nil,
         planWorkout: StructuredWorkout? = nil,
         title: String? = nil,
+        fieldTestFailureMessage: String? = nil,
         calculator: StatisticsCalculator = StatisticsCalculator()
     ) {
         self.activity = activity
@@ -64,6 +69,7 @@ public struct ActivityDetailViewModel {
         self.overlapContext = overlapContext
         self.planLinkContext = planLinkContext
         self.title = title ?? activity.sport.displayName
+        self.fieldTestFailureMessage = fieldTestFailureMessage
         self.chartData = ActivityChartData.make(for: activity, workout: planWorkout)
     }
 

@@ -43,7 +43,8 @@ extension WeekViewModel {
     /// Links `activity` to the plan `planID` (replacing its current link), or confirms the current
     /// one when they're the same.
     ///
-    /// Then requests a Watch sync (MVP2-116), since the change can link or unlink a plan.
+    /// Then requests a Watch sync (MVP2-116), since the change can link or unlink a plan, and checks
+    /// whether the activity is now a field test with a result to confirm.
     ///
     /// - Returns: `true` if the link was made. `false` (nothing changed) if the plan isn't on the
     ///   activity's day or a store failed — the sheet stays open with a message, like a refused join.
@@ -56,6 +57,9 @@ extension WeekViewModel {
         }
         await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
+        // The link decides whether the activity is a field test, and refreshing forgets why an earlier
+        // measurement failed, so look again (MVP2-155, MVP2-157).
+        await checkForFieldTestResult()
         return true
     }
 
@@ -73,6 +77,9 @@ extension WeekViewModel {
         }
         await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
+        // The link decides whether the activity is a field test, and refreshing forgets why an earlier
+        // measurement failed, so look again (MVP2-155, MVP2-157).
+        await checkForFieldTestResult()
         return true
     }
 

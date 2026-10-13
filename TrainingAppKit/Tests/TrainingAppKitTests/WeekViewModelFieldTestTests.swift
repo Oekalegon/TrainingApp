@@ -32,12 +32,13 @@ struct WeekViewModelFieldTestTests {
     private func makeViewModel(
         purpose: WorkoutPurpose = .maxHRTest, peak: Double = 171,
         history: InMemoryMaxHeartRatePromptHistory = InMemoryMaxHeartRatePromptHistory(),
-        athleteStore: (any AthleteStore)? = nil, activity makeActivity: ((UUID) -> Activity)? = nil,
+        athleteStore: (any AthleteStore)? = nil, wrappingActivityStore: ((InMemoryStore) -> any ActivityStore)? = nil,
+        activity makeActivity: ((UUID) -> Activity)? = nil,
         workoutSeconds: Double = 600
     ) async throws -> (TrainingModel, WeekViewModel, Activity) {
         let store = InMemoryStore()
         let stores = StoreSet(
-            activityStore: store, planStore: store, workoutStore: store,
+            activityStore: wrappingActivityStore?(store) ?? store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: athleteStore ?? store
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178))
@@ -207,10 +208,72 @@ struct WeekViewModelFieldTestTests {
 
         #expect(viewModel.fieldTestResult == nil)
         #expect(!viewModel.fieldTestUpdateFailed)
-        #expect(viewModel.unmeasurableFieldTestActivityIDs == [activity.id])
+        #expect(viewModel.fieldTestFailures[activity.id] != nil)
+        #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == viewModel.fieldTestFailures[activity.id]?.explanation)
 
         await viewModel.refreshWeekCachesIfNeeded(asOf: day(3), activitiesChanged: true)
-        #expect(viewModel.unmeasurableFieldTestActivityIDs.isEmpty)
+        #expect(viewModel.fieldTestFailures.isEmpty)
+        #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == nil)
+    }
+
+    @Test("every reason a test couldn't be measured has its own explanation, with a way forward")
+    func explanations() {
+        let errors: [FieldTestError] = [
+            .noHeartRate, .effortNotLocated, .effortTooShort(recordedSeconds: 600),
+            .insufficientHeartRate, .implausibleValue(bpm: 48)
+        ]
+        let texts = errors.map(\.explanation)
+        #expect(Set(texts).count == errors.count)
+        #expect(texts[1].contains("Start the test from its scheduled workout"))
+        #expect(texts[2].contains("10 minutes"))
+        #expect(texts[4].contains("48 bpm"))
+    }
+
+    @Test("a measured test, or an ordinary workout, has no failure on its detail sheet")
+    func noFailureWhenMeasured() async throws {
+        let (_, viewModel, activity) = try await makeViewModel(peak: 171)
+        await viewModel.checkForFieldTestResult()
+
+        #expect(viewModel.fieldTestResult != nil)
+        #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == nil)
+    }
+
+    @Test("a store failure while measuring isn't remembered as a failed test, and is retried")
+    func storeFailureIsRetried() async throws {
+        var failingStore: FailingActivityStore?
+        let (_, viewModel, activity) = try await makeViewModel(peak: 171, wrappingActivityStore: {
+            let failing = FailingActivityStore(base: $0)
+            failingStore = failing
+            return failing
+        })
+        let failing = try #require(failingStore)
+        await failing.setFailsIDReads(true)
+
+        await viewModel.checkForFieldTestResult()
+
+        #expect(viewModel.fieldTestResult == nil)
+        #expect(viewModel.fieldTestFailures.isEmpty)
+        #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == nil)
+
+        await failing.setFailsIDReads(false)
+        await viewModel.checkForFieldTestResult()
+
+        #expect(viewModel.fieldTestResult != nil)
+    }
+
+    @Test("linking or unlinking a test activity looks again, so the sheet's message follows the link")
+    func failureFollowsTheLink() async throws {
+        let (_, viewModel, activity) = try await makeViewModel(purpose: .lthrTest, peak: 171)
+        await viewModel.checkForFieldTestResult()
+        let planID = try #require(activity.linkedPlanID)
+        #expect(viewModel.fieldTestFailures[activity.id] != nil)
+
+        await viewModel.unlinkActivity(activity, asOf: day(3))
+        #expect(viewModel.fieldTestFailures[activity.id] == nil)
+
+        let unlinked = try #require(viewModel.model.activities.first { $0.id == activity.id })
+        await viewModel.linkActivity(unlinked, toPlan: planID, asOf: day(3))
+        #expect(viewModel.fieldTestFailures[activity.id] != nil)
     }
 
     @Test("a failed save reports the failure, changes nothing and doesn't record a decline")

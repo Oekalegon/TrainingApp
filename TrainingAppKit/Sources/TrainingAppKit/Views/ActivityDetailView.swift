@@ -129,6 +129,18 @@ struct ActivityDetailView: View {
                 planLinkSection(planLinkContext)
             }
 
+            if let message = viewModel.fieldTestFailureMessage {
+                Section {
+                    Label {
+                        Text(message)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                    }
+                } header: {
+                    Text("Field Test")
+                }
+            }
+
             sportSection
 
             // The heart rate and pace over time (MVP2-146), with a band for each recorded step, above

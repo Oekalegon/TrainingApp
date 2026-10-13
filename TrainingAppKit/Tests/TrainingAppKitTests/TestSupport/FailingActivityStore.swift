@@ -6,6 +6,7 @@ import TrainingCore
 actor FailingActivityStore: ActivityStore {
     private let base: InMemoryStore
     private var failsRangeReads = false
+    private var failsIDReads = false
 
     struct ReadFailure: Error {}
 
@@ -18,6 +19,11 @@ actor FailingActivityStore: ActivityStore {
         failsRangeReads = fails
     }
 
+    /// Makes ``activity(id:)`` throw (or stop throwing).
+    func setFailsIDReads(_ fails: Bool) {
+        failsIDReads = fails
+    }
+
     func activities(in range: ClosedRange<Date>) async throws -> [Activity] {
         if failsRangeReads { throw ReadFailure() }
         return try await base.activities(in: range)
@@ -25,7 +31,10 @@ actor FailingActivityStore: ActivityStore {
 
     func upsert(_ activities: [Activity]) async throws { try await base.upsert(activities) }
     func activity(source: ActivitySource) async throws -> Activity? { try await base.activity(source: source) }
-    func activity(id: UUID) async throws -> Activity? { try await base.activity(id: id) }
+    func activity(id: UUID) async throws -> Activity? {
+        if failsIDReads { throw ReadFailure() }
+        return try await base.activity(id: id)
+    }
     func activities(ids: [UUID]) async throws -> [UUID: Activity] { try await base.activities(ids: ids) }
     func deleteActivity(source: ActivitySource) async throws { try await base.deleteActivity(source: source) }
     func deleteActivity(id: UUID) async throws { try await base.deleteActivity(id: id) }

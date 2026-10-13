@@ -172,10 +172,10 @@ public final class WeekViewModel {
     /// ask about the same test again.
     @ObservationIgnored
     var isApplyingFieldTest = false
-    /// Test activities that couldn't be measured, so a check doesn't read and measure them again
-    /// until an import changes the activities.
+    /// Why each test activity couldn't be measured (MVP2-157): shown on its detail sheet, and a check
+    /// doesn't measure it again until an import changes the activities.
     @ObservationIgnored
-    var unmeasurableFieldTestActivityIDs: Set<UUID> = []
+    var fieldTestFailures: [UUID: FieldTestError] = [:]
     /// What the athlete has already declined (max heart rate suggestions and field-test results, which
     /// share it: both are keyed by activity), and whether the history scan has run.
     @ObservationIgnored
@@ -1006,7 +1006,7 @@ public final class WeekViewModel {
     ///     change the stored activities the pace history is built from without anything the week
     ///     view itself keys on changing; forces a pace-history refresh.
     public func refreshWeekCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
-        if activitiesChanged { unmeasurableFieldTestActivityIDs.removeAll() }
+        if activitiesChanged { fieldTestFailures.removeAll() }
         let fingerprint = histogramFingerprint()
         let inputsChanged = weekGraphCachesFingerprint != fingerprint
             || weekGraphCachesAthlete != model.athlete
@@ -1107,7 +1107,8 @@ public final class WeekViewModel {
         ActivityDetailViewModel(
             activity: activity, athlete: model.athlete, overlapContext: overlapContext(for: activity),
             planLinkContext: planLinkContext(for: activity), planWorkout: linkedWorkout(for: activity),
-            title: activityTitle(for: activity)
+            title: activityTitle(for: activity),
+            fieldTestFailureMessage: fieldTestFailures[activity.id]?.explanation
         )
     }
 
