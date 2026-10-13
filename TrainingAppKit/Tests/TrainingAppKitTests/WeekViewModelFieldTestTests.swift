@@ -34,14 +34,16 @@ struct WeekViewModelFieldTestTests {
         history: InMemoryMaxHeartRatePromptHistory = InMemoryMaxHeartRatePromptHistory(),
         athleteStore: (any AthleteStore)? = nil, wrappingActivityStore: ((InMemoryStore) -> any ActivityStore)? = nil,
         activity makeActivity: ((UUID) -> Activity)? = nil,
-        workoutSeconds: Double = 600
+        workoutSeconds: Double = 600, maxSource: MaxHeartRateSource = .formula
     ) async throws -> (TrainingModel, WeekViewModel, Activity) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: wrappingActivityStore?(store) ?? store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: athleteStore ?? store
         )
-        let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178))
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178)
+        athlete.heartRateZoneHistory[0].maxHeartRateSource = maxSource
+        let model = TrainingModel(stores: stores, athlete: athlete)
         let workout = StructuredWorkout(
             name: "Test", sport: .running,
             blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(workoutSeconds))])], purpose: purpose
@@ -182,6 +184,28 @@ struct WeekViewModelFieldTestTests {
         let result = try #require(viewModel.fieldTestResult)
         #expect(viewModel.fieldTestAcceptTitle(for: result) == "Record 178 bpm")
         #expect(viewModel.fieldTestPromptMessage(for: result).contains("the same as your max heart rate"))
+    }
+
+    @Test("an equal result isn't offered over a lab-tested value, since it would only swap in a weaker source")
+    func equalResultOverLabTestIsNotOffered() async throws {
+        let labDay = day(-30)
+        let (model, viewModel, _) = try await makeViewModel(peak: 178, maxSource: .labTest(measuredOn: labDay))
+
+        await viewModel.checkForFieldTestResult()
+
+        #expect(viewModel.fieldTestResult == nil)
+        #expect(model.athlete.currentHeartRateZoneSettings?.maxHeartRateSource == .labTest(measuredOn: labDay))
+    }
+
+    @Test("a different result over a lab-tested value is offered, with the note")
+    func differentResultOverLabTestIsOffered() async throws {
+        let (_, viewModel, _) = try await makeViewModel(peak: 171, maxSource: .labTest(measuredOn: day(-30)))
+
+        await viewModel.checkForFieldTestResult()
+
+        let result = try #require(viewModel.fieldTestResult)
+        #expect(result.replacesMoreReliableSource)
+        #expect(viewModel.fieldTestPromptMessage(for: result).contains("This replaces a lab-tested value."))
     }
 
     @Test("the message names the direction, and says when the effort was placed by the plan")

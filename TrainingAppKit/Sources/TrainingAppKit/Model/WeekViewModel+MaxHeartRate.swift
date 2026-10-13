@@ -103,5 +103,6 @@ extension WeekViewModel {
         return "Your \(suggestion.sport.displayName.lowercased()) workout on \(date) held \(peak) bpm, "
             + "above your max heart rate of \(current) bpm. Update your max heart rate to \(peak) bpm? "
             + "Your zones and training load from that day on will be recalculated."
+            + (suggestion.replacesMoreReliableSource ? replacedMaxSourceNote(at: suggestion.activityStart) : "")
     }
 }

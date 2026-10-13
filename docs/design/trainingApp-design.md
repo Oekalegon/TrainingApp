@@ -693,8 +693,10 @@ The screens:
   - **Heart Rate Zones** (`HeartRateZonesView`, MVP2-132 editing): the current heart-rate zone settings
     (`athlete.currentHeartRateZoneSettings`): resting HR, maximum HR with its value on the title's own
     row and a second row saying where it came from (MVP2-56,
-    `AthleteViewModel.maxHeartRateSourceDescription`: "Estimated from age", or "Measured in a workout
-    on 24 Sep 2026" once a workout has raised it), lactate threshold HR (if set), zone method — plus a
+    `AthleteViewModel.maxHeartRateSourceDescription`: "Estimated from age", "Measured in a workout
+    on 24 Sep 2026" once a workout has raised it, "Measured in a field test on …" (MVP2-155) or
+    "Lab test on …" (MVP2-158)), lactate threshold HR (if set) with its own source row
+    (`lactateThresholdSourceDescription`: "Set by you", a field test or a lab test), zone method — plus a
     "Zones" table (MVP1-71, `AthleteViewModel.heartRateZoneRanges`) listing each named zone's own bpm
     range (`HeartRateZoneModel.zoneBPMRange(_:)`), each preceded by a dot in that zone's color
     (`HeartRateZone.color`), as the activity detail sheet's zone list does (MVP1-70). The table is
@@ -716,7 +718,17 @@ The screens:
     replacing the day's entry if there is one (`AthleteProfile.recordingHeartRateSettings`); activities
     from then on are scored with it, earlier ones keep theirs. A "History" section lists the entries,
     newest first, and a swipe deletes one (never the last). A maximum the athlete changes is stored with
-    the source `.manual` ("Set by you on …"); one left alone keeps its source.
+    the source `.manual` ("Set by you on …"); one left alone keeps its source, as does a lactate
+    threshold. **Lab tests** (MVP2-158): a "Maximum from a Lab Test" switch, and a "Threshold from a Lab
+    Test" one while there is a threshold, mark a value as `.labTest(measuredOn:)`, each with its own
+    "Lab Test Date", separate from the day the settings take effect (a March test can be recorded in
+    May, but a lab test can't be in the future or after that day;
+    its age decides whether a field test or workout may replace it: TrainingKit ranks sources, and a
+    lab test ranks below a field test after 2 years for the maximum and 90 days for the threshold).
+    An age estimate is never offered over a lab-tested maximum. When the max heart rate raise prompt
+    (MVP2-56) or the field-test prompt (MVP2-155) would replace a more reliable value, its message
+    adds "This replaces a lab-tested value." (or "field-tested"). A field-test result equal to a
+    lab-tested value isn't offered at all, since it would only swap in a weaker source.
 
     While Apple Health is connected (an import has happened), a switch, "Use Apple Health"
     (`AthleteProfile.usesHealthKitRestingHeartRate`, on by default), decides who owns the
