@@ -162,10 +162,44 @@ extension WeekViewModel {
         }
         message += " Update your \(setting) to \(value) bpm? "
             + "Your zones and training load from that day on will be recalculated."
+        if result.replacesMoreReliableSource {
+            let note = switch result.measurement {
+            case .maxHeartRate: replacedMaxSourceNote(at: result.activityStart)
+            case .lactateThresholdHeartRate: replacedLactateSourceNote(at: result.activityStart)
+            }
+            message += note
+        }
         if result.isEstimatedFromPlan {
             message += " The test wasn't started from its scheduled workout, so the effort was placed "
                 + "by the plan's timing; check that it looks right."
         }
         return message
+    }
+
+    /// A sentence for an alert that would replace a more reliable max heart rate than it measured,
+    /// e.g. " This replaces a lab-tested value." (MVP2-158); empty when the value in effect on `date`
+    /// isn't a lab or field test. TrainingKit says whether a result replaces a more reliable source
+    /// (`replacesMoreReliableSource`); this names it, from the profile as of the activity.
+    ///
+    /// - Parameter date: The start of the activity whose value would be replaced.
+    func replacedMaxSourceNote(at date: Date) -> String {
+        guard let source = model.athlete.heartRateZoneSettings(asOf: date)?.maxHeartRateSource else { return "" }
+        switch source {
+        case .labTest: return " This replaces a lab-tested value."
+        case .fieldTest: return " This replaces a field-tested value."
+        case .formula, .manual, .workout: return ""
+        }
+    }
+
+    /// The same for a lactate threshold heart rate (MVP2-158).
+    ///
+    /// - Parameter date: The start of the activity whose value would be replaced.
+    func replacedLactateSourceNote(at date: Date) -> String {
+        guard let source = model.athlete.heartRateZoneSettings(asOf: date)?.lactateThresholdSource else { return "" }
+        switch source {
+        case .labTest: return " This replaces a lab-tested value."
+        case .fieldTest: return " This replaces a field-tested value."
+        case .manual: return ""
+        }
     }
 }

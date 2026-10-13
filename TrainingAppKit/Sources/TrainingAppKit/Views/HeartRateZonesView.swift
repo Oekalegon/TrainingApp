@@ -56,7 +56,14 @@ struct HeartRateZonesView: View {
                         }
                     }
                     if let lactateThreshold = settings.lactateThresholdHeartRateBPM {
-                        LabeledContent("Lactate Threshold", value: "\(Int(lactateThreshold.rounded())) bpm")
+                        LabeledContent {
+                            Text("\(Int(lactateThreshold.rounded())) bpm")
+                        } label: {
+                            Text("Lactate Threshold")
+                            if let source = viewModel.lactateThresholdSourceDescription {
+                                Text(source)
+                            }
+                        }
                     }
                     Picker("Zone Method", selection: Binding(
                         get: { settings.zoneMethod },

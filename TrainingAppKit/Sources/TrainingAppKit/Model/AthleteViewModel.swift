@@ -71,32 +71,60 @@ public struct AthleteViewModel {
     }
 
     /// Where the current max heart rate came from, for a caption under the Maximum Heart Rate row (MVP2-56):
-    /// "Estimated from age", "Measured in a workout on 24 Sep 2026" or "Measured in a field test on …".
-    /// `nil` when there are no settings on record.
+    /// "Estimated from age", "Measured in a workout on 24 Sep 2026", "Measured in a field test on …" or
+    /// "Lab test on …" (MVP2-158). `nil` when there are no settings on record.
     ///
-    /// The workout's date is the earliest entry carrying that source, which is the entry that
-    /// starts at the workout itself; later entries raised to the same value share its source.
+    /// A workout's or field test's date is the earliest entry carrying that source, which is the entry
+    /// that starts at the workout itself; later entries raised to the same value share its source. A lab
+    /// test's date is the one the athlete gave, not the day the settings take effect.
     public var maxHeartRateSourceDescription: String? {
         guard let settings = currentHeartRateZoneSettings else { return nil }
         switch settings.maxHeartRateSource {
         case .formula:
             return "Estimated from age"
         case .manual:
-            let date = settings.effectiveDate.formatted(
-                Date.FormatStyle(timeZone: athlete.timeZone).day().month(.abbreviated).year()
-            )
-            return "Set by you on \(date)"
-        case .workout, .fieldTest:
+            return "Set by you on \(dateText(settings.effectiveDate))"
+        case .workout:
             let measuredFrom = athlete.heartRateZoneHistory
                 .filter { $0.maxHeartRateSource == settings.maxHeartRateSource }
                 .map(\.effectiveDate)
                 .min() ?? settings.effectiveDate
-            let date = measuredFrom.formatted(
-                Date.FormatStyle(timeZone: athlete.timeZone).day().month(.abbreviated).year()
-            )
-            if case .fieldTest = settings.maxHeartRateSource { return "Measured in a field test on \(date)" }
-            return "Measured in a workout on \(date)"
+            return "Measured in a workout on \(dateText(measuredFrom))"
+        case .fieldTest:
+            let measuredFrom = athlete.heartRateZoneHistory
+                .filter { $0.maxHeartRateSource == settings.maxHeartRateSource }
+                .map(\.effectiveDate)
+                .min() ?? settings.effectiveDate
+            return "Measured in a field test on \(dateText(measuredFrom))"
+        case .labTest(let measuredOn):
+            return "Lab test on \(dateText(measuredOn))"
         }
+    }
+
+    /// Where the current lactate threshold heart rate came from, for a caption under the Lactate
+    /// Threshold row (MVP2-158): "Set by you", "Measured in a field test on …" or "Lab test on …". `nil`
+    /// when there is none on record.
+    public var lactateThresholdSourceDescription: String? {
+        guard let settings = currentHeartRateZoneSettings, settings.lactateThresholdHeartRateBPM != nil else {
+            return nil
+        }
+        switch settings.lactateThresholdSource {
+        case .manual:
+            return "Set by you"
+        case .fieldTest:
+            let measuredFrom = athlete.heartRateZoneHistory
+                .filter { $0.lactateThresholdSource == settings.lactateThresholdSource }
+                .map(\.effectiveDate)
+                .min() ?? settings.effectiveDate
+            return "Measured in a field test on \(dateText(measuredFrom))"
+        case .labTest(let measuredOn):
+            return "Lab test on \(dateText(measuredOn))"
+        }
+    }
+
+    /// `date` as "24 Sep 2026" in the athlete's time zone.
+    private func dateText(_ date: Date) -> String {
+        date.formatted(Date.FormatStyle(timeZone: athlete.timeZone).day().month(.abbreviated).year())
     }
 
     /// Every named zone's bpm range under ``currentHeartRateZoneSettings``, in zone order
@@ -144,13 +172,15 @@ public struct AthleteViewModel {
     /// The age estimate to offer the athlete as a new maximum heart rate (MVP2-132), or `nil` when
     /// there's nothing to offer: it's never applied on its own, so the athlete decides.
     ///
-    /// Offered only while the current maximum is itself an estimate and the new one differs by at
-    /// least ``AthleteProfile/heartRateChangeToleranceBPM``; a maximum the athlete entered or a
-    /// workout measured isn't compared with a formula.
+    /// Offered only while the current maximum is itself an estimate (nothing more reliable than a formula
+    /// would be replaced, see ``MaxHeartRateSource/isReplaceable(by:asOf:)``) and the new one differs by at
+    /// least ``AthleteProfile/heartRateChangeToleranceBPM``; a maximum the athlete entered, a
+    /// workout or test measured, or a lab test gave isn't compared with a formula.
     ///
     /// - Parameter today: The date to estimate as of; injected for tests.
     public func offeredMaxHeartRateEstimate(asOf today: Date = .now) -> Double? {
-        guard let current = currentHeartRateZoneSettings, current.maxHeartRateSource == .formula,
+        guard let current = currentHeartRateZoneSettings,
+              current.maxHeartRateSource.isReplaceable(by: .formula, asOf: today),
               let estimate = ageEstimatedMaxHeartRate(asOf: today),
               abs(estimate - current.maxHeartRateBPM) >= AthleteProfile.heartRateChangeToleranceBPM
         else { return nil }

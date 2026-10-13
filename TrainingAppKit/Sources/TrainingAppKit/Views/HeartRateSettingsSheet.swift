@@ -31,6 +31,7 @@ struct HeartRateSettingsSheet: View {
                         Stepper("Resting Heart Rate: \(draft.restingHeartRate) bpm", value: $draft.restingHeartRate, in: 25...120)
                     }
                     Stepper("Maximum Heart Rate: \(draft.maxHeartRate) bpm", value: $draft.maxHeartRate, in: 100...230)
+                    Toggle("Maximum from a Lab Test", isOn: $draft.maxHeartRateIsLabTest)
                     Toggle("Lactate Threshold", isOn: Binding(
                         get: { draft.lactateThresholdHeartRate != nil },
                         set: { draft.lactateThresholdHeartRate = $0 ? min(draft.maxHeartRate - 10, 170) : nil }
@@ -41,6 +42,10 @@ struct HeartRateSettingsSheet: View {
                             value: Binding(get: { threshold }, set: { draft.lactateThresholdHeartRate = $0 }),
                             in: 60...230
                         )
+                        Toggle("Threshold from a Lab Test", isOn: $draft.lactateThresholdIsLabTest)
+                    }
+                    if draft.hasLabTest {
+                        DatePicker("Lab Test Date", selection: $draft.labTestDate, in: ...Date.now, displayedComponents: .date)
                     }
                     Picker("Zone Method", selection: $draft.zoneMethod) {
                         ForEach(HeartRateSettingsSheet.methods, id: \.self) { method in
@@ -52,6 +57,8 @@ struct HeartRateSettingsSheet: View {
                         Text("Your resting heart rate comes from Apple Health. Turn that off on the previous screen to enter your own.")
                     } else if let message = draft.validationMessage {
                         Text(message).foregroundStyle(.red)
+                    } else if draft.hasLabTest {
+                        Text("A lab test is the most reliable source. A field test or workout won't replace it for two years (maximum) or 90 days (lactate threshold).")
                     }
                 }
             }
