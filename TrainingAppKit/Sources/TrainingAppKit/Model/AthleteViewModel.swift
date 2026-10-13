@@ -71,8 +71,8 @@ public struct AthleteViewModel {
     }
 
     /// Where the current max heart rate came from, for a caption under the Maximum Heart Rate row (MVP2-56):
-    /// "Estimated from age", or "Measured in a workout on 24 Sep 2026". `nil` when there are no
-    /// settings on record.
+    /// "Estimated from age", "Measured in a workout on 24 Sep 2026" or "Measured in a field test on …".
+    /// `nil` when there are no settings on record.
     ///
     /// The workout's date is the earliest entry carrying that source, which is the entry that
     /// starts at the workout itself; later entries raised to the same value share its source.
@@ -86,7 +86,7 @@ public struct AthleteViewModel {
                 Date.FormatStyle(timeZone: athlete.timeZone).day().month(.abbreviated).year()
             )
             return "Set by you on \(date)"
-        case .workout:
+        case .workout, .fieldTest:
             let measuredFrom = athlete.heartRateZoneHistory
                 .filter { $0.maxHeartRateSource == settings.maxHeartRateSource }
                 .map(\.effectiveDate)
@@ -94,6 +94,7 @@ public struct AthleteViewModel {
             let date = measuredFrom.formatted(
                 Date.FormatStyle(timeZone: athlete.timeZone).day().month(.abbreviated).year()
             )
+            if case .fieldTest = settings.maxHeartRateSource { return "Measured in a field test on \(date)" }
             return "Measured in a workout on \(date)"
         }
     }

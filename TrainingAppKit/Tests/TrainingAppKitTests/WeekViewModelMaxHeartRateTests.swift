@@ -245,7 +245,7 @@ final class InMemoryMaxHeartRatePromptHistory: MaxHeartRatePromptHistory {
 }
 
 /// An ``AthleteStore`` whose `save` always fails.
-private final class FailingAthleteSaveStore: AthleteStore, @unchecked Sendable {
+final class FailingAthleteSaveStore: AthleteStore, @unchecked Sendable {
     struct SaveError: Error {}
     private let base = InMemoryStore()
 

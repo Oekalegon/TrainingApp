@@ -304,6 +304,40 @@ public struct WeekView: View {
             } message: {
                 Text("Your max heart rate wasn't changed. You'll be asked again.")
             }
+            // MVP2-155: a field test measured a new max heart rate or lactate threshold. Like the
+            // alert above, it's never applied without asking, and "Keep Current" leaves the old value.
+            .alert(
+                viewModel.fieldTestResult.map(viewModel.fieldTestPromptTitle(for:)) ?? "",
+                isPresented: Binding(
+                    get: { viewModel.fieldTestResult != nil },
+                    set: { isPresented in
+                        if !isPresented { viewModel.clearFieldTestPrompt() }
+                    }
+                ),
+                presenting: viewModel.fieldTestResult
+            ) { result in
+                Button(viewModel.fieldTestAcceptTitle(for: result)) {
+                    Task { await viewModel.acceptFieldTestResult(result) }
+                }
+                Button("Keep Current", role: .cancel) {
+                    viewModel.declineFieldTestResult(result)
+                }
+            } message: { result in
+                Text(viewModel.fieldTestPromptMessage(for: result))
+            }
+            .alert(
+                "Couldn't Update Heart Rate Settings",
+                isPresented: Binding(
+                    get: { viewModel.fieldTestUpdateFailed },
+                    set: { isPresented in
+                        if !isPresented { viewModel.acknowledgeFieldTestUpdateFailure() }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Your heart rate settings weren't changed. You'll be asked again.")
+            }
             .sheet(item: $selectedActivity) { activity in
                 // Its own NavigationStack: a sheet doesn't inherit the presenting view's
                 // navigation bar, and ActivityDetailView's .navigationTitle needs one to render

@@ -23,6 +23,9 @@ extension WeekViewModel {
     /// - Parameter today: The end of the history scan's range.
     public func checkForMaxHeartRateSuggestion(asOf today: Date = .now) async {
         guard maxHeartRateSuggestion == nil, !isApplyingMaxHeartRate else { return }
+        // A test activity's result comes first, and its activity isn't also offered as a raise.
+        await checkForFieldTestResult()
+        guard fieldTestResult == nil, !isApplyingFieldTest else { return }
         let declined = maxHeartRatePromptHistory.declinedActivityIDs
         if let suggestion = model.maxHeartRateSuggestion(among: model.activities.filter { !declined.contains($0.id) }) {
             maxHeartRateSuggestion = suggestion
