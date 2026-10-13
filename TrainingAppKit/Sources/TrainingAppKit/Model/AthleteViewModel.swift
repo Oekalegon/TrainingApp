@@ -71,8 +71,8 @@ public struct AthleteViewModel {
     }
 
     /// Where the current max heart rate came from, for a caption under the Maximum Heart Rate row (MVP2-56):
-    /// "Estimated from age", or "Measured in a workout (or field test) on 24 Sep 2026". `nil` when there are no
-    /// settings on record.
+    /// "Estimated from age", "Measured in a workout on 24 Sep 2026" or "Measured in a field test on …".
+    /// `nil` when there are no settings on record.
     ///
     /// The workout's date is the earliest entry carrying that source, which is the entry that
     /// starts at the workout itself; later entries raised to the same value share its source.

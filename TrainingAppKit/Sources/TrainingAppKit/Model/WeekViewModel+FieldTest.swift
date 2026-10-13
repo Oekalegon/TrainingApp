@@ -12,29 +12,45 @@ extension WeekViewModel {
     /// Looks through the loaded activities for a field test whose result the athlete hasn't answered
     /// yet and, if one is found, sets ``fieldTestResult`` for `WeekView` to ask about.
     ///
-    /// Only activities linked to a plan are measured. Skipped: activities already declined, those
-    /// whose result is already the source of the athlete's max heart rate or lactate threshold, and
-    /// results equal to the value on record. A test that can't be measured (no heart rate, the effort
-    /// not found, ...) is skipped without a message.
+    /// Only activities linked to a plan whose workout is a test are measured. Skipped: activities
+    /// already declined, and those whose result is already the source of the athlete's max heart rate
+    /// or lactate threshold. A result equal to the value on record is still offered, since accepting it
+    /// replaces an estimate's source with the measured one. A test that can't be measured (no heart
+    /// rate, the effort not found, ...) is skipped without a message and not tried again until the next
+    /// import (``unmeasurableFieldTestActivityIDs``).
     ///
     /// Does nothing while a result is already waiting, or while an accepted one is still being saved
     /// (see ``isApplyingFieldTest``). Called with the max heart rate check, after every import and
     /// whenever the week view loads a week.
-    ///
-    /// - Parameter today: Not used to pick activities; kept so the call matches its siblings.
-    public func checkForFieldTestResult(asOf today: Date = .now) async {
+    public func checkForFieldTestResult() async {
         guard fieldTestResult == nil, !isApplyingFieldTest else { return }
         let declined = maxHeartRatePromptHistory.declinedActivityIDs
         let applied = appliedFieldTestActivityIDs
         for activity in model.activities.sorted(by: { $0.start > $1.start })
-        where activity.linkedPlanID != nil && !declined.contains(activity.id) && !applied.contains(activity.id) {
-            guard let result = try? await model.fieldTestResult(forActivity: activity.id),
-                  result.changesValue else { continue }
+        where activity.linkedPlanID != nil && !declined.contains(activity.id) && !applied.contains(activity.id)
+            && !unmeasurableFieldTestActivityIDs.contains(activity.id) && mayBeFieldTest(activity) {
+            let result: FieldTestResult?
+            do {
+                result = try await model.fieldTestResult(forActivity: activity.id)
+            } catch {
+                unmeasurableFieldTestActivityIDs.insert(activity.id)
+                continue
+            }
+            guard let result else { continue }
             // The athlete may have answered, or another check set one, while this one was measuring.
             guard fieldTestResult == nil, !isApplyingFieldTest else { return }
             fieldTestResult = result
             return
         }
+    }
+
+    /// Whether `activity`'s plan is for a test, judged from the loaded plans and workouts so that
+    /// ordinary linked workouts don't each cost a store read. A plan or workout that isn't loaded
+    /// counts as possibly a test; the model then decides.
+    private func mayBeFieldTest(_ activity: Activity) -> Bool {
+        guard let plan = model.plans.first(where: { $0.id == activity.linkedPlanID }),
+              let workout = model.workouts.first(where: { $0.id == plan.workoutID }) else { return true }
+        return workout.purpose != .general
     }
 
     /// The activities whose field-test result is already recorded as a source in the athlete's
@@ -105,7 +121,8 @@ extension WeekViewModel {
     ///
     /// - Parameter result: The result to describe.
     public func fieldTestAcceptTitle(for result: FieldTestResult) -> String {
-        "Update to \(Int(result.valueBPM)) bpm"
+        if result.currentBPM == result.valueBPM { return "Record \(Int(result.valueBPM)) bpm" }
+        return "Update to \(Int(result.valueBPM)) bpm"
     }
 
     /// The question `WeekView`'s alert asks about `result`, e.g. "Your max heart rate test on 24 Sep
@@ -129,7 +146,10 @@ extension WeekViewModel {
             test = "lactate threshold test"
         }
         var message = "We measured \(value) bpm in your \(test) on \(date)"
-        if let current = result.currentBPM {
+        if let current = result.currentBPM, current == result.valueBPM {
+            return message + ", the same as your \(setting). Record it as measured? "
+                + "Your zones and training load stay as they are."
+        } else if let current = result.currentBPM {
             let currentBPM = Int(current.rounded())
             let comparison = result.valueBPM > current ? "above" : "below"
             message += ", \(comparison) your \(setting) of \(currentBPM) bpm."

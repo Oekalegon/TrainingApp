@@ -163,7 +163,7 @@ public final class WeekViewModel {
     @ObservationIgnored
     var isApplyingMaxHeartRate = false
     /// What a field test measured, waiting for the athlete to confirm or decline it (MVP2-155).
-    /// `WeekView` shows it as an alert. See ``checkForFieldTestResult(asOf:)``.
+    /// `WeekView` shows it as an alert. See ``checkForFieldTestResult()``.
     public internal(set) var fieldTestResult: FieldTestResult?
     /// Set when saving an accepted field-test result failed, for `WeekView` to report; cleared when
     /// shown.
@@ -172,6 +172,10 @@ public final class WeekViewModel {
     /// ask about the same test again.
     @ObservationIgnored
     var isApplyingFieldTest = false
+    /// Test activities that couldn't be measured, so a check doesn't read and measure them again
+    /// until an import changes the activities.
+    @ObservationIgnored
+    var unmeasurableFieldTestActivityIDs: Set<UUID> = []
     /// What the athlete has already declined (max heart rate suggestions and field-test results, which
     /// share it: both are keyed by activity), and whether the history scan has run.
     @ObservationIgnored
@@ -1002,6 +1006,7 @@ public final class WeekViewModel {
     ///     change the stored activities the pace history is built from without anything the week
     ///     view itself keys on changing; forces a pace-history refresh.
     public func refreshWeekCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
+        if activitiesChanged { unmeasurableFieldTestActivityIDs.removeAll() }
         let fingerprint = histogramFingerprint()
         let inputsChanged = weekGraphCachesFingerprint != fingerprint
             || weekGraphCachesAthlete != model.athlete

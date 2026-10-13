@@ -13,10 +13,6 @@ struct WeekViewModelFieldTestTests {
         }
     }
 
-    private func day(_ offset: Int) -> Date {
-        Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
-    }
-
     /// A run at 150 bpm that ramps up to hold `peak` for two minutes, then ramps back down.
     private func run(on start: Date, peak: Double, scheduledPlanID: UUID?) -> Activity {
         let ramp = stride(from: 150.0, to: peak, by: 10).dropFirst().map { $0 }
@@ -35,23 +31,25 @@ struct WeekViewModelFieldTestTests {
     /// given peak, imported (so it's linked to the plan, as in the app). The athlete's max is 178.
     private func makeViewModel(
         purpose: WorkoutPurpose = .maxHRTest, peak: Double = 171,
-        history: InMemoryMaxHeartRatePromptHistory = InMemoryMaxHeartRatePromptHistory()
+        history: InMemoryMaxHeartRatePromptHistory = InMemoryMaxHeartRatePromptHistory(),
+        athleteStore: (any AthleteStore)? = nil, activity makeActivity: ((UUID) -> Activity)? = nil,
+        workoutSeconds: Double = 600
     ) async throws -> (TrainingModel, WeekViewModel, Activity) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
-            cycleStore: store, raceStore: store, athleteStore: store
+            cycleStore: store, raceStore: store, athleteStore: athleteStore ?? store
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178))
         let workout = StructuredWorkout(
             name: "Test", sport: .running,
-            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(600))])], purpose: purpose
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(workoutSeconds))])], purpose: purpose
         )
         try await model.add(workout, asOf: day(2))
         let plan = PlannedActivity(workoutID: workout.id, date: day(2))
         try await model.add(plan, asOf: day(2))
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let activity = run(on: day(2), peak: peak, scheduledPlanID: plan.id)
+        let activity = makeActivity?(plan.id) ?? run(on: day(2), peak: peak, scheduledPlanID: plan.id)
         try await model.importActivities(from: StubImporter(activities: [activity]), asOf: day(2))
         let viewModel = WeekViewModel(
             model: model, refresher: FakeRefresher(), maxHeartRatePromptHistory: history, today: day(3)
@@ -133,18 +131,146 @@ struct WeekViewModelFieldTestTests {
     func ordinaryWorkoutIsNotATest() async throws {
         let (_, viewModel, _) = try await makeViewModel(purpose: .general, peak: 171)
 
-        await viewModel.checkForFieldTestResult(asOf: day(3))
+        await viewModel.checkForFieldTestResult()
 
         #expect(viewModel.fieldTestResult == nil)
     }
 
-    @Test("a test that can't be measured is skipped without a prompt")
-    func unmeasurableIsSkipped() async throws {
-        let (_, viewModel, _) = try await makeViewModel(purpose: .lthrTest, peak: 171)
+    /// A 30-minute effort at a steady `bpm`, one sample every 5 s.
+    private func thirtyMinuteEffort(bpm: Double) -> (UUID) -> Activity {
+        { planID in
+            let start = day(2)
+            let samples = (0..<360).map { HeartRateSample(time: start.addingTimeInterval(Double($0) * 5), bpm: bpm) }
+            return Activity(
+                source: .healthKit(UUID()), sport: .running, start: start, duration: 1800,
+                heartRate: samples, scheduledPlanID: planID
+            )
+        }
+    }
 
-        await viewModel.checkForFieldTestResult(asOf: day(3))
+    @Test("a lactate threshold test is offered, with no value on record to compare")
+    func lactateThresholdOffered() async throws {
+        let (model, viewModel, activity) = try await makeViewModel(
+            purpose: .lthrTest, activity: thirtyMinuteEffort(bpm: 162), workoutSeconds: 1800
+        )
+
+        await viewModel.checkForFieldTestResult()
+
+        let result = try #require(viewModel.fieldTestResult)
+        #expect(result.measurement == .lactateThresholdHeartRate)
+        #expect(result.valueBPM == 162)
+        #expect(result.currentBPM == nil)
+        #expect(viewModel.fieldTestPromptTitle(for: result) == "New Lactate Threshold?")
+        #expect(viewModel.fieldTestAcceptTitle(for: result) == "Update to 162 bpm")
+        #expect(viewModel.fieldTestPromptMessage(for: result).contains("no lactate threshold heart rate on record"))
+
+        await viewModel.acceptFieldTestResult(result, asOf: day(3))
+
+        let settings = try #require(model.athlete.heartRateZoneSettings(asOf: activity.start))
+        #expect(settings.lactateThresholdHeartRateBPM == 162)
+        #expect(settings.lactateThresholdSource == .fieldTest(activityID: activity.id))
+        #expect(settings.maxHeartRateBPM == 178)
+    }
+
+    @Test("a result equal to the current max is still offered, to record it as measured")
+    func equalResultIsOffered() async throws {
+        let (_, viewModel, _) = try await makeViewModel(peak: 178)
+
+        await viewModel.checkForFieldTestResult()
+
+        let result = try #require(viewModel.fieldTestResult)
+        #expect(viewModel.fieldTestAcceptTitle(for: result) == "Record 178 bpm")
+        #expect(viewModel.fieldTestPromptMessage(for: result).contains("the same as your max heart rate"))
+    }
+
+    @Test("the message names the direction, and says when the effort was placed by the plan")
+    func messageBranches() {
+        let viewModel = FieldTestMessageFixture.viewModel()
+        let base = FieldTestResult(
+            measurement: .maxHeartRate, activityID: UUID(), activityStart: day(2), valueBPM: 189, currentBPM: 178
+        )
+        #expect(viewModel.fieldTestPromptMessage(for: base).contains("above your max heart rate of 178 bpm"))
+        #expect(!viewModel.fieldTestPromptMessage(for: base).contains("scheduled workout"))
+        let estimated = FieldTestResult(
+            measurement: .maxHeartRate, activityID: UUID(), activityStart: day(2), valueBPM: 189, currentBPM: 178,
+            isEstimatedFromPlan: true
+        )
+        #expect(viewModel.fieldTestPromptMessage(for: estimated).contains("scheduled workout"))
+    }
+
+    @Test("a test that can't be measured is skipped without a prompt, and not measured again until an import")
+    func unmeasurableIsSkipped() async throws {
+        // A lactate threshold test whose activity has the wrong shape: a ten-minute run.
+        let (_, viewModel, activity) = try await makeViewModel(purpose: .lthrTest, peak: 171)
+
+        await viewModel.checkForFieldTestResult()
 
         #expect(viewModel.fieldTestResult == nil)
         #expect(!viewModel.fieldTestUpdateFailed)
+        #expect(viewModel.unmeasurableFieldTestActivityIDs == [activity.id])
+
+        await viewModel.refreshWeekCachesIfNeeded(asOf: day(3), activitiesChanged: true)
+        #expect(viewModel.unmeasurableFieldTestActivityIDs.isEmpty)
+    }
+
+    @Test("a failed save reports the failure, changes nothing and doesn't record a decline")
+    func failedSaveReported() async throws {
+        let history = InMemoryMaxHeartRatePromptHistory()
+        let (model, viewModel, _) = try await makeViewModel(
+            peak: 171, history: history, athleteStore: FailingAthleteSaveStore()
+        )
+        await viewModel.checkForFieldTestResult()
+        let result = try #require(viewModel.fieldTestResult)
+
+        await viewModel.acceptFieldTestResult(result, asOf: day(3))
+
+        #expect(viewModel.fieldTestUpdateFailed)
+        #expect(history.declinedActivityIDs.isEmpty)
+        #expect(model.athlete.currentHeartRateZoneSettings?.maxHeartRateBPM == 178)
+        viewModel.acknowledgeFieldTestUpdateFailure()
+        #expect(!viewModel.fieldTestUpdateFailed)
+
+        await viewModel.checkForFieldTestResult()
+        #expect(viewModel.fieldTestResult != nil)
+    }
+
+    @Test("a declined test also keeps its activity from being suggested as a raise")
+    func declinedTestIsNotSuggestedAsRaise() async throws {
+        let (_, viewModel, _) = try await makeViewModel(peak: 189)
+        await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
+        viewModel.declineFieldTestResult(try #require(viewModel.fieldTestResult))
+
+        await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
+
+        #expect(viewModel.fieldTestResult == nil)
+        #expect(viewModel.maxHeartRateSuggestion == nil)
+    }
+
+    @Test("the athlete screen says a max came from a field test")
+    func athleteCaption() async throws {
+        let (model, viewModel, _) = try await makeViewModel(peak: 171)
+        await viewModel.checkForFieldTestResult()
+        await viewModel.acceptFieldTestResult(try #require(viewModel.fieldTestResult), asOf: day(3))
+
+        let caption = AthleteViewModel(athlete: model.athlete).maxHeartRateSourceDescription
+
+        #expect(caption?.hasPrefix("Measured in a field test on") == true)
+    }
+
+    private func day(_ offset: Int) -> Date {
+        Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
+    }
+}
+
+@MainActor
+private enum FieldTestMessageFixture {
+    static func viewModel() -> WeekViewModel {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store
+        )
+        let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178))
+        return WeekViewModel(model: model, refresher: FakeRefresher(), today: .now)
     }
 }

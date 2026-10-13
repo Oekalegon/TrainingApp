@@ -439,6 +439,26 @@ across launches.
   - Closing the alert any other way just asks again on the next check.
   - It's never applied silently, because every zone and every TRIMP score from that day on moves
     with it.
+- **Field-test result prompt** (MVP2-155): a max heart rate or 30-minute lactate threshold test
+  (a workout whose `purpose` is `.maxHRTest` or `.lthrTest`, made in the library or the template
+  editor's Purpose picker, MVP2-156) that was linked to its plan gets its own alert.
+  `WeekViewModel.checkForFieldTestResult()` runs at the start of the max heart rate check, after
+  every import and when the week view loads.
+  - TrainingKit measures the result (`TrainingModel.fieldTestResult(forActivity:)`, MVP2-154); the
+    alert reads "We measured 171 bpm in your max heart rate test on 24 Sep, below your max heart
+    rate of 178 bpm. Update …?". A test's max may be **lower** than the one on record; an ordinary
+    workout's can only raise it. When the effort was placed by the plan's timing (the test wasn't
+    started from its scheduled workout) the message asks the athlete to check it.
+  - **Update to N bpm** calls `applyFieldTestResult(_:asOf:)`: from the test's date onward, with the
+    `.fieldTest` source, which the Athlete tab shows as "Measured in a field test on …". A failed
+    save shows "Couldn't Update Heart Rate Settings" and asks again at the next check.
+  - **Keep Current** records the activity in the same declined set as the max heart rate prompt, so
+    it isn't asked about again and isn't offered as an ordinary raise either.
+  - Skipped: activities already the source of the max or lactate threshold, and tests that can't
+    be measured (no heart rate, effort not found). Those stay silent and aren't tried again until an
+    import changes the activities. A result equal to the current value is still offered, as
+    "Record N bpm", so an estimate's source becomes the measured one.
+  - Checks look at the loaded plans' workouts first, so ordinary linked workouts cost no store read.
 - **Caches follow the athlete**: the sport-stats pages, daily-load split and heart-rate histogram
   caches include the athlete in their keys alongside the activity, plan and workout counts (the
   sport-stats and daily-load caches also hash the activities and plans themselves, and the
@@ -698,7 +718,7 @@ The screens:
     (the sheet shows it locked); off, the athlete's own entries stand and HealthKit's reading is ignored.
     Turning it on imports straight away. The maximum is **never** changed for the athlete: the HealthKit
     merge only seeds the very first entry from the age estimate, a workout-measured maximum still has to
-    be accepted (MVP2-56), and when the age estimate later differs by at least 2 bpm while the current
+    be accepted (MVP2-56), as does a field-test result (MVP2-155), and when the age estimate later differs by at least 2 bpm while the current
     maximum is itself an estimate, a "Use Age Estimate (N bpm)" button offers it
     (`AthleteViewModel.offeredMaxHeartRateEstimate(asOf:)`).
   - **Pace Zones** (`PaceZonesView`, MVP2-132 editing): the pace model's threshold pace
