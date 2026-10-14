@@ -311,8 +311,19 @@ public final class PlannedWorkoutSheetViewModel {
     /// Writes one parameter's value and recomputes ``expectedLoad``/``guardrailFindings``. The
     /// sheet's controls call this rather than mutating ``parameterValues`` directly, since a plain
     /// dictionary write wouldn't trigger the guardrail simulation.
+    ///
+    /// A value inside the parameter's range is moved onto its nearest notch
+    /// (``WorkoutTemplateParameter/snapped(_:)``), whoever sends it: the slider already steps, but a rest
+    /// of 94.3 seconds would still reach the workout from any other control. A value outside the range
+    /// (which no slider can produce, for example a plan made elsewhere with a longer run than the
+    /// template's range) is kept as given rather than silently clamped.
     public func setParameterValue(_ value: Double, forKey key: String) {
-        parameterValues[key] = value
+        let parameter = (selectedTemplate ?? editedTemplate)?.parameters.first { $0.key == key }
+        if let parameter, parameter.sliderRange.contains(value) {
+            parameterValues[key] = parameter.snapped(value)
+        } else {
+            parameterValues[key] = value
+        }
         refreshGeneratedTitle()
         recomputeExpectedLoad()
         recomputeGuardrails()
@@ -335,8 +346,11 @@ public final class PlannedWorkoutSheetViewModel {
             guardrailDiagnostic = nil
             return
         }
+        // A new plan starts on a notch of each slider (a template's default can be off one, such as an
+        // athlete's own 10 minutes in a 7.5 to 20 minute range), so the label and the thumb agree.
+        // Editing an existing plan keeps the values it was made with.
         parameterValues = Dictionary(
-            uniqueKeysWithValues: selectedTemplate.parameters.map { ($0.key, $0.defaultValue) }
+            uniqueKeysWithValues: selectedTemplate.parameters.map { ($0.key, $0.snapped($0.defaultValue)) }
         )
         venue = selectedTemplate.defaultVenue(for: model.athlete)
         nameIsCustomized = false

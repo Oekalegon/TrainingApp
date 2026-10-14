@@ -272,18 +272,6 @@ private struct ParameterRow: View {
     let parameter: WorkoutTemplateParameter
     @Binding var value: Double
 
-    /// Falls back to half/double `defaultValue` when the template declares no explicit range —
-    /// floored to a minimum 1-wide band so a future template with `defaultValue == 0` (none of
-    /// `BuiltInWorkoutTemplates` today do) doesn't produce a degenerate `0...0` Slider.
-    private var range: ClosedRange<Double> {
-        guard let declaredRange = parameter.range else {
-            let lower = parameter.defaultValue / 2
-            let upper = max(parameter.defaultValue * 2, lower + 1)
-            return lower...upper
-        }
-        return declaredRange
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -292,7 +280,9 @@ private struct ParameterRow: View {
                 Text(parameter.formatted(value))
                     .foregroundStyle(.secondary)
             }
-            Slider(value: $value, in: range)
+            Slider(value: $value, in: parameter.sliderRange, step: parameter.sliderStep)
+                .accessibilityLabel(parameter.name)
+                .accessibilityValue(parameter.formatted(value))
         }
     }
 }
