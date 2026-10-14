@@ -963,3 +963,43 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(editing.sport == .running)
     }
 }
+
+@MainActor
+@Suite("PlannedWorkoutSheetViewModel parameter snapping (MVP2-106)")
+struct PlannedWorkoutSheetParameterSnappingTests {
+    private func makeViewModel(template: WorkoutTemplate) -> PlannedWorkoutSheetViewModel {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: store, athleteStore: store
+        )
+        let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, templates: [template], scheduler: nil)
+        viewModel.selectedTemplate = template
+        return viewModel
+    }
+
+    @Test("a value off a notch lands on it, whichever control sent it")
+    func offNotchValueSnaps() throws {
+        let template = BuiltInWorkoutTemplates.hillRepetitionRun
+        let rest = try #require(template.parameters.first { $0.key == "rest" })
+        let viewModel = makeViewModel(template: template)
+
+        viewModel.setParameterValue(rest.sliderRange.lowerBound + 2.4, forKey: "rest")
+
+        #expect(viewModel.parameterValues["rest"] == rest.snapped(rest.sliderRange.lowerBound + 2.4))
+        #expect(viewModel.parameterValues["rest"] == rest.sliderRange.lowerBound)
+    }
+
+    @Test("a value outside the range is kept as given, not clamped")
+    func outOfRangeValueIsKept() throws {
+        let template = BuiltInWorkoutTemplates.easyRun
+        let duration = try #require(template.parameters.first { $0.key == "duration" })
+        let viewModel = makeViewModel(template: template)
+        let beyond = duration.sliderRange.upperBound + 5 * 60
+
+        viewModel.setParameterValue(beyond, forKey: "duration")
+
+        #expect(viewModel.parameterValues["duration"] == beyond)
+    }
+}

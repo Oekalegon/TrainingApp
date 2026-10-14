@@ -66,9 +66,13 @@ struct WorkoutLibraryViewModelTests {
 
         #expect(ids("") == BuiltInWorkoutTemplates.all.map(\.id))
         #expect(ids("EASY") == [BuiltInWorkoutTemplates.easyRun.id])
-        // By default title ("20 km Long Run") and across words in any order.
-        #expect(ids("km long") == [BuiltInWorkoutTemplates.longRun.id])
-        #expect(ids("run long") == [BuiltInWorkoutTemplates.longRun.id])
+        // By default title ("20 km Long Run") and across words in any order. "km" is only in a distance title,
+        // so with the long run templates that also say "long" it narrows to the plain long run.
+        #expect(ids("km long").contains(BuiltInWorkoutTemplates.longRun.id))
+        #expect(!ids("km long").contains(BuiltInWorkoutTemplates.easyRun.id))
+        #expect(ids("long km").contains(BuiltInWorkoutTemplates.longRun.id))
+        #expect(ids("long run").contains(BuiltInWorkoutTemplates.longRun.id))
+        #expect(!ids("easy long").contains(BuiltInWorkoutTemplates.longRun.id))
         // By sport.
         #expect(ids("running").count == BuiltInWorkoutTemplates.all.count)
         #expect(ids("swim").isEmpty)

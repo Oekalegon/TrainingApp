@@ -915,7 +915,7 @@ nothing is saved until the check mark:
   Value" and "Maximum Value" for a parameter. Changing the step's role, goal type or target closes it
   again (editing the parameter's own fields doesn't). Switching to Parameter makes a parameter named after the step ("Recovery
   duration") that starts at the fixed value, with a range of half to double it; switching back to
-  Fixed keeps its default value. Each parameter becomes a slider in the planned-workout sheet. The
+  Fixed keeps its default value. Each parameter becomes a slider in the planned-workout sheet, with a step so a rest can't land on 94.3 seconds (MVP2-106, `WorkoutTemplateParameter.sliderStep`): a `.minutes` parameter, which holds seconds, moves by 5 s when its range ends within 5 minutes, by 15 s up to 15 minutes and by a whole minute beyond; distances by 50 m up to a kilometre and by 100 m beyond; counts by one. Notches are counted from the range's lower bound, as `Slider` does, and a test checks that every built-in parameter's default and range ends sit on them. `PlannedWorkoutSheetViewModel.setParameterValue` snaps a value inside the range whoever sends it, and keeps one outside as given. The
   repeat count of a block is set from its "Repeat" header, in the same way; an ordinary step has no
   repeats of its own. Going back to "Fixed", or removing the step or block, drops a parameter nothing
   else uses, so no slider is left that does nothing.
