@@ -12,8 +12,8 @@ Scope of MVP 1:
   preferences synced through CloudKit,
   end-to-end in a real app, not just the `HealthKitHarness`/`PersistenceHarness` test harnesses.
 
-Explicitly **not** MVP 1: manual activity entry, plan editing/generation (MVP 2 territory), a
-dedicated onboarding flow, multi-athlete switching UI (the data layer supports it per
+Explicitly **not** MVP 1: manual activity entry (still open, MVP 4), planning workouts by hand (shipped
+in MVP 2) and plan generation (MVP 5), a dedicated onboarding flow (shipped in MVP 2), multi-athlete switching UI (the data layer supports it per
 `AthleteProfile`, but nothing in this app builds a roster), iPad/watchOS layouts.
 
 ---
@@ -1185,7 +1185,7 @@ HealthKit or CloudKit involved.
   in MVP 1 beyond a basic "loading" state.
 - **Multi-athlete roster UI** — data layer supports it (`AthleteProfile.id`), app doesn't expose
   it.
-- **Cycle/plan viewing screen** — deferred until MVP 2's plan assistant gives it a reason to
+- **Cycle/plan viewing screen** — deferred until the plan assistant (MVP 5) gives it a reason to
   exist beyond a static list.
 - **Editing the athlete account** — done in MVP2-132 (§2.3).
 - iPad layout, watchOS companion, manual activity entry, plan editing.

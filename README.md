@@ -4,8 +4,13 @@ Companion iOS app for [TrainingKit](https://github.com/Oekalegon/TrainingKit): a
 single-athlete viewer of training data read from HealthKit, with plans and preferences synced
 through CloudKit (health data stays on the device). iOS 26+, iPhone only.
 
-MVP 1 shows a rolling fitness trend (CTL/ATL/TSB) alongside a week-by-week view of completed and
-planned activities, with a basic activity detail screen and a read-only athlete account screen.
+It shows a rolling fitness trend (CTL/ATL/TSB) alongside a week-by-week view of completed and
+planned activities, with an activity detail screen and an athlete account (heart-rate zones with where
+each value came from, pace, personal information). Since 0.2.0 (MVP 2) you can plan workouts from a
+library of running templates, or your own, and send them to the Apple Watch; completed activities link
+to their plans and are compared with them; field tests and lab tests update your max heart rate and
+lactate threshold after you confirm; and planned loads, durations and distances are forecast from what
+you actually did before.
 See [`docs/design/trainingApp-design.md`](docs/design/trainingApp-design.md) for the full design.
 
 ## Project layout
