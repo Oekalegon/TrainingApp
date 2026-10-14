@@ -72,4 +72,90 @@ struct TemplateSliderTests {
         let zero = WorkoutTemplateParameter(key: "p", name: "P", unit: .count, defaultValue: 0)
         #expect(zero.sliderRange == 0...1)
     }
+
+    // MARK: The athlete's own templates
+
+    private func custom(_ unit: ParameterUnit, _ range: ClosedRange<Double>, default value: Double) -> WorkoutTemplateParameter {
+        WorkoutTemplateParameter(key: "p", name: "P", unit: unit, defaultValue: value, range: range)
+    }
+
+    /// Whether `value` is a notch of the parameter's slider, counted from its lower bound.
+    private func onNotch(_ value: Double, _ parameter: WorkoutTemplateParameter) -> Bool {
+        let notches = (value - parameter.sliderRange.lowerBound) / parameter.sliderStep
+        return abs(notches - notches.rounded()) < 1e-9
+    }
+
+    @Test("a custom duration range that isn't on whole minutes can still reach its maximum")
+    func oddMinuteRange() {
+        // 7.5 to 20 minutes with a 10 minute default: a whole-minute step from 7:30 would stop at 19:30.
+        let parameter = custom(.minutes, 450...1200, default: 600)
+
+        #expect(onNotch(parameter.sliderRange.upperBound, parameter))
+        #expect(onNotch(parameter.defaultValue, parameter))
+        #expect(parameter.sliderStep <= 60)
+        #expect(parameter.snapped(1200) == 1200)
+    }
+
+    @Test("a range in miles, held in metres, reaches its maximum and starts within half a notch of its default")
+    func imperialDistanceRange() {
+        let mile = 1609.344
+        let parameter = custom(.meters, 3 * mile...13 * mile, default: 8 * mile)
+
+        #expect(onNotch(parameter.sliderRange.upperBound, parameter))
+        #expect(parameter.sliderStep <= 100)
+        #expect(abs(parameter.snapped(parameter.defaultValue) - parameter.defaultValue) <= parameter.sliderStep / 2 + 1e-9)
+        #expect(parameter.snapped(13 * mile) == 13 * mile)
+    }
+
+    @Test("a step never exceeds the one its range length allows, and finer ones are used only when needed")
+    func stepStaysCoarseWhenItCan() {
+        #expect(custom(.minutes, 30...120, default: 60).sliderStep == 5)
+        #expect(custom(.minutes, 600...2400, default: 1200).sliderStep == 60)
+        // A default two seconds off the 5 s grid needs the 1 s step; one on it keeps 5 s.
+        #expect(custom(.minutes, 60...300, default: 132).sliderStep == 1)
+        #expect(custom(.minutes, 60...300, default: 120).sliderStep == 5)
+    }
+
+    @Test("a fractional count range is divided so its maximum is a notch")
+    func fractionalCountRange() {
+        let parameter = custom(.count, 2.5...10, default: 5)
+        #expect(onNotch(10, parameter))
+        #expect(parameter.sliderStep > 0)
+    }
+
+    @Test("a new plan's sliders start on a notch, and an edited plan keeps what it was made with")
+    @MainActor
+    func seedingSnapsOnlyNewPlans() throws {
+        let parameter = WorkoutTemplateParameter(
+            key: "duration", name: "Duration", unit: .minutes, defaultValue: 600, range: 450...1200
+        )
+        // No step puts both ends of this range in miles' metres on a notch, so the default ends up off one.
+        let mile = 1609.344
+        let off = WorkoutTemplateParameter(
+            key: "rest", name: "Rest", unit: .meters, defaultValue: 8 * mile, range: 3 * mile...13 * mile
+        )
+        let template = WorkoutTemplate(
+            name: "Mine", sport: .running, parameters: [parameter, off],
+            blocks: [TemplateBlock(steps: [TemplateStep(kind: .work, goal: .time(.parameter("duration")))])]
+        )
+        let store = InMemoryStore()
+        let model = TrainingModel(
+            stores: StoreSet(
+                activityStore: store, planStore: store, workoutStore: store,
+                cycleStore: store, raceStore: store, athleteStore: store
+            ),
+            athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        )
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, templates: [template], scheduler: nil)
+
+        viewModel.selectedTemplate = template
+
+        for parameter in template.parameters {
+            let seeded = try #require(viewModel.parameterValues[parameter.key])
+            #expect(seeded == parameter.snapped(parameter.defaultValue))
+        }
+        // The default 12874.752 m is not on a notch; the new plan starts on the nearest one.
+        #expect(viewModel.parameterValues["rest"] != off.defaultValue)
+        #expect(abs((viewModel.parameterValues["rest"] ?? 0) - off.defaultValue) <= off.sliderStep / 2 + 1e-9)
+    }
 }

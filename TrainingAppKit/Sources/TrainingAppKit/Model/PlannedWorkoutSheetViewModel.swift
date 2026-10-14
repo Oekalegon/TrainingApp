@@ -346,8 +346,11 @@ public final class PlannedWorkoutSheetViewModel {
             guardrailDiagnostic = nil
             return
         }
+        // A new plan starts on a notch of each slider (a template's default can be off one, such as an
+        // athlete's own 10 minutes in a 7.5 to 20 minute range), so the label and the thumb agree.
+        // Editing an existing plan keeps the values it was made with.
         parameterValues = Dictionary(
-            uniqueKeysWithValues: selectedTemplate.parameters.map { ($0.key, $0.defaultValue) }
+            uniqueKeysWithValues: selectedTemplate.parameters.map { ($0.key, $0.snapped($0.defaultValue)) }
         )
         venue = selectedTemplate.defaultVenue(for: model.athlete)
         nameIsCustomized = false

@@ -281,6 +281,8 @@ private struct ParameterRow: View {
                     .foregroundStyle(.secondary)
             }
             Slider(value: $value, in: parameter.sliderRange, step: parameter.sliderStep)
+                .accessibilityLabel(parameter.name)
+                .accessibilityValue(parameter.formatted(value))
         }
     }
 }
