@@ -281,7 +281,7 @@ struct OnboardingViewModelTests {
         let refresher = RecordingRefresher(unanswered: true)
         let progress = FakeProgress()
         progress.hasCompletedOnboarding = true
-        let viewModel = WeekViewModel(model: model, refresher: refresher, onboardingProgress: progress, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, onboardingProgress: progress, today: day(0))
         await viewModel.load(asOf: day(0))
         await viewModel.refreshHealthAccessStatus()
         #expect(viewModel.showsDistanceBanner)
@@ -298,7 +298,7 @@ struct OnboardingViewModelTests {
         let progress = FakeProgress()
         progress.hasCompletedOnboarding = true
         let model = makeModel()
-        let viewModel = WeekViewModel(
+        let viewModel = MicroCycleViewModel(
             model: model, refresher: StubRefresher(), onboardingProgress: progress, iCloud: FakeICloud(.noAccount), today: day(0)
         )
         await viewModel.load(asOf: day(0))
@@ -327,7 +327,7 @@ struct OnboardingViewModelTests {
         let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
         let progress = FakeProgress()
         progress.hasCompletedOnboarding = true
-        let viewModel = WeekViewModel(
+        let viewModel = MicroCycleViewModel(
             model: model, refresher: RecordingRefresher(unanswered: true), onboardingProgress: progress,
             iCloud: FakeICloud(.noAccount), today: day(0)
         )
@@ -349,7 +349,7 @@ struct OnboardingViewModelTests {
         let refresher = RecordingRefresher(unanswered: true)
         let progress = FakeProgress()
         progress.hasCompletedOnboarding = true
-        let viewModel = WeekViewModel(model: model, refresher: refresher, onboardingProgress: progress, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, onboardingProgress: progress, today: day(0))
         await viewModel.load(asOf: day(0))
         // A tap landing while the Health sheet is still up.
         refresher.whileAuthorizing = { await viewModel.allowMoreHealthData(asOf: self.day(0)) }
@@ -364,11 +364,11 @@ struct OnboardingViewModelTests {
     // MARK: Week view model
 
     @Test("the week view model shows the Health banner once a plan is loaded and the introduction is done, and not before the first load")
-    func weekViewModelHealthBanner() async throws {
+    func microCycleViewModelHealthBanner() async throws {
         let progress = FakeProgress()
         progress.hasCompletedOnboarding = true
         let model = makeModel()
-        let viewModel = WeekViewModel(
+        let viewModel = MicroCycleViewModel(
             model: model, refresher: StubRefresher(), onboardingProgress: progress, today: day(0)
         )
         #expect(!viewModel.showsConnectHealthBanner)
@@ -396,7 +396,7 @@ struct OnboardingViewModelTests {
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
-        let viewModel = WeekViewModel(model: model, refresher: StubRefresher(), onboardingProgress: FakeProgress(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: StubRefresher(), onboardingProgress: FakeProgress(), today: day(0))
 
         await viewModel.load(asOf: day(0))
 

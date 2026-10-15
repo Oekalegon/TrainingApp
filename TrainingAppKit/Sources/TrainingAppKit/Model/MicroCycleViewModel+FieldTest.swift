@@ -8,9 +8,9 @@ import TrainingCore
 /// athlete confirms, and only then are the settings changed, since a new value moves every zone and
 /// training-load score from the test's day on. Unlike that suggestion, a max heart rate from a test may
 /// be lower than the one on record.
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// Looks through the loaded activities for a field test whose result the athlete hasn't answered
-    /// yet and, if one is found, sets ``fieldTestResult`` for `WeekView` to ask about.
+    /// yet and, if one is found, sets ``fieldTestResult`` for `MicroCycleView` to ask about.
     ///
     /// Only activities linked to a plan whose workout is a test are measured. Skipped: activities
     /// already declined, and those whose result is already the source of the athlete's max heart rate
@@ -109,7 +109,7 @@ extension WeekViewModel {
         fieldTestResult = nil
     }
 
-    /// Clears ``fieldTestUpdateFailed`` once `WeekView` has shown it.
+    /// Clears ``fieldTestUpdateFailed`` once `MicroCycleView` has shown it.
     public func acknowledgeFieldTestUpdateFailure() {
         fieldTestUpdateFailed = false
     }
@@ -132,7 +132,7 @@ extension WeekViewModel {
         return "Update to \(Int(result.valueBPM)) bpm"
     }
 
-    /// The question `WeekView`'s alert asks about `result`, e.g. "Your max heart rate test on 24 Sep
+    /// The question `MicroCycleView`'s alert asks about `result`, e.g. "Your max heart rate test on 24 Sep
     /// measured 171 bpm, below your max heart rate of 178 bpm. …".
     ///
     /// - Parameter result: The result to describe.

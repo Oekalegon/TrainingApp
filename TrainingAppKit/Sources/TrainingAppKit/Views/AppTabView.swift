@@ -7,9 +7,9 @@ import TrainingCore
 /// that searches workout templates, planned workouts and
 /// activities as the athlete types.
 ///
-/// Owns the single `WeekViewModel` for the app's lifetime so both tabs share it: `WeekView` reads
-/// it directly, and `AthleteView` reads it via `WeekViewModel.athleteViewModel` — that coupling is
-/// why `WeekViewModel` is constructed once here rather than inside `WeekView` itself.
+/// Owns the single `MicroCycleViewModel` for the app's lifetime so both tabs share it: `MicroCycleView` reads
+/// it directly, and `AthleteView` reads it via `MicroCycleViewModel.athleteViewModel` — that coupling is
+/// why `MicroCycleViewModel` is constructed once here rather than inside `MicroCycleView` itself.
 ///
 /// Also puts the next 7 days of planned workouts on the Watch each time the app becomes active
 /// (MVP2-55, ``WatchScheduleSync``), and opens the Athlete tab's Apple Watch synchronisation screen
@@ -22,7 +22,7 @@ public struct AppTabView: View {
         case athlete
     }
 
-    @State private var viewModel: WeekViewModel
+    @State private var viewModel: MicroCycleViewModel
     /// The Library tab's view model (MVP2-21), kept for the app's lifetime so its plan counts
     /// survive switching tabs.
     @State private var libraryViewModel: WorkoutLibraryViewModel
@@ -53,7 +53,7 @@ public struct AppTabView: View {
         model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil,
         iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
     ) {
-        let viewModel = WeekViewModel(model: model, refresher: refresher, watchSync: watchSync, iCloud: iCloud)
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, watchSync: watchSync, iCloud: iCloud)
         _viewModel = State(initialValue: viewModel)
         let libraryViewModel = viewModel.workoutLibraryViewModel()
         _libraryViewModel = State(initialValue: libraryViewModel)
@@ -64,7 +64,7 @@ public struct AppTabView: View {
 
     /// The search results, laid over a tab while its search field is in use (MVP2-145).
     private var searchResultsView: SearchView {
-        SearchView(viewModel: searchViewModel, weekViewModel: viewModel, query: searchText)
+        SearchView(viewModel: searchViewModel, microCycleViewModel: viewModel, query: searchText)
     }
 
     public var body: some View {
@@ -76,7 +76,7 @@ public struct AppTabView: View {
 
         TabView(selection: $selectedTab) {
             Tab("Week", systemImage: "calendar", value: AppTab.week) {
-                WeekView(viewModel: viewModel, onShowWatchSettings: {
+                MicroCycleView(viewModel: viewModel, onShowWatchSettings: {
                     athletePath = AthleteRoute.watchSettings
                     selectedTab = .athlete
                 })
@@ -91,7 +91,7 @@ public struct AppTabView: View {
             Tab("Athlete", systemImage: "person.circle", value: AppTab.athlete) {
                 AthleteView(
                     viewModel: viewModel.athleteViewModel,
-                    weekViewModel: viewModel,
+                    microCycleViewModel: viewModel,
                     path: $athletePath,
                     isResyncing: viewModel.isResyncing,
                     onResync: { Task { await viewModel.resyncActivities() } },
@@ -118,7 +118,7 @@ public struct AppTabView: View {
             }
             // Same live count `OverlapWarningBanner` shows on the Athlete screen itself (MVP1-67)
             // — both update together whenever an overlap is resolved, since they read the same
-            // `WeekViewModel.overlapReviewItems`. `.badge(0)` hides the badge on its own, so no
+            // `MicroCycleViewModel.overlapReviewItems`. `.badge(0)` hides the badge on its own, so no
             // extra `nil`-vs-count branch is needed here.
             .badge(overlapReviewItems.count)
         }

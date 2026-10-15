@@ -1,14 +1,14 @@
 import Foundation
 import TrainingCore
 
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// What the plan a completed activity is linked to expected, for the planned values its card
     /// shows next to and under the actual ones.
     public struct LinkedPlanExpectation: Equatable, Sendable {
         /// Expected TRIMP: the plan's override, else the estimator's figure.
         public let load: Double?
         /// Expected duration — exact for a duration-based workout, forecast from the athlete's
-        /// earlier paces for distance and open steps (see ``WeekViewModel/paceHistory``).
+        /// earlier paces for distance and open steps (see ``MicroCycleViewModel/paceHistory``).
         public let duration: TimeInterval?
         /// Expected distance — exact for a distance-based workout, forecast from the athlete's
         /// earlier paces for time and open steps; `nil` when the forecast can't be made (no heart-rate

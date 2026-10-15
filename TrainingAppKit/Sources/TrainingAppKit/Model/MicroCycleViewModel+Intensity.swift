@@ -2,7 +2,7 @@ import Foundation
 import TrainingCore
 
 /// The intensity (MVP2-43) shown on the day list's activity and planned-workout cards.
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// The intensity of a completed activity, checked against its linked plan when there is one —
     /// see `TrainingModel.intensity(of:)`. `nil` when there is nothing to classify it from.
     ///

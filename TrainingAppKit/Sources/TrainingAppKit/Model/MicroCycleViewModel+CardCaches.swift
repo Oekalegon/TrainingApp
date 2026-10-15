@@ -3,7 +3,7 @@ import TrainingCore
 
 /// Invalidation shared by the card caches (`InputKeyedCache`s for card summaries, linked-plan
 /// expectations, intensities and activities' scored loads).
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// Everything a cached card value can depend on that isn't one of its own inputs: the athlete
     /// (zone settings, pace model) and the intensity thresholds. Changing either drops every card
     /// cache; a change in what is loaded prunes entries whose activity or plan is gone.

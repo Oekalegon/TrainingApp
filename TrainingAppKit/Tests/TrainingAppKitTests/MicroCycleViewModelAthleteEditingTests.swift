@@ -5,8 +5,8 @@ import TrainingCore
 
 /// MVP2-132: the athlete edits their profile from the Athlete tab.
 @MainActor
-@Suite("WeekViewModel athlete editing")
-struct WeekViewModelAthleteEditingTests {
+@Suite("MicroCycleViewModel athlete editing")
+struct MicroCycleViewModelAthleteEditingTests {
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
     private func day(_ offset: Int) -> Date {
@@ -16,14 +16,14 @@ struct WeekViewModelAthleteEditingTests {
     private func makeViewModel(
         athlete: AthleteProfile = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190),
         refresher: any ActivityRefreshing = FakeRefresher()
-    ) -> (WeekViewModel, TrainingModel, InMemoryStore) {
+    ) -> (MicroCycleViewModel, TrainingModel, InMemoryStore) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: athlete)
-        return (WeekViewModel(model: model, refresher: refresher, today: now), model, store)
+        return (MicroCycleViewModel(model: model, refresher: refresher, today: now), model, store)
     }
 
     @Test("renaming trims the name, saves it, and an empty name is allowed")
@@ -147,7 +147,7 @@ struct WeekViewModelAthleteEditingTests {
         let activity = Activity(source: .manual, sport: .running, start: evening, duration: 1800, perceivedExertion: 4)
         try await store.upsert([activity])
         let viewModelNow = evening
-        let freshViewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: viewModelNow)
+        let freshViewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: viewModelNow)
         await freshViewModel.load(asOf: viewModelNow)
         #expect(freshViewModel.activities(on: evening).count == 1)
         let auckland = try #require(TimeZone(identifier: "Pacific/Auckland"))
@@ -168,7 +168,7 @@ struct WeekViewModelAthleteEditingTests {
             cycleStore: store, raceStore: store, athleteStore: failing
         )
         let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: now)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: now)
         await failing.setFailsSaves(true)
         let before = model.athlete
 
@@ -201,7 +201,7 @@ struct WeekViewModelAthleteEditingTests {
             cycleStore: store, raceStore: store, athleteStore: failing
         )
         let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: now)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: now)
         await failing.setFailsSaves(true)
         let before = model.athlete
 

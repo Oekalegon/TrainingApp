@@ -3,7 +3,7 @@ import TrainingCore
 
 /// Drives the read-only athlete screens (design doc §2.3), the Athlete tab's list and the screens it
 /// opens (MVP2-123): everything here comes straight from `AthleteProfile`. Edits don't go through this
-/// view model; they're `WeekViewModel`'s (`WeekViewModel+AthleteEditing`, MVP2-132).
+/// view model; they're `MicroCycleViewModel`'s (`MicroCycleViewModel+AthleteEditing`, MVP2-132).
 ///
 /// Immutable after creation, like `ActivityDetailViewModel` — a plain struct, not an `@Observable`
 /// class.

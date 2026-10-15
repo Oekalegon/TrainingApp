@@ -45,8 +45,8 @@ TrainingApp/                      # sibling to TrainingKit/ on disk
   TrainingAppKit/                 # local SPM package, added as a local dependency
     Package.swift
     Sources/TrainingAppKit/
-      Model/                    # TrainingAppEnvironment, WeekViewModel, ActivityDetailViewModel
-      Views/                    # AppTabView, WeekView, ActivityDetailView, AthleteView, EmptyStateView
+      Model/                    # TrainingAppEnvironment, MicroCycleViewModel, ActivityDetailViewModel
+      Views/                    # AppTabView, MicroCycleView, ActivityDetailView, AthleteView, EmptyStateView
     Tests/TrainingAppKitTests/
   docs/design/trainingApp-design.md   # this document
 ```
@@ -78,8 +78,8 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 
 `AppTabView` is the app's root: a bottom tab bar with three tabs, "Week" (§2.1), "Library" (§2.4,
 MVP2-21) and "Athlete" (§2.3), with a search field on every tab (§2.5). All are built from the same
-`WeekViewModel` instance (`AthleteView` reads it via `WeekViewModel.athleteViewModel`, the Library
-and the search results via `WeekViewModel.workoutLibraryViewModel()` and `searchViewModel(library:)`),
+`MicroCycleViewModel` instance (`AthleteView` reads it via `MicroCycleViewModel.athleteViewModel`, the Library
+and the search results via `MicroCycleViewModel.workoutLibraryViewModel()` and `searchViewModel(library:)`),
 owned by `AppTabView` and constructed once for the app's lifetime, as are the Library and search
 tabs' view models. `AppTabView` holds the selected tab and the Athlete tab's pushed screens
 (`[AthleteRoute]`) only so the week view's Watch permission banner can open the Athlete tab's Apple
@@ -106,7 +106,7 @@ calendar week of the year.
   for calendar weeks, but the neighbors come from the plan and may differ in length from a micro), fed
   from `TrainingModel.metrics: [FitnessMetrics]`; "Time in zone" is scoped to just the displayed
   week and its own domain (zone 1's lower bound through zone 5's upper, each padded 15bpm), built
-  on demand from that week's raw heart-rate samples (`WeekViewModel.heartRateHistogram(for:)`)
+  on demand from that week's raw heart-rate samples (`MicroCycleViewModel.heartRateHistogram(for:)`)
   rather than pre-aggregated by `TrainingModel`. The bpm line itself, its zone-band shading, and the
   80th-percentile marker all resolve zone boundaries as of the *displayed week's own end date*, not
   the athlete's current settings (MVP1-78) — a week long in the past shades against the zones
@@ -155,11 +155,11 @@ calendar week of the year.
   full-bleed chart and card-style sections don't fit `List`'s row insets/separators), top to
   bottom:
   - A period-picker segmented control (`ChartPeriod`: W/M/3M/6M/Y) first, above everything else —
-    reachable immediately, without scrolling past the value/chart first. Owned by `WeekView`
-    (`WeekViewModel`-adjacent `@State`), not this view, and passed down as a `Binding` — so it's
+    reachable immediately, without scrolling past the value/chart first. Owned by `MicroCycleView`
+    (`MicroCycleViewModel`-adjacent `@State`), not this view, and passed down as a `Binding` — so it's
     retained across separate pushes: pick "Month" on Load, go back, tap Fitness, and it's
     still "Month". Picking anything past the default `.week` fetches a wider window via
-    `WeekViewModel.metrics(in:asOf:)`, which unions the requested range with whatever's already
+    `MicroCycleViewModel.metrics(in:asOf:)`, which unions the requested range with whatever's already
     loaded before calling `TrainingModel.load(in:)` — that call replaces `activities`/`plans`/
     `metrics` outright rather than merging into them, so requesting a shifted range on its own
     would silently drop data the day list still needs until the next natural navigation reload.
@@ -187,7 +187,7 @@ calendar week of the year.
     moving the tapped day's own value/date/zone header, which stays put regardless of how far the
     chart itself is panned. `MetricDetailView` always loads a buffer three times as wide as the
     picked period around the tapped day (`bufferRange(around:)`) so a pan has real room to move
-    before it needs to await `WeekViewModel.metrics(in:asOf:)` again for more; panning clamps at
+    before it needs to await `MicroCycleViewModel.metrics(in:asOf:)` again for more; panning clamps at
     the edge of whatever's currently loaded rather than showing a blank chart beyond it, and
     tops up the buffer in the background once a pan lands close to that edge:
     - **Load**: `LoadDetailChartView` — the same Daily Load bars `DailyLoadChartView` plots for the
@@ -255,9 +255,9 @@ calendar week of the year.
   don't set is forecast from the athlete's paces (see "Pace forecasts" below) and marked with a "~"
   (see "Estimated values" below), so a guess next to a real figure stays recognisable as one. The
   distance is left out when it can't be forecast (no zone settings recorded). Plans already matched to a completed activity get no row at all
-  (`WeekViewModel.pendingPlans(on:)`). Tapping it opens the planned-workout detail sheet (below).
+  (`MicroCycleViewModel.pendingPlans(on:)`). Tapping it opens the planned-workout detail sheet (below).
 - **Linked activity title** (MVP2-152). An activity matched to a plan is titled by the plan's workout name (e.g.
-  "10 km Long Run"), from one function, `WeekViewModel.activityTitle(for:)`, used by its card, its detail
+  "10 km Long Run"), from one function, `MicroCycleViewModel.activityTitle(for:)`, used by its card, its detail
   sheet, the overlap review and the join text; the sport's name is the title when it has no plan, the
   workout is gone or its name is empty. The card also says the sport to VoiceOver. A plan saved before titles
   carried their parameters keeps its old plain name (e.g. "Long Run") until renamed. Activities carry no name of their own yet,
@@ -310,7 +310,7 @@ calendar week of the year.
     CTL minus ATL: today's Form is known before today's workout is done
     (`FitnessMetrics.isFormProjected(on:in:calendar:)`).
     A performed day's Load pill is marked too (MVP2-127) when one of that day's activities was scored
-    from perceived effort rather than heart rate, as its card is (`WeekViewModel.dayMetrics(on:)`'s
+    from perceived effort rather than heart rate, as its card is (`MicroCycleViewModel.dayMetrics(on:)`'s
     `isLoadEstimated`); one such activity is enough, since the day's total then includes an estimate.
     Fitness and Fatigue aren't marked for it. Each activity's score is cached per activity
     (`scoredLoad(for:)`, MVP2-128), keyed on its sport, start, duration, effort and heart-rate sample
@@ -333,20 +333,20 @@ calendar week of the year.
   cycling." The detail sheet repeats the reason (§2.2, MVP2-122). Neither shows on a missed plan, or
   while the athlete has turned sending off (§2.3);
   VoiceOver reads them as "on Apple Watch" or "can't go on Apple Watch: …". Both come from the
-  last sync, looked up per card (`WeekViewModel.watchStatus(for:)`), so the cards redraw after
+  last sync, looked up per card (`MicroCycleViewModel.watchStatus(for:)`), so the cards redraw after
   each sync without touching the card caches.
 - **Race cards** (MVP2-104). A race on a day is drawn as a `RaceCard` above that day's activities,
   laid out like an activity card's headline: a lettered circle for the priority (A primary, B
   secondary, C tertiary) where the activity card has its intensity marker, a flag icon and the race
-  name. Several races on one day are listed primary first (`WeekViewModel.races(on:)`). The card is
+  name. Several races on one day are listed primary first (`MicroCycleViewModel.races(on:)`). The card is
   not tappable (there is no race detail sheet yet) and reads as one VoiceOver element, e.g. "Primary
   race: Marathon". The graph panel's Daily load and Form pages and
   the metric detail charts (Load, Fitness, Fatigue, Form) mark each race in their window with a solid
   vertical rule and an outlined A/B/C circle at the top of the plot, drawn in the chart overlay so the
-  rule stops at the circle (`RaceChartMarkers`; `WeekViewModel.chartRaces(in:)` gives one race per
+  rule stops at the circle (`RaceChartMarkers`; `MicroCycleViewModel.chartRaces(in:)` gives one race per
   day, the most important). On the daily-load bars the rule sits in the middle of the race day's bar.
   The heart-rate page has none, since its x-axis isn't a date.
-- `DayActivitiesSection` takes one closure per card kind (`WeekViewModel.activityCardContent(for:)`,
+- `DayActivitiesSection` takes one closure per card kind (`MicroCycleViewModel.activityCardContent(for:)`,
   `plannedCardContent(for:asOf:)`) returning everything the card shows. Those values are cached per
   item against the inputs they depend on — a plan's load override, its workout's steps and date, an
   activity's link and heart-rate data, and the pace history planned durations and distances are
@@ -411,9 +411,9 @@ calendar week of the year.
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
   import trigger in MVP 1 — see §3.4.
-- **Empty state**: until a HealthKit import has completed (`WeekViewModel.hasNoActivities`, e.g.
+- **Empty state**: until a HealthKit import has completed (`MicroCycleViewModel.hasNoActivities`, e.g.
   first launch before HealthKit authorization / initial sync) and while no plan is loaded
-  (`WeekViewModel.showsEmptyState`), show an inline prompt — "Connect Health data" — that triggers
+  (`MicroCycleViewModel.showsEmptyState`), show an inline prompt — "Connect Health data" — that triggers
   the HealthKit authorization request. The first-run introduction (§2.1a) is separate.
   A loaded plan (a calendar import, MVP2-103, or a plan made in the Library) shows the calendar
   instead (MVP2-108), so it isn't invisible before Health is connected; only the plans of the
@@ -421,14 +421,14 @@ calendar week of the year.
   reveals the calendar. "Connect Apple Health" stays on the Athlete tab (Connected Services) while
   nothing has been imported.
 - **Overlap warning badge** (MVP1-63): an `Activity` card shows a small orange warning triangle
-  when `WeekViewModel.overlapWarning(for:)` finds a real issue (`.duplicate`/`.merge`/`.conflict`/
+  when `MicroCycleViewModel.overlapWarning(for:)` finds a real issue (`.duplicate`/`.merge`/`.conflict`/
   `.join` from `TrainingModel.overlapAdvice`; when an activity is named by several pairs the
   highest-priority one wins — see `OverlapRecommendation.priority`) — `.possibleMultisport` (e.g. a triathlon's separately-logged
   legs) is deliberately not treated as a warning here, since it isn't a problem. Purely passive;
   resolving it happens in the activity detail sheet (§2.2). The aggregate count across every
   outstanding overlap lives on the Athlete tab instead (§2.3), not here.
 - **New max heart rate prompt** (MVP2-56): after each import, and when the week view loads,
-  `WeekViewModel.checkForMaxHeartRateSuggestion(asOf:)` looks for a workout that *held* a heart
+  `MicroCycleViewModel.checkForMaxHeartRateSuggestion(asOf:)` looks for a workout that *held* a heart
   rate above the athlete's current max (TrainingKit's `PeakHeartRateDetector`: 10 s or longer, so
   sensor spikes don't count).
   - It checks the loaded activities first. Once per device, it also scans the last 12 months in
@@ -452,7 +452,7 @@ calendar week of the year.
 - **Field-test result prompt** (MVP2-155): a max heart rate or 30-minute lactate threshold test
   (a workout whose `purpose` is `.maxHRTest` or `.lthrTest`, made in the library or the template
   editor's Purpose picker, MVP2-156) that was linked to its plan gets its own alert.
-  `WeekViewModel.checkForFieldTestResult()` runs at the start of the max heart rate check, after
+  `MicroCycleViewModel.checkForFieldTestResult()` runs at the start of the max heart rate check, after
   every import and when the week view loads.
   - TrainingKit measures the result (`TrainingModel.fieldTestResult(forActivity:)`, MVP2-154); the
     alert reads "We measured 171 bpm in your max heart rate test on 24 Sep, below your max heart
@@ -485,7 +485,7 @@ calendar week of the year.
   macOS) explains the two things the app can use and lets the athlete act on each:
   - **Apple Health**: what is read (workouts, heart rate, resting heart rate, sex, date of birth), that
     nothing is written, and that workouts never leave the device. "Connect Apple Health" asks for
-    access and imports (`WeekViewModel.connectHealthData`). HealthKit says only whether an import
+    access and imports (`MicroCycleViewModel.connectHealthData`). HealthKit says only whether an import
     completed, not whether access was granted, so the card reads "Connected" after an import, or else
     "Nothing was imported" with where to turn access on in Settings, and offers "Try Again".
     Connecting doesn't end the introduction, even though an import marks Health as imported: whether
@@ -498,7 +498,7 @@ calendar week of the year.
     sheet can't be swiped away, so leaving it is always Continue, which is remembered
     (`OnboardingProgress`, `UserDefaults`, per device).
 - **Banners** at the bottom of the week view, all the same dismissible `PermissionBanner`, **one at a
-  time** (`WeekViewModel.bottomBanner`, MVP2-146): several can apply at once and stacked they would
+  time** (`MicroCycleViewModel.bottomBanner`, MVP2-146): several can apply at once and stacked they would
   cover most of the calendar, so the most important shows (Health, then the Watch (MVP2-117), then
   iCloud) and dismissing it brings up the next:
   - **iCloud isn't available**: while the account is signed out or restricted (not for "unknown",
@@ -559,27 +559,27 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   footer additionally rolls that same breakdown up into the 80/20 low vs. moderate-to-high split
   (MVP1-48, `TimeInZone.polarizedSplit`).
 - No map/route rendering, no cadence/elevation charts — text/stat rows only for MVP 1.
-- **Overlap section** (MVP1-63): shown when `WeekViewModel.overlapContext(for:)` finds this
+- **Overlap section** (MVP1-63): shown when `MicroCycleViewModel.overlapContext(for:)` finds this
   activity part of a pair — unlike the day-list badge above, this includes `.possibleMultisport`
   (informational only, no action), since the detail sheet is where all five
   `OverlapRecommendation` cases are meant to surface distinctly (MVP1-29). `.duplicate` offers a
   single "Remove Duplicate" action (the pair's `remove` side is already decided);
   `.merge`/`.conflict` offer both "keep this, delete other" and "keep other, delete this", routed
-  through `WeekViewModel.resolveOverlap(deleting:)` → `TrainingModel.deleteActivity(id:)`. Real
+  through `MicroCycleViewModel.resolveOverlap(deleting:)` → `TrainingModel.deleteActivity(id:)`. Real
   field-level merge (picking which source's data to keep per field) and multisport-leg linking
   aren't implemented — both need new `TrainingCore` data modeling — so `.merge` gets the delete-one
   fallback rather than an actual field picker.
 - **Join** (MVP1-80): `.join` (same-sport pieces back-to-back, e.g. a run accidentally stopped and
-  restarted) offers "Join into One Activity", routed through `WeekViewModel.joinActivities(_:with:)`
+  restarted) offers "Join into One Activity", routed through `MicroCycleViewModel.joinActivities(_:with:)`
   → `TrainingModel.joinActivities`. No confirmation alert, unlike Delete: a join is reversible. The
   originals stay stored behind the joined activity, which the day list shows as one. A joined
   activity's own detail sheet has a "Joined From" section listing its pieces with an "Unjoin
-  Activities" button (`WeekViewModel.unjoinActivity(_:)`). Both actions report success, and the
+  Activities" button (`MicroCycleViewModel.unjoinActivity(_:)`). Both actions report success, and the
   sheet only closes when they worked — a refused join (different sports, a piece already joined
   elsewhere) leaves it open with an inline message.
-- **Sport and venue** (MVP2-151): a "Sport" section with a sport picker and, for a sport with venue variants, a venue picker, for the athlete to correct a recording (a treadmill run the Watch saved as outdoors). `WeekViewModel.setActivitySport(_:sport:venue:)` saves through `TrainingModel.setSport`, which marks the activity as edited so a re-import keeps the choice, and refreshes the week's caches and the pace history, which the sport and venue feed. The pickers show a choice at once and put it back if the save fails. A linked activity otherwise takes its plan's sport and venue, else the athlete's usual venue (TrainingKit). There is not yet a way to give an edited activity back to its plan.
+- **Sport and venue** (MVP2-151): a "Sport" section with a sport picker and, for a sport with venue variants, a venue picker, for the athlete to correct a recording (a treadmill run the Watch saved as outdoors). `MicroCycleViewModel.setActivitySport(_:sport:venue:)` saves through `TrainingModel.setSport`, which marks the activity as edited so a re-import keeps the choice, and refreshes the week's caches and the pace history, which the sport and venue feed. The pickers show a choice at once and put it back if the save fails. A linked activity otherwise takes its plan's sport and venue, else the athlete's usual venue (TrainingKit). There is not yet a way to give an edited activity back to its plan.
 - **Planned workout link** (MVP2-42): a "Planned Workout" section, shown when the activity is linked
-  to a plan or an unmatched plan exists on its day (`WeekViewModel.planLinkContext(for:)`). A linked
+  to a plan or an unmatched plan exists on its day (`MicroCycleViewModel.planLinkContext(for:)`). A linked
   plan's steps follow in a "Planned Steps" section of step cards, the same as the planned-workout
   sheet's (`PlanLinkContext.linkedPlanSteps`, MVP2-144). When the activity has the steps the Watch
   recorded (`Activity.steps`, TrainingKit's `ActivityStepAligner` lays them over the plan's steps)
@@ -598,7 +598,7 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   Workout"; when the automatic match had a close runner-up (`TrainingModel.planMatchAmbiguities`) it
   says so and offers "Confirm Match" (a link to the same plan, which clears the flag). The other
   unmatched plans on that day appear as "Switch to …"/"Link to …", never plans on another day, which
-  Core refuses anyway. Routed through `WeekViewModel.linkActivity(_:toPlan:)`/`unlinkActivity(_:)`
+  Core refuses anyway. Routed through `MicroCycleViewModel.linkActivity(_:toPlan:)`/`unlinkActivity(_:)`
   → `TrainingModel.linkActivity`/`unlinkActivity`. Like join, each action closes the sheet on success
   and leaves it open with an inline message when refused. An unlink sticks: only newly imported
   activities are auto-matched.
@@ -612,7 +612,7 @@ swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
   (always available, not just when `overlapAdvice` flags something) — e.g. a bad HealthKit import
   the athlete just wants gone. Gated behind a confirmation alert ("Delete Activity? This can't be
   undone."), since it's irreversible from the UI. Routed through
-  `WeekViewModel.deleteActivity(_:asOf:)` → the same `TrainingModel.deleteActivity(id:)` the
+  `MicroCycleViewModel.deleteActivity(_:asOf:)` → the same `TrainingModel.deleteActivity(id:)` the
   Overlap section's resolution buttons use, so a deleted HealthKit-sourced activity is tombstoned
   (MVP1-64) and won't reappear on the next resync either way.
 
@@ -620,7 +620,7 @@ Tapping a *planned* (not-yet-completed) activity (MVP2-38) opens a small read-on
 (`PlannedWorkoutDetailSheet`): the workout's sport icon, name and date; an "Apple Watch" section
 with the reason its workout can't go on the Watch, when the plan's card shows that warning
 (MVP2-122, `PlannedWorkoutDetailViewModel.watchIncompatibility`, from the same
-`WeekViewModel.watchStatus(for:asOf:)` as the card, so the two always agree); its expected duration,
+`MicroCycleViewModel.watchStatus(for:asOf:)` as the card, so the two always agree); its expected duration,
 distance and load, a forecast value marked with a "~" and "Forecast" (an estimated load with a "~"
 and "Estimate", MVP2-8) and the section's footer saying how many
 similar workouts it came from (see "Pace forecasts" below); and the workout's steps as the same step cards the Library's template detail uses (a "Repeat N" card around a repeating block).
@@ -652,7 +652,7 @@ completed plans of the same workout or template actually scored, as a recency-we
 `expectedLoadOverride` still wins. TrainingKit uses it for the load series and the calendar export;
 the app uses the same estimator everywhere it shows a planned load, so the surfaces agree.
 
-- `WeekViewModel.refreshPlannedLoadIfNeeded(force:)` asks `TrainingModel.loadRefinedEstimator()` and swaps
+- `MicroCycleViewModel.refreshPlannedLoadIfNeeded(force:)` asks `TrainingModel.loadRefinedEstimator()` and swaps
   `statisticsCalculator` for one built on it. The model builds the estimator once (it reads the whole
   plan history and scores every completed activity: about 0.4 s for 400 one-hour runs in a debug build,
   linear in the history) and keeps it until the next `recompute`, which every import, link, join,
@@ -673,7 +673,7 @@ the app uses the same estimator everywhere it shows a planned load, so the surfa
   (`plannedLoadCalculator(before:)`, the refinement without that run and later ones), not with a
   figure its own load has already pulled towards itself.
 
-- `WeekViewModel.refreshPaceHistoryIfNeeded(asOf:force:)` has `TrainingModel.refreshPaceHistory(in:)`
+- `MicroCycleViewModel.refreshPaceHistoryIfNeeded(asOf:force:)` has `TrainingModel.refreshPaceHistory(in:)`
   read the last 180 days of activities from the store into `TrainingModel.paceHistory`. It runs with
   the week caches: when the athlete, the library or the day changed, and always after an import,
   resync, dedup, link, join or delete (`refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`). It
@@ -696,7 +696,7 @@ Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0). A settings-
 `TrainingModel.athlete: AthleteProfile`, shown to confirm the imported biometric data looks right, and
 (MVP2-132) editable where the athlete knows better than Health: the name, heart-rate settings, threshold
 pace, week start and time zone. Sex and age come from Health and aren't edited. Every edit goes through
-`TrainingModel.updateAthlete(asOf:_:)` (`WeekViewModel+AthleteEditing`): it saves before it assigns, so a
+`TrainingModel.updateAthlete(asOf:_:)` (`MicroCycleViewModel+AthleteEditing`): it saves before it assigns, so a
 failed save changes nothing and the screen says so, and it invalidates the fitness-metrics cache from the
 earliest changed date. The other app settings are the Apple Watch ones (MVP2-117, MVP2-118).
 
@@ -709,7 +709,7 @@ The list itself (`AthleteView`):
   on the Personal Information screen (below).
 - **Overlap warning** (MVP1-67): a non-dismissible row just below the avatar, with a warning-color
   background, showing "N activities have overlaps to review" whenever
-  `WeekViewModel.overlapWarningCount` (`overlapReviewItems.count`, the same non-`.possibleMultisport`
+  `MicroCycleViewModel.overlapWarningCount` (`overlapReviewItems.count`, the same non-`.possibleMultisport`
   set §2.1's per-card badge and the summary below both derive from) is non-zero — always current,
   not a one-time post-import snapshot, so it updates the moment an overlap is resolved from the
   activity detail sheet (§2.2) just as readily as after a fresh import. It stays on the list rather
@@ -788,7 +788,7 @@ The screens:
     history lists newest first with swipe to delete (never the last). A pace stored before the history
     existed shows as "Since the start", and editing it records a new entry from today. Planning uses the
     latest entry, like the heart-rate settings.
-  The same screen has the **main sport** and **usual venue** (MVP2-151, `WeekViewModel.setAthleteMainSport`): the sport the stats lead with, and where the athlete usually does it, which a new planned workout starts with. A venue the sport doesn't have is dropped.
+  The same screen has the **main sport** and **usual venue** (MVP2-151, `MicroCycleViewModel.setAthleteMainSport`): the sport the stats lead with, and where the athlete usually does it, which a new planned workout starts with. A venue the sport doesn't have is dropped.
 - **Connected Services** (`ConnectedServicesView`):
   - **Apple Health** (`AppleHealthView`, MVP2-126): what the app reads from Health, "Import Now" (the
     pull-to-refresh import) and, while nothing has ever been imported, "Connect Apple Health" (the
@@ -819,7 +819,7 @@ The screens:
 - **Calendar** (`CalendarSettingsView`, MVP2-132 editing): week-starts-on (a picker) and time zone (a
   searchable list of every identifier, `TimeZonePickerView`). Both are single values that apply to all
   history, so changing either regroups every day and week and rebuilds the fitness history once; the
-  footer says so. `WeekViewModel` rebuilds its calendar when either changes, keeps the displayed week on
+  footer says so. `MicroCycleViewModel` rebuilds its calendar when either changes, keeps the displayed week on
   the day it showed (`setWeekStartsOn`/`setTimeZone`) and reloads. A dated time-zone history was
   considered and left out.
 - **Developer** (`DeveloperView`): **Inspect Recent Workouts** (MVP2-146 spike, `WorkoutInspectionView`):
@@ -971,7 +971,7 @@ Results update as the athlete types, in three sections:
   a result pushes the library's template detail (§2.4).
 - **Planned Workouts**: the workout's name, sport or date; a result opens the planned-workout
   detail sheet (§2.1). The subtitle says "Done" or "Missed", by the week view's missed rule
-  (`WeekViewModel.isMissed(_:asOf:calendar:)`), so a result and its card always agree.
+  (`MicroCycleViewModel.isMissed(_:asOf:calendar:)`), so a result and its card always agree.
 - **Activities**: sport, date, or the name of the planned workout they're linked to; a result
   opens the activity detail (§2.2).
 
@@ -989,7 +989,7 @@ results without their samples; the full activity is fetched when one is opened. 
 decodes every activity with its samples on the way, until TrainingKit has a summary query
 (MVP2-129).
 
-The detail sheets read `TrainingModel`, so before one opens, `WeekViewModel.ensureLoaded(around:)`
+The detail sheets read `TrainingModel`, so before one opens, `MicroCycleViewModel.ensureLoaded(around:)`
 loads the weeks around the result's day together with the displayed ones. Without that, an older
 plan's sheet wouldn't follow an edit and an older activity's sheet would miss its plan link and
 overlaps. A tap while another result is opening is ignored; an activity that can't be read shows
@@ -1021,7 +1021,7 @@ struct TrainingAppApp: App {
 ```
 
 `TrainingModel` is `@Observable @MainActor`. In practice it's threaded through explicit
-constructor parameters (`AppTabView(model:refresher:)` → `WeekViewModel(model:refresher:)`) rather
+constructor parameters (`AppTabView(model:refresher:)` → `MicroCycleViewModel(model:refresher:)`) rather
 than `.environment(_:)`/`@Environment(TrainingModel.self)` — there's only ever one `TrainingModel`
 for the app's lifetime, so there's no need for the environment-injection machinery that pattern
 exists to support.
@@ -1107,7 +1107,7 @@ process has registered. It runs an `HKObserverQuery` on workouts with background
 its plan, MVP2-120), then the Watch sync (MVP2-116), awaited because HealthKit keeps the app awake only
 until the observer is told the work is finished. A running UI is told through
 `Notification.Name.trainingAppDidImportWorkouts` and calls
-`WeekViewModel.activitiesImportedElsewhere(asOf:)`, which refreshes the week caches and checks the max
+`MicroCycleViewModel.activitiesImportedElsewhere(asOf:)`, which refreshes the week caches and checks the max
 heart rate suggestion, as a pull-to-refresh does. Observation can't start before HealthKit access is
 granted, so the launch-time start fails on a first run; `requestAuthorization()` starts it again once
 the athlete has granted access, and a failed start leaves it retryable (the observer stops its query first, so a retry can't leave two running). HealthKit also calls the handler once when a query is registered, so every launch runs one extra, idempotent import.
@@ -1139,17 +1139,17 @@ the foreground, which also moves the window on after midnight.
   (`unscheduleAll(except: [])`) instead of scheduling, and never asks for permission. Turning the
   switch off runs that sync straight away; a run already in progress checks the switch before
   adding entries and goes round again to remove them. The planned-workout sheets get no scheduler
-  while it's off (`WeekViewModel.plannedWorkoutScheduler`), so saving a plan neither checks the
+  while it's off (`MicroCycleViewModel.plannedWorkoutScheduler`), so saving a plan neither checks the
   workout against the Watch nor schedules it. The permission banner doesn't show while it's off.
 - **Permission denied (MVP2-117).** Each run records the permission (`WatchScheduleSync.authorization`).
-  While it's denied and sending is on, `WeekView` shows a yellow `WatchPermissionBanner` at the bottom of the screen,
+  While it's denied and sending is on, `MicroCycleView` shows a yellow `WatchPermissionBanner` at the bottom of the screen,
   explaining that planned workouts won't reach the Watch, with an "Open Watch Settings" button to the
   Athlete tab's Apple Watch ▸ Synchronisation screen (§2.3). The banner can be dismissed; the dismissal is kept in
   `UserDefaults` and cleared once permission is granted, so declining again later brings the banner
   back. iOS asks only once: after "Don't Allow", or after the athlete turns the app off in the Watch
   app's Workout settings, only those settings can turn it back on. Doing so hides the banner on its
   own, since the sync runs again when the app becomes active.
-- **When else it runs.** `WeekViewModel` runs it again after the planned-workout sheet saves, the
+- **When else it runs.** `MicroCycleViewModel` runs it again after the planned-workout sheet saves, the
   detail sheet deletes, or a calendar import succeeds (`onPlansChanged`), and after anything that can
   link or unlink a plan (MVP2-116): a HealthKit import (pull-to-refresh, Connect Health, Force Full
   Resync), linking or unlinking by hand, deduplicating, and deleting, joining or unjoining an

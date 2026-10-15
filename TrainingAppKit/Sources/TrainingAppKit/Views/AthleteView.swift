@@ -15,7 +15,7 @@ import TrainingCore
 struct AthleteView: View {
     let viewModel: AthleteViewModel
     /// The week view model the screens' edits go through (MVP2-132).
-    let weekViewModel: WeekViewModel
+    let microCycleViewModel: MicroCycleViewModel
     /// The screens currently pushed, owned by `AppTabView`.
     @Binding var path: [AthleteRoute]
     let isResyncing: Bool
@@ -29,7 +29,7 @@ struct AthleteView: View {
     let onImport: () -> Void
     let onConnectHealth: () -> Void
     /// Every activity currently worth reviewing for an overlap issue (MVP1-67), live from
-    /// `WeekViewModel.overlapReviewItems` — backs both ``OverlapWarningBanner`` (shown just below
+    /// `MicroCycleViewModel.overlapReviewItems` — backs both ``OverlapWarningBanner`` (shown just below
     /// the avatar) and the review sheet it opens.
     let overlapReviewItems: [OverlapReviewItem]
     let athleteTimeZone: TimeZone
@@ -54,7 +54,7 @@ struct AthleteView: View {
     /// Set by a row tap in the overlap-review sheet, then consumed by that sheet's `onDismiss` to
     /// open `selectedActivity`'s own detail sheet — chained this way (rather than presenting the
     /// detail sheet directly from on top of the review sheet) since SwiftUI only reliably supports
-    /// one sheet on a view at a time. Same pattern `WeekView` used before this moved here.
+    /// one sheet on a view at a time. Same pattern `MicroCycleView` used before this moved here.
     @State private var pendingOverlapActivity: Activity?
     /// The activity currently shown in the detail sheet, or `nil` when none is presented.
     @State private var selectedActivity: Activity?
@@ -103,7 +103,7 @@ struct AthleteView: View {
             }
             .sheet(item: $selectedActivity) { activity in
                 // Its own NavigationStack: a sheet doesn't inherit the presenting view's
-                // navigation bar. Same pattern as WeekView's own activity detail sheet.
+                // navigation bar. Same pattern as MicroCycleView's own activity detail sheet.
                 NavigationStack {
                     ActivityDetailView(
                         viewModel: activityDetailViewModel(activity),
@@ -149,11 +149,11 @@ struct AthleteView: View {
     private func destination(for route: AthleteRoute) -> some View {
         switch route {
         case .personalInformation:
-            PersonalInformationView(viewModel: viewModel, weekViewModel: weekViewModel)
+            PersonalInformationView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
         case .heartRateZones:
-            HeartRateZonesView(viewModel: viewModel, weekViewModel: weekViewModel, showsHealthKitSwitch: !hasNoActivities)
+            HeartRateZonesView(viewModel: viewModel, microCycleViewModel: microCycleViewModel, showsHealthKitSwitch: !hasNoActivities)
         case .paceZones:
-            PaceZonesView(viewModel: viewModel, weekViewModel: weekViewModel)
+            PaceZonesView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
         case .connectedServices:
             ConnectedServicesView(showsAppleWatch: watchSync != nil)
         case .appleHealth:
@@ -168,7 +168,7 @@ struct AthleteView: View {
                 WatchSynchronisationView(sync: watchSync)
             }
         case .calendar:
-            CalendarSettingsView(viewModel: viewModel, weekViewModel: weekViewModel)
+            CalendarSettingsView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
         case .developer:
             DeveloperView(
                 isResyncing: isResyncing, onResync: onResync,

@@ -3,7 +3,7 @@ import Foundation
 /// What the athlete has already said about max heart rate suggestions (MVP2-56), so the week view
 /// doesn't ask the same question twice.
 ///
-/// A seam rather than `UserDefaults` directly, so `WeekViewModel`'s tests can use an in-memory
+/// A seam rather than `UserDefaults` directly, so `MicroCycleViewModel`'s tests can use an in-memory
 /// record. The app uses ``UserDefaultsMaxHeartRatePromptHistory``.
 @MainActor
 public protocol MaxHeartRatePromptHistory: AnyObject {

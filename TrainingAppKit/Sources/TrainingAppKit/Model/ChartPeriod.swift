@@ -1,7 +1,7 @@
 import Foundation
 
 /// The time range a metric detail chart shows (MVP1-45) — picked via a segmented control in
-/// `MetricDetailView`, and retained across metric sheets (`WeekView` owns the single shared
+/// `MetricDetailView`, and retained across metric sheets (`MicroCycleView` owns the single shared
 /// selection) so switching from, say, Load to Fitness doesn't reset back to the default.
 enum ChartPeriod: String, CaseIterable, Identifiable {
     case week, month, threeMonths, sixMonths, year

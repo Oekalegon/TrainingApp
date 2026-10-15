@@ -30,13 +30,13 @@ struct SportStatsPagerView: View {
     @ScaledMetric(relativeTo: .footnote) private var threeLineRowHeight: CGFloat = 58
     @ScaledMetric(relativeTo: .footnote) private var twoLineRowHeight: CGFloat = 46
 
-    /// Index into `pages`, not a `Sport` tag: unlike `WeekView`'s own day-list carousel (always
+    /// Index into `pages`, not a `Sport` tag: unlike `MicroCycleView`'s own day-list carousel (always
     /// exactly 3 fixed slots), the *number* of pages here varies week to week, so an index is what
     /// stays meaningful across a `pages` change (see the `onChange` below, which resets it rather
     /// than trying to re-locate a sport that may no longer be present).
     @State private var selectedIndex = 0
     /// Tracks the finger during a drag, on top of `selectedIndex`'s base position — 0 while idle,
-    /// same role as `WeekView.dragOffset`.
+    /// same role as `MicroCycleView.dragOffset`.
     @State private var dragOffset: CGFloat = 0
 
     private static let commitThreshold: CGFloat = 0.3
@@ -65,8 +65,8 @@ struct SportStatsPagerView: View {
             // A hand-rolled `DragGesture` + offset carousel, not `TabView(.page)`: squeezed into
             // this row's ~44pt height, `TabView(.page)`'s UIPageViewController-backed gesture
             // recognizer doesn't respect that tight height for hit-testing — a swipe square inside
-            // this row's own visible bounds was silently captured by `WeekView`'s day-list swipe
-            // gesture instead of paging here. `WeekView`'s own carousel already avoids `TabView`
+            // this row's own visible bounds was silently captured by `MicroCycleView`'s day-list swipe
+            // gesture instead of paging here. `MicroCycleView`'s own carousel already avoids `TabView`
             // for unrelated reasons (see its doc comment); the same manual approach sidesteps this
             // interop issue too, and works identically on iOS and macOS.
             GeometryReader { geometry in
@@ -379,7 +379,7 @@ private struct StatsPageView: View {
     }
 
     /// `changeFraction`'s percentage, or "+∞%" when the previous week had nothing to compare
-    /// against (``WeekViewModel/sportStatsPages(asOf:)`` reports that as `.infinity`, not a
+    /// against (``MicroCycleViewModel/sportStatsPages(asOf:)`` reports that as `.infinity`, not a
     /// misleadingly literal "+0%") — any growth off a zero base is an unbounded increase, not a 0%
     /// one; a fraction that's neither finite nor infinite doesn't occur here (the underlying totals
     /// are never negative), so this only has the two cases to handle.

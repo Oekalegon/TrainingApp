@@ -8,7 +8,7 @@ import TrainingCore
 /// The week view's cards, the stats bar, the daily-load split, the planned-workout sheets and the library
 /// compute their own planned loads, so without this they would show the base estimator's figure beside a
 /// refined one.
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// What the refined estimator depends on that the week view can see without reading the store:
     /// the athlete (the zones that score each completed run) and the library's workouts (the
     /// references hold copies of them, so an edit that keeps the count must count too). Changes to the

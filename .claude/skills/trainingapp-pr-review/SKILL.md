@@ -145,7 +145,7 @@ One of: **Merge** / **Merge with fixes** (list them) / **Needs rework** (explain
 - **Injectable today.** Logic takes `asOf:` (cf. `isPast(_:asOf:)`, `minimumDate(asOf:)`) and
   never reads `.now` directly, so behavior is deterministic and testable.
 - **Caches** (`InputKeyedCache`, `weekGraphCaches`, `sportStatsPagesCaches`, the card caches in
-  `WeekViewModel+CardCaches.swift`) must be keyed on *every* input the value depends on. For
+  `MicroCycleViewModel+CardCaches.swift`) must be keyed on *every* input the value depends on. For
   example, `dailyLoadSplit` depends on activity count, plan count, workout count **and** today;
   a plan or workout can change without any activity changing.
   - Clearing a cache synchronously can cause a "No data" flash. Prefer leaving the stale entry
@@ -270,7 +270,7 @@ Flag violations as `[MINOR]` at least, or `[DESIGN]` where they matter structura
 - Never commit an Apple Developer Team ID. Signing comes from `Config/Local.Secrets.xcconfig`,
   which is gitignored.
 - One primary type per file, with the file named after the type. Split large view models into
-  `WeekViewModel+Feature.swift` extensions.
+  `MicroCycleViewModel+Feature.swift` extensions.
 - Tests use **Swift Testing**.
 - CI (`swift.yml`) runs TrainingAppKit tests plus a simulator build of the app. A PR shouldn't
   merge red.

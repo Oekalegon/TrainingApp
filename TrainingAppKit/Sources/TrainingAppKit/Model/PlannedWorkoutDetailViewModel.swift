@@ -20,11 +20,11 @@ public final class PlannedWorkoutDetailViewModel {
     /// Called after the plan is deleted or edited, so the Watch sync can run again (MVP2-55).
     @ObservationIgnored
     public var onPlansChanged: (@MainActor () -> Void)?
-    /// Looks up a plan's Apple Watch status, set by `WeekViewModel` to its own
+    /// Looks up a plan's Apple Watch status, set by `MicroCycleViewModel` to its own
     /// `watchStatus(for:asOf:)`, with the day the sheet opened, so the sheet and the plan's card
     /// always agree (MVP2-122); `nil` shows no status.
     @ObservationIgnored
-    public var watchStatus: (@MainActor (PlannedActivity) -> WeekViewModel.PlannedWatchStatus?)?
+    public var watchStatus: (@MainActor (PlannedActivity) -> MicroCycleViewModel.PlannedWatchStatus?)?
     private let statisticsCalculator: StatisticsCalculator
 
     /// Set when ``delete()`` fails; the sheet shows it as an alert.
@@ -36,7 +36,7 @@ public final class PlannedWorkoutDetailViewModel {
     /// - Parameters:
     ///   - model: The training model `plan` lives in.
     ///   - plan: The plan to show.
-    ///   - statisticsCalculator: Estimates the plan's expected load; `WeekViewModel` passes its own, whose
+    ///   - statisticsCalculator: Estimates the plan's expected load; `MicroCycleViewModel` passes its own, whose
     ///     estimator is refined from completed plans, so the sheet agrees with the plan's card.
     ///   - scheduler: Removes the plan's WorkoutKit entry on delete and reschedules on edit; defaults
     ///     to the real bridge where available, `nil` otherwise (tests pass `nil` — see
@@ -84,8 +84,8 @@ public final class PlannedWorkoutDetailViewModel {
 
     /// Sport, name, load, duration and distance — the same numbers the day list's
     /// card shows.
-    public var summary: WeekViewModel.PlannedCardSummary {
-        WeekViewModel.PlannedCardSummary.make(
+    public var summary: MicroCycleViewModel.PlannedCardSummary {
+        MicroCycleViewModel.PlannedCardSummary.make(
             plan: plan, workout: workout, athlete: model.athlete, calculator: statisticsCalculator,
             history: model.paceHistory
         )
@@ -127,7 +127,7 @@ public final class PlannedWorkoutDetailViewModel {
     }
 
     /// ``expected`` from a ``summary`` already read, so the sheet runs the forecast once per render.
-    public func expected(from summary: WeekViewModel.PlannedCardSummary) -> Expected? {
+    public func expected(from summary: MicroCycleViewModel.PlannedCardSummary) -> Expected? {
         guard let duration = summary.duration else { return nil }
         return Expected(
             duration: duration,

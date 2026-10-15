@@ -2,13 +2,13 @@ import Foundation
 import TrainingCore
 
 /// Asking the athlete to raise their max heart rate when a workout held a higher one (MVP2-56).
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// How far back the one-time history scan looks. Max heart rate falls with age, so a peak from
     /// years ago says little about today's max.
     static let maxHeartRateHistoryScanDays = 365
 
     /// Looks for a workout that held a heart rate above the athlete's current max and, if one is
-    /// found, sets ``maxHeartRateSuggestion`` for `WeekView` to ask about.
+    /// found, sets ``maxHeartRateSuggestion`` for `MicroCycleView` to ask about.
     ///
     /// Checks the loaded activities first. If it finds nothing there, it also scans the last
     /// ``maxHeartRateHistoryScanDays`` days in the store, once per device. The scan waits until
@@ -84,12 +84,12 @@ extension WeekViewModel {
         maxHeartRateSuggestion = nil
     }
 
-    /// Clears ``maxHeartRateUpdateFailed`` once `WeekView` has shown it.
+    /// Clears ``maxHeartRateUpdateFailed`` once `MicroCycleView` has shown it.
     public func acknowledgeMaxHeartRateUpdateFailure() {
         maxHeartRateUpdateFailed = false
     }
 
-    /// The question `WeekView`'s alert asks about `suggestion`, e.g. "Your running workout on 24 Sep held
+    /// The question `MicroCycleView`'s alert asks about `suggestion`, e.g. "Your running workout on 24 Sep held
     /// 189 bpm, above your max heart rate of 178 bpm. …".
     ///
     /// - Parameter suggestion: The suggestion to describe.

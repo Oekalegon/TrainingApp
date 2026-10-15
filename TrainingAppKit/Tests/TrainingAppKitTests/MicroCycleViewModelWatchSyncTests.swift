@@ -9,8 +9,8 @@ import TrainingCore
 /// The plan sits on day 2, which is also "today", so it's inside the 7-day window: linking decides
 /// whether it's scheduled or only kept as done.
 @MainActor
-@Suite("WeekViewModel Watch sync (MVP2-116)")
-struct WeekViewModelWatchSyncTests {
+@Suite("MicroCycleViewModel Watch sync (MVP2-116)")
+struct MicroCycleViewModelWatchSyncTests {
     private let scratch = ScratchDefaults()
 
     private struct StubImporter: ActivityImporting {
@@ -32,7 +32,7 @@ struct WeekViewModelWatchSyncTests {
         scheduler: FakeScheduler?,
         refresher: FakeRefresher = FakeRefresher(),
         extra: [Activity] = []
-    ) async throws -> (WeekViewModel, PlannedActivity, Activity) {
+    ) async throws -> (MicroCycleViewModel, PlannedActivity, Activity) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
@@ -50,7 +50,7 @@ struct WeekViewModelWatchSyncTests {
         let run = Activity(source: .healthKit(UUID()), sport: .running, start: today, duration: 1800)
         try await model.importActivities(from: StubImporter(activities: [run] + extra), asOf: today)
         let defaults = scratch.defaults
-        let viewModel = WeekViewModel(
+        let viewModel = MicroCycleViewModel(
             model: model, refresher: refresher,
             watchSync: scheduler.map { WatchScheduleSync(model: model, scheduler: $0, defaults: defaults) },
             today: today
@@ -239,7 +239,7 @@ struct WeekViewModelWatchSyncTests {
         let sync = WatchScheduleSync(
             model: viewModel.model, scheduler: FakeScheduler(authorization: .denied), defaults: scratch.defaults
         )
-        let withSync = WeekViewModel(
+        let withSync = MicroCycleViewModel(
             model: viewModel.model, refresher: FakeRefresher(), watchSync: sync, today: today
         )
         #expect(!withSync.showsWatchPermissionBanner)
@@ -269,7 +269,7 @@ struct WeekViewModelWatchSyncTests {
     /// workout, and a Watch sync that has run once.
     private func makeCardViewModel(
         scheduler: FakeScheduler
-    ) async throws -> (WeekViewModel, upcoming: PlannedActivity, missed: PlannedActivity) {
+    ) async throws -> (MicroCycleViewModel, upcoming: PlannedActivity, missed: PlannedActivity) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
@@ -288,7 +288,7 @@ struct WeekViewModelWatchSyncTests {
         try await model.add(missed, asOf: today)
         try await model.load(in: day(0)...day(6), asOf: today)
         let sync = WatchScheduleSync(model: model, scheduler: scheduler, defaults: scratch.defaults)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), watchSync: sync, today: today)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), watchSync: sync, today: today)
         await sync.sync(asOf: today)
         return (viewModel, upcoming, missed)
     }

@@ -4,13 +4,13 @@ import TrainingCore
 @testable import TrainingAppKit
 
 @MainActor
-@Suite("WeekViewModel intensity (MVP2-43)")
-struct WeekViewModelIntensityTests {
+@Suite("MicroCycleViewModel intensity (MVP2-43)")
+struct MicroCycleViewModelIntensityTests {
     private func day(_ offset: Int) -> Date {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
-    private func makeViewModel() -> (WeekViewModel, TrainingModel) {
+    private func makeViewModel() -> (MicroCycleViewModel, TrainingModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
@@ -18,7 +18,7 @@ struct WeekViewModelIntensityTests {
         )
         let athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        return (WeekViewModel(model: model, refresher: FakeRefresher(), today: day(2)), model)
+        return (MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(2)), model)
     }
 
     /// A 20 minute single-step running workout at the given heart-rate zone.

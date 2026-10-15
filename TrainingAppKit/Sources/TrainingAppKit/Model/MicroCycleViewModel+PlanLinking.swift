@@ -4,7 +4,7 @@ import TrainingCore
 /// Linking a completed activity to the planned workout it fulfilled (MVP2-42). The matching itself
 /// is automatic (``TrainingModel``'s import runs ``PlanReconciler``); this is the athlete's way to
 /// confirm, correct or undo it.
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// The plan link `activity`'s detail sheet shows, or `nil` when there's nothing to show: the
     /// activity isn't linked and no unmatched plan exists on its day.
     public func planLinkContext(for activity: Activity) -> PlanLinkContext? {

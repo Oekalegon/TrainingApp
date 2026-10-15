@@ -13,7 +13,7 @@ struct EstimatedValuesTests {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
-    private func makeViewModel(today: Int = 2) -> (WeekViewModel, TrainingModel, InMemoryStore) {
+    private func makeViewModel(today: Int = 2) -> (MicroCycleViewModel, TrainingModel, InMemoryStore) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
@@ -21,7 +21,7 @@ struct EstimatedValuesTests {
         )
         let athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        return (WeekViewModel(model: model, refresher: FakeRefresher(), today: day(today)), model, store)
+        return (MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(today)), model, store)
     }
 
     private func workout(_ goals: [StepGoal], repetitions: Int = 1) -> StructuredWorkout {
@@ -127,7 +127,7 @@ struct EstimatedValuesTests {
     @Test("a planned card marks the estimator's load and a forecast duration, not a target")
     func plannedCardSummary() async throws {
         let (viewModel, model, _) = makeViewModel()
-        func summary(_ workout: StructuredWorkout, override: Double? = nil) async throws -> WeekViewModel.PlannedCardSummary {
+        func summary(_ workout: StructuredWorkout, override: Double? = nil) async throws -> MicroCycleViewModel.PlannedCardSummary {
             try await model.add(workout, asOf: day(2))
             let plan = PlannedActivity(workoutID: workout.id, date: day(3), expectedLoadOverride: override)
             try await model.add(plan, asOf: day(2))
@@ -161,7 +161,7 @@ struct EstimatedValuesTests {
     @Test("a planned card shows both duration and distance, the one the steps don't set marked as a forecast")
     func plannedCardShowsBoth() async throws {
         let (viewModel, model, _) = makeViewModel()
-        func summary(_ workout: StructuredWorkout) async throws -> WeekViewModel.PlannedCardSummary {
+        func summary(_ workout: StructuredWorkout) async throws -> MicroCycleViewModel.PlannedCardSummary {
             try await model.add(workout, asOf: day(2))
             let plan = PlannedActivity(workoutID: workout.id, date: day(3))
             try await model.add(plan, asOf: day(2))

@@ -6,7 +6,7 @@ import TrainingCore
 /// regroups every day and week and recalculates the fitness history once; the footer says so.
 struct CalendarSettingsView: View {
     let viewModel: AthleteViewModel
-    let weekViewModel: WeekViewModel
+    let microCycleViewModel: MicroCycleViewModel
     @State private var isShowingError = false
 
     var body: some View {
@@ -16,7 +16,7 @@ struct CalendarSettingsView: View {
                     get: { viewModel.athlete.weekStartsOn },
                     set: { weekday in
                         Task {
-                            if await !weekViewModel.setWeekStartsOn(weekday) { isShowingError = true }
+                            if await !microCycleViewModel.setWeekStartsOn(weekday) { isShowingError = true }
                         }
                     }
                 )) {
@@ -26,7 +26,7 @@ struct CalendarSettingsView: View {
                 }
                 NavigationLink {
                     TimeZonePickerView(selected: viewModel.athlete.timeZone) { timeZone in
-                        await weekViewModel.setTimeZone(timeZone)
+                        await microCycleViewModel.setTimeZone(timeZone)
                     }
                 } label: {
                     LabeledContent("Time Zone", value: viewModel.athlete.timeZone.identifier)

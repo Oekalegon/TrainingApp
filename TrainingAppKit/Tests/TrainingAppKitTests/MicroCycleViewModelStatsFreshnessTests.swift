@@ -7,8 +7,8 @@ import TrainingCore
 /// deleted or changed activity or plan straight away, without the athlete switching weeks — and
 /// a missed planned workout never counts anywhere.
 @MainActor
-@Suite("WeekViewModel stats freshness")
-struct WeekViewModelStatsFreshnessTests {
+@Suite("MicroCycleViewModel stats freshness")
+struct MicroCycleViewModelStatsFreshnessTests {
     private struct Importer: ActivityImporting {
         let activities: [Activity]
         func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
@@ -19,7 +19,7 @@ struct WeekViewModelStatsFreshnessTests {
     private struct Fixture {
         let store: InMemoryStore
         let model: TrainingModel
-        let viewModel: WeekViewModel
+        let viewModel: MicroCycleViewModel
         /// The displayed week's first day, used as "today" so the day-after is still in the week.
         let today: Date
         var tomorrow: Date { today.addingTimeInterval(86400) }
@@ -34,10 +34,10 @@ struct WeekViewModelStatsFreshnessTests {
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let probe = WeekViewModel(model: model, refresher: FakeRefresher(), today: now)
+        let probe = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: now)
         let today = probe.displayedWeekStart
         let refresher = ImportingRefresher(model: model, importer: Importer(activities: activities(today)))
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: now)
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: now)
         await viewModel.load(asOf: today)
         return Fixture(store: store, model: model, viewModel: viewModel, today: today)
     }

@@ -12,7 +12,7 @@ import TrainingCore
 /// Deliberately scoped to just the displayed week, not the 3-week window `FitnessChartView`/
 /// `DailyLoadChartView` share: unlike load/CTL/ATL/TSB (already computed for the whole
 /// `chartRange` by `TrainingModel.recompute`), the histogram here is built from raw samples —
-/// see `WeekViewModel.heartRateHistogram`'s own doc comment for why that's computed
+/// see `MicroCycleViewModel.heartRateHistogram`'s own doc comment for why that's computed
 /// asynchronously off the main actor rather than synchronously here — and widening the window to
 /// 21 days would triple the cost of every recomputation.
 ///

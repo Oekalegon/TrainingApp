@@ -20,7 +20,7 @@ import TrainingCore
 /// whose workout can't go on the Watch shows a warning line with the reason (MVP2-119,
 /// `PlannedCardContent.watchStatus`). Neither shows on a missed plan or while sending is off.
 ///
-/// Tapping it (MVP2-38) presents the planned-workout detail sheet — see `WeekView`'s
+/// Tapping it (MVP2-38) presents the planned-workout detail sheet — see `MicroCycleView`'s
 /// `.sheet(item: $selectedPlan)`. A value the workout sets (a target duration or distance, a load
 /// the athlete typed in) is shown plainly, since the marker already says "planned"; only an
 /// estimate — the estimator's load, a duration or distance forecast from the athlete's paces —
@@ -28,11 +28,11 @@ import TrainingCore
 /// the workout is defined by.
 struct PlannedActivityCard: View {
     let plan: PlannedActivity
-    /// The card's summary, intensity and missed state, from `WeekViewModel.plannedCardContent(for:)`.
-    let content: WeekViewModel.PlannedCardContent
+    /// The card's summary, intensity and missed state, from `MicroCycleViewModel.plannedCardContent(for:)`.
+    let content: MicroCycleViewModel.PlannedCardContent
     let onSelect: () -> Void
 
-    private var summary: WeekViewModel.PlannedCardSummary { content.summary }
+    private var summary: MicroCycleViewModel.PlannedCardSummary { content.summary }
     /// The workout's intended intensity (MVP2-43), shown as a small coloured ring leading the
     /// headline row — the counterpart of `ActivityCard`'s own filled-circle marker; `nil` leaves
     /// that slot empty.
@@ -119,7 +119,7 @@ struct PlannedActivityCard: View {
                 .background {
                     if isMissed {
                         RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
-                            .fill(weekViewBackground)
+                            .fill(microCycleViewBackground)
                         RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous)
                             .strokeBorder(Color.secondary, lineWidth: 0.5)
                     } else {

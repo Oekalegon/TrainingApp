@@ -7,7 +7,7 @@ import SwiftUI
 /// Yellow with black content in both light and dark mode, so it stands out from the grey week
 /// background behind it. ``WatchPermissionBanner``, ``HealthConnectBanner``, ``HealthDistanceBanner`` and
 /// ``ICloudUnavailableBanner`` are this with their own words. The week view shows one at a time
-/// (``WeekViewModel/bottomBanner``).
+/// (``MicroCycleViewModel/bottomBanner``).
 struct PermissionBanner: View {
     let symbolName: String
     let title: String

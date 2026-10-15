@@ -9,20 +9,20 @@ import TrainingCore
 /// The athlete has resting 50 / max 190 bpm (zone 2 is 134–148 bpm) and a 300 s/km threshold pace,
 /// so zone 2's pace-model speed is 2.78 m/s.
 @MainActor
-@Suite("WeekViewModel pace history (MVP2-35, MVP2-111)")
-struct WeekViewModelPaceHistoryTests {
+@Suite("MicroCycleViewModel pace history (MVP2-35, MVP2-111)")
+struct MicroCycleViewModelPaceHistoryTests {
     private func day(_ offset: Int) -> Date {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
-    private func makeViewModel() -> (WeekViewModel, TrainingModel, InMemoryStore) {
+    private func makeViewModel() -> (MicroCycleViewModel, TrainingModel, InMemoryStore) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190))
-        return (WeekViewModel(model: model, refresher: FakeRefresher(), today: day(10)), model, store)
+        return (MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(10)), model, store)
     }
 
     /// A 40-minute zone-2 run at 3.0 m/s, sampled every 5 s.
@@ -130,7 +130,7 @@ struct WeekViewModelPaceHistoryTests {
             cycleStore: base, raceStore: base, athleteStore: base
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(10))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(10))
         try await base.upsert([easyRun(on: day(3))])
         await failing.setFailsRangeReads(true)
 

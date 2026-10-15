@@ -204,16 +204,16 @@ struct SearchViewModelTests {
 
     // MARK: Opening results outside the week view's window
 
-    private func makeWeekViewModel() async -> (InMemoryStore, WeekViewModel, SearchViewModel) {
+    private func makeMicroCycleViewModel() async -> (InMemoryStore, MicroCycleViewModel, SearchViewModel) {
         let (store, model) = await makeModel()
-        let week = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let week = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await week.load(asOf: day(0))
         return (store, week, week.searchViewModel(library: week.workoutLibraryViewModel()))
     }
 
     @Test("a plan opened from search far from the displayed week follows an edit in its sheet")
     func openPlanOutsideWindow() async throws {
-        let (store, week, search) = await makeWeekViewModel()
+        let (store, week, search) = await makeMicroCycleViewModel()
         let workout = try BuiltInWorkoutTemplates.easyRun.instantiate(name: "Far away run")
         try await store.upsert([workout])
         let plan = PlannedActivity(workoutID: workout.id, date: day(70))
@@ -234,7 +234,7 @@ struct SearchViewModelTests {
 
     @Test("an activity opened from search far from the displayed week shows its plan link")
     func openActivityOutsideWindow() async throws {
-        let (store, week, search) = await makeWeekViewModel()
+        let (store, week, search) = await makeMicroCycleViewModel()
         let workout = try BuiltInWorkoutTemplates.easyRun.instantiate(name: "Linked far run")
         try await store.upsert([workout])
         let activityID = UUID()

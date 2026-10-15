@@ -36,13 +36,13 @@ struct PlanIndex {
         let period: DisplayPeriod
     }
 
-    /// What this index was built from; see `WeekViewModel.planIndex()`.
+    /// What this index was built from; see `MicroCycleViewModel.planIndex()`.
     let key: Int
     let micros: [Entry]
     let byID: [UUID: TrainingCycle]
 }
 
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// The index of the plan's micro-cycles, rebuilt only when `model.cycles`, the cycles peeked from
     /// the store (see ``peekCycles()``) or the athlete's time zone changed.
     func planIndex() -> PlanIndex {

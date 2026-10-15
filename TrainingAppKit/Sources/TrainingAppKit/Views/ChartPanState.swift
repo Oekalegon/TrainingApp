@@ -8,7 +8,7 @@ import Foundation
 /// `MetricDetailView` holds one of these as `@State`, driving it from a `DragGesture` and reading
 /// `anchorDate`/`loadedRange` back out to build `periodRange`/`visibleRange`. `period` and
 /// `calendar` are never stored here — both come from `MetricDetailView` itself (`period` is a
-/// `Binding` shared with `WeekView`), so every method takes them as parameters instead of risking a
+/// `Binding` shared with `MicroCycleView`), so every method takes them as parameters instead of risking a
 /// stale copy drifting out of sync with the view's own.
 struct ChartPanState: Equatable {
     /// The center date `ChartPeriod.range(around:)` is built around — separate from the tapped

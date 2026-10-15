@@ -4,13 +4,13 @@ import TrainingCore
 @testable import TrainingAppKit
 
 @MainActor
-@Suite("WeekViewModel join handling (MVP1-80)")
-struct WeekViewModelJoinTests {
+@Suite("MicroCycleViewModel join handling (MVP1-80)")
+struct MicroCycleViewModelJoinTests {
     private func day(_ offset: Int) -> Date {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
-    private func makeViewModel(_ activities: [Activity]) async throws -> (InMemoryStore, WeekViewModel) {
+    private func makeViewModel(_ activities: [Activity]) async throws -> (InMemoryStore, MicroCycleViewModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
@@ -19,7 +19,7 @@ struct WeekViewModelJoinTests {
         try await store.upsert(activities)
         let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        return (store, WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0)))
+        return (store, MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0)))
     }
 
     /// A 5:43 run followed, ~17 s later, by a 44:03 run — the pair this feature exists for.

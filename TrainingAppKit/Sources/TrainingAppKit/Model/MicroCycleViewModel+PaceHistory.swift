@@ -2,7 +2,7 @@ import Foundation
 import TrainingCore
 
 /// Forecasting planned workouts from the athlete's own paces (MVP2-35, MVP2-111).
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// How far back ``paceHistory`` looks. Long enough to have run most kinds of workout before,
     /// short enough that the paces are about the athlete's current fitness; the forecast weighs
     /// recent activities more on top of this.

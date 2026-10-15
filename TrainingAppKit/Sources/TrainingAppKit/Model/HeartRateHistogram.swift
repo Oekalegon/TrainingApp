@@ -56,7 +56,7 @@ public struct HeartRateHistogram: Sendable {
         self.timeInZone = timeInZone
     }
 
-    /// An empty histogram — `WeekViewModel`'s initial value before its first async load completes.
+    /// An empty histogram — `MicroCycleViewModel`'s initial value before its first async load completes.
     public static let empty = HeartRateHistogram(bins: [], binWidth: 5, zoneBoundariesBPM: nil)
 
     /// Builds a histogram of `activities`' combined heart-rate samples, binned every `binWidth`

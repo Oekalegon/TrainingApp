@@ -13,7 +13,7 @@ Status: draft for review. Covers TrainingKit (model, generator, guardrails) and 
 | Guardrails | `PlanGuardrails` + `PlanEvaluator` (+ cycle-aware rules) | Done, but one global set, tuned for 7-day weeks. |
 | Preferences | `PlanPreferences` | Designed (TrainingKit design §8.1), **not built**. Training days are a plain `Set<Weekday>`. |
 | Goals | `Goal`, `GoalStore` | Model only; no UI, nothing reads them. |
-| Week view | `WeekView` / `WeekViewModel` | Hard-wired to 7 days (carousel, `chartRange` = −7…+13 days, `loadRange`, per-week caches keyed by `weekStart`). |
+| Week view | `MicroCycleView` / `MicroCycleViewModel` (renamed from `WeekView`/`WeekViewModel` in MVP5-108) | Hard-wired to 7 days (carousel, `chartRange` = −7…+13 days, `loadRange`, per-week caches keyed by `weekStart`). |
 
 So the vocabulary the user asked for is mostly there. The new work is the **paradigm**, **availability**, the **generator**, and a **period-aware calendar view**.
 
@@ -139,7 +139,7 @@ enum DisplayPeriod { case week(start: Date), micro(TrainingCycle) }   // dateRan
 
 Resolver: for the selected date, if a **micro-level cycle** contains it, show that micro (7, 10 or 14 days); otherwise show the calendar week. Paging steps to the previous/next period of whichever kind applies, so a plan boundary is crossed cleanly.
 
-What has to stop assuming 7 days in `WeekViewModel`: `displayedWeekStart`, `displayedWeekRange`, `chartRange(for:)` (−7…+13), `loadRange`, `activities(forWeekStarting:)`, and every cache keyed by `weekStart` (re-key by period start + length). The charts' window becomes "one period either side". The day-row timeline already renders one row per day, so it extends naturally.
+What has to stop assuming 7 days in `MicroCycleViewModel`: `displayedWeekStart`, `displayedWeekRange`, `chartRange(for:)` (−7…+13), `loadRange`, `activities(forWeekStarting:)`, and every cache keyed by `weekStart` (re-key by period start + length). The charts' window becomes "one period either side". The day-row timeline already renders one row per day, so it extends naturally.
 
 Order of work: make the view model period-aware with no visible change (weeks only) → add micro resolution → rename `WeekView`/`WeekViewModel` to `MicroCycleView`/`MicroCycleViewModel` as its own mechanical PR, so the behavioural diff stays reviewable.
 

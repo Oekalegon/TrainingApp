@@ -9,8 +9,8 @@ import TrainingCore
 /// only owns the "which week" navigation state, not the training data itself.
 @Observable
 @MainActor
-public final class WeekViewModel {
-    // Internal (not private) so `WeekViewModel+Overlaps.swift`'s extension can reach it.
+public final class MicroCycleViewModel {
+    // Internal (not private) so `MicroCycleViewModel+Overlaps.swift`'s extension can reach it.
     let model: TrainingModel
     /// Keeps the Watch's scheduled workouts in step with the plans (MVP2-55); `nil` in tests and
     /// where WorkoutKit isn't available.
@@ -39,7 +39,7 @@ public final class WeekViewModel {
     }
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
     /// uses, so a card's headline Load number always agrees with the detail sheet's own figure.
-    /// Not `private` only because `WeekViewModel+LinkedPlan.swift` projects workouts with it too.
+    /// Not `private` only because `MicroCycleViewModel+LinkedPlan.swift` projects workouts with it too.
     ///
     /// Its planned-load estimator is refined with what completed plans actually scored
     /// (MVP2-159, see ``refreshPlannedLoadIfNeeded(force:)``), so the cards and stats agree
@@ -68,7 +68,7 @@ public final class WeekViewModel {
     var refinedLoadEstimator: LinkedActivityRefinedEstimator?
 
     /// Sport-stats pages, cached per week (keyed by that week's `weekStart`) — see
-    /// ``sportStatsPages(for:asOf:)``'s own doc comment. Not `@ObservationIgnored`: `WeekView`
+    /// ``sportStatsPages(for:asOf:)``'s own doc comment. Not `@ObservationIgnored`: `MicroCycleView`
     /// reads this indirectly through that method, and needs the read tracked the same way a plain
     /// stored property's would be.
     private var sportStatsPagesCaches: [DisplayPeriod: [SportStatsPage]] = [:]
@@ -104,7 +104,7 @@ public final class WeekViewModel {
     private var weekGraphCachesAthlete: AthleteProfile?
 
     /// ``dailyLoadSplit(for:)`` results, cached per week (keyed by that week's `weekStart`) — same
-    /// reasoning as ``sportStatsPagesCaches``: `WeekView.graphPanel(weekStart:isCurrentPage:)` calls
+    /// reasoning as ``sportStatsPagesCaches``: `MicroCycleView.graphPanel(weekStart:isCurrentPage:)` calls
     /// this for all three carousel pages (current plus both static previews) on every touch-move
     /// frame of the week-swipe drag, and unlike ``chartMetrics(for:)`` (a cheap filter over
     /// already-computed `model.metrics`), this does real per-activity TRIMP work
@@ -204,10 +204,10 @@ public final class WeekViewModel {
 
     /// Creates a week view model showing the week containing `today`.
     /// A workout that held a heart rate above the athlete's max, waiting for them to confirm or
-    /// decline raising it (MVP2-56). `WeekView` shows it as an alert. See
+    /// decline raising it (MVP2-56). `MicroCycleView` shows it as an alert. See
     /// ``checkForMaxHeartRateSuggestion(asOf:)``.
     public internal(set) var maxHeartRateSuggestion: MaxHeartRateSuggestion?
-    /// Set when saving an accepted max heart rate failed, for `WeekView` to report; cleared when
+    /// Set when saving an accepted max heart rate failed, for `MicroCycleView` to report; cleared when
     /// shown.
     public internal(set) var maxHeartRateUpdateFailed = false
     /// `true` while an accepted max heart rate is being saved. Until it lands, `model.athlete`
@@ -215,9 +215,9 @@ public final class WeekViewModel {
     @ObservationIgnored
     var isApplyingMaxHeartRate = false
     /// What a field test measured, waiting for the athlete to confirm or decline it (MVP2-155).
-    /// `WeekView` shows it as an alert. See ``checkForFieldTestResult()``.
+    /// `MicroCycleView` shows it as an alert. See ``checkForFieldTestResult()``.
     public internal(set) var fieldTestResult: FieldTestResult?
-    /// Set when saving an accepted field-test result failed, for `WeekView` to report; cleared when
+    /// Set when saving an accepted field-test result failed, for `MicroCycleView` to report; cleared when
     /// shown.
     public internal(set) var fieldTestUpdateFailed = false
     /// `true` while an accepted field-test result is being saved, so a check in that window doesn't
@@ -326,7 +326,7 @@ public final class WeekViewModel {
     }
 
     /// ``displayedWeekStart`` and its immediate neighbors — the window ``sportStatsPagesCaches``/
-    /// ``weekGraphCaches`` keep cached, and the only weeks `WeekView`'s carousel ever shows at once.
+    /// ``weekGraphCaches`` keep cached, and the only weeks `MicroCycleView`'s carousel ever shows at once.
     var cachedPeriods: [DisplayPeriod] {
         [period(offset: -1), displayedPeriod, period(offset: 1)]
     }
@@ -346,7 +346,7 @@ public final class WeekViewModel {
     }
 
     /// The 3-week range `chartRange` would be if ``displayedWeekStart`` were `weekStart` instead —
-    /// used by `WeekView`'s carousel so each page renders its own week's chart rather than
+    /// used by `MicroCycleView`'s carousel so each page renders its own week's chart rather than
     /// whichever week happens to be ``displayedWeekStart`` (MVP1-32).
     public func chartRange(for weekStart: Date) -> ClosedRange<Date> {
         let period = period(startingAt: weekStart)
@@ -355,7 +355,7 @@ public final class WeekViewModel {
 
     /// The range ``load(asOf:)`` actually fetches from the stores: wide enough to cover not just
     /// `weekStart`'s own ``chartRange(for:)``, but its immediate neighbors' as well (MVP1-32) — so
-    /// `WeekView`'s carousel can render each neighbor page's own complete, correct 3-week chart
+    /// `MicroCycleView`'s carousel can render each neighbor page's own complete, correct 3-week chart
     /// continuously (not just after actually navigating there), and a swipe or button navigation
     /// never finds anything left to load once it flips ``displayedWeekStart``. Deliberately wider
     /// than ``chartRange(for:)`` itself, which stays exactly 3 weeks — that's still the range each
@@ -374,7 +374,7 @@ public final class WeekViewModel {
     }
 
     /// `model.metrics` restricted to ``chartRange(for:)``'s own range for `weekStart`, in day
-    /// order — `WeekView`'s carousel uses this (rather than the unparameterized ``chartMetrics``)
+    /// order — `MicroCycleView`'s carousel uses this (rather than the unparameterized ``chartMetrics``)
     /// so each page renders *that page's own* 3-week window instead of whichever week happens to
     /// be ``displayedWeekStart`` (MVP1-32).
     public func chartMetrics(for weekStart: Date) -> [FitnessMetrics] {
@@ -428,7 +428,7 @@ public final class WeekViewModel {
     ///
     /// Cached per week: unlike `chartMetrics(for:)` (a cheap filter over already-computed
     /// `model.metrics`), this does real per-activity TRIMP work
-    /// (`StatisticsCalculator.summary(for:athlete:)`), and `WeekView.graphPanel(weekStart:isCurrentPage:)`
+    /// (`StatisticsCalculator.summary(for:athlete:)`), and `MicroCycleView.graphPanel(weekStart:isCurrentPage:)`
     /// calls it for all three carousel pages on every touch-move frame of the week-swipe drag — see
     /// ``dailyLoadSplitCaches``'s own doc comment for why this needs the same per-week caching
     /// ``sportStatsPages(for:asOf:)``/``heartRateHistogram(for:)`` already have.
@@ -510,7 +510,7 @@ public final class WeekViewModel {
         displayedWeekRange(for: displayedWeekStart)
     }
 
-    /// The date range of `weekStart` — used by `WeekView`'s carousel (MVP1-32) so a
+    /// The date range of `weekStart` — used by `MicroCycleView`'s carousel (MVP1-32) so a
     /// previous/next page highlights *its own* week's background rather than
     /// ``displayedWeekStart``'s.
     public func displayedWeekRange(for weekStart: Date) -> ClosedRange<Date> {
@@ -755,7 +755,7 @@ public final class WeekViewModel {
     /// sport's, zero-filled if it had no activity that week), so the pager never has nothing to
     /// show.
     ///
-    /// Cached per week (`weekStart`, not just ``displayedWeekStart``): `WeekView` calls this from
+    /// Cached per week (`weekStart`, not just ``displayedWeekStart``): `MicroCycleView` calls this from
     /// each of its 3 carousel pages' own pinned stats bar, including the previous/next week's,
     /// which re-evaluate on every touch-move frame of the day list's own swipe gesture just like
     /// the current page does. Without a cache keyed per week, each of those frames on each page
@@ -1016,7 +1016,7 @@ public final class WeekViewModel {
     /// `HeartRateHistogram.aggregating(_:athlete:)`. Empty until ``refreshWeekCachesIfNeeded()``
     /// has cached `weekStart` — in practice near-instant for ``displayedWeekStart`` and its
     /// immediate neighbors, which are the only weeks ever prefetched (see that method's own doc
-    /// comment) and so the only ones `WeekView`'s carousel ever asks for.
+    /// comment) and so the only ones `MicroCycleView`'s carousel ever asks for.
     public func heartRateHistogram(for weekStart: Date) -> HeartRateHistogram {
         weekGraphCaches[period(startingAt: weekStart)] ?? .empty
     }
@@ -1025,17 +1025,17 @@ public final class WeekViewModel {
     /// and its immediate neighbors, so paging to a neighboring week almost always finds its graph
     /// data already cached — computed while the athlete was still looking at a different week —
     /// instead of needing a fresh async computation on every swipe. Called after every
-    /// load/import/dedup that could change the underlying activities, and by `WeekView` whenever
+    /// load/import/dedup that could change the underlying activities, and by `MicroCycleView` whenever
     /// ``displayedWeekStart`` changes.
     ///
     /// The displayed week itself is computed first, at `.userInitiated` priority, so the graph
     /// panel actually on screen updates as promptly as possible; its neighbors follow at the
     /// lower `.utility` priority, so the scheduler still favors the visible week's own work over
     /// prefetching ones the athlete isn't looking at yet. All still awaited here (structured
-    /// concurrency, not a detached fire-and-forget `Task`) — by the time `WeekView`'s own
+    /// concurrency, not a detached fire-and-forget `Task`) — by the time `MicroCycleView`'s own
     /// `.task(id: displayedWeekStart)` next has anything else to do, the whole 3-week window is
     /// settled, and a caller that only cares about the displayed week's own data (already updated
-    /// first) isn't kept waiting by anything else, since `WeekView` never awaits this call itself.
+    /// first) isn't kept waiting by anything else, since `MicroCycleView` never awaits this call itself.
     ///
     /// A changed activity fingerprint or athlete (MVP2-56) marks every currently cached week stale and due for
     /// recomputation, but deliberately doesn't clear ``weekGraphCaches`` up front to do that —
@@ -1142,14 +1142,14 @@ public final class WeekViewModel {
     }
 
     /// `true` if `day` is strictly before `today`'s calendar day, in the athlete's timezone — a
-    /// planned workout only makes sense for today or later, so `WeekView`'s "add planned workout"
+    /// planned workout only makes sense for today or later, so `MicroCycleView`'s "add planned workout"
     /// affordance disables itself (MVP2-15) on a day this returns `true` for, rather than opening
     /// a sheet for a day that's already happened.
     public func isPast(_ day: Date, asOf today: Date = .now) -> Bool {
         Self.isPast(day, asOf: today, calendar: calendar)
     }
 
-    /// ``isPast(_:asOf:)`` for any `calendar`, so code without a `WeekViewModel`'s own calendar
+    /// ``isPast(_:asOf:)`` for any `calendar`, so code without a `MicroCycleViewModel`'s own calendar
     /// (the search results' missed plans, MVP2-21) applies the same rule.
     static func isPast(_ day: Date, asOf today: Date, calendar: Calendar) -> Bool {
         calendar.startOfDay(for: day) < calendar.startOfDay(for: today)
@@ -1325,7 +1325,7 @@ public final class WeekViewModel {
     }
 
     /// Loads ``loadRange(for:)`` for ``displayedWeekStart`` from the stores into `model`
-    /// — wider than ``chartRange`` itself, so `WeekView`'s neighbor carousel pages already have
+    /// — wider than ``chartRange`` itself, so `MicroCycleView`'s neighbor carousel pages already have
     /// their own complete chart data before the athlete ever swipes to them (MVP1-32). Errors are
     /// swallowed — a failed load leaves `model` exactly as it was (`TrainingModel.load(in:)`'s own
     /// guarantee), so there's nothing for the view to reconcile; MVP 1 has no load-failure UI.
@@ -1409,7 +1409,7 @@ public final class WeekViewModel {
     /// `chartMetrics(for:)` already has loaded. Loads the *union* of `range` and the currently
     /// loaded window before reading, never just `range` alone — `TrainingModel.load(in:)` replaces
     /// `model.activities`/`plans`/`metrics` outright rather than merging into them, so loading a
-    /// shifted range on its own would silently drop data `WeekView`'s own day list still needs
+    /// shifted range on its own would silently drop data `MicroCycleView`'s own day list still needs
     /// until the next natural navigation reloads it. The union is a strict superset of both, so
     /// nothing the main view relies on is ever lost by calling this.
     public func metrics(in range: ClosedRange<Date>, asOf today: Date = .now) async -> [FitnessMetrics] {

@@ -4,8 +4,8 @@ import TrainingCore
 @testable import TrainingAppKit
 
 @MainActor
-@Suite("WeekViewModel")
-struct WeekViewModelTests {
+@Suite("MicroCycleViewModel")
+struct MicroCycleViewModelTests {
     private func day(_ offset: Int) -> Date {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
@@ -28,16 +28,16 @@ struct WeekViewModelTests {
     @Test("displayedWeekStart lands on the athlete's week-start day, not just any day")
     func displayedWeekStartRespectsWeekStartsOn() {
         let model = makeModel(weekStartsOn: .monday)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(3))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(3))
 
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
         #expect(calendar.component(.weekday, from: viewModel.displayedWeekStart) == Weekday.monday.rawValue)
     }
 
     @Test("weekDates has exactly the 7 days starting at displayedWeekStart")
     func weekDatesIsSevenConsecutiveDays() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.weekDates.count == 7)
         #expect(viewModel.weekDates.first == viewModel.displayedWeekStart)
@@ -46,8 +46,8 @@ struct WeekViewModelTests {
     @Test("weekDates(offsetWeeks:) returns the neighboring weeks without moving displayedWeekStart")
     func weekDatesWithOffsetReflectsNeighboringWeeksOnly() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
         let originalStart = viewModel.displayedWeekStart
 
         let previous = viewModel.weekDates(offsetWeeks: -1)
@@ -64,8 +64,8 @@ struct WeekViewModelTests {
     @Test("isToday(_:) matches only the calendar day of the given reference date")
     func isTodayMatchesOnlyTheReferenceDay() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
         let startOfDay2 = calendar.startOfDay(for: day(2))
 
         #expect(viewModel.isToday(day(2), asOf: day(2)))
@@ -76,7 +76,7 @@ struct WeekViewModelTests {
     @Test("isPast(_:) is true only for a calendar day strictly before today's")
     func isPastMatchesOnlyDaysBeforeToday() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.isPast(day(1), asOf: day(2)))
         #expect(!viewModel.isPast(day(2), asOf: day(2)))
@@ -86,8 +86,8 @@ struct WeekViewModelTests {
     @Test("chartRange spans the week before, the displayed week, and the week after")
     func chartRangeIsThreeWeeksCenteredOnDisplayedWeek() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
 
         let expectedStart = calendar.date(byAdding: .day, value: -7, to: viewModel.displayedWeekStart)!
         let expectedEnd = calendar.date(byAdding: .day, value: 13, to: viewModel.displayedWeekStart)!
@@ -102,8 +102,8 @@ struct WeekViewModelTests {
     @Test("chartRange(for:) matches chartRange for the currently displayed week, and shifts for others")
     func chartRangeForWeekStartMatchesUnparameterizedForDisplayedWeek() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
 
         #expect(viewModel.chartRange(for: viewModel.displayedWeekStart) == viewModel.chartRange)
 
@@ -120,8 +120,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         // Inside the *next* week's own chartRange but outside the currently displayed week's --
         // proves chartMetrics(for:) reads the given week's own window, not displayedWeekStart's.
@@ -139,8 +139,8 @@ struct WeekViewModelTests {
     @Test("displayedWeekRange(for:) matches displayedWeekRange for the currently displayed week, and shifts for others")
     func displayedWeekRangeForWeekStartMatchesUnparameterizedForDisplayedWeek() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
 
         #expect(viewModel.displayedWeekRange(for: viewModel.displayedWeekStart) == viewModel.displayedWeekRange)
 
@@ -156,12 +156,12 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         // Outside the displayed week's own chartRange (whose upper bound is +13 days) but inside
         // the *next* week's chartRange (+7 -7...+7 +13 = 0...+20) -- proves `load` reaches far
-        // enough for WeekView's "next" carousel page to render its own complete chart immediately,
+        // enough for MicroCycleView's "next" carousel page to render its own complete chart immediately,
         // without waiting for a swipe to trigger a further load.
         let dayInNextWeeksRange = calendar.date(byAdding: .day, value: 18, to: viewModel.displayedWeekStart)!
         let activity = Activity(source: .manual, sport: .running, start: dayInNextWeeksRange, duration: 1800)
@@ -175,8 +175,8 @@ struct WeekViewModelTests {
     @Test("displayedWeekRange tracks displayedWeekStart, following navigation rather than staying on today")
     func displayedWeekRangeFollowsNavigation() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
 
         func expectedRange(for weekStart: Date) -> ClosedRange<Date> {
             weekStart...calendar.date(byAdding: .day, value: 7, to: weekStart)!
@@ -194,8 +194,8 @@ struct WeekViewModelTests {
     @Test("displayedWeekOfYear matches the calendar's own weekOfYear component for displayedWeekStart")
     func displayedWeekOfYearMatchesCalendarComponent() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
 
         #expect(viewModel.displayedWeekOfYear == calendar.component(.weekOfYear, from: viewModel.displayedWeekStart))
 
@@ -206,8 +206,8 @@ struct WeekViewModelTests {
     @Test("displayedWeekDateRangeDescription spans displayedWeekStart through 6 days later, with the year on the end date")
     func displayedWeekDateRangeDescriptionSpansTheWeek() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
         let weekEnd = calendar.date(byAdding: .day, value: 6, to: viewModel.displayedWeekStart)!
 
         let description = viewModel.displayedWeekDateRangeDescription
@@ -234,18 +234,18 @@ struct WeekViewModelTests {
     @Test("displayedWeekOfYear follows ISO-8601 week numbering across a year boundary, not Foundation's Gregorian default")
     func displayedWeekOfYearFollowsISO8601NearYearBoundary() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: dateOfDecember28th2022())
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: dateOfDecember28th2022())
 
         // The literal expected ISO week number, not the same Calendar computation under test —
         // this is the case that catches a wrong `minimumDaysInFirstWeek`, which a test that only
-        // re-derives the expectation from `WeekViewModel.calendar(for:)` itself cannot.
+        // re-derives the expectation from `MicroCycleViewModel.calendar(for:)` itself cannot.
         #expect(viewModel.displayedWeekOfYear == 52)
     }
 
     @Test("displayedWeekDateRangeDescription shows both years when the week crosses a year boundary")
     func displayedWeekDateRangeDescriptionShowsBothYearsAcrossBoundary() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: dateOfDecember28th2022())
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: dateOfDecember28th2022())
 
         let description = viewModel.displayedWeekDateRangeDescription
 
@@ -256,9 +256,9 @@ struct WeekViewModelTests {
     @Test("goToNextWeek/goToPreviousWeek move by exactly 7 days")
     func weekNavigationMovesBySevenDays() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         let start = viewModel.displayedWeekStart
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
 
         viewModel.goToNextWeek()
         #expect(viewModel.displayedWeekStart == calendar.date(byAdding: .day, value: 7, to: start))
@@ -271,7 +271,7 @@ struct WeekViewModelTests {
     @Test("goToToday returns to the week containing the given date after navigating away")
     func goToTodayReturnsToCurrentWeek() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         let start = viewModel.displayedWeekStart
 
         viewModel.goToNextWeek()
@@ -285,8 +285,8 @@ struct WeekViewModelTests {
     @Test("goToWeek(containing:) jumps to an arbitrary date's week, not just today's")
     func goToWeekJumpsToArbitraryDate() {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: model.athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
         // Several weeks away from `today`, so this can't be confused with `goToToday`'s target.
         let target = day(40)
         let expectedStart = calendar.dateInterval(of: .weekOfYear, for: target)!.start
@@ -314,7 +314,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.activities(on: day(2)).map(\.id) == [onDay.id])
         #expect(viewModel.activities(on: day(3)).map(\.id) == [otherDay.id])
@@ -343,7 +343,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let timedSummary = viewModel.plannedCardSummary(for: timedPlan)
         #expect(timedSummary.sport == .cycling)
@@ -382,7 +382,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         for plan in plans {
             guard case .duration = viewModel.plannedCardSummary(for: plan).extent else {
@@ -407,7 +407,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.pendingPlans(on: day(2)).map(\.id) == [pending.id])
         #expect(viewModel.plans(on: day(2)).count == 2)
@@ -424,7 +424,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.races(on: day(2)).map(\.id) == [primary.id, tertiary.id])
         #expect(viewModel.races(on: day(3)).isEmpty)
@@ -435,8 +435,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
         let weekStart = viewModel.displayedWeekStart
         func offset(_ days: Int) -> Date { calendar.date(byAdding: .day, value: days, to: weekStart)! }
         let later = Race(name: "Later", date: offset(10), priority: .secondary)
@@ -454,8 +454,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
         let weekStart = viewModel.displayedWeekStart
         let raceDay = calendar.date(byAdding: .day, value: 3, to: weekStart)!
         let tertiary = Race(name: "Parkrun", date: raceDay, priority: .tertiary)
@@ -473,7 +473,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         let far = Race(name: "Far", date: day(150), priority: .secondary)
         let near = Race(name: "Near", date: day(2), priority: .tertiary)
         try await store.upsert([far, near])
@@ -490,7 +490,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         let race = Race(name: "Far", date: day(150), priority: .primary)
         let activity = Activity(source: .manual, sport: .running, start: day(149), duration: 1800, perceivedExertion: 6)
         try await store.upsert([race])
@@ -515,7 +515,7 @@ struct WeekViewModelTests {
             cycleStore: store, raceStore: racesCounter, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
         let before = await racesCounter.reads
 
@@ -535,7 +535,7 @@ struct WeekViewModelTests {
         ])
         let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.races(on: day(2)).map(\.name) == ["Amsterdam 10K", "Zandvoort 10K"])
     }
@@ -548,7 +548,7 @@ struct WeekViewModelTests {
         try await store.upsert([Race(name: "Night Race", date: raceDate, priority: .primary)])
         let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "Pacific/Auckland"))
         try await model.load(in: raceDate.addingTimeInterval(-3 * 86400)...raceDate.addingTimeInterval(3 * 86400), asOf: raceDate)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: raceDate)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: raceDate)
         var auckland = Calendar(identifier: .gregorian)
         auckland.timeZone = TimeZone(identifier: "Pacific/Auckland")!
         let fifteenth = auckland.startOfDay(for: raceDate)
@@ -562,7 +562,7 @@ struct WeekViewModelTests {
         let (_, stores) = makeStores()
         let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         #expect(viewModel.races(on: day(3)).isEmpty)
 
         let sheet = RaceSheetViewModel(model: model, date: day(3))
@@ -581,9 +581,9 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
         let metricsOnDay2 = try #require(viewModel.metrics(on: day(2)))
         #expect(calendar.isDate(metricsOnDay2.day, inSameDayAs: day(2)))
         #expect(viewModel.metrics(on: day(100)) == nil)
@@ -592,7 +592,7 @@ struct WeekViewModelTests {
     @Test("trainingLoad(for:) computes a value when a calculator can score the activity, nil otherwise")
     func trainingLoadReflectsWhetherACalculatorSucceeds() throws {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         // No heart-rate samples and no perceivedExertion: neither calculator can score it.
         let unscored = Activity(source: .manual, sport: .running, start: day(2), duration: 1800)
@@ -627,7 +627,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.overlapWarning(for: a) == .merge)
         #expect(viewModel.overlapWarning(for: b) == .merge)
@@ -653,7 +653,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let mergeContext = try #require(viewModel.overlapContext(for: a))
         #expect(mergeContext.recommendation == .merge)
@@ -691,7 +691,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.overlapReviewItems.map(\.activity.id) == [a.id, b.id])
         #expect(viewModel.overlapReviewItems.map(\.recommendation) == [.merge, .merge])
@@ -707,7 +707,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         #expect(viewModel.activities(on: day(2)).count == 2)
 
         await viewModel.resolveOverlap(deleting: b.id, asOf: day(2))
@@ -726,7 +726,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(6), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         #expect(viewModel.activities(on: day(2)).map(\.id) == [solo.id])
 
         await viewModel.deleteActivity(solo, asOf: day(2))
@@ -747,7 +747,7 @@ struct WeekViewModelTests {
         try await store.upsert([a, b, contained, leg])
 
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
 
         // No separate "import finished" step needed -- unlike the old `overlapImportSummary`
@@ -776,7 +776,7 @@ struct WeekViewModelTests {
         let (_, connectStores) = makeStores()
         let connectModel = TrainingModel(stores: connectStores, athlete: athlete)
         let connectRefresher = ModelBackedFakeRefresher(model: connectModel, importer: importer)
-        let connectViewModel = WeekViewModel(model: connectModel, refresher: connectRefresher, today: day(0))
+        let connectViewModel = MicroCycleViewModel(model: connectModel, refresher: connectRefresher, today: day(0))
         await connectViewModel.load(asOf: day(0))
         #expect(connectViewModel.overlapWarningCount == 0)
         await connectViewModel.connectHealthData(asOf: day(0))
@@ -785,7 +785,7 @@ struct WeekViewModelTests {
         let (_, resyncStores) = makeStores()
         let resyncModel = TrainingModel(stores: resyncStores, athlete: athlete)
         let resyncRefresher = ModelBackedFakeRefresher(model: resyncModel, importer: importer)
-        let resyncViewModel = WeekViewModel(model: resyncModel, refresher: resyncRefresher, today: day(0))
+        let resyncViewModel = MicroCycleViewModel(model: resyncModel, refresher: resyncRefresher, today: day(0))
         await resyncViewModel.load(asOf: day(0))
         #expect(resyncViewModel.overlapWarningCount == 0)
         await resyncViewModel.resyncActivities(asOf: day(0))
@@ -795,7 +795,7 @@ struct WeekViewModelTests {
     @Test("sportStatsPages(asOf:) has exactly one, zero-filled page for the main sport when nothing was tracked")
     func sportStatsPagesZeroFillsWhenNoActivity() async {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
 
         let pages = viewModel.sportStatsPages(asOf: day(0))
@@ -816,8 +816,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
         let previousWeekDay = calendar.date(byAdding: .day, value: -7, to: viewModel.displayedWeekStart)!
 
         // 10000m/2000s last week, 15000m/3000s this week -- both +50%.
@@ -845,7 +845,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         // No activity last week at all, some this week -- an unbounded increase, not "+0%".
         let currentActivity = Activity(
@@ -870,7 +870,7 @@ struct WeekViewModelTests {
         // Default AthleteProfile.fixture() has .running as mainSport.
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let running = Activity(
             source: .manual, sport: .running, start: viewModel.displayedWeekStart,
@@ -899,7 +899,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         // Both scored via perceivedExertion, so each contributes real (non-zero) load.
         let running = Activity(
@@ -927,7 +927,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         // `today` is `displayedWeekStart` itself (not `day(0)`), so "planned dated the day after"
         // is unambiguously both >= today and still inside the displayed week, regardless of which
@@ -973,8 +973,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         let today = viewModel.displayedWeekStart
         let previousWeekDay = calendar.date(byAdding: .day, value: -7, to: today)!
@@ -1009,8 +1009,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         let today = viewModel.displayedWeekStart
         let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: today)!
@@ -1055,7 +1055,7 @@ struct WeekViewModelTests {
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
         )
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let weekStart = viewModel.displayedWeekStart
         // 175bpm (well above threshold with a 50/190 resting/max split) lands in a
@@ -1098,8 +1098,8 @@ struct WeekViewModelTests {
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
         )
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         // Entirely in the future -- no completed activities at all, so `polarizedSplit` (performed)
         // stays empty and the projection can only show up under `plannedPolarizedSplit`.
@@ -1130,7 +1130,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let thisWeekActivity = Activity(
             source: .manual, sport: athlete.mainSport, start: viewModel.displayedWeekStart,
@@ -1156,7 +1156,7 @@ struct WeekViewModelTests {
         let (_, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         await viewModel.refreshWeekCachesIfNeeded()
 
@@ -1172,7 +1172,7 @@ struct WeekViewModelTests {
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
         )
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let activityDay = viewModel.displayedWeekStart
         // 30s apart (well under the 60s gap threshold), so the whole 10 minutes forms one
@@ -1205,7 +1205,7 @@ struct WeekViewModelTests {
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
         )
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let activityDay = viewModel.displayedWeekStart
         let samples = stride(from: 0, through: 600, by: 30).map {
@@ -1239,7 +1239,7 @@ struct WeekViewModelTests {
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
         )
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let weekStart = viewModel.displayedWeekStart
         let firstActivity = Activity(
@@ -1278,7 +1278,7 @@ struct WeekViewModelTests {
             timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190
         )
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let activityDay = viewModel.displayedWeekStart
         let nextWeekDay = viewModel.athleteCalendar.date(byAdding: .day, value: 7, to: activityDay)!
@@ -1310,7 +1310,7 @@ struct WeekViewModelTests {
         let (_, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "Europe/Amsterdam")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         let activity = Activity(source: .manual, sport: .running, start: day(0), duration: 1800)
 
         let detail = viewModel.activityDetailViewModel(for: activity)
@@ -1324,7 +1324,7 @@ struct WeekViewModelTests {
         let (_, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "Europe/Amsterdam")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         #expect(viewModel.athleteViewModel.athlete.timeZone.identifier == "Europe/Amsterdam")
     }
@@ -1334,8 +1334,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         let farPastDay = calendar.date(byAdding: .day, value: -200, to: viewModel.displayedWeekStart)!
         // `perceivedExertion` so `DailyLoadSeries` can actually score this activity -- an
@@ -1357,8 +1357,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         let currentWeekActivity = Activity(
             source: .manual, sport: .running, start: viewModel.displayedWeekStart, duration: 1800
@@ -1382,8 +1382,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         let farPastDay = calendar.date(byAdding: .day, value: -200, to: viewModel.displayedWeekStart)!
         let activity = Activity(
@@ -1402,8 +1402,8 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
 
         let currentWeekActivity = Activity(
             source: .manual, sport: .running, start: viewModel.displayedWeekStart, duration: 1800, perceivedExertion: 5
@@ -1424,11 +1424,11 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         // Inside chartRange (the week after the displayed one) but outside weekDates — proves
         // `load` fetches the wider 3-week window, not just the 7 displayed days.
-        let calendar = WeekViewModel.calendar(for: athlete)
+        let calendar = MicroCycleViewModel.calendar(for: athlete)
         let nextWeekDay = calendar.date(byAdding: .day, value: 10, to: viewModel.displayedWeekStart)!
         let activity = Activity(source: .manual, sport: .running, start: nextWeekDay, duration: 1800)
         try await store.upsert([activity])
@@ -1444,7 +1444,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         #expect(viewModel.hasNoActivities)
 
         try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
@@ -1456,7 +1456,7 @@ struct WeekViewModelTests {
     @Test("the empty state gives way to the calendar once a plan is loaded, and returns when it is gone (MVP2-108)")
     func emptyStateGivesWayToPlans() async throws {
         let model = makeModel()
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
         #expect(viewModel.showsEmptyState)
 
@@ -1485,7 +1485,7 @@ struct WeekViewModelTests {
         try await store.upsert([workout])
         try await store.upsert([PlannedActivity(workoutID: workout.id, date: day(-3))])
         let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
 
         #expect(model.plans.count == 1)
@@ -1501,7 +1501,7 @@ struct WeekViewModelTests {
         try await store.upsert([workout])
         try await store.upsert([PlannedActivity(workoutID: workout.id, date: day(200))])
         let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
         #expect(model.plans.isEmpty)
         #expect(viewModel.showsEmptyState)
@@ -1518,7 +1518,7 @@ struct WeekViewModelTests {
         try await store.saveImportAnchor(ImportAnchor(data: Data([1])))
 
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
 
         #expect(model.activities.isEmpty)
@@ -1529,7 +1529,7 @@ struct WeekViewModelTests {
     func refreshDelegatesAndTogglesFlag() async {
         let model = makeModel()
         let refresher = FakeRefresher()
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
 
         #expect(!viewModel.isRefreshing)
         await viewModel.refresh(asOf: day(0))
@@ -1541,7 +1541,7 @@ struct WeekViewModelTests {
     func refreshClearsFlagOnFailure() async {
         let model = makeModel()
         let refresher = FakeRefresher(shouldThrow: true)
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
 
         await viewModel.refresh(asOf: day(0))
         #expect(!viewModel.isRefreshing)
@@ -1551,7 +1551,7 @@ struct WeekViewModelTests {
     func resyncDelegatesAndTogglesFlag() async {
         let model = makeModel()
         let refresher = FakeRefresher()
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
 
         #expect(!viewModel.isResyncing)
         await viewModel.resyncActivities(asOf: day(0))
@@ -1563,7 +1563,7 @@ struct WeekViewModelTests {
     func resyncClearsFlagOnFailure() async {
         let model = makeModel()
         let refresher = FakeRefresher(shouldThrow: true)
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
 
         await viewModel.resyncActivities(asOf: day(0))
         #expect(!viewModel.isResyncing)
@@ -1573,7 +1573,7 @@ struct WeekViewModelTests {
     func resyncAndRefreshFlagsAreIndependent() async {
         let model = makeModel()
         let refresher = FakeRefresher()
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
 
         await viewModel.resyncActivities(asOf: day(0))
         #expect(!viewModel.isRefreshing)
@@ -1586,7 +1586,7 @@ struct WeekViewModelTests {
     func deduplicateTogglesFlagIndependently() async {
         let model = makeModel()
         let refresher = FakeRefresher()
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
 
         #expect(!viewModel.isDeduplicating)
         await viewModel.deduplicateActivities(asOf: day(0))
@@ -1604,7 +1604,7 @@ struct WeekViewModelTests {
 
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(0)...day(0), asOf: day(0))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         // InMemoryStore's own upsert already prevents real duplicates from existing (see
         // TrainingKit's own InMemoryStoreTests/SwiftDataStoreTests for that store-level
@@ -1620,7 +1620,7 @@ struct WeekViewModelTests {
     func resyncActivitiesUpdatesModelEndToEnd() async throws {
         let model = makeModel()
         let refresher = ModelBackedFakeRefresher(model: model)
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
         #expect(viewModel.hasNoActivities)
 
         await viewModel.resyncActivities(asOf: day(0))
@@ -1632,7 +1632,7 @@ struct WeekViewModelTests {
     func connectHealthDataRequestsAuthorizationThenRefreshes() async {
         let model = makeModel()
         let refresher = FakeRefresher()
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
 
         await viewModel.connectHealthData(asOf: day(0))
 
@@ -1645,7 +1645,7 @@ struct WeekViewModelTests {
     func connectHealthDataSkipsRefreshOnAuthorizationFailure() async {
         let model = makeModel()
         let refresher = FakeRefresher(shouldThrow: true)
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
 
         await viewModel.connectHealthData(asOf: day(0))
 
@@ -1658,7 +1658,7 @@ struct WeekViewModelTests {
     func connectHealthDataClearsEmptyState() async throws {
         let model = makeModel()
         let refresher = ModelBackedFakeRefresher(model: model)
-        let viewModel = WeekViewModel(model: model, refresher: refresher, today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: day(0))
         #expect(viewModel.hasNoActivities)
 
         await viewModel.connectHealthData(asOf: day(0))
@@ -1674,7 +1674,7 @@ struct WeekViewModelTests {
         // `sportStatsPagesPolarizedSplitIncludesPlannedWorkoutProjection` uses.
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let workout = StructuredWorkout(
             name: "Easy Run", sport: .running,
@@ -1696,7 +1696,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let workout = StructuredWorkout(
             name: "Easy Run", sport: .running,
@@ -1729,7 +1729,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         let activity = Activity(
             source: .manual, sport: .running, start: day(0), duration: 1800, perceivedExertion: 4
@@ -1748,7 +1748,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(5))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(5))
 
         let workout = StructuredWorkout(
             name: "Easy Run", sport: .running,
@@ -1773,7 +1773,7 @@ struct WeekViewModelTests {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         await viewModel.load(asOf: day(0))
 
         let first = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
@@ -1793,7 +1793,7 @@ struct WeekViewModelTests {
     }
 
     private func calendar(for athlete: AthleteProfile) -> Calendar {
-        WeekViewModel.calendar(for: athlete)
+        MicroCycleViewModel.calendar(for: athlete)
     }
 }
 
@@ -1829,7 +1829,7 @@ final class FakeRefresher: ActivityRefreshing {
 
 /// Unlike `FakeRefresher`, which just counts calls, this actually drives `model.importActivities(from:)`
 /// with a stub `ActivityImporting` — so a test can assert the real end-to-end effect of a refresh/
-/// connect on `model` (and therefore on anything, like `WeekViewModel.hasNoActivities`, that's
+/// connect on `model` (and therefore on anything, like `MicroCycleViewModel.hasNoActivities`, that's
 /// derived from it), the way the app's real `TrainingAppEnvironment` does.
 @MainActor
 private final class ModelBackedFakeRefresher: ActivityRefreshing {
@@ -1859,7 +1859,7 @@ private struct StubImporter: ActivityImporting {
 }
 
 /// Unlike `StubImporter`, actually hands back `activities` as freshly "imported" -- lets a test
-/// assert `WeekViewModel.overlapWarningCount` (MVP1-67) is live through `connectHealthData(asOf:)`/
+/// assert `MicroCycleViewModel.overlapWarningCount` (MVP1-67) is live through `connectHealthData(asOf:)`/
 /// `resyncActivities(asOf:)` specifically, not just `refresh(asOf:)`.
 private struct OverlapProducingImporter: ActivityImporting {
     let activities: [Activity]

@@ -2,16 +2,16 @@ import Foundation
 import TrainingCore
 
 /// What the activity detail sheet needs to show and change an activity's link to a planned workout
-/// (MVP2-42) — see ``WeekViewModel/planLinkContext(for:)``.
+/// (MVP2-42) — see ``MicroCycleViewModel/planLinkContext(for:)``.
 public struct PlanLinkContext: Equatable {
     /// One planned workout the activity is, or could be, linked to.
     public struct PlanOption: Identifiable, Equatable {
-        /// The plan's id — what ``WeekViewModel/linkActivity(_:toPlan:asOf:)`` takes.
+        /// The plan's id — what ``MicroCycleViewModel/linkActivity(_:toPlan:asOf:)`` takes.
         public let id: UUID
         /// The workout's name, or the sport's when the workout has none or is no longer in the library.
         public let title: String
         /// The workout's headline figure (duration or distance), if known.
-        public let extent: WeekViewModel.PlannedCardSummary.Extent?
+        public let extent: MicroCycleViewModel.PlannedCardSummary.Extent?
         /// Whether ``extent`` is forecast from the athlete's paces, shown with a "~" (MVP2-8).
         public let isExtentEstimated: Bool
     }

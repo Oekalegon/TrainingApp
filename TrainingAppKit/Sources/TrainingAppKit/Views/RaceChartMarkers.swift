@@ -12,7 +12,7 @@ import TrainingCore
 /// so the two stay joined. Races are date-only (the race form stores the start of the day), which is
 /// what `dayOffset` assumes.
 ///
-/// Callers pass races with at most one per day (`WeekViewModel.chartRaces(in:)`), so circles never
+/// Callers pass races with at most one per day (`MicroCycleViewModel.chartRaces(in:)`), so circles never
 /// stack.
 struct RaceChartMarkers: View {
     let races: [Race]
