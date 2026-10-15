@@ -526,9 +526,8 @@ public final class PlannedWorkoutSheetViewModel {
     /// ``FitnessMetrics/isWarmingUp`` values, plus whether the projection found a real day to seed
     /// from at all — rather than an interpretation of them (see ``recomputeGuardrails()``'s own doc
     /// comment for why this view model stopped trying to explain that in English). The ratio is
-    /// computed here the same way ``PlanEvaluator``'s `atlToCTLRatioFindings` does (`atl/ctl`, `n/a`
-    /// for a zero-CTL day) so this always matches whatever that rule actually compared against its
-    /// thresholds.
+    /// `atl/ctl` (`n/a` for a zero-CTL day); ``PlanEvaluator`` no longer has a rule on it, so it is
+    /// shown purely as a diagnostic.
     private static func diagnosticDescription(seeded: Bool, displayedMetrics: [FitnessMetrics]) -> String {
         guard !displayedMetrics.isEmpty else {
             return "No projected days landed in the display window."
