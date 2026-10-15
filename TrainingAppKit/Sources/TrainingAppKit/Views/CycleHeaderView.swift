@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The plan strip above a micro-cycle's chart: "Macro › Meso › Micro", the phase and load role, and
+/// The plan strip at the top of the stats bar, under the chart: "Macro › Meso › Micro", the phase and load role, and
 /// the plan's edit button (MVP5-107). Shown only for a planned micro-cycle, not a plain calendar week.
 struct CycleHeaderView: View {
     let context: CycleContext

@@ -279,7 +279,7 @@ struct DisplayPeriodTests {
         #expect(context.phase == "ultra-specific")
         #expect(context.phaseTitle == "Ultra-Specific")
         #expect(context.loadRole == .build)
-        #expect(viewModel.displayedTitle == "Microcycle 2")
+        #expect(viewModel.displayedTitle == "Micro 2")
 
         viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 300, to: first)!)
         #expect(viewModel.cycleContext() == nil)

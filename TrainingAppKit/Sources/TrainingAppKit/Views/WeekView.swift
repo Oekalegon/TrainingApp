@@ -644,9 +644,6 @@ public struct WeekView: View {
     private func weekPageContent(for dates: [Date], pageHeight: CGFloat, isCurrentPage: Bool) -> some View {
         let weekStart = dates.first ?? viewModel.displayedWeekStart
         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-            if let context = viewModel.cycleContext(for: weekStart) {
-                CycleHeaderView(context: context)
-            }
             graphPanel(weekStart: weekStart, isCurrentPage: isCurrentPage)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
@@ -720,6 +717,11 @@ public struct WeekView: View {
     private func weekPageHeader(weekStart: Date, isCurrentPage: Bool) -> some View {
         VStack(spacing: 0) {
             Divider()
+            // The plan strip (MVP5-107) sits with the stats it frames, pinned above them.
+            if let context = viewModel.cycleContext(for: weekStart) {
+                CycleHeaderView(context: context)
+                Divider()
+            }
             SportStatsPagerView(pages: viewModel.sportStatsPages(for: weekStart))
                 .padding(.vertical, 4)
             Divider()

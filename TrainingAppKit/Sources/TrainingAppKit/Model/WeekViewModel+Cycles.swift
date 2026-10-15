@@ -13,7 +13,7 @@ public struct CycleContext: Hashable, Sendable {
     public let phase: CyclePhase
     /// How hard the micro is meant to be.
     public let loadRole: MicroLoadRole?
-    /// The micro's 1-based position (its "Microcycle N") among the macro's micro-cycles; `nil` without a macro.
+    /// The micro's 1-based position (its "Micro N") among the macro's micro-cycles; `nil` without a macro.
     public let weekInPlan: Int?
     /// The micro's length in days (7, 10, 14, …).
     public let lengthInDays: Int
@@ -145,10 +145,10 @@ extension WeekViewModel {
         )
     }
 
-    /// The title for the week view: "Microcycle N" with N the micro's position in the plan (also for
+    /// The title for the week view: "Micro N" with N the micro's position in the plan (also for
     /// a 7-day micro), else "Week N" for the calendar week of the year (MVP1-56).
     public var displayedTitle: String {
-        if let number = cycleContext()?.weekInPlan { return "Microcycle \(number)" }
+        if let number = cycleContext()?.weekInPlan { return "Micro \(number)" }
         return "Week \(displayedWeekOfYear)"
     }
 }
