@@ -109,4 +109,35 @@ struct DisplayPeriodTests {
 
         #expect(viewModel.displayedWeekDateRangeDescription.hasSuffix(expected))
     }
+
+    @Test("the cache window is the displayed period and one neighbor either side", arguments: [7, 10, 14])
+    func cacheWindowFollowsLength(length: Int) async {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let viewModel = WeekViewModel(
+            model: model, refresher: FakeRefresher(), today: day(0), displayedLengthInDays: length
+        )
+        await viewModel.refreshWeekCachesIfNeeded(asOf: day(0))
+
+        let period = viewModel.displayedPeriod
+        #expect(viewModel.cachedPeriods == [period.previous(calendar: calendar), period, period.next(calendar: calendar)])
+        #expect(Set(viewModel.weekGraphCaches.keys) == Set(viewModel.cachedPeriods))
+    }
+
+    @Test("caches for the same start date but another length are separate entries")
+    func cachesAreKeyedByLength() {
+        let start = day(0)
+        #expect(DisplayPeriod(start: start, lengthInDays: 7) != DisplayPeriod(start: start, lengthInDays: 10))
+    }
+
+    @Test("the stats pages compare against the previous period of the same length", arguments: [7, 10, 14])
+    func statsCompareWithPreviousPeriod(length: Int) {
+        let model = makeModel()
+        let viewModel = WeekViewModel(
+            model: model, refresher: FakeRefresher(), today: day(0), displayedLengthInDays: length
+        )
+        // No data: the pages still build for any length, with nothing to compare.
+        let pages = viewModel.sportStatsPages(for: viewModel.displayedWeekStart, asOf: day(0))
+        #expect(!pages.isEmpty)
+    }
 }

@@ -1,7 +1,7 @@
 import Foundation
 import TrainingCore
 
-/// Drives the week view (design doc §2.1): which week is displayed, the 3-week window the
+/// Drives the week view (design doc §2.1): which week is displayed, the three-period window (3 weeks for a calendar week) the
 /// CTL/ATL/TSB chart shows, and the day-by-day activities/plans below it.
 ///
 /// Reads `model.activities`/`plans`/`metrics` directly rather than caching its own copies, so it
@@ -71,7 +71,7 @@ public final class WeekViewModel {
     /// ``sportStatsPages(for:asOf:)``'s own doc comment. Not `@ObservationIgnored`: `WeekView`
     /// reads this indirectly through that method, and needs the read tracked the same way a plain
     /// stored property's would be.
-    private var sportStatsPagesCaches: [Date: [SportStatsPage]] = [:]
+    private var sportStatsPagesCaches: [DisplayPeriod: [SportStatsPage]] = [:]
     /// `(model.activities.count, model.plans.count, model.workouts.count, today)` as of the last
     /// time ``sportStatsPagesCaches`` was populated — any changing invalidates the whole cache (an
     /// import/dedup could change any cached week's activities, not just the displayed one; a new
@@ -89,7 +89,7 @@ public final class WeekViewModel {
     /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
     /// by ``refreshWeekCachesIfNeeded()``. Not `@ObservationIgnored`, for the same reason as
     /// ``sportStatsPagesCaches``.
-    private var weekGraphCaches: [Date: HeartRateHistogram] = [:]
+    private(set) var weekGraphCaches: [DisplayPeriod: HeartRateHistogram] = [:]
     /// ``histogramFingerprint()`` of `model.activities` as of the last time ``weekGraphCaches`` was
     /// populated — see ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch
     /// invalidates the whole cache rather than trying to single out which weeks actually changed.
@@ -110,7 +110,7 @@ public final class WeekViewModel {
     /// already-computed `model.metrics`), this does real per-activity TRIMP work
     /// (`StatisticsCalculator.summary(for:athlete:)`) — exactly the MVP1-19 freeze class this
     /// codebase already built ``sportStatsPagesCaches``/``weekGraphCaches`` to keep out of that path.
-    private var dailyLoadSplitCaches: [Date: DailyLoadSplit] = [:]
+    private var dailyLoadSplitCaches: [DisplayPeriod: DailyLoadSplit] = [:]
     /// `(model.activities.count, model.plans.count, model.workouts.count)` as of the last time
     /// ``dailyLoadSplitCaches`` was populated — three counts, not just `activityCount` the way
     /// ``sportStatsPagesCachesKey`` does, since a plan or its workout can change independently of
@@ -161,8 +161,8 @@ public final class WeekViewModel {
     @ObservationIgnored
     var paceHistoryKey: PaceHistoryKey?
 
-    /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
-    /// on screen.
+    /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the period currently
+    /// on screen: a calendar week, or a micro-cycle once MVP5-107 shows one.
     public private(set) var displayedWeekStart: Date
     /// The number of days on screen: 7 for a calendar week, or a micro-cycle's own length (MVP5-106).
     public private(set) var displayedLengthInDays: Int
@@ -312,9 +312,9 @@ public final class WeekViewModel {
 
     /// ``displayedWeekStart`` and its immediate neighbors — the window ``sportStatsPagesCaches``/
     /// ``weekGraphCaches`` keep cached, and the only weeks `WeekView`'s carousel ever shows at once.
-    private var cachedWeekStarts: [Date] {
+    var cachedPeriods: [DisplayPeriod] {
         let period = displayedPeriod
-        return [period.previous(calendar: calendar).start, period.start, period.next(calendar: calendar).start]
+        return [period.previous(calendar: calendar), period, period.next(calendar: calendar)]
     }
 
     /// Completed activities in the period starting `weekStart` (which need not be
@@ -325,7 +325,8 @@ public final class WeekViewModel {
             .flatMap { activities(on: $0) }
     }
 
-    /// The 3-week range (the week before, the displayed week, the week after) the chart covers.
+    /// The range of three periods (the one before, the displayed one, the one after; 3 weeks for a
+    /// calendar week) the chart covers.
     public var chartRange: ClosedRange<Date> {
         chartRange(for: displayedWeekStart)
     }
@@ -427,11 +428,11 @@ public final class WeekViewModel {
             dailyLoadSplitCaches.removeAll()
             dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today, plans, activities, plannedLoadGeneration)
         }
-        if let cached = dailyLoadSplitCaches[weekStart] {
+        if let cached = dailyLoadSplitCaches[period(startingAt: weekStart)] {
             return cached
         }
         let split = computeDailyLoadSplit(in: chartRange(for: weekStart), asOf: today)
-        dailyLoadSplitCaches[weekStart] = split
+        dailyLoadSplitCaches[period(startingAt: weekStart)] = split
         return split
     }
 
@@ -767,11 +768,11 @@ public final class WeekViewModel {
                 key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration, plannedLoadGeneration, plans, activities
             )
         }
-        if let cached = sportStatsPagesCaches[weekStart] {
+        if let cached = sportStatsPagesCaches[period(startingAt: weekStart)] {
             return cached
         }
         let pages = computeSportStatsPages(weekStart: weekStart, asOf: today)
-        sportStatsPagesCaches[weekStart] = pages
+        sportStatsPagesCaches[period(startingAt: weekStart)] = pages
         return pages
     }
 
@@ -933,7 +934,7 @@ public final class WeekViewModel {
     }
 
     /// Descriptive totals (every sport, not just one), performed and planned independently, for
-    /// the calendar week starting `weekStart` — shared by ``sportStatsPages(asOf:)`` for both the
+    /// the period starting `weekStart` — shared by ``sportStatsPages(asOf:)`` for both the
     /// displayed week and the previous one.
     private func periodStatsSplit(weekStart: Date, asOf today: Date) -> PeriodStatsSplit {
         let weekEnd = period(startingAt: weekStart).lastDay(calendar: calendar)
@@ -999,7 +1000,7 @@ public final class WeekViewModel {
     /// immediate neighbors, which are the only weeks ever prefetched (see that method's own doc
     /// comment) and so the only ones `WeekView`'s carousel ever asks for.
     public func heartRateHistogram(for weekStart: Date) -> HeartRateHistogram {
-        weekGraphCaches[weekStart] ?? .empty
+        weekGraphCaches[period(startingAt: weekStart)] ?? .empty
     }
 
     /// Prefetches (and evicts stale entries from) ``weekGraphCaches`` for ``displayedWeekStart``
@@ -1046,16 +1047,16 @@ public final class WeekViewModel {
             weekGraphCachesFingerprint = fingerprint
             weekGraphCachesAthlete = model.athlete
         }
-        let window = cachedWeekStarts
-        let windowSet = Set(window)
+        let window = cachedPeriods.map(\.start)
+        let windowSet = Set(cachedPeriods)
         weekGraphCaches = weekGraphCaches.filter { windowSet.contains($0.key) }
 
         let displayedWeekStart = self.displayedWeekStart
-        if inputsChanged || weekGraphCaches[displayedWeekStart] == nil {
+        if inputsChanged || weekGraphCaches[displayedPeriod] == nil {
             await cacheWeekGraph(weekStart: displayedWeekStart, priority: .userInitiated)
         }
         for weekStart in window where weekStart != displayedWeekStart
-            && (inputsChanged || weekGraphCaches[weekStart] == nil) {
+            && (inputsChanged || weekGraphCaches[period(startingAt: weekStart)] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
         await refreshPaceHistoryIfNeeded(asOf: today, force: activitiesChanged)
@@ -1063,7 +1064,7 @@ public final class WeekViewModel {
     }
 
     /// Computes one week's heart-rate histogram off the main actor and stores it in
-    /// ``weekGraphCaches``, unless the 3-week window has moved on again by the time it lands (a
+    /// ``weekGraphCaches``, unless the cache window has moved on again by the time it lands (a
     /// stale result for a week no longer near ``displayedWeekStart`` is simply dropped, not
     /// cached).
     private func cacheWeekGraph(weekStart: Date, priority: TaskPriority) async {
@@ -1083,7 +1084,7 @@ public final class WeekViewModel {
             )
         }.value
         guard isStillCacheable(weekStart, fingerprint: fingerprint), athlete == model.athlete else { return }
-        weekGraphCaches[weekStart] = histogram
+        weekGraphCaches[period(startingAt: weekStart)] = histogram
     }
 
     /// Whether a background computation for `weekStart` (started under `fingerprint`, the one
@@ -1096,7 +1097,7 @@ public final class WeekViewModel {
     /// sample: a refresh that sees changed data stores its new fingerprint first, so an older
     /// result is dropped here, and data that changed before any refresh is caught by the next one.
     private func isStillCacheable(_ weekStart: Date, fingerprint: Int?) -> Bool {
-        cachedWeekStarts.contains(weekStart) && fingerprint == weekGraphCachesFingerprint
+        cachedPeriods.contains(period(startingAt: weekStart)) && fingerprint == weekGraphCachesFingerprint
     }
 
     /// A hash of what the heart-rate histogram reads from each activity — id, start, duration and

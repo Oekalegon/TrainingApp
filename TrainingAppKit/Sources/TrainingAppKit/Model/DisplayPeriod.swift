@@ -7,6 +7,11 @@ import Foundation
 /// load range, the cache keys) is derived from a period's ``lengthInDays`` instead. Dates are
 /// computed with the athlete's calendar, so day arithmetic stays correct across daylight-saving
 /// changes.
+///
+/// The neighbors (``next(calendar:)``, ``previous(calendar:)``) are periods of the same length, which
+/// is exact for calendar weeks. A micro-cycle followed or preceded by a different length needs the
+/// plan to say so (MVP5-107), so the chart, load and cache windows will take their neighbors from
+/// there instead.
 public struct DisplayPeriod: Hashable, Sendable {
     /// The number of days in a calendar week.
     public static let calendarWeekLength = 7
