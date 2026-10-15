@@ -21,7 +21,7 @@ struct CycleHeaderView: View {
                 .disabled(true)
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.top, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }

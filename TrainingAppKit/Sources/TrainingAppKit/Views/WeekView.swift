@@ -718,11 +718,13 @@ public struct WeekView: View {
         VStack(spacing: 0) {
             Divider()
             // The plan strip (MVP5-107) sits with the stats it frames, pinned above them.
-            if let context = viewModel.cycleContext(for: weekStart) {
+            let context = viewModel.cycleContext(for: weekStart)
+            if let context {
                 CycleHeaderView(context: context)
             }
             SportStatsPagerView(pages: viewModel.sportStatsPages(for: weekStart))
-                .padding(.vertical, 4)
+                .padding(.top, context == nil ? 4 : 0)
+                .padding(.bottom, 4)
             Divider()
         }
         .background(.thinMaterial)
