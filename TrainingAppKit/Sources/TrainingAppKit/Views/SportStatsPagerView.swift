@@ -23,9 +23,12 @@ struct SportStatsPagerView: View {
     /// (three lines where a page has both performed and still-planned figures, else two) plus the
     /// strip's own margin.
     private var rowHeight: CGFloat {
-        guard hugsContent else { return 64 }
-        return pages.contains(where: \.showsPerformedAndPlanned) ? 58 : 46
+        guard hugsContent else { return defaultRowHeight }
+        return pages.contains(where: \.showsPerformedAndPlanned) ? threeLineRowHeight : twoLineRowHeight
     }
+    @ScaledMetric(relativeTo: .footnote) private var defaultRowHeight: CGFloat = 64
+    @ScaledMetric(relativeTo: .footnote) private var threeLineRowHeight: CGFloat = 58
+    @ScaledMetric(relativeTo: .footnote) private var twoLineRowHeight: CGFloat = 46
 
     /// Index into `pages`, not a `Sport` tag: unlike `WeekView`'s own day-list carousel (always
     /// exactly 3 fixed slots), the *number* of pages here varies week to week, so an index is what
@@ -382,15 +385,5 @@ private struct StatsPageView: View {
     /// are never negative), so this only has the two cases to handle.
     private func percentString(_ changeFraction: Double) -> String {
         changeFraction.isFinite ? changeFraction.formatted(Self.percentFormat) : "+∞%"
-    }
-}
-
-extension SportStatsPage {
-    /// Whether any figure shows both a performed and a still-planned value, which makes the stats row
-    /// one line taller (see `StatsPageView`).
-    fileprivate var showsPerformedAndPlanned: Bool {
-        (sport.isEndurance && ((distanceMeters > 0 && plannedDistanceMeters > 0) || (time > 0 && plannedTime > 0)))
-            || (load > 0 && plannedLoad > 0)
-            || (polarizedSplit.total > 0 && plannedPolarizedSplit.total > 0)
     }
 }

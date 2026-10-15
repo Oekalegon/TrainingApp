@@ -77,3 +77,14 @@ public struct SportStatsPage: Identifiable, Hashable {
     /// or a plan whose load the athlete didn't set (MVP2-8). The same value on every page.
     public let isExpectedLoadEstimated: Bool
 }
+
+extension SportStatsPage {
+    /// Whether any figure shows both a performed and a still-planned value, which makes the stats row
+    /// one line taller (`StatsPageView` shows the planned figure under the performed one only when
+    /// both exist). The pager sizes its row from this, so keep the two in step.
+    var showsPerformedAndPlanned: Bool {
+        (sport.isEndurance && ((distanceMeters > 0 && plannedDistanceMeters > 0) || (time > 0 && plannedTime > 0)))
+            || (load > 0 && plannedLoad > 0)
+            || (polarizedSplit.total > 0 && plannedPolarizedSplit.total > 0)
+    }
+}

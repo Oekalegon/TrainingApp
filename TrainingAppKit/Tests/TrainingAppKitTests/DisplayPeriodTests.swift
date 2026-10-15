@@ -10,13 +10,13 @@ struct DisplayPeriodTests {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
-    private func makeModel(timeZone: String = "UTC") -> TrainingModel {
+    private func makeModel(timeZone: String = "UTC", weekStartsOn: Weekday = .monday) -> TrainingModel {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
-        let athlete = AthleteProfile.fixture(weekStartsOn: .monday, timeZoneIdentifier: timeZone)
+        let athlete = AthleteProfile.fixture(weekStartsOn: weekStartsOn, timeZoneIdentifier: timeZone)
         return TrainingModel(stores: stores, athlete: athlete)
     }
 
@@ -324,5 +324,94 @@ struct DisplayPeriodTests {
         #expect(viewModel.displayedLengthInDays == 14)
         viewModel.goToPreviousWeek()
         #expect(viewModel.displayedPeriod == period)
+    }
+
+    @Test("a micro starting mid-week still replaces the picked calendar week once the plan loads")
+    func midWeekMicroAfterLateLoad() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let monday = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        let wednesday = calendar.date(byAdding: .day, value: 2, to: monday)!
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        // Written to the store only, so `model.cycles` doesn't know it yet.
+        let macro = TrainingCycle(level: .macro, phase: .build, name: "Plan", dateRange: wednesday...calendar.date(byAdding: .day, value: 9, to: wednesday)!)
+        let meso = TrainingCycle(level: .meso, phase: .build, name: "Block", dateRange: macro.dateRange, parentID: macro.id)
+        let micro = TrainingCycle(level: .micro, phase: .build, name: "Micro", dateRange: macro.dateRange, parentID: meso.id)
+        try await model.stores.cycleStore.upsert([macro, meso, micro])
+
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 3, to: monday)!)
+        #expect(viewModel.displayedLengthInDays == 7)
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.displayedPeriod == DisplayPeriod(start: wednesday, lengthInDays: 10))
+    }
+
+    @Test("the position in the plan follows changes to the plan")
+    func microOrderFollowsPlanChanges() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        try await seedPlan(model, lengths: [7, 7, 7], anchoredAt: first, index: 2)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        viewModel.goToWeek(containing: first)
+        await viewModel.refreshMicroOrder()
+        #expect(viewModel.displayedTitle == "Micro 3")
+
+        let firstMicro = try #require(model.cycles.filter { $0.level == .micro }.min { $0.dateRange.lowerBound < $1.dateRange.lowerBound })
+        try await model.stores.cycleStore.deleteCycle(id: firstMicro.id)
+        await viewModel.refreshWeekCachesIfNeeded(asOf: day(0))
+
+        #expect(viewModel.displayedTitle == "Micro 2")
+    }
+
+    @Test("with Sunday as the week start, calendar weeks run Sunday to Saturday and meet a micro cleanly")
+    func sundayWeekStart() async throws {
+        let model = makeModel(weekStartsOn: .sunday)
+        let calendar = calendar(model)
+        let sunday = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        #expect(calendar.component(.weekday, from: sunday) == Weekday.sunday.rawValue)
+        let microStart = calendar.date(byAdding: .day, value: 11, to: sunday)!
+        try await seedPlan(model, lengths: [10], anchoredAt: microStart, index: 0)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 8, to: sunday)!)
+        #expect(viewModel.displayedWeekStart == calendar.date(byAdding: .day, value: 7, to: sunday))
+        #expect(viewModel.displayedLengthInDays == 4)
+        viewModel.goToNextWeek()
+        #expect(viewModel.displayedWeekStart == microStart)
+    }
+
+    @Test("a gap between two micros is covered by calendar weeks, each date in exactly one period")
+    func gapBetweenMicros() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        let laterStart = calendar.date(byAdding: .day, value: 24, to: first)!
+        try await seedPlan(model, lengths: [10], anchoredAt: first, index: 0)
+        try await seedSecondPlan(model, lengths: [7], anchoredAt: laterStart)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        viewModel.goToWeek(containing: first)
+        await viewModel.load(asOf: day(0))
+
+        var covered = 0
+        var cursor = first
+        while cursor < calendar.date(byAdding: .day, value: 31, to: first)! {
+            #expect(viewModel.displayedWeekStart == cursor)
+            covered += viewModel.displayedLengthInDays
+            cursor = calendar.date(byAdding: .day, value: viewModel.displayedLengthInDays, to: cursor)!
+            viewModel.goToNextWeek()
+        }
+        #expect(covered == 31)
+    }
+
+    /// A second macro with one micro-cycle, so a plan can have a gap.
+    private func seedSecondPlan(_ model: TrainingModel, lengths: [Int], anchoredAt anchor: Date) async throws {
+        let calendar = calendar(model)
+        let last = calendar.date(byAdding: .day, value: lengths[0] - 1, to: anchor)!
+        let macro = TrainingCycle(level: .macro, phase: .build, name: "Later", dateRange: anchor...last)
+        let meso = TrainingCycle(level: .meso, phase: .build, name: "Later block", dateRange: anchor...last, parentID: macro.id)
+        let micro = TrainingCycle(level: .micro, phase: .build, name: "Later micro", dateRange: anchor...last, parentID: meso.id)
+        try await model.add([macro, meso, micro])
     }
 }

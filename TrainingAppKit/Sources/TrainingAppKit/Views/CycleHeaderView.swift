@@ -14,16 +14,18 @@ struct CycleHeaderView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .combine)
             Spacer()
             // Plan editing doesn't exist yet; the button holds its place in the header.
             Button("Edit Plan", systemImage: "pencil") {}
                 .labelStyle(.iconOnly)
                 .disabled(true)
+                // Not offered to VoiceOver until plan editing exists.
+                .accessibilityHidden(true)
         }
         .padding(.horizontal)
         .padding(.top, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
     }
 
     private var detail: String {

@@ -8,10 +8,10 @@ import Foundation
 /// computed with the athlete's calendar, so day arithmetic stays correct across daylight-saving
 /// changes.
 ///
-/// The same-length neighbors (``next(calendar:)``, ``previous(calendar:)``) are exact for calendar
-/// weeks only. ``WeekViewModel`` takes the real neighbors from the plan (MVP5-107), where a micro-cycle
-/// can be followed or preceded by a period of another length, and uses these for fixed-length
-/// arithmetic.
+/// The same-length helpers (``next(calendar:)``, ``previous(calendar:)``, ``chartRange(calendar:)``,
+/// ``loadRange(calendar:)``) are exact for calendar weeks only. ``WeekViewModel`` doesn't use them: it
+/// takes the neighbors from the plan (MVP5-107), where a micro-cycle can be followed or preceded by a
+/// period of another length.
 public struct DisplayPeriod: Hashable, Sendable {
     /// The number of days in a calendar week.
     public static let calendarWeekLength = 7

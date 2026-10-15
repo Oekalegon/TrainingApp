@@ -162,10 +162,10 @@ public final class WeekViewModel {
     var paceHistoryKey: PaceHistoryKey?
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the period currently
-    /// on screen: a calendar week, or a micro-cycle once MVP5-107 shows one.
-    public internal(set) var displayedWeekStart: Date
+    /// on screen: a calendar week, or a planned micro-cycle (MVP5-107).
+    public private(set) var displayedWeekStart: Date
     /// The number of days on screen: 7 for a calendar week, or a micro-cycle's own length (MVP5-106).
-    public internal(set) var displayedLengthInDays: Int
+    public private(set) var displayedLengthInDays: Int
     /// The date the athlete last asked to see (today, a picked date, or the start of the period they
     /// paged to). ``displayedPeriod`` is the period containing it, so when the plan covering it loads
     /// later, ``refreshDisplayedPeriod()`` can switch from a calendar week to the micro-cycle.
@@ -175,6 +175,12 @@ public final class WeekViewModel {
     /// cycles near the displayed period are in `model.cycles`, so counting there would number a
     /// micro from the edge of the loaded window instead of from its plan's start.
     var microOrderByMacro: [UUID: [UUID]] = [:]
+    /// Cycles fetched straight from the store around ``anchorDate`` before the first load, and the
+    /// index built from them and `model.cycles`; see `planIndex()`.
+    @ObservationIgnored
+    var peekedCycles: [TrainingCycle] = []
+    @ObservationIgnored
+    var planIndexCache: PlanIndex?
     /// The period currently on screen: ``displayedWeekStart`` for ``displayedLengthInDays`` days.
     public var displayedPeriod: DisplayPeriod {
         DisplayPeriod(start: displayedWeekStart, lengthInDays: displayedLengthInDays)
@@ -334,7 +340,7 @@ public final class WeekViewModel {
     }
 
     /// The range of three periods (the one before, the displayed one, the one after; 3 weeks for a
-    /// calendar week) the chart covers.
+    /// calendar week, otherwise as long as the plan's neighbors are) the chart covers.
     public var chartRange: ClosedRange<Date> {
         chartRange(for: displayedWeekStart)
     }
@@ -1071,6 +1077,7 @@ public final class WeekViewModel {
             && (inputsChanged || weekGraphCaches[period(startingAt: weekStart)] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
+        await refreshMicroOrder()
         await refreshPaceHistoryIfNeeded(asOf: today, force: activitiesChanged)
         await refreshPlannedLoadIfNeeded(force: activitiesChanged)
     }
@@ -1283,8 +1290,24 @@ public final class WeekViewModel {
     /// Jumps to the week containing `date` — the "Select Date" toolbar action's destination,
     /// for an arbitrary date rather than today's.
     public func goToWeek(containing date: Date) {
-        anchorDate = date
-        show(period(containing: date))
+        show(period(containing: date), anchor: date)
+    }
+
+    /// Shows `period`. `anchor` is the date to keep resolving from (see ``anchorDate``): the picked
+    /// date for a jump, the period's start when paging.
+    func show(_ period: DisplayPeriod, anchor: Date? = nil) {
+        anchorDate = anchor ?? period.start
+        displayedWeekStart = period.start
+        displayedLengthInDays = period.lengthInDays
+    }
+
+    /// Re-resolves the displayed period from the plan, after a load may have brought in the micro
+    /// containing ``anchorDate``. A no-op when nothing changed.
+    func refreshDisplayedPeriod() {
+        let resolved = period(containing: anchorDate)
+        guard resolved != displayedPeriod else { return }
+        displayedWeekStart = resolved.start
+        displayedLengthInDays = resolved.lengthInDays
     }
 
     /// Loads the weeks around `date` into `model` as well as the displayed ones, so a detail sheet
@@ -1307,11 +1330,12 @@ public final class WeekViewModel {
     /// swallowed — a failed load leaves `model` exactly as it was (`TrainingModel.load(in:)`'s own
     /// guarantee), so there's nothing for the view to reconcile; MVP 1 has no load-failure UI.
     public func load(asOf today: Date = .now) async {
+        // The plan first, so a cold start inside a micro loads that micro's range once.
+        await peekCycles()
+        refreshDisplayedPeriod()
         do {
             try await model.load(in: loadRange(for: displayedWeekStart), asOf: today)
-            // The plan may only now cover the date the athlete jumped to (see ``anchorDate``).
             refreshDisplayedPeriod()
-            await refreshMicroOrder()
             // Only a load that worked says whether Health was ever imported (MVP2-147).
             onboarding.markLoaded()
         } catch {}
