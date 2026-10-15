@@ -6,17 +6,11 @@ import TrainingCore
 private extension PlanRule {
     var displayName: String {
         switch self {
-        case .ctlRamp: "Fitness ramping up fast"
-        case .atlToCTLRatio: "Fatigue-to-fitness ratio"
         case .tsbBand: "Form (TSB) out of range"
         case .monotony: "Monotony"
         case .strain: "Strain"
         case .raceDayTSB: "Form on race day"
-        case .recoveryMicro: "Recovery week load"
         case .buildProgression: "Build week progression"
-        case .mesoProgress: "Fitness gain this block"
-        case .taperShape: "Taper shape"
-        case .consecutiveLoad: "Consecutive load without recovery"
         }
     }
 }

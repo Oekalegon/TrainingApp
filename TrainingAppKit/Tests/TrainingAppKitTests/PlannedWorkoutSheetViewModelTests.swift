@@ -333,12 +333,6 @@ struct PlannedWorkoutSheetViewModelTests {
         // TSB is the direct freshness signal -- the day after the addition should read as a
         // genuine risk-level dip.
         #expect(viewModel.guardrailFindings.contains { $0.rule == .tsbBand && $0.severity == .risk })
-        // atlToCTLRatio isn't filtered here anymore -- that hypersensitive-at-low-CTL problem
-        // (a real report: CTL=9, ATL=14, TSB=-6, unremarkable per tsbBand, already read as
-        // ratio=1.56, over the risk threshold) is now gated at the source by TrainingKit's
-        // `PlanGuardrails.minCTLForRatioCheck`. This test's 60-day established history clears
-        // that minimum, so the ratio check legitimately applies -- unlike the low-CTL case, this
-        // isn't a false positive to suppress.
         // Always populated now (not just when there are no findings), so "what would tomorrow's
         // TSB/ratio be" is directly checkable from the sheet.
         #expect(viewModel.guardrailDiagnostic != nil)
@@ -400,7 +394,7 @@ struct PlannedWorkoutSheetViewModelTests {
             PlanFinding(day: day(0), rule: .tsbBand, severity: .warning, value: 30, threshold: 25),
             PlanFinding(day: day(1), rule: .tsbBand, severity: .risk, value: -40, threshold: -30),
             PlanFinding(day: day(2), rule: .tsbBand, severity: .warning, value: 28, threshold: 25),
-            PlanFinding(day: day(5), rule: .atlToCTLRatio, severity: .risk, value: 1.6, threshold: 1.4),
+            PlanFinding(day: day(5), rule: .monotony, severity: .risk, value: 2.4, threshold: 2.0),
         ]
         viewModel.setGuardrailFindingsForTesting(findings)
 
@@ -412,8 +406,8 @@ struct PlannedWorkoutSheetViewModelTests {
         #expect(tsbSummary?.lastDay == day(2))
         // Worst severity across the run, not the first/last day's own.
         #expect(tsbSummary?.severity == .risk)
-        let ratioSummary = summaries.first { $0.rule == .atlToCTLRatio }
-        #expect(ratioSummary?.dayCount == 1)
+        let monotonySummary = summaries.first { $0.rule == .monotony }
+        #expect(monotonySummary?.dayCount == 1)
         // Sorted worst-severity first; both runs here are .risk, so earliest day breaks the tie.
         #expect(summaries.first?.rule == .tsbBand)
     }
