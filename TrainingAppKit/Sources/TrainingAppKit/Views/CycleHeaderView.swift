@@ -9,9 +9,9 @@ struct CycleHeaderView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(context.breadcrumb)
-                    .font(.body.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                 Text(detail)
-                    .font(.body)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer()
