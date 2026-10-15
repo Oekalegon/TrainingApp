@@ -722,9 +722,8 @@ public struct WeekView: View {
             if let context {
                 CycleHeaderView(context: context)
             }
-            SportStatsPagerView(pages: viewModel.sportStatsPages(for: weekStart))
-                .padding(.top, context == nil ? 4 : -8)
-                .padding(.bottom, context == nil ? 4 : -10)
+            SportStatsPagerView(pages: viewModel.sportStatsPages(for: weekStart), hugsContent: context != nil)
+                .padding(.vertical, context == nil ? 4 : 0)
             Divider()
         }
         .background(.thinMaterial)
