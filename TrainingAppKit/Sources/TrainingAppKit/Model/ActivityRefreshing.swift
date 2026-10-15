@@ -2,8 +2,8 @@ import Foundation
 
 /// Something that can run a fresh HealthKit import against the app's `TrainingModel`.
 ///
-/// A narrow seam between `WeekViewModel` and `TrainingAppEnvironment`'s concrete HealthKit/
-/// CloudKit wiring, so `WeekViewModel` stays testable against `InMemoryStore` — a test substitutes
+/// A narrow seam between `MicroCycleViewModel` and `TrainingAppEnvironment`'s concrete HealthKit/
+/// CloudKit wiring, so `MicroCycleViewModel` stays testable against `InMemoryStore` — a test substitutes
 /// a stub conforming to this instead of needing real HealthKit/CloudKit (design doc §4).
 @MainActor
 public protocol ActivityRefreshing {

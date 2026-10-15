@@ -9,7 +9,7 @@ import TrainingCore
 /// in (MVP2-124); sex and age come from Health and aren't edited here.
 struct PersonalInformationView: View {
     let viewModel: AthleteViewModel
-    let weekViewModel: WeekViewModel
+    let microCycleViewModel: MicroCycleViewModel
     @State private var isEditingName = false
     @State private var nameText = ""
     @State private var isShowingError = false
@@ -39,7 +39,7 @@ struct PersonalInformationView: View {
         mainSportChangeCount += 1
         let change = mainSportChangeCount
         Task {
-            if await !weekViewModel.setAthleteMainSport(sport, venue: venue) { isShowingError = true }
+            if await !microCycleViewModel.setAthleteMainSport(sport, venue: venue) { isShowingError = true }
             guard change == mainSportChangeCount else { return }
             mainSport = nil
             mainVenue = nil
@@ -64,7 +64,7 @@ struct PersonalInformationView: View {
                     if viewModel.avatarImageData != nil {
                         Button("Remove Photo", role: .destructive) {
                             Task {
-                                if await !weekViewModel.setAthleteAvatar(nil) { isShowingError = true }
+                                if await !microCycleViewModel.setAthleteAvatar(nil) { isShowingError = true }
                             }
                         }
                         .font(.footnote)
@@ -126,7 +126,7 @@ struct PersonalInformationView: View {
             Button("Save") {
                 let name = nameText
                 Task {
-                    if await !weekViewModel.setAthleteName(name) { isShowingError = true }
+                    if await !microCycleViewModel.setAthleteName(name) { isShowingError = true }
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -140,7 +140,7 @@ struct PersonalInformationView: View {
                     isShowingPhotoError = true
                     return
                 }
-                if await !weekViewModel.setAthleteAvatar(avatar) { isShowingError = true }
+                if await !microCycleViewModel.setAthleteAvatar(avatar) { isShowingError = true }
             }
         }
         .alert("Couldn't Use That Photo", isPresented: $isShowingPhotoError) {

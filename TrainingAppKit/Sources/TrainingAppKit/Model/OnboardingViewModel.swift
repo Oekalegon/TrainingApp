@@ -60,7 +60,7 @@ public final class OnboardingViewModel {
         hasDismissedDistanceBanner = progress.hasDismissedDistanceBanner
     }
 
-    /// Tells the view model the first load has finished (see `WeekViewModel.load(asOf:)`).
+    /// Tells the view model the first load has finished (see `MicroCycleViewModel.load(asOf:)`).
     func markLoaded() {
         guard !isLoaded else { return }
         isLoaded = true
@@ -80,7 +80,7 @@ public final class OnboardingViewModel {
 
     /// Records that the athlete went through the Health step, whether or not it connected.
     ///
-    /// - Parameter connect: Runs the Health connection (`WeekViewModel.connectHealthData(asOf:)`).
+    /// - Parameter connect: Runs the Health connection (`MicroCycleViewModel.connectHealthData(asOf:)`).
     public func connectHealth(_ connect: () async -> Void) async {
         guard !isConnecting else { return }
         isConnecting = true
@@ -118,7 +118,7 @@ public final class OnboardingViewModel {
     /// its own "Connect Health Data" button.
     ///
     /// - Parameter showsCalendar: Whether the week view is showing the calendar, not the empty state
-    ///   (`!WeekViewModel.showsEmptyState`).
+    ///   (`!MicroCycleViewModel.showsEmptyState`).
     public func showsHealthBanner(showsCalendar: Bool) -> Bool {
         showsCalendar && !model.hasEverImportedActivities && !hasDismissedHealthBanner && !showsOnboarding
     }

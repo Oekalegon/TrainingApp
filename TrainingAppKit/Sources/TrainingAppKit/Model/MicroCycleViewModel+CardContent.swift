@@ -3,11 +3,11 @@ import TrainingCore
 
 /// Everything a day-list card shows, bundled per card so `DayActivitiesSection` takes one closure
 /// per card kind rather than one per fact.
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// What a completed activity's card shows beyond the activity itself.
     public struct ActivityCardContent: Equatable {
         /// The headline: the linked plan's workout name, else the sport's name (MVP2-152); see
-        /// ``WeekViewModel/activityTitle(for:)``.
+        /// ``MicroCycleViewModel/activityTitle(for:)``.
         public let title: String
         /// The activity's TRIMP — the headline number (MVP1-41); `nil` when no calculator could score
         /// it, in which case the card omits the number rather than showing a misleading "0".

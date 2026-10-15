@@ -3,7 +3,7 @@ import TrainingCore
 
 /// A live count of how many activities currently have an overlap issue worth reviewing (MVP1-67)
 /// — `AthleteView` shows this as the row just below the avatar, with a warning-color background,
-/// whenever `WeekViewModel.overlapWarningCount` is non-zero. Unlike the one-time post-import
+/// whenever `MicroCycleViewModel.overlapWarningCount` is non-zero. Unlike the one-time post-import
 /// banner this replaced (MVP1-63), there's no dismiss action: the count is always current (it's
 /// backed by the same live `overlapReviewItems`/`overlapWarningsByActivityID` set
 /// `DayActivitiesSection`'s per-card badge reads), so it simply disappears on its own once every

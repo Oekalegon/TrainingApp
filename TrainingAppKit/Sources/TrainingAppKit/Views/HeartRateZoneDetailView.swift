@@ -2,7 +2,7 @@ import SwiftUI
 import TrainingCore
 
 /// The "Time in Zone" graph panel's own detail screen (MVP1-60) — pushed the same way
-/// `MetricDetailView` is (`WeekView`'s `NavigationStack`, a graph-panel tap), reusing its Apple
+/// `MetricDetailView` is (`MicroCycleView`'s `NavigationStack`, a graph-panel tap), reusing its Apple
 /// Health-style visual language (a caption/value/date header, white band with the chart, grouped
 /// cards below) even though a heart-rate histogram doesn't fit `MetricDetailView` itself: it's a
 /// distribution across the displayed week, not one metric with a single day's or week's own value.
@@ -18,14 +18,14 @@ import TrainingCore
 /// happened this week" reading before the general "what zones are" background).
 struct HeartRateZoneDetailView: View {
     let histogram: HeartRateHistogram
-    /// `WeekViewModel.displayedWeekDateRangeDescription` — this panel is only ever reachable by
+    /// `MicroCycleViewModel.displayedWeekDateRangeDescription` — this panel is only ever reachable by
     /// tapping the *current* page, so it's always the displayed week already, not the page's own
     /// (possibly different) week the way `MetricChartContext` has to account for.
     let weekDateRangeText: String
     /// Which of `chartCard`'s two pages (histogram, then the zone bar chart) is showing — a plain
     /// `@State` rather than `GraphPanelPagerView`'s hand-rolled drag gesture, since this screen has
     /// no competing horizontal gesture to avoid (it sits in a vertical-only `ScrollView`, not
-    /// alongside `WeekView`'s own week-swipe), so `TabView(.page)` works here without the gesture
+    /// alongside `MicroCycleView`'s own week-swipe), so `TabView(.page)` works here without the gesture
     /// conflict that ruled it out there.
     @State private var selectedChartIndex: Int = 0
     private static let chartPageCount = 2

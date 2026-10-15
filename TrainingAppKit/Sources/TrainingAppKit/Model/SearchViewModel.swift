@@ -25,7 +25,7 @@ public final class SearchViewModel {
         /// An activity is linked to it.
         case done
         /// Its day has passed with no activity linked — the week view's missed card
-        /// (`WeekViewModel.isMissed(_:asOf:calendar:)`).
+        /// (`MicroCycleViewModel.isMissed(_:asOf:calendar:)`).
         case missed
     }
 
@@ -81,7 +81,7 @@ public final class SearchViewModel {
     /// tap is ignored until it's done.
     public private(set) var isOpening = false
     /// Loads the week view's model around a date before a detail sheet opens on it. Set by
-    /// `WeekViewModel.searchViewModel(library:)` to `ensureLoaded(around:)`: the detail sheets read
+    /// `MicroCycleViewModel.searchViewModel(library:)` to `ensureLoaded(around:)`: the detail sheets read
     /// `TrainingModel`, which otherwise only holds the week view's window, so an older plan or
     /// activity would open without its plan, workout, link or overlaps, and not follow an edit.
     @ObservationIgnored
@@ -162,8 +162,8 @@ public final class SearchViewModel {
     /// Where `result`'s plan stands on `today`: done, missed or upcoming, by the week view's rule.
     public func status(of result: PlanResult, asOf today: Date = .now) -> PlanStatus {
         if result.isDone { return .done }
-        let calendar = WeekViewModel.calendar(for: model.athlete)
-        return WeekViewModel.isMissed(result.plan, asOf: today, calendar: calendar) ? .missed : .upcoming
+        let calendar = MicroCycleViewModel.calendar(for: model.athlete)
+        return MicroCycleViewModel.isMissed(result.plan, asOf: today, calendar: calendar) ? .missed : .upcoming
     }
 
     /// The athlete's timezone — results' dates are matched and shown in it.

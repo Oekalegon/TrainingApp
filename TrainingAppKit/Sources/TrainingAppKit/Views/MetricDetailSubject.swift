@@ -18,11 +18,11 @@ enum MetricDetailSubject: Hashable {
 
     /// This subject's own points within `all` — the single day's own point for a `.day` subject
     /// (matched via `calendar.isDate(_:inSameDayAs:)`, not `==`, the same reasoning
-    /// `WeekViewModel.metrics(on:)` already documents for the same comparison), or every point
+    /// `MicroCycleViewModel.metrics(on:)` already documents for the same comparison), or every point
     /// inside a `.week` subject's own range for `MetricDetailView` to average.
     ///
     /// A half-open comparison for `.week`, not `range.contains(_:)` — `range` itself
-    /// (`WeekViewModel.displayedWeekRange(for:)`) is `weekStart...weekStart+7days`, so a
+    /// (`MicroCycleViewModel.displayedWeekRange(for:)`) is `weekStart...weekStart+7days`, so a
     /// `ClosedRange`'s inclusive upper bound would wrongly pull in the *next* week's own point for
     /// whichever day happens to land exactly on that boundary.
     func metrics(in all: [FitnessMetrics], calendar: Calendar) -> [FitnessMetrics] {

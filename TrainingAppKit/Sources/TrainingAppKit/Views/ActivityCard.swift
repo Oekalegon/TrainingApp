@@ -18,7 +18,7 @@ extension OverlapRecommendation {
 
 /// A completed activity, rendered as a filled card in the timeline between weekday rows (design
 /// doc §2.1, MVP1-41) rather than a plain list row — tapping it presents `ActivityDetailView` in a
-/// sheet (see `WeekView`'s `.sheet(item: $selectedActivity)`), so this is a plain `Button` rather
+/// sheet (see `MicroCycleView`'s `.sheet(item: $selectedActivity)`), so this is a plain `Button` rather
 /// than a `NavigationLink(value:)`/`navigationDestination` push.
 ///
 /// Headline line: icon, sport name, and — trailing-aligned, same font as the name but secondary —
@@ -30,8 +30,8 @@ extension OverlapRecommendation {
 struct ActivityCard: View {
     let activity: Activity
     /// Everything the card shows beyond the activity itself — TRIMP, overlap badge, intensity tint and
-    /// the linked plan's expected values — from `WeekViewModel.activityCardContent(for:)`.
-    let content: WeekViewModel.ActivityCardContent
+    /// the linked plan's expected values — from `MicroCycleViewModel.activityCardContent(for:)`.
+    let content: MicroCycleViewModel.ActivityCardContent
     let onSelect: () -> Void
 
     /// The headline line omits the number entirely when this is `nil` (couldn't be computed) or
@@ -44,7 +44,7 @@ struct ActivityCard: View {
     private var intensity: IntensityAssessment? { content.intensity }
     /// The linked plan's expected values: its TRIMP follows the actual TRIMP after a slash, and its
     /// duration and distance sit in a tertiary colour directly below the actual ones.
-    private var planned: WeekViewModel.LinkedPlanExpectation? { content.planned }
+    private var planned: MicroCycleViewModel.LinkedPlanExpectation? { content.planned }
 
     var body: some View {
         Button(action: onSelect) {

@@ -2,7 +2,7 @@ import SwiftUI
 import TrainingCore
 
 /// Background behind the fitness chart (MVP1-56) — plain white (an elevated dark grey in dark
-/// mode), distinct from `weekViewBackground` behind the day rows, so title and chart read as one
+/// mode), distinct from `microCycleViewBackground` behind the day rows, so title and chart read as one
 /// opaque surface while the pinned stats bar (translucent) is the only part of the screen that lets
 /// scrolled content show through.
 #if os(iOS)
@@ -15,16 +15,16 @@ private let chartSectionBackground = Color.white
 
 /// The named coordinate space `weekContent`'s week-swipe `DragGesture` and `weekPageHeader`'s
 /// frame measurement (`statsBarFrame`) both use, so a swipe's start point can be compared against
-/// the stats bar's on-screen frame in the same terms. A file-scope constant, not a `WeekView`
-/// static member: `WeekView`'s own static members are inferred `@MainActor`-isolated (since `View`
+/// the stats bar's on-screen frame in the same terms. A file-scope constant, not a `MicroCycleView`
+/// static member: `MicroCycleView`'s own static members are inferred `@MainActor`-isolated (since `View`
 /// requires that for its instance side), which a plain `Sendable` `String` doesn't need to be.
-private let weekSwipeCoordinateSpace = "WeekView.weekSwipe"
+private let weekSwipeCoordinateSpace = "MicroCycleView.weekSwipe"
 
 /// The week tab's screen (design doc §2.1): a 3-week CTL/ATL/TSB chart centered on the displayed
 /// week, that week's activities/plans below it, swipe-to-navigate between weeks, "Today" and
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
-public struct WeekView: View {
-    let viewModel: WeekViewModel
+public struct MicroCycleView: View {
+    let viewModel: MicroCycleViewModel
     /// Opens the Athlete tab's Apple Watch synchronisation screen, from the Watch permission banner (MVP2-117, MVP2-123).
     let onShowWatchSettings: () -> Void
     @Environment(\.openURL) private var openURL
@@ -124,7 +124,7 @@ public struct WeekView: View {
     /// The scroll anchor `weekPage`'s `ScrollViewReader` scrolls back to on a week change — see
     /// that call site's own doc comment for why an explicit `scrollTo` replaced `.id(dates.first)`
     /// forcing a fresh `ScrollView`.
-    private static let weekPageTopID = "WeekView.weekPageTop"
+    private static let weekPageTopID = "MicroCycleView.weekPageTop"
     /// Fraction of the page width a drag needs to clear, at release, to commit to the next/
     /// previous week rather than springing back.
     private static let commitThreshold: CGFloat = 0.3
@@ -132,7 +132,7 @@ public struct WeekView: View {
     /// - Parameters:
     ///   - viewModel: The week view's model.
     ///   - onShowWatchSettings: Opens the Athlete tab's Apple Watch synchronisation screen, from the Watch permission banner's button.
-    public init(viewModel: WeekViewModel, onShowWatchSettings: @escaping () -> Void = {}) {
+    public init(viewModel: MicroCycleViewModel, onShowWatchSettings: @escaping () -> Void = {}) {
         self.viewModel = viewModel
         self.onShowWatchSettings = onShowWatchSettings
     }
@@ -172,11 +172,11 @@ public struct WeekView: View {
             // A light (dark in dark mode) grey rather than the plain system background, so
             // DayActivitiesSection's pills/timeline (recessed relative to this) and its activity
             // cards (elevated relative to this) both have something to visually contrast against.
-            .background(weekViewBackground.ignoresSafeArea())
+            .background(microCycleViewBackground.ignoresSafeArea())
             // MVP2-117: an inset rather than an overlay, so the last day row can still scroll clear
             // of the banner; at the bottom, so the large title and the week swipe aren't touched.
             .safeAreaInset(edge: .bottom) {
-                // One banner at a time (MVP2-146): see ``WeekViewModel/bottomBanner``.
+                // One banner at a time (MVP2-146): see ``MicroCycleViewModel/bottomBanner``.
                 Group {
                     switch viewModel.bottomBanner {
                     case .connectHealth:
@@ -406,7 +406,7 @@ public struct WeekView: View {
         case .day(let day): anchor = day
         case .week(let range): anchor = range.lowerBound
         }
-        let weekStart = WeekViewModel.weekStart(containing: anchor, calendar: viewModel.athleteCalendar)
+        let weekStart = MicroCycleViewModel.weekStart(containing: anchor, calendar: viewModel.athleteCalendar)
         return MetricChartContext(
             metrics: viewModel.chartMetrics(for: weekStart),
             dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
@@ -599,15 +599,15 @@ public struct WeekView: View {
     /// an `isCurrentPage`-style mode flag) and why the two off-screen pages need their own display
     /// path here at all rather than just reusing `GraphPanelPagerView` with a frozen initial page.
     ///
-    /// Passes `weekStart`'s own ``WeekViewModel/chartMetrics(for:)``/``WeekViewModel/displayedWeekRange(for:)``,
-    /// not the unparameterized ``WeekViewModel/chartMetrics``/``WeekViewModel/displayedWeekRange``
+    /// Passes `weekStart`'s own ``MicroCycleViewModel/chartMetrics(for:)``/``MicroCycleViewModel/displayedWeekRange(for:)``,
+    /// not the unparameterized ``MicroCycleViewModel/chartMetrics``/``MicroCycleViewModel/displayedWeekRange``
     /// (both of which always reflect `viewModel.displayedWeekStart`, not this particular page's own
     /// week) — MVP1-32. Before this, every carousel page — including the previous/next ones a swipe
     /// slides into view — rendered the *same* chart (whatever `displayedWeekStart` happened to be),
     /// so the page that visibly became current after a swipe or button navigation genuinely hadn't
     /// been showing its own data until that flip actually landed. Scoping each page to its own
     /// `weekStart` means a neighbor page already shows its own correct, complete 3-week chart
-    /// beforehand — `load(asOf:)` fetches a wide enough range (`WeekViewModel.loadRange(for:calendar:)`)
+    /// beforehand — `load(asOf:)` fetches a wide enough range (`MicroCycleViewModel.loadRange(for:calendar:)`)
     /// for that to be true as soon as `displayedWeekStart` last changed, not just after the page in
     /// question becomes current.
     @ViewBuilder
@@ -780,7 +780,7 @@ public struct WeekView: View {
     /// recomputes to — so nothing visibly moves a second time.
     ///
     /// No preloading here (MVP1-32's actual fix lives in `graphPanel(weekStart:isCurrentPage:)`
-    /// and `WeekViewModel.loadRange(for:calendar:)`, not in this method): the target week's own
+    /// and `MicroCycleViewModel.loadRange(for:calendar:)`, not in this method): the target week's own
     /// chart is already complete by the time this runs, because `chartMetrics(for:)` reads
     /// `model.metrics` scoped to *that* week, and `model.metrics` already reaches every immediate
     /// neighbor of `displayedWeekStart` thanks to the widened range `load(asOf:)` fetches whenever
@@ -823,7 +823,7 @@ public struct WeekView: View {
     }
 }
 
-/// `WeekView.metricsInfoPresentation`'s value (MVP1-45/MVP1-60) — which metric, and its subject (a
+/// `MicroCycleView.metricsInfoPresentation`'s value (MVP1-45/MVP1-60) — which metric, and its subject (a
 /// day-list pill's own day, or the whole displayed week from a graph-panel tap). `Identifiable`/
 /// `Hashable` (the latter for `.navigationDestination(item:)`, which needs it) via a fresh `UUID`
 /// per instance (not `kind`/`subject` themselves) so tapping the *same* metric/subject twice in a
@@ -834,7 +834,7 @@ private struct MetricsInfoPresentation: Identifiable, Hashable {
     let subject: MetricDetailSubject
 }
 
-/// `WeekView.addingEntryDate`'s value (MVP2-15, MVP2-22) — just wraps a `Date` so `.sheet(item:)`
+/// `MicroCycleView.addingEntryDate`'s value (MVP2-15, MVP2-22) — just wraps a `Date` so `.sheet(item:)`
 /// can drive presentation the way it does for `selectedActivity`/`metricsInfoPresentation`.
 private struct DayAddDate: Identifiable, Hashable {
     let id = UUID()

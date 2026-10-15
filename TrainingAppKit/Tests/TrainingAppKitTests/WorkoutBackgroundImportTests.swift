@@ -103,7 +103,7 @@ struct WorkoutBackgroundImportTests {
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: now)
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: now)
         let weekStart = viewModel.displayedWeekStart
         await viewModel.load(asOf: weekStart)
         #expect(viewModel.heartRateHistogram(for: weekStart).bins.isEmpty)

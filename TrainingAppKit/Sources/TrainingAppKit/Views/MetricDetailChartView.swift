@@ -24,7 +24,7 @@ struct LoadDetailChartView: View {
     /// (MVP1-60) — see `MetricDetailSubject`'s own doc comment.
     let subject: MetricDetailSubject
     let calendar: Calendar
-    /// The races in the loaded buffer, one per day (`WeekViewModel.chartRaces(in:)`), marked like the
+    /// The races in the loaded buffer, one per day (`MicroCycleViewModel.chartRaces(in:)`), marked like the
     /// main graphs mark them (MVP2-104); those outside `visibleRange` are skipped.
     let races: [Race]
 
@@ -128,7 +128,7 @@ struct FitnessTrendDetailChartView: View {
     /// actually in reads as more saturated than the rest. `nil` for Fitness/Fatigue (`zoneBandMarks`
     /// draws nothing for either) and for Form before `subjectValue` has loaded.
     let highlightedZone: TSBZone?
-    /// The races in the loaded buffer, one per day (`WeekViewModel.chartRaces(in:)`), marked like the
+    /// The races in the loaded buffer, one per day (`MicroCycleViewModel.chartRaces(in:)`), marked like the
     /// main graphs mark them (MVP2-104); those outside `visibleRange` are skipped.
     let races: [Race]
     let today: Date = .now
@@ -192,7 +192,7 @@ struct FitnessTrendDetailChartView: View {
     /// the left edge of a `day...(day + 1 day)` span), or the whole week's own range as-is for a
     /// `.week` subject. For `.day`, snaps to the real data point's own `day` value if `metrics` has
     /// one, rather than the tapped `Date` as-is -- keeping the mark pixel-aligned with that day's
-    /// line points even if the tapped `Date` (built from `WeekViewModel`'s own day list) and
+    /// line points even if the tapped `Date` (built from `MicroCycleViewModel`'s own day list) and
     /// `FitnessMetrics.day` (built inside TrainingKit) aren't bit-identical for the same calendar
     /// day.
     private var highlightRange: ClosedRange<Date> {

@@ -19,7 +19,7 @@ struct PlannedWorkoutDetailSheet: View {
     @State private var isShowingDeleteError = false
 
     /// Kept in `@State` (set once from the initializer) so the view model survives the presenting
-    /// `WeekView` re-evaluating its `.sheet(item:)` content — a fresh one each time would drop
+    /// `MicroCycleView` re-evaluating its `.sheet(item:)` content — a fresh one each time would drop
     /// `isDeleting`/`deleteError` mid-operation.
     init(viewModel: PlannedWorkoutDetailViewModel) {
         _viewModel = State(initialValue: viewModel)

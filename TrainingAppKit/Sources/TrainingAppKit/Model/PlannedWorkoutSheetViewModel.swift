@@ -23,7 +23,7 @@ public final class PlannedWorkoutSheetViewModel {
     /// `TrainingAppKit` still declares that platform) or in a test that passed `nil` explicitly to
     /// avoid the real `WorkoutScheduler`, which requires a genuine app bundle context — see
     /// ``PlannedWorkoutScheduling``'s own doc comment — or while the athlete has turned sending to
-    /// the Watch off (MVP2-118, `WeekViewModel.plannedWorkoutScheduler`). `save(asOf:)` skips the validate/schedule step
+    /// the Watch off (MVP2-118, `MicroCycleViewModel.plannedWorkoutScheduler`). `save(asOf:)` skips the validate/schedule step
     /// entirely when this is `nil`, rather than only skipping `schedule` — a plan that was never
     /// scheduled is a consistent, if incomplete, state to save, which ``WatchScheduleSync`` fills
     /// in later.
@@ -235,7 +235,7 @@ public final class PlannedWorkoutSheetViewModel {
     ///     same ``TRIMPPlanEstimator`` `TrainingModel` itself uses, so the preview agrees with what
     ///     the fitness chart will show once this workout is scheduled.
     ///   - scheduler: Validates the instantiated workout and schedules it on WorkoutKit; defaults to a real
-    ///     `WorkoutKitBridge` where available, `nil` otherwise. `WeekViewModel` passes `nil` while
+    ///     `WorkoutKitBridge` where available, `nil` otherwise. `MicroCycleViewModel` passes `nil` while
     ///     sending to the Watch is turned off (MVP2-118). Tests pass `nil` explicitly to skip
     ///     WorkoutKit entirely, since the real bridge's `schedule` crashes outside a genuine app
     ///     bundle context.
@@ -570,11 +570,11 @@ public final class PlannedWorkoutSheetViewModel {
     }
 
     /// The earliest day the sheet's `DatePicker` may select — today, in the athlete's calendar.
-    /// Matches `WeekViewModel.isPast`'s day-boundary semantics so the in-sheet picker can't be
+    /// Matches `MicroCycleViewModel.isPast`'s day-boundary semantics so the in-sheet picker can't be
     /// used to route around the same past-date rule the "+" entry point enforces.
     ///
     /// - Parameter today: Injected rather than read from `.now` internally, matching
-    ///   `WeekViewModel.isPast(_:asOf:)`'s own convention (and `TrainingModel.recompute(asOf:)`'s,
+    ///   `MicroCycleViewModel.isPast(_:asOf:)`'s own convention (and `TrainingModel.recompute(asOf:)`'s,
     ///   further up the stack) — lets a test pin an exact boundary instead of racing `.now`.
     ///
     /// In edit mode the bound also reaches back to the plan's own day when that's already past (a

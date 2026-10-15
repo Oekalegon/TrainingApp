@@ -5,7 +5,7 @@ import Testing
 @Suite("ChartAxisMarks")
 struct ChartAxisMarksTests {
     /// Monday-start UTC calendar, matching this app's typical athlete default -- same construction
-    /// `WeekViewModelTests` uses elsewhere, so a reader doesn't have to reconcile two different ways
+    /// `MicroCycleViewModelTests` uses elsewhere, so a reader doesn't have to reconcile two different ways
     /// of building "the same" test calendar.
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)

@@ -4,8 +4,8 @@ import TrainingCore
 @testable import TrainingAppKit
 
 @MainActor
-@Suite("WeekViewModel field tests (MVP2-155)", .serialized)
-struct WeekViewModelFieldTestTests {
+@Suite("MicroCycleViewModel field tests (MVP2-155)", .serialized)
+struct MicroCycleViewModelFieldTestTests {
     private struct StubImporter: ActivityImporting {
         let activities: [Activity]
         func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
@@ -35,7 +35,7 @@ struct WeekViewModelFieldTestTests {
         athleteStore: (any AthleteStore)? = nil, wrappingActivityStore: ((InMemoryStore) -> any ActivityStore)? = nil,
         activity makeActivity: ((UUID) -> Activity)? = nil,
         workoutSeconds: Double = 600, maxSource: MaxHeartRateSource = .formula
-    ) async throws -> (TrainingModel, WeekViewModel, Activity) {
+    ) async throws -> (TrainingModel, MicroCycleViewModel, Activity) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: wrappingActivityStore?(store) ?? store, planStore: store, workoutStore: store,
@@ -54,7 +54,7 @@ struct WeekViewModelFieldTestTests {
         try await model.load(in: day(0)...day(6), asOf: day(2))
         let activity = makeActivity?(plan.id) ?? run(on: day(2), peak: peak, scheduledPlanID: plan.id)
         try await model.importActivities(from: StubImporter(activities: [activity]), asOf: day(2))
-        let viewModel = WeekViewModel(
+        let viewModel = MicroCycleViewModel(
             model: model, refresher: FakeRefresher(), maxHeartRatePromptHistory: history, today: day(3)
         )
         await viewModel.load(asOf: day(3))
@@ -351,13 +351,13 @@ struct WeekViewModelFieldTestTests {
 
 @MainActor
 private enum FieldTestMessageFixture {
-    static func viewModel() -> WeekViewModel {
+    static func viewModel() -> MicroCycleViewModel {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178))
-        return WeekViewModel(model: model, refresher: FakeRefresher(), today: .now)
+        return MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: .now)
     }
 }

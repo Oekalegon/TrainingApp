@@ -11,7 +11,7 @@ struct SearchView: View {
     /// Builds the planned-workout and activity detail sheets and runs their actions, exactly as the
     /// week view does, so a result's sheet behaves like its card's. Passed whole rather than as
     /// closures (unlike `AthleteView`) because both sheets need it.
-    let weekViewModel: WeekViewModel
+    let microCycleViewModel: MicroCycleViewModel
     let query: String
 
     @State private var selectedPlan: PlannedActivity?
@@ -107,38 +107,38 @@ struct SearchView: View {
                 // can change the results marks them for a reload.
                 NavigationStack {
                     ActivityDetailView(
-                        viewModel: weekViewModel.activityDetailViewModel(for: activity),
+                        viewModel: microCycleViewModel.activityDetailViewModel(for: activity),
                         onResolveOverlap: { id in
-                            await weekViewModel.resolveOverlap(deleting: id)
+                            await microCycleViewModel.resolveOverlap(deleting: id)
                             viewModel.markChanged()
                         },
                         onDelete: {
-                            await weekViewModel.deleteActivity(activity)
+                            await microCycleViewModel.deleteActivity(activity)
                             viewModel.markChanged()
                         },
                         onJoin: { other in
-                            let joined = await weekViewModel.joinActivities(activity, with: other)
+                            let joined = await microCycleViewModel.joinActivities(activity, with: other)
                             if joined { viewModel.markChanged() }
                             return joined
                         },
                         onUnjoin: {
-                            let unjoined = await weekViewModel.unjoinActivity(activity)
+                            let unjoined = await microCycleViewModel.unjoinActivity(activity)
                             if unjoined { viewModel.markChanged() }
                             return unjoined
                         },
-                        loadComponents: { await weekViewModel.joinedComponents(of: activity) },
+                        loadComponents: { await microCycleViewModel.joinedComponents(of: activity) },
                         onLinkPlan: {
-                            let linked = await weekViewModel.linkActivity(activity, toPlan: $0)
+                            let linked = await microCycleViewModel.linkActivity(activity, toPlan: $0)
                             if linked { viewModel.markChanged() }
                             return linked
                         },
                         onUnlinkPlan: {
-                            let unlinked = await weekViewModel.unlinkActivity(activity)
+                            let unlinked = await microCycleViewModel.unlinkActivity(activity)
                             if unlinked { viewModel.markChanged() }
                             return unlinked
                         },
                         onSetSport: {
-                            let changed = await weekViewModel.setActivitySport(activity, sport: $0, venue: $1)
+                            let changed = await microCycleViewModel.setActivitySport(activity, sport: $0, venue: $1)
                             if changed { viewModel.markChanged() }
                             return changed
                         }
@@ -163,7 +163,7 @@ struct SearchView: View {
     /// The plan detail's view model, as the week view builds it, also marking the results for a
     /// reload when the plan is edited or deleted.
     private func planDetailViewModel(for plan: PlannedActivity) -> PlannedWorkoutDetailViewModel {
-        let detail = weekViewModel.plannedWorkoutDetailViewModel(for: plan)
+        let detail = microCycleViewModel.plannedWorkoutDetailViewModel(for: plan)
         let syncWatch = detail.onPlansChanged
         detail.onPlansChanged = { [viewModel] in
             syncWatch?()

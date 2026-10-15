@@ -5,35 +5,35 @@ import TrainingCore
 /// cadence/elevation charts in MVP 1.
 struct ActivityDetailView: View {
     let viewModel: ActivityDetailViewModel
-    /// Runs `WeekViewModel.resolveOverlap(deleting:)` for the given activity id (MVP1-63) —
-    /// `WeekView` supplies this. `async` so the caller can await it before dismissing: whichever
+    /// Runs `MicroCycleViewModel.resolveOverlap(deleting:)` for the given activity id (MVP1-63) —
+    /// `MicroCycleView` supplies this. `async` so the caller can await it before dismissing: whichever
     /// side of `viewModel.overlapContext` the athlete picks to delete, the sheet should only close
     /// once the delete has actually happened, not the instant the button is tapped.
     let onResolveOverlap: (UUID) async -> Void
-    /// Runs `WeekViewModel.deleteActivity(_:asOf:)` (MVP1-65) — the bottom-of-list "Delete
+    /// Runs `MicroCycleViewModel.deleteActivity(_:asOf:)` (MVP1-65) — the bottom-of-list "Delete
     /// Activity" button's action, gated behind `isShowingDeleteConfirmation`'s alert. `async` for
     /// the same reason as `onResolveOverlap`: the caller awaits it before dismissing, rather than
     /// firing a detached `Task` and dismissing immediately regardless of whether the delete has
     /// actually run yet. Independent of `onResolveOverlap`: always available, not just when
     /// `viewModel.overlapContext` flags an issue.
     let onDelete: () async -> Void
-    /// Runs `WeekViewModel.joinActivities(_:with:)` with the other piece of a
+    /// Runs `MicroCycleViewModel.joinActivities(_:with:)` with the other piece of a
     /// ``OverlapRecommendation/join`` pair (MVP1-80). `async` for the same reason as
     /// `onResolveOverlap`: the sheet closes only once the join has actually happened.
     /// Returns whether the join happened; the sheet stays open (with a message) when it didn't.
     let onJoin: (Activity) async -> Bool
-    /// Runs `WeekViewModel.unjoinActivity(_:)` for this (joined) activity (MVP1-80); same
+    /// Runs `MicroCycleViewModel.unjoinActivity(_:)` for this (joined) activity (MVP1-80); same
     /// success/stay-open contract as `onJoin`.
     let onUnjoin: () async -> Bool
     /// Loads the pieces this activity was joined from — empty for an ordinary activity — for the
     /// "Joined from" section (MVP1-80).
     let loadComponents: () async -> [Activity]
-    /// Runs `WeekViewModel.linkActivity(_:toPlan:)` for the given plan id (MVP2-42) — also used to
+    /// Runs `MicroCycleViewModel.linkActivity(_:toPlan:)` for the given plan id (MVP2-42) — also used to
     /// confirm the current match. Same success/stay-open contract as `onJoin`.
     let onLinkPlan: (UUID) async -> Bool
-    /// Runs `WeekViewModel.unlinkActivity(_:)` (MVP2-42); same contract.
+    /// Runs `MicroCycleViewModel.unlinkActivity(_:)` (MVP2-42); same contract.
     let onUnlinkPlan: () async -> Bool
-    /// Runs `WeekViewModel.setActivitySport(_:sport:venue:)` (MVP2-151); returns whether it was saved.
+    /// Runs `MicroCycleViewModel.setActivitySport(_:sport:venue:)` (MVP2-151); returns whether it was saved.
     let onSetSport: (Sport, Venue?) async -> Bool
     @Environment(\.dismiss) private var dismiss
     /// The pieces this activity was joined from, loaded once by `.task`; empty for an ordinary one.
@@ -388,7 +388,7 @@ struct ActivityDetailView: View {
         }
     }
 
-    private func extentText(_ extent: WeekViewModel.PlannedCardSummary.Extent?) -> String {
+    private func extentText(_ extent: MicroCycleViewModel.PlannedCardSummary.Extent?) -> String {
         switch extent {
         case .duration(let seconds):
             Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))

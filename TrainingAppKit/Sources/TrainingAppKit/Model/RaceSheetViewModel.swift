@@ -66,7 +66,7 @@ public final class RaceSheetViewModel {
         // Normalized to the athlete calendar's start of day: `date` itself can carry whatever
         // time-of-day the sheet's `DatePicker` happened to start from (its `.date`-only
         // `displayedComponents` only constrains what's *editable*, not what's already in the
-        // bound value) -- WeekViewModel's own day grouping tolerates that by comparing with
+        // bound value) -- MicroCycleViewModel's own day grouping tolerates that by comparing with
         // `isDate(_:inSameDayAs:)` everywhere, but `PlanEvaluator`'s race-day TSB rule looks a
         // race's `date` up as an exact dictionary key against `FitnessMetrics.day` (itself always
         // a start-of-day value), so an unnormalized `date` here would silently never match and

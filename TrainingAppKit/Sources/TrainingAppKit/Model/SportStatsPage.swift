@@ -1,7 +1,7 @@
 import Foundation
 import TrainingCore
 
-/// One sport's page in the week view's stats pager — see ``WeekViewModel/sportStatsPages(asOf:)``.
+/// One sport's page in the week view's stats pager — see ``MicroCycleViewModel/sportStatsPages(asOf:)``.
 ///
 /// `distanceMeters`/`time` (and their change fractions) are this sport's own *performed* totals,
 /// but `load`/`loadChangeFraction` are always the whole week's *performed* total across every

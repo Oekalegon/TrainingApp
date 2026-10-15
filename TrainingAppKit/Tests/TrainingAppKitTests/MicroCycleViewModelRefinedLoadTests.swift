@@ -6,8 +6,8 @@ import TrainingCore
 /// A planned workout's expected load follows what the athlete's completed plans scored, on the cards, in
 /// the stats and in the planned-workout sheets, as TrainingKit's own load series does.
 @MainActor
-@Suite("WeekViewModel refined planned load", .serialized)
-struct WeekViewModelRefinedLoadTests {
+@Suite("MicroCycleViewModel refined planned load", .serialized)
+struct MicroCycleViewModelRefinedLoadTests {
     private struct StubImporter: ActivityImporting {
         let activities: [Activity]
         func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
@@ -33,7 +33,7 @@ struct WeekViewModelRefinedLoadTests {
 
     /// A twenty-minute zone-2 workout, planned once in the past (and done, hard) and once ahead.
     private struct Fixture {
-        let viewModel: WeekViewModel
+        let viewModel: MicroCycleViewModel
         let model: TrainingModel
         let workout: StructuredWorkout
         let pastPlan: PlannedActivity
@@ -68,7 +68,7 @@ struct WeekViewModelRefinedLoadTests {
         try await model.importActivities(
             from: StubImporter(activities: [run(on: day(-3), bpm: bpm, linkedTo: pastPlan.id)]), asOf: day(0)
         )
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         let activity = try #require(model.activities.first)
         let baseLoad = TRIMPPlanEstimator().estimatedLoad(for: workout, athlete: model.athlete).value
         let actualLoad = viewModel.statisticsCalculator.summary(for: activity, athlete: model.athlete).load.value
@@ -112,7 +112,7 @@ struct WeekViewModelRefinedLoadTests {
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         await viewModel.refreshPlannedLoadIfNeeded(force: true)
 
@@ -184,7 +184,7 @@ struct WeekViewModelRefinedLoadTests {
         )
         let athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         let model = TrainingModel(stores: stores, athlete: athlete)
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         // The tab is created first, as the app does, before any refinement exists.
         let library = viewModel.workoutLibraryViewModel()
         let template = BuiltInWorkoutTemplates.easyRun

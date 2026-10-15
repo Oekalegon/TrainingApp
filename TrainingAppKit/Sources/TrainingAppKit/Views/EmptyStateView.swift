@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Inline prompt shown instead of the chart/day list until a Health import has completed and while no
 /// plan is loaded (first launch, before HealthKit authorization/initial sync; see
-/// ``WeekViewModel/showsEmptyState``) — design doc §2.1. MVP 1 has no
+/// ``MicroCycleViewModel/showsEmptyState``) — design doc §2.1. MVP 1 has no
 /// dedicated onboarding screen; this is the whole first-run experience.
 struct EmptyStateView: View {
     let isConnecting: Bool

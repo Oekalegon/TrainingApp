@@ -4,8 +4,8 @@ import TrainingCore
 @testable import TrainingAppKit
 
 @MainActor
-@Suite("WeekViewModel plan linking (MVP2-42)")
-struct WeekViewModelPlanLinkTests {
+@Suite("MicroCycleViewModel plan linking (MVP2-42)")
+struct MicroCycleViewModelPlanLinkTests {
     private struct StubImporter: ActivityImporting {
         let activities: [Activity]
         func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
@@ -28,7 +28,7 @@ struct WeekViewModelPlanLinkTests {
     /// (so it's auto-matched, as in the app).
     private func makeViewModel(
         planMinutes: [Double], activityMinutes: Double, startedFromPlan: Int? = nil, steps: [ActivityStep] = []
-    ) async throws -> (WeekViewModel, [PlannedActivity], Activity) {
+    ) async throws -> (MicroCycleViewModel, [PlannedActivity], Activity) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
@@ -49,7 +49,7 @@ struct WeekViewModelPlanLinkTests {
             scheduledPlanID: startedFromPlan.map { plans[$0].id }, steps: steps
         )
         try await model.importActivities(from: StubImporter(activities: [activity]), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(2))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(2))
         return (viewModel, plans, model.activities[0])
     }
 
@@ -121,7 +121,7 @@ struct WeekViewModelPlanLinkTests {
             scheduledPlanID: plan.id, steps: [work, warmup]  // not in order
         )
         try await model.importActivities(from: StubImporter(activities: [activity]), asOf: day(2))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(2))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(2))
 
         let detail = viewModel.activityDetailViewModel(for: model.activities[0])
 
@@ -289,7 +289,7 @@ struct WeekViewModelPlanLinkTests {
         )
         try await store.upsert([activity])
         try await model.load(in: try local(day: 9, hour: 0)...(try local(day: 12, hour: 0)), asOf: try local(day: 10, hour: 12))
-        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: try local(day: 10, hour: 12))
+        let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: try local(day: 10, hour: 12))
 
         let context = try #require(viewModel.planLinkContext(for: activity))
 

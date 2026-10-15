@@ -167,14 +167,14 @@ struct LabTestSourceTests {
 
     // MARK: Prompts
 
-    private func viewModel(with settings: HeartRateZoneSettings) -> WeekViewModel {
+    private func viewModel(with settings: HeartRateZoneSettings) -> MicroCycleViewModel {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let model = TrainingModel(stores: stores, athlete: athlete(settings))
-        return WeekViewModel(model: model, refresher: FakeRefresher(), today: day)
+        return MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day)
     }
 
     @Test("the raise prompt says when it would replace a lab-tested or field-tested max")

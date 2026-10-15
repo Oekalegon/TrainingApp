@@ -3,13 +3,13 @@ import Foundation
 /// A run of consecutive days the week view shows at once: a calendar week today, and a 7-, 10- or
 /// 14-day micro-cycle once plans use those (MVP5-106).
 ///
-/// Everything in ``WeekViewModel`` that used to assume 7 days (the date range, the chart window, the
+/// Everything in ``MicroCycleViewModel`` that used to assume 7 days (the date range, the chart window, the
 /// load range, the cache keys) is derived from a period's ``lengthInDays`` instead. Dates are
 /// computed with the athlete's calendar, so day arithmetic stays correct across daylight-saving
 /// changes.
 ///
 /// The same-length helpers (``next(calendar:)``, ``previous(calendar:)``, ``chartRange(calendar:)``,
-/// ``loadRange(calendar:)``) are exact for calendar weeks only. ``WeekViewModel`` doesn't use them: it
+/// ``loadRange(calendar:)``) are exact for calendar weeks only. ``MicroCycleViewModel`` doesn't use them: it
 /// takes the neighbors from the plan (MVP5-107), where a micro-cycle can be followed or preceded by a
 /// period of another length.
 public struct DisplayPeriod: Hashable, Sendable {

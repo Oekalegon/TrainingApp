@@ -94,11 +94,11 @@ public final class WorkoutLibraryViewModel {
     ///   - templates: The built-in templates to list, followed by the athlete's own; defaults to the
     ///     built-in library.
     ///   - estimator: Asked for the estimator each time the entries are worked out, so a refinement from
-    ///     completed plans that lands after the tab was created still reaches it (`WeekViewModel`
+    ///     completed plans that lands after the tab was created still reaches it (`MicroCycleViewModel`
     ///     returns its own, which also reads `plannedLoadGeneration` so the tab updates). Defaults to
     ///     the plain ``TRIMPPlanEstimator`` the planned-workout sheet defaults to, so the two agree.
     ///   - scheduler: Asked for the planned-workout sheet's scheduler each time one opens (see
-    ///     ``makePlanner(for:date:)``), so it follows the Watch setting: `WeekViewModel` returns
+    ///     ``makePlanner(for:date:)``), so it follows the Watch setting: `MicroCycleViewModel` returns
     ///     `nil` while sending to the Watch is turned off (MVP2-118). Tests return `nil`.
     public init(
         model: TrainingModel,

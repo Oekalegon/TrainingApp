@@ -7,7 +7,7 @@ import TrainingCore
 /// aren't built yet (MVP8), so the screen says so rather than leaving a gap.
 struct PaceZonesView: View {
     let viewModel: AthleteViewModel
-    let weekViewModel: WeekViewModel
+    let microCycleViewModel: MicroCycleViewModel
     @State private var editing: PaceDraft?
     @State private var isShowingError = false
 
@@ -37,7 +37,7 @@ struct PaceZonesView: View {
                         if viewModel.paceHistory.count > 1 {
                             Button("Delete", role: .destructive) {
                                 Task {
-                                    if await !weekViewModel.removePaceSettings(on: entry.effectiveDate) { isShowingError = true }
+                                    if await !microCycleViewModel.removePaceSettings(on: entry.effectiveDate) { isShowingError = true }
                                 }
                             }
                         }
@@ -61,7 +61,7 @@ struct PaceZonesView: View {
             set: { editing = $0?.draft }
         )) { item in
             ThresholdPaceSheet(draft: item.draft) { draft in
-                await weekViewModel.recordThresholdPace(
+                await microCycleViewModel.recordThresholdPace(
                     secondsPerKilometer: draft.thresholdPaceSecondsPerKilometer, from: draft.effectiveDate
                 )
             }

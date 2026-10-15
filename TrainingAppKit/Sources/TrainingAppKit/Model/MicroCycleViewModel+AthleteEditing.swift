@@ -5,7 +5,7 @@ import TrainingCore
 /// through `TrainingModel.updateAthlete(asOf:_:)`, which saves before it assigns, queues behind
 /// imports and other updates, and invalidates the fitness-metrics cache from the earliest changed
 /// date; so a failed save changes nothing and these report it by returning `false`.
-extension WeekViewModel {
+extension MicroCycleViewModel {
     /// Sets the athlete's picture, or removes it with `nil`. The data should already be small (see
     /// ``AvatarImageProcessor``): it's stored in the profile, which travels with the athlete.
     ///

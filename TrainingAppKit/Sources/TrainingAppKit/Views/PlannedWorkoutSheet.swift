@@ -28,7 +28,7 @@ private extension Severity {
 /// The "Create Planned Workout" sheet (MVP2-15, design doc): pick a `WorkoutTemplate`, adjust its
 /// parameters with a live expected-load preview, see non-blocking guardrail warnings for the
 /// hypothetical addition, then save. Own `NavigationStack`/no explicit close button, matching
-/// `WeekView`'s `.sheet(item: $selectedActivity)` convention.
+/// `MicroCycleView`'s `.sheet(item: $selectedActivity)` convention.
 struct PlannedWorkoutSheet: View {
     @Bindable var viewModel: PlannedWorkoutSheetViewModel
     @Environment(\.dismiss) private var dismiss

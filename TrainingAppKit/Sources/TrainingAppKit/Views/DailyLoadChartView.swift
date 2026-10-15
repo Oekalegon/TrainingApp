@@ -11,7 +11,7 @@ import TrainingCore
 /// with a narrower `actual` bar (what really happened, from completed `Activity`s) layered on top
 /// of it. A day with only a plan not yet performed shows just the muted bar; a day with only a
 /// completed activity and no plan shows just the narrow one; a day with both shows both, even if
-/// they disagree — see `WeekViewModel.dailyLoadSplit(for:)`'s own doc comment for why these two
+/// they disagree — see `MicroCycleViewModel.dailyLoadSplit(for:)`'s own doc comment for why these two
 /// figures are computed independently rather than merged the way `FitnessMetrics.load` is.
 struct DailyLoadChartView: View {
     let actualLoads: [DailyLoad]
@@ -24,7 +24,7 @@ struct DailyLoadChartView: View {
     /// Date range of the week currently visible in the day list, shaded behind the bars — same
     /// role as `FitnessChartView.displayedWeekRange`.
     let displayedWeekRange: ClosedRange<Date>
-    /// The races in the chart's window (one per day, see `WeekViewModel.chartRaces(for:)`), marked
+    /// The races in the chart's window (one per day, see `MicroCycleViewModel.chartRaces(for:)`), marked
     /// like `FitnessChartView` marks them (MVP2-104).
     let races: [Race]
 

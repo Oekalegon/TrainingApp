@@ -51,7 +51,7 @@ enum TimelineCardStyle {
         Measurement(value: meters, unit: UnitLength.meters).formatted(.measurement(width: .wide))
     }
 
-    /// The cards' own background — "elevated" relative to `weekViewBackground` (white in light mode,
+    /// The cards' own background — "elevated" relative to `microCycleViewBackground` (white in light mode,
     /// a dark elevated grey in dark mode), the opposite direction from `unhighlightedPillBackground`'s
     /// "recessed" pills/timeline, so a card reads as the most prominent surface in the day list.
     #if os(iOS)

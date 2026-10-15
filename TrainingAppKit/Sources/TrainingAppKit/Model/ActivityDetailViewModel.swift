@@ -24,19 +24,19 @@ public struct ActivityDetailViewModel {
     }
     /// The athlete's timezone — the view formats every date with this, not the device's default.
     public let timeZone: TimeZone
-    /// This activity's overlap issue, if any (MVP1-63) — see `WeekViewModel.overlapContext(for:)`.
+    /// This activity's overlap issue, if any (MVP1-63) — see `MicroCycleViewModel.overlapContext(for:)`.
     /// The detail screen shows an "Overlap" section with resolution actions when non-`nil`.
     public let overlapContext: OverlapContext?
     /// This activity's link to a planned workout and what it could be linked to instead (MVP2-42);
-    /// `nil` when there's nothing to show. See `WeekViewModel.planLinkContext(for:)`.
+    /// `nil` when there's nothing to show. See `MicroCycleViewModel.planLinkContext(for:)`.
     public let planLinkContext: PlanLinkContext?
     /// What the heart-rate and pace charts draw, with the recorded steps as markers (MVP2-146).
     public let chartData: ActivityChartData
     /// The sheet's title: the linked plan's workout name, else the sport's name (MVP2-152); see
-    /// ``WeekViewModel/activityTitle(for:)``.
+    /// ``MicroCycleViewModel/activityTitle(for:)``.
     public let title: String
     /// Why this test activity's result couldn't be measured, with what to do about it, or `nil` when
-    /// it isn't a test or was measured (MVP2-157). See ``WeekViewModel/checkForFieldTestResult()``.
+    /// it isn't a test or was measured (MVP2-157). See ``MicroCycleViewModel/checkForFieldTestResult()``.
     public let fieldTestFailureMessage: String?
 
     /// Creates a detail view model for `activity`.

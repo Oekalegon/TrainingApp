@@ -4,8 +4,8 @@ import TrainingCore
 @testable import TrainingAppKit
 
 @MainActor
-@Suite("WeekViewModel max heart rate", .serialized)
-struct WeekViewModelMaxHeartRateTests {
+@Suite("MicroCycleViewModel max heart rate", .serialized)
+struct MicroCycleViewModelMaxHeartRateTests {
     private func day(_ offset: Int) -> Date {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
@@ -25,14 +25,14 @@ struct WeekViewModelMaxHeartRateTests {
     private func makeViewModel(
         athleteStore: (any AthleteStore)? = nil,
         history: InMemoryMaxHeartRatePromptHistory = InMemoryMaxHeartRatePromptHistory()
-    ) -> (InMemoryStore, TrainingModel, WeekViewModel) {
+    ) -> (InMemoryStore, TrainingModel, MicroCycleViewModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: athleteStore ?? store
         )
         let model = TrainingModel(stores: stores, athlete: .fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178))
-        let viewModel = WeekViewModel(
+        let viewModel = MicroCycleViewModel(
             model: model, refresher: FakeRefresher(), maxHeartRatePromptHistory: history, today: day(3)
         )
         return (store, model, viewModel)

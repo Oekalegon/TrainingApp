@@ -1,9 +1,9 @@
 import Foundation
 import TrainingCore
 
-/// `WeekViewModel`'s overlap, join and delete surface (MVP1-63/65/67/80), split out of
-/// `WeekViewModel.swift` to keep that file manageable.
-extension WeekViewModel {
+/// `MicroCycleViewModel`'s overlap, join and delete surface (MVP1-63/65/67/80), split out of
+/// `MicroCycleViewModel.swift` to keep that file manageable.
+extension MicroCycleViewModel {
     /// `activity.id` → the overlap issue worth warning about, for every activity named by a real
     /// (non-``OverlapRecommendation/possibleMultisport``) advice — one pass over
     /// ``TrainingModel/overlapAdvice`` rather than the N passes ``overlapWarning(for:)`` would need

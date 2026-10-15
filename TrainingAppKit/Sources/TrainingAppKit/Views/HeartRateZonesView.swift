@@ -13,7 +13,7 @@ import TrainingCore
 /// age estimate that differs is offered with a button, to accept.
 struct HeartRateZonesView: View {
     let viewModel: AthleteViewModel
-    let weekViewModel: WeekViewModel
+    let microCycleViewModel: MicroCycleViewModel
     /// Whether Apple Health is connected, which shows the resting-heart-rate switch.
     let showsHealthKitSwitch: Bool
     /// The sheet being shown: a new entry or one from the history.
@@ -31,7 +31,7 @@ struct HeartRateZonesView: View {
                             get: { viewModel.athlete.usesHealthKitRestingHeartRate },
                             set: { isOn in
                                 Task {
-                                    if await !weekViewModel.setUsesHealthKitRestingHeartRate(isOn) { isShowingError = true }
+                                    if await !microCycleViewModel.setUsesHealthKitRestingHeartRate(isOn) { isShowingError = true }
                                 }
                             }
                         ))
@@ -134,7 +134,7 @@ struct HeartRateZonesView: View {
                         if viewModel.heartRateHistory.count > 1 {
                             Button("Delete", role: .destructive) {
                                 Task {
-                                    if await !weekViewModel.removeHeartRateSettings(on: entry.effectiveDate) { isShowingError = true }
+                                    if await !microCycleViewModel.removeHeartRateSettings(on: entry.effectiveDate) { isShowingError = true }
                                 }
                             }
                         }
@@ -163,7 +163,7 @@ struct HeartRateZonesView: View {
                 draft: item.draft,
                 isRestingLocked: showsHealthKitSwitch && viewModel.athlete.usesHealthKitRestingHeartRate
             ) { draft in
-                await weekViewModel.recordHeartRateSettings(draft.settings())
+                await microCycleViewModel.recordHeartRateSettings(draft.settings())
             }
         }
         .alert("Couldn't Save", isPresented: $isShowingError) {
@@ -181,7 +181,7 @@ struct HeartRateZonesView: View {
             editing = draft
         } else {
             Task {
-                if await !weekViewModel.recordHeartRateSettings(draft.settings()) { isShowingError = true }
+                if await !microCycleViewModel.recordHeartRateSettings(draft.settings()) { isShowingError = true }
             }
         }
     }
@@ -190,7 +190,7 @@ struct HeartRateZonesView: View {
     private func save(_ draft: HeartRateSettingsDraft, source: MaxHeartRateSource) async {
         var settings = draft.settings()
         settings.maxHeartRateSource = source
-        if await !weekViewModel.recordHeartRateSettings(settings) { isShowingError = true }
+        if await !microCycleViewModel.recordHeartRateSettings(settings) { isShowingError = true }
     }
 
     /// "120–133 bpm" — whole-number bpm on both ends, matching the other bpm figures here.

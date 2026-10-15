@@ -6,9 +6,9 @@ import TrainingCore
 ///
 /// A hand-rolled `DragGesture` + offset carousel, not `TabView(.page)` — same reasoning as
 /// `SportStatsPagerView`'s own carousel: `TabView`'s `UIPageViewController`-backed gesture
-/// recognizer would compete with `WeekView`'s own week-swipe gesture for a horizontal drag
-/// starting on this panel, and `WeekView` already has to explicitly exempt drags that start here
-/// from changing the displayed week (see `WeekView.graphPanelFrame`) — a second, independent
+/// recognizer would compete with `MicroCycleView`'s own week-swipe gesture for a horizontal drag
+/// starting on this panel, and `MicroCycleView` already has to explicitly exempt drags that start here
+/// from changing the displayed week (see `MicroCycleView.graphPanelFrame`) — a second, independent
 /// paging gesture underneath `TabView`'s own would only compound that.
 struct GraphPanelPagerView: View {
     let metrics: [FitnessMetrics]
@@ -16,27 +16,27 @@ struct GraphPanelPagerView: View {
     let displayedWeekRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
     let races: [Race]
-    /// Called whenever the page changes, so `WeekView` can remember it across a week change or a
+    /// Called whenever the page changes, so `MicroCycleView` can remember it across a week change or a
     /// scroll-triggered recycle (see `selectedIndex`'s own doc comment for why this is a one-way
     /// callback rather than a `@Binding`).
     let onSelectedIndexChange: (Int) -> Void
     /// Called with the currently-visible page on a plain tap anywhere on the panel (MVP1-60) — or
     /// on VoiceOver's own default activation, see the explicit `.accessibilityAction` below —
-    /// `WeekView` pushes that page's own info screen. A separate `.onTapGesture`, not folded into
+    /// `MicroCycleView` pushes that page's own info screen. A separate `.onTapGesture`, not folded into
     /// the drag gesture above: `DragGesture(minimumDistance: 10)` never fires at all for a touch
     /// that lifts before crossing that distance, so a tap and a page-changing drag are already
     /// mutually exclusive gestures rather than needing to be disambiguated by hand. Takes
-    /// `GraphPanelPage`, not a raw `Int`, so `WeekView`'s own mapping from page to metric can switch
+    /// `GraphPanelPage`, not a raw `Int`, so `MicroCycleView`'s own mapping from page to metric can switch
     /// over it exhaustively instead of matching a magic number that could silently drift from this
     /// view's own page order.
     let onTapPage: (GraphPanelPage) -> Void
 
     /// Local `@State`, seeded from `initialSelectedIndex` at init — not a `@Binding` to a value
-    /// `WeekView` owns, even though the selection does need to survive this view being torn down
+    /// `MicroCycleView` owns, even though the selection does need to survive this view being torn down
     /// and rebuilt (a week change gives the current carousel page a fresh `.id(dates.first)`
     /// identity, needed to reset the day list's own scroll position; the enclosing `LazyVStack` can
-    /// also recycle this view during scrolling). A `@Binding` sourced from `WeekView`'s own `@State`
-    /// was tried first: since `WeekView.body` re-evaluates on every drag-gesture callback (other
+    /// also recycle this view during scrolling). A `@Binding` sourced from `MicroCycleView`'s own `@State`
+    /// was tried first: since `MicroCycleView.body` re-evaluates on every drag-gesture callback (other
     /// `@State` there changes too, e.g. `graphPanelFrame`), each recomputes a *new* `Binding` value
     /// for this property, and passing a newly-constructed `Binding` on every render made SwiftUI
     /// tear down and rebuild this view's own `DragGesture` recognizer just as often — the gesture
@@ -46,7 +46,7 @@ struct GraphPanelPagerView: View {
     /// recognizer's identity — and so its ability to keep recognizing new gestures — stable.
     @State private var selectedIndex: Int
     /// Tracks the finger during a drag, on top of `selectedIndex`'s base position — 0 while idle,
-    /// same role as `WeekView.dragOffset`/`SportStatsPagerView.dragOffset`.
+    /// same role as `MicroCycleView.dragOffset`/`SportStatsPagerView.dragOffset`.
     @State private var dragOffset: CGFloat = 0
 
     /// Shared with `GraphPanelStaticPreview`'s own page dots, so the two stay in visual lockstep.
@@ -169,10 +169,10 @@ struct GraphPanelPagerView: View {
 }
 
 /// A non-interactive stand-in for `GraphPanelPagerView`, used for the two off-screen (previous/
-/// next week) carousel pages in `WeekView.weekPageContent` — see that call site's own doc comment
+/// next week) carousel pages in `MicroCycleView.weekPageContent` — see that call site's own doc comment
 /// for why. Those pages are never touched (always `.disabled`), so unlike `GraphPanelPagerView`
 /// they carry no local `@State` and no drag gesture at all: they just render whichever chart
-/// `selectedIndex` (owned by `WeekView`, passed in fresh on every render) currently names, so they
+/// `selectedIndex` (owned by `MicroCycleView`, passed in fresh on every render) currently names, so they
 /// stay in sync with the interactive page instead of freezing on whatever page happened to be
 /// selected the first time each one ever mounted. Deliberately a *separate* type from
 /// `GraphPanelPagerView` rather than a mode flag on it: giving `GraphPanelPagerView` itself an

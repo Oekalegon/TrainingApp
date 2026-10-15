@@ -9,7 +9,7 @@ import TrainingCore
 /// `Color.primary.opacity(_:)`, not a fixed grey: `.primary` is already black in light mode and
 /// white in dark mode, so this overlay is "slightly darker than whatever's behind it" in light
 /// mode and "slightly lighter" in dark mode for free, without a separate dark-mode-reversed value
-/// to keep in sync. Not `private`: `WeekView` reuses it for the trailing filler segment that
+/// to keep in sync. Not `private`: `MicroCycleView` reuses it for the trailing filler segment that
 /// extends the timeline past the last day down to the bottom of the week view.
 let unhighlightedPillBackground = Color.primary.opacity(0.06)
 
@@ -18,13 +18,13 @@ let unhighlightedPillBackground = Color.primary.opacity(0.06)
 /// `ActivityCard`'s own background reads as "elevated". Also used as an opaque backing layer behind
 /// the weekday pill and each activity's time label, so the timeline's line (drawn behind everything
 /// as one continuous background) is fully hidden where a pill or time label sits on it, rather than
-/// showing through. Not `private`: `WeekView` sets it as the day list's actual background too.
+/// showing through. Not `private`: `MicroCycleView` sets it as the day list's actual background too.
 #if os(iOS)
-let weekViewBackground = Color(.systemGroupedBackground)
+let microCycleViewBackground = Color(.systemGroupedBackground)
 #else
 // This view only ever ships on iOS; the fallback exists purely so TrainingAppKit (built for both
 // iOS and macOS, per Package.swift) still compiles on macOS, e.g. for host-side tooling/tests.
-let weekViewBackground = Color(white: 0.93)
+let microCycleViewBackground = Color(white: 0.93)
 #endif
 
 /// Renders one day's row in the week view's day list (design doc §2.1, MVP1-39/MVP1-40/MVP1-41): a
@@ -38,7 +38,7 @@ let weekViewBackground = Color(white: 0.93)
 /// plans still renders its pill, just with an empty content column beside it — no "rest day" text,
 /// since the empty space next to a pill already reads as "nothing that day".
 ///
-/// Deliberately holds no local `@State`: `WeekView` recreates the scroll view a given week's rows
+/// Deliberately holds no local `@State`: `MicroCycleView` recreates the scroll view a given week's rows
 /// live in (via `.id(...)` on that week's first date) whenever the displayed week changes, so a
 /// swipe resets scroll position instead of leaking it into the next week — any local state added
 /// here (an expand/collapse toggle, say) would be silently reset by the same mechanism. If this
@@ -47,52 +47,52 @@ struct DayActivitiesSection: View {
     let date: Date
     /// Whether `date` is today, in the athlete's calendar — highlights the weekday pill.
     let isToday: Bool
-    /// Whether to draw the timeline connector below this row's pill. `WeekView` passes `true` for
+    /// Whether to draw the timeline connector below this row's pill. `MicroCycleView` passes `true` for
     /// every day, including the last, and appends its own trailing filler segment after the last
     /// day so the line continues past it to the bottom of the week view rather than stopping right
     /// at the final pill — this parameter exists so a caller that doesn't want that (a future
-    /// non-`WeekView` use of this type, say) still can.
+    /// non-`MicroCycleView` use of this type, say) still can.
     let showsConnector: Bool
     /// This day's CTL/ATL/TSB, shown as pills beside the weekday pill (MVP1-40) — `nil` before
     /// the first load, in which case no pill row renders (rather than a row of placeholder zeros).
     let metrics: FitnessMetrics?
     /// Whether this day's Form is an estimate, shown with a "~" (MVP2-8) — see
-    /// `WeekViewModel.dayMetrics(on:)`.
+    /// `MicroCycleViewModel.dayMetrics(on:)`.
     let isFormProjected: Bool
     /// Whether this day's Load is an estimate, shown with a "~" (MVP2-127): an activity that day was
-    /// scored from perceived effort — see `WeekViewModel.dayMetrics(on:)`.
+    /// scored from perceived effort — see `MicroCycleViewModel.dayMetrics(on:)`.
     let isLoadEstimated: Bool
     let activities: [Activity]
-    /// This day's plans not yet matched to a completed activity — see `WeekViewModel.pendingPlans(on:)`.
+    /// This day's plans not yet matched to a completed activity — see `MicroCycleViewModel.pendingPlans(on:)`.
     let plans: [PlannedActivity]
     /// Races on this day, most important first — each renders as a `RaceCard` above the day's activities.
     let races: [Race]
     /// Everything an activity's card shows beyond the activity itself — TRIMP, overlap badge,
-    /// intensity, the linked plan's expected values — see `WeekViewModel.activityCardContent(for:)`.
-    let activityCard: (Activity) -> WeekViewModel.ActivityCardContent
+    /// intensity, the linked plan's expected values — see `MicroCycleViewModel.activityCardContent(for:)`.
+    let activityCard: (Activity) -> MicroCycleViewModel.ActivityCardContent
     /// Everything a planned activity's card shows beyond the plan itself — its summary (MVP2-37),
-    /// intensity, and whether it was missed — see `WeekViewModel.plannedCardContent(for:asOf:)`.
-    let plannedCard: (PlannedActivity) -> WeekViewModel.PlannedCardContent
+    /// intensity, and whether it was missed — see `MicroCycleViewModel.plannedCardContent(for:asOf:)`.
+    let plannedCard: (PlannedActivity) -> MicroCycleViewModel.PlannedCardContent
     /// The athlete's timezone — every date here is formatted with this, not the device's default,
-    /// so the dates/times shown agree with how `WeekViewModel` grouped them into this day in the
+    /// so the dates/times shown agree with how `MicroCycleViewModel` grouped them into this day in the
     /// first place.
     let timeZone: TimeZone
-    /// Called when a completed activity's row is tapped — `WeekView` presents it in a detail
+    /// Called when a completed activity's row is tapped — `MicroCycleView` presents it in a detail
     /// sheet, not a navigation push, so this hands back the tapped `Activity` rather than this
     /// view building a `NavigationLink` itself.
     let onSelectActivity: (Activity) -> Void
-    /// Called when a planned activity's card is tapped (MVP2-38) — `WeekView` presents the
+    /// Called when a planned activity's card is tapped (MVP2-38) — `MicroCycleView` presents the
     /// planned-workout detail sheet, the same hand-back-the-value pattern as `onSelectActivity`.
     let onSelectPlan: (PlannedActivity) -> Void
     /// Called when one of this row's Load/Fitness/Fatigue/Form pills is tapped (MVP1-45) —
-    /// `WeekView` opens the fitness metrics detail view showing just that metric's explanation.
+    /// `MicroCycleView` opens the fitness metrics detail view showing just that metric's explanation.
     let onSelectMetric: (TrainingMetricKind) -> Void
     /// Whether the "add" button below is enabled — `false` for a day in the past (MVP2-15):
     /// planning a workout or race for a day that's already happened doesn't make sense, but the
     /// button itself still shows (rather than disappearing) since a past day is also where a
     /// future "log an activity that wasn't auto-imported" entry point would belong.
     let canAddWorkout: Bool
-    /// Called when this day's "add" button is tapped (MVP2-15, MVP2-17, MVP2-22) — `WeekView`
+    /// Called when this day's "add" button is tapped (MVP2-15, MVP2-17, MVP2-22) — `MicroCycleView`
     /// presents `AddEntrySheet` defaulted to `date`, which offers the planned-workout/race choice
     /// itself via its own type picker rather than this button needing a dialog of its own.
     let onAddEntry: () -> Void
@@ -154,7 +154,7 @@ struct DayActivitiesSection: View {
                         // Opaque, so the timeline line behind it (see `showsConnector`'s
                         // `.background` below) is fully interrupted here rather than showing
                         // through the label — same reasoning as `WeekdayPillView`'s own backing.
-                        .background(weekViewBackground)
+                        .background(microCycleViewBackground)
                         .frame(width: WeekdayPillView.columnWidth)
                         .padding(.top, TimelineCardStyle.contentPadding)
                     ActivityCard(
@@ -164,7 +164,7 @@ struct DayActivitiesSection: View {
                     )
                 }
             }
-            // `plans` is `WeekViewModel.pendingPlans(on:)` — already minus plans a completed
+            // `plans` is `MicroCycleViewModel.pendingPlans(on:)` — already minus plans a completed
             // activity's card above represents, so no empty row is laid out for those.
             ForEach(plans) { plan in
                 HStack(alignment: .top, spacing: 4) {
@@ -184,7 +184,7 @@ struct DayActivitiesSection: View {
         // The continuous timeline line, drawn once behind the whole day rather than per row: a
         // per-row line (as MVP1-39 used, back when this view had only one row) can't span multiple
         // sibling `HStack`s the way a single background can. It's drawn behind the weekday pill and
-        // every time label too, but each of those has its own opaque `weekViewBackground` backing layer
+        // every time label too, but each of those has its own opaque `microCycleViewBackground` backing layer
         // (see `WeekdayPillView` and the time label below) that fully covers the line where it
         // passes underneath, rather than letting the line's translucent color show through/blend
         // with theirs.
@@ -216,7 +216,7 @@ struct WeekdayPillView: View {
     static let columnWidth: CGFloat = 60
 
     /// Width of the timeline connector line (`DayActivitiesSection`'s own connector and
-    /// `WeekView`'s trailing filler that extends it past the last day both draw a line this wide).
+    /// `MicroCycleView`'s trailing filler that extends it past the last day both draw a line this wide).
     static let connectorLineWidth: CGFloat = 2
     /// Leading inset that centers a `connectorLineWidth`-wide line under this pill's column — the
     /// single source both connector-drawing call sites use, so the two segments can't drift apart
@@ -242,13 +242,13 @@ struct WeekdayPillView: View {
             .padding(.vertical, 3)
             .foregroundStyle(isToday ? Color.white : Color.primary)
             .background {
-                // Opaque `weekViewBackground` first, so the timeline line drawn behind this pill (see
+                // Opaque `microCycleViewBackground` first, so the timeline line drawn behind this pill (see
                 // `DayActivitiesSection`'s `showsConnector` background) is fully hidden rather than
                 // showing through — `unhighlightedPillBackground` alone is translucent (12%
                 // opacity) and wouldn't block it on its own. `isToday`'s solid `accentColor` would
                 // already fully cover the line without this, but it's applied unconditionally so
                 // this doesn't silently break if that color ever becomes translucent too.
-                Capsule().fill(weekViewBackground)
+                Capsule().fill(microCycleViewBackground)
                 Capsule().fill(isToday ? Color.accentColor : unhighlightedPillBackground)
             }
             // This pill is deliberately fixed-size (it's a small badge, not body text), so it

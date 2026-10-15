@@ -6,7 +6,7 @@ import TrainingCore
 ///
 /// WorkoutKit never wakes the app, so the window only moves forward when the app runs. `AppTabView`
 /// calls ``requestSync(asOf:)`` whenever the app becomes active, which covers launch and the
-/// window rolling over at midnight. `WeekViewModel` calls it after a plan is saved, deleted or
+/// window rolling over at midnight. `MicroCycleViewModel` calls it after a plan is saved, deleted or
 /// imported, and after anything that can link or unlink a plan: a HealthKit import, linking by
 /// hand, deduplicating, or deleting, joining or unjoining an activity (MVP2-116). Each run compares
 /// what should be on the Watch with what is, so it can run any number of times: scheduling an

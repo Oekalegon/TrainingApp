@@ -4,24 +4,24 @@ import TrainingCore
 /// What `MetricDetailView` needs to draw one metric's own chart and read its subject's value
 /// (MVP1-45/MVP1-60).
 struct MetricChartContext {
-    /// The 3-week window `WeekViewModel.chartMetrics(for:)` returns for the week containing
+    /// The 3-week window `MicroCycleViewModel.chartMetrics(for:)` returns for the week containing
     /// `subject` — the same data `FitnessChartView`/`DailyLoadChartView` plot for the main week
     /// graph, so the numbers agree between the two places they're shown. Used only to seed the
     /// screen's first paint before `bufferProvider` fetches its own, wider buffer.
     let metrics: [FitnessMetrics]
-    /// `WeekViewModel.dailyLoadSplit(for:)`'s own 3-week window for the week containing `subject`
+    /// `MicroCycleViewModel.dailyLoadSplit(for:)`'s own 3-week window for the week containing `subject`
     /// — the Load kind's `LoadDetailChartView` own first-paint seed, mirroring `metrics`' role,
     /// before `bufferProvider` fetches its own, wider buffer. Unused by the Fitness/Fatigue/
     /// Form kinds, which only ever read `metrics`.
     let dailyLoadSplit: DailyLoadSplit
-    /// `WeekViewModel.chartRaces(for:)`'s 3-week window for the week containing `subject`, the first
+    /// `MicroCycleViewModel.chartRaces(for:)`'s 3-week window for the week containing `subject`, the first
     /// paint's race markers before `bufferProvider` supplies the buffer's own (MVP2-104).
     let races: [Race]
     /// A specific day (a day-list pill tap) or a whole displayed week (a graph-panel tap) — see
     /// `MetricDetailSubject`'s own doc comment.
     let subject: MetricDetailSubject
     /// The athlete's own calendar — matching `subject` against `metrics` needs
-    /// `calendar.isDate(_:inSameDayAs:)`, not `==`, the same reasoning `WeekViewModel.metrics(on:)`
+    /// `calendar.isDate(_:inSameDayAs:)`, not `==`, the same reasoning `MicroCycleViewModel.metrics(on:)`
     /// already documents for the same comparison. Also supplies `calendar.timeZone` for formatting.
     let calendar: Calendar
 
@@ -37,7 +37,7 @@ struct MetricChartContext {
     }
 }
 
-/// One metric's own detail screen (MVP1-45/MVP1-60), Apple Health-style: `WeekView` pushes this
+/// One metric's own detail screen (MVP1-45/MVP1-60), Apple Health-style: `MicroCycleView` pushes this
 /// onto its own `NavigationStack` (`.navigationDestination(item:)`) when a day-list pill or the
 /// graph panel itself is tapped — a real back button and push transition, not a dismiss-by-swiping
 /// `.sheet`, since this is a full detail screen (chart + explanation + zone card) rather than a
@@ -59,11 +59,11 @@ struct MetricChartContext {
 struct MetricDetailView: View {
     let kind: TrainingMetricKind
     let chartContext: MetricChartContext
-    /// The selected chart period — owned by `WeekView` (not this view), so it's retained across
+    /// The selected chart period — owned by `MicroCycleView` (not this view), so it's retained across
     /// separate pushes rather than resetting to `.week` every time a different pill is tapped.
     @Binding var period: ChartPeriod
     /// Fetches (and, if needed, loads) the metrics, daily-load split and races for an arbitrary
-    /// range — `WeekViewModel.chartBuffer(in:asOf:)` in practice. Called for every period, including
+    /// range — `MicroCycleViewModel.chartBuffer(in:asOf:)` in practice. Called for every period, including
     /// `.week`, since the chart's own swipe-to-pan (MVP1-45) needs a buffer wider than
     /// `chartContext.metrics` alone provides. The daily-load split is only read by `.load`'s
     /// `LoadDetailChartView`, but is fetched unconditionally rather than branching on `kind`,
