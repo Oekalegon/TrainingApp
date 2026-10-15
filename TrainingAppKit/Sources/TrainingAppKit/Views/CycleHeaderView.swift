@@ -28,7 +28,8 @@ struct CycleHeaderView: View {
 
     private var detail: String {
         var parts = ["\(context.phaseTitle) phase"]
-        if let role = context.loadRole { parts.append(role.rawValue.capitalized) }
+        // A legacy recovery micro has the recovery phase and role both; say it once.
+        if let role = context.loadRole, role.rawValue != context.phase.id { parts.append(role.rawValue.capitalized) }
         parts.append("\(context.lengthInDays) days")
         return parts.joined(separator: " · ")
     }
