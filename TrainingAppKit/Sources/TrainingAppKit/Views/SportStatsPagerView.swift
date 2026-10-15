@@ -24,7 +24,7 @@ struct SportStatsPagerView: View {
     /// strip's own margin.
     private var rowHeight: CGFloat {
         guard hugsContent else { return 64 }
-        return pages.contains(where: \.showsPerformedAndPlanned) ? 64 : 46
+        return pages.contains(where: \.showsPerformedAndPlanned) ? 58 : 46
     }
 
     /// Index into `pages`, not a `Sport` tag: unlike `WeekView`'s own day-list carousel (always
