@@ -219,7 +219,7 @@ public struct WeekView: View {
             // `ScrollView` per page (MVP1-56) lets the system's own large-title collapse engage
             // natively — title and chart scroll away together as the day list scrolls, exactly like
             // Mail's message list, rather than an abrupt manual swap between two fixed styles.
-            .navigationTitle("Week \(viewModel.displayedWeekOfYear)")
+            .navigationTitle(viewModel.displayedTitle)
             #if os(iOS)
             .navigationSubtitle(viewModel.displayedWeekDateRangeDescription)
             // A concrete resolved color, not `chartSectionBackground` itself: passed a dynamic/
@@ -262,7 +262,7 @@ public struct WeekView: View {
                     }
                 }
             }
-            .task(id: viewModel.displayedWeekStart) {
+            .task(id: viewModel.displayedPeriod) {
                 await viewModel.load()
                 // Cheap once the history scan has run: a check over the loaded activities only.
                 await viewModel.checkForMaxHeartRateSuggestion()
@@ -644,6 +644,9 @@ public struct WeekView: View {
     private func weekPageContent(for dates: [Date], pageHeight: CGFloat, isCurrentPage: Bool) -> some View {
         let weekStart = dates.first ?? viewModel.displayedWeekStart
         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+            if let context = viewModel.cycleContext(for: weekStart) {
+                CycleHeaderView(context: context)
+            }
             graphPanel(weekStart: weekStart, isCurrentPage: isCurrentPage)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)

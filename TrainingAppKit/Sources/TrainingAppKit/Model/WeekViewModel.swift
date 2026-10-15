@@ -30,7 +30,7 @@ public final class WeekViewModel {
     /// The athlete's calendar: ``Calendar`` for their time zone with their week start applied. Built
     /// once and reused, so the week-swipe path doesn't create one per access; a changed time zone or
     /// week start gets a new one on the next access.
-    private var calendar: Calendar {
+    var calendar: Calendar {
         let athlete = model.athlete
         if calendarCache.timeZone != athlete.timeZone || calendarCache.weekStartsOn != athlete.weekStartsOn {
             calendarCache = (athlete.timeZone, athlete.weekStartsOn, Self.calendar(for: athlete))
@@ -163,17 +163,22 @@ public final class WeekViewModel {
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the period currently
     /// on screen: a calendar week, or a micro-cycle once MVP5-107 shows one.
-    public private(set) var displayedWeekStart: Date
+    public internal(set) var displayedWeekStart: Date
     /// The number of days on screen: 7 for a calendar week, or a micro-cycle's own length (MVP5-106).
-    public private(set) var displayedLengthInDays: Int
+    public internal(set) var displayedLengthInDays: Int
+    /// The date the athlete last asked to see (today, a picked date, or the start of the period they
+    /// paged to). ``displayedPeriod`` is the period containing it, so when the plan covering it loads
+    /// later, ``refreshDisplayedPeriod()`` can switch from a calendar week to the micro-cycle.
+    @ObservationIgnored
+    var anchorDate: Date
     /// The period currently on screen: ``displayedWeekStart`` for ``displayedLengthInDays`` days.
     public var displayedPeriod: DisplayPeriod {
         DisplayPeriod(start: displayedWeekStart, lengthInDays: displayedLengthInDays)
     }
-    /// The period of ``displayedLengthInDays`` days starting `start`: how the date-keyed APIs
-    /// (``chartRange(for:)`` and the caches) turn a start date into a period.
+    /// The period starting on `start`, resolved from the plan (see ``period(containing:)``): how the
+    /// date-keyed APIs (``chartRange(for:)`` and the caches) turn a start date into a period.
     private func period(startingAt start: Date) -> DisplayPeriod {
-        DisplayPeriod(start: start, lengthInDays: displayedLengthInDays)
+        period(containing: start)
     }
     /// `true` while a pull-to-refresh import is in flight.
     public private(set) var isRefreshing = false
@@ -240,8 +245,7 @@ public final class WeekViewModel {
         watchSync: WatchScheduleSync? = nil,
         onboardingProgress: (any OnboardingProgress)? = nil,
         iCloud: (any ICloudAccountChecking)? = nil,
-        today: Date = .now,
-        displayedLengthInDays: Int = DisplayPeriod.calendarWeekLength
+        today: Date = .now
     ) {
         self.model = model
         self.refresher = refresher
@@ -253,7 +257,8 @@ public final class WeekViewModel {
         let calendar = Self.calendar(for: model.athlete)
         self.calendarCache = (model.athlete.timeZone, model.athlete.weekStartsOn, calendar)
         self.displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
-        self.displayedLengthInDays = max(1, displayedLengthInDays)
+        self.displayedLengthInDays = DisplayPeriod.calendarWeekLength
+        self.anchorDate = today
     }
 
     /// `true` while no HealthKit import has yet completed for this athlete — the empty-state
@@ -307,14 +312,13 @@ public final class WeekViewModel {
     /// Lets a view render the neighboring weeks (e.g. to peek during a swipe) purely from data
     /// already covered by ``chartRange`` — no navigation state changes, no separate load.
     public func weekDates(offsetWeeks weeks: Int) -> [Date] {
-        displayedPeriod.shifted(byDays: weeks * displayedLengthInDays, calendar: calendar).days(calendar: calendar)
+        period(offset: weeks).days(calendar: calendar)
     }
 
     /// ``displayedWeekStart`` and its immediate neighbors — the window ``sportStatsPagesCaches``/
     /// ``weekGraphCaches`` keep cached, and the only weeks `WeekView`'s carousel ever shows at once.
     var cachedPeriods: [DisplayPeriod] {
-        let period = displayedPeriod
-        return [period.previous(calendar: calendar), period, period.next(calendar: calendar)]
+        [period(offset: -1), displayedPeriod, period(offset: 1)]
     }
 
     /// Completed activities in the period starting `weekStart` (which need not be
@@ -335,7 +339,8 @@ public final class WeekViewModel {
     /// used by `WeekView`'s carousel so each page renders its own week's chart rather than
     /// whichever week happens to be ``displayedWeekStart`` (MVP1-32).
     public func chartRange(for weekStart: Date) -> ClosedRange<Date> {
-        period(startingAt: weekStart).chartRange(calendar: calendar)
+        let period = period(startingAt: weekStart)
+        return previousPeriod(of: period).start...nextPeriod(of: period).lastDay(calendar: calendar)
     }
 
     /// The range ``load(asOf:)`` actually fetches from the stores: wide enough to cover not just
@@ -347,7 +352,10 @@ public final class WeekViewModel {
     /// page's own chart *displays*, just now backed by a `model.metrics` that already reaches far
     /// enough to cover its neighbors' displays too.
     private func loadRange(for weekStart: Date) -> ClosedRange<Date> {
-        period(startingAt: weekStart).loadRange(calendar: calendar)
+        let period = period(startingAt: weekStart)
+        let previous = previousPeriod(of: period)
+        let next = nextPeriod(of: period)
+        return previousPeriod(of: previous).start...nextPeriod(of: next).lastDay(calendar: calendar)
     }
 
     /// `model.metrics` restricted to ``chartRange``, in day order.
@@ -815,7 +823,7 @@ public final class WeekViewModel {
 
     private func computeSportStatsPages(weekStart: Date, asOf today: Date) -> [SportStatsPage] {
         let current = periodStatsSplit(weekStart: weekStart, asOf: today)
-        let previousWeekStart = period(startingAt: weekStart).previous(calendar: calendar).start
+        let previousWeekStart = previousPeriod(of: period(startingAt: weekStart)).start
         let previous = periodStatsSplit(weekStart: previousWeekStart, asOf: today)
 
         let mainSport = model.athlete.mainSport
@@ -1255,12 +1263,12 @@ public final class WeekViewModel {
 
     /// Moves the displayed week forward by one week.
     public func goToNextWeek() {
-        displayedWeekStart = displayedPeriod.next(calendar: calendar).start
+        show(nextPeriod(of: displayedPeriod))
     }
 
     /// Moves the displayed week back by one week.
     public func goToPreviousWeek() {
-        displayedWeekStart = displayedPeriod.previous(calendar: calendar).start
+        show(previousPeriod(of: displayedPeriod))
     }
 
     /// Jumps back to the week containing `today`.
@@ -1271,7 +1279,8 @@ public final class WeekViewModel {
     /// Jumps to the week containing `date` — the "Select Date" toolbar action's destination,
     /// for an arbitrary date rather than today's.
     public func goToWeek(containing date: Date) {
-        displayedWeekStart = Self.weekStart(containing: date, calendar: calendar)
+        anchorDate = date
+        show(period(containing: date))
     }
 
     /// Loads the weeks around `date` into `model` as well as the displayed ones, so a detail sheet
@@ -1280,7 +1289,7 @@ public final class WeekViewModel {
     /// Loads the *union* with the current window, for the same reason as ``metrics(in:asOf:)``.
     /// A failed load leaves `model` as it was, and the sheet opens anyway.
     public func ensureLoaded(around date: Date, asOf today: Date = .now) async {
-        let range = loadRange(for: Self.weekStart(containing: date, calendar: calendar))
+        let range = loadRange(for: period(containing: date).start)
         let currentLoadRange = loadRange(for: displayedWeekStart)
         if currentLoadRange.contains(range.lowerBound), currentLoadRange.contains(range.upperBound) { return }
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
@@ -1296,6 +1305,8 @@ public final class WeekViewModel {
     public func load(asOf today: Date = .now) async {
         do {
             try await model.load(in: loadRange(for: displayedWeekStart), asOf: today)
+            // The plan may only now cover the date the athlete jumped to (see ``anchorDate``).
+            refreshDisplayedPeriod()
             // Only a load that worked says whether Health was ever imported (MVP2-147).
             onboarding.markLoaded()
         } catch {}
