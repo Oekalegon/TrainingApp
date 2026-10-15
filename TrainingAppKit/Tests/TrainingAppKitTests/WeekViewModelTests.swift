@@ -14,7 +14,7 @@ struct WeekViewModelTests {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
-            cycleStore: store, athleteStore: store
+            cycleStore: store, raceStore: store, athleteStore: store
         )
         return (store, stores)
     }
@@ -71,6 +71,16 @@ struct WeekViewModelTests {
         #expect(viewModel.isToday(day(2), asOf: day(2)))
         #expect(!viewModel.isToday(day(2), asOf: day(3)))
         #expect(!viewModel.isToday(day(2), asOf: startOfDay2.addingTimeInterval(-1)))
+    }
+
+    @Test("isPast(_:) is true only for a calendar day strictly before today's")
+    func isPastMatchesOnlyDaysBeforeToday() {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.isPast(day(1), asOf: day(2)))
+        #expect(!viewModel.isPast(day(2), asOf: day(2)))
+        #expect(!viewModel.isPast(day(3), asOf: day(2)))
     }
 
     @Test("chartRange spans the week before, the displayed week, and the week after")
@@ -311,6 +321,255 @@ struct WeekViewModelTests {
         #expect(viewModel.plans(on: day(2)).map(\.id) == [plan.id])
         #expect(viewModel.plans(on: day(3)).isEmpty)
         #expect(viewModel.workout(for: plan)?.id == workout.id)
+    }
+
+    @Test("plannedCardSummary shows distance for a distance-only workout, duration otherwise, and falls back when the workout is missing")
+    func plannedCardSummaryExtent() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let timed = StructuredWorkout(
+            name: "Steady", sport: .cycling,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let distance = StructuredWorkout(
+            name: "Reps", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .distance(400), target: .heartRateZone(4))], repetitions: 5)]
+        )
+        let timedPlan = PlannedActivity(workoutID: timed.id, date: day(2))
+        let distancePlan = PlannedActivity(workoutID: distance.id, date: day(2), expectedLoadOverride: 55)
+        let orphanPlan = PlannedActivity(workoutID: UUID(), date: day(2))
+        try await store.upsert([timed, distance])
+        try await store.upsert([timedPlan, distancePlan, orphanPlan])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let timedSummary = viewModel.plannedCardSummary(for: timedPlan)
+        #expect(timedSummary.sport == .cycling)
+        #expect(timedSummary.name == "Steady")
+        #expect(timedSummary.extent == .duration(1800))
+
+        let distanceSummary = viewModel.plannedCardSummary(for: distancePlan)
+        #expect(distanceSummary.extent == .distance(meters: 2000))
+        #expect(distanceSummary.load == 55)
+
+        let orphanSummary = viewModel.plannedCardSummary(for: orphanPlan)
+        #expect(orphanSummary.sport == .running)
+        #expect(orphanSummary.name == nil)
+        #expect(orphanSummary.extent == nil)
+    }
+
+    @Test("plannedCardSummary shows duration for mixed/open workouts and for a workout with no steps, never 0 m")
+    func plannedCardSummaryMixedOpenAndEmpty() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let mixed = StructuredWorkout(
+            name: "Mixed", sport: .running,
+            blocks: [WorkoutBlock(steps: [
+                WorkoutStep(kind: .work, goal: .distance(1000), target: .heartRateZone(3)),
+                WorkoutStep(kind: .work, goal: .time(600), target: .heartRateZone(2)),
+            ])]
+        )
+        let open = StructuredWorkout(
+            name: "Open", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .open, target: .heartRateZone(2))])]
+        )
+        let empty = StructuredWorkout(name: "Empty", sport: .running, blocks: [WorkoutBlock(steps: [])])
+        let plans = [mixed, open, empty].map { PlannedActivity(workoutID: $0.id, date: day(2)) }
+        try await store.upsert([mixed, open, empty])
+        try await store.upsert(plans)
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        for plan in plans {
+            guard case .duration = viewModel.plannedCardSummary(for: plan).extent else {
+                Issue.record("expected a duration extent for \(String(describing: viewModel.workout(for: plan)?.name))")
+                continue
+            }
+        }
+    }
+
+    @Test("pendingPlans(on:) omits plans already matched to a completed activity")
+    func pendingPlansOmitsReconciled() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let workout = StructuredWorkout(
+            name: "Steady", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let pending = PlannedActivity(workoutID: workout.id, date: day(2))
+        let matched = PlannedActivity(workoutID: workout.id, date: day(2), completedActivityID: UUID())
+        try await store.upsert([workout])
+        try await store.upsert([pending, matched])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.pendingPlans(on: day(2)).map(\.id) == [pending.id])
+        #expect(viewModel.plans(on: day(2)).count == 2)
+    }
+
+    @Test("races(on:) returns that day's races, primary first")
+    func racesOnDayOrderedByPriority() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let tertiary = Race(name: "Parkrun", date: day(2), priority: .tertiary)
+        let primary = Race(name: "Marathon", date: day(2), priority: .primary)
+        let other = Race(name: "Elsewhere", date: day(4), priority: .secondary)
+        try await store.upsert([tertiary, primary, other])
+
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.races(on: day(2)).map(\.id) == [primary.id, tertiary.id])
+        #expect(viewModel.races(on: day(3)).isEmpty)
+    }
+
+    @Test("chartRaces(for:) returns the races in that week's chartRange, in date order (MVP2-104)")
+    func chartRacesScopedToChartRange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+        let weekStart = viewModel.displayedWeekStart
+        func offset(_ days: Int) -> Date { calendar.date(byAdding: .day, value: days, to: weekStart)! }
+        let later = Race(name: "Later", date: offset(10), priority: .secondary)
+        let earlier = Race(name: "Earlier", date: offset(2), priority: .primary)
+        let outside = Race(name: "Outside", date: offset(40), priority: .tertiary)
+        try await store.upsert([later, earlier, outside])
+
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.chartRaces(for: weekStart).map(\.id) == [earlier.id, later.id])
+    }
+
+    @Test("chartRaces(for:) keeps only the most important race of a day (MVP2-104)")
+    func chartRacesOnePerDay() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+        let weekStart = viewModel.displayedWeekStart
+        let raceDay = calendar.date(byAdding: .day, value: 3, to: weekStart)!
+        let tertiary = Race(name: "Parkrun", date: raceDay, priority: .tertiary)
+        let primary = Race(name: "Marathon", date: raceDay, priority: .primary)
+        let boundary = Race(name: "Last day", date: viewModel.chartRange(for: weekStart).upperBound, priority: .secondary)
+        try await store.upsert([tertiary, primary, boundary])
+
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.chartRaces(for: weekStart).map(\.id) == [primary.id, boundary.id])
+    }
+
+    @Test("chartRaces(in:) covers any loaded range, so the detail charts can ask for a year (MVP2-135)")
+    func chartRacesInArbitraryRange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let far = Race(name: "Far", date: day(150), priority: .secondary)
+        let near = Race(name: "Near", date: day(2), priority: .tertiary)
+        try await store.upsert([far, near])
+        let range = day(-10)...day(200)
+
+        _ = await viewModel.metrics(in: range, asOf: day(0))
+
+        #expect(viewModel.chartRaces(in: range).map(\.id) == [near.id, far.id])
+        #expect(viewModel.chartRaces(in: day(100)...day(200)).map(\.id) == [far.id])
+    }
+
+    @Test("chartBuffer(in:) returns metrics, load split and races for one range, loading it first (MVP2-137)")
+    func chartBufferLoadsBeforeReadingRaces() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let race = Race(name: "Far", date: day(150), priority: .primary)
+        let activity = Activity(source: .manual, sport: .running, start: day(149), duration: 1800, perceivedExertion: 6)
+        try await store.upsert([race])
+        try await store.upsert([activity])
+        let range = day(100)...day(200)
+
+        // Nothing has loaded this range yet: the buffer itself has to.
+        let buffer = await viewModel.chartBuffer(in: range, asOf: day(0))
+
+        #expect(buffer.races.map(\.id) == [race.id])
+        #expect(buffer.metrics.allSatisfy { range.contains($0.day) })
+        #expect(!buffer.metrics.isEmpty)
+        #expect(buffer.dailyLoadSplit.actual.contains { $0.load > 0 })
+    }
+
+    @Test("chartBuffer(in:) loads its range once, not once per part (MVP2-138)")
+    func chartBufferLoadsOnce() async throws {
+        let store = InMemoryStore()
+        let racesCounter = CountingRaceStore(base: store)
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store,
+            cycleStore: store, raceStore: racesCounter, athleteStore: store
+        )
+        let model = TrainingModel(stores: stores, athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC"))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+        let before = await racesCounter.reads
+
+        _ = await viewModel.chartBuffer(in: day(100)...day(200), asOf: day(0))
+
+        // One `TrainingModel.load(in:)`. It reads the races once, which is what this counts; if
+        // TrainingKit's `load` ever reads them twice, expect 2 here for a single load.
+        #expect(await racesCounter.reads - before == 1)
+    }
+
+    @Test("races on one day with the same priority are ordered by name")
+    func racesWithSamePriorityOrderedByName() async throws {
+        let (store, stores) = makeStores()
+        try await store.upsert([
+            Race(name: "Zandvoort 10K", date: day(2), priority: .secondary),
+            Race(name: "Amsterdam 10K", date: day(2), priority: .secondary)
+        ])
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        #expect(viewModel.races(on: day(2)).map(\.name) == ["Amsterdam 10K", "Zandvoort 10K"])
+    }
+
+    @Test("a race belongs to the athlete's local day, not the UTC day")
+    func racesUseTheAthletesTimeZone() async throws {
+        let (store, stores) = makeStores()
+        // 2023-11-14 23:30 UTC, which is 12:30 on 15 November in Auckland (UTC+13).
+        let raceDate = Date(timeIntervalSince1970: 1_699_920_000 + 23.5 * 3600)
+        try await store.upsert([Race(name: "Night Race", date: raceDate, priority: .primary)])
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "Pacific/Auckland"))
+        try await model.load(in: raceDate.addingTimeInterval(-3 * 86400)...raceDate.addingTimeInterval(3 * 86400), asOf: raceDate)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: raceDate)
+        var auckland = Calendar(identifier: .gregorian)
+        auckland.timeZone = TimeZone(identifier: "Pacific/Auckland")!
+        let fifteenth = auckland.startOfDay(for: raceDate)
+
+        #expect(viewModel.races(on: fifteenth).map(\.name) == ["Night Race"])
+        #expect(viewModel.races(on: auckland.date(byAdding: .day, value: -1, to: fifteenth)!).isEmpty)
+    }
+
+    @Test("a race saved after the week loaded shows on its day without reloading")
+    func racesIncludeARaceSavedAfterLoad() async throws {
+        let (_, stores) = makeStores()
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        try await model.load(in: day(0)...day(6), asOf: day(2))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        #expect(viewModel.races(on: day(3)).isEmpty)
+
+        let sheet = RaceSheetViewModel(model: model, date: day(3))
+        sheet.name = "Local 10K"
+        #expect(await sheet.save())
+
+        #expect(viewModel.races(on: day(3)).map(\.name) == ["Local 10K"])
     }
 
     @Test("metrics(on:) returns the matching day's fitness metrics, nil outside the loaded range")
@@ -663,6 +922,132 @@ struct WeekViewModelTests {
         #expect(pages.allSatisfy { $0.load == totalLoad })
     }
 
+    @Test("sportStatsPages(asOf:) reports performed and planned distance/time/load independently, not blended (MVP2-31)")
+    func sportStatsPagesReportsPerformedAndPlannedIndependently() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        // `today` is `displayedWeekStart` itself (not `day(0)`), so "planned dated the day after"
+        // is unambiguously both >= today and still inside the displayed week, regardless of which
+        // weekday the `day(0)` epoch fixture happens to land on.
+        let today = viewModel.displayedWeekStart
+        let performed = Activity(
+            source: .manual, sport: .running, start: today,
+            duration: 1800, distanceMeters: 5000, perceivedExertion: 5
+        )
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        // A day after `today` that has no completed activity of its own -- unlike `periodStats`'s
+        // merged figure, this plan must still show up under
+        // `plannedDistanceMeters`/`plannedTime`/`plannedLoad` even though the week already has a
+        // completed activity on a different day.
+        let plannedDate = today.addingTimeInterval(86400)
+        let plan = PlannedActivity(workoutID: workout.id, date: plannedDate)
+        try await store.upsert([performed])
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: today)
+
+        let pages = viewModel.sportStatsPages(asOf: today)
+        let runningPage = try #require(pages.first { $0.sport == .running })
+
+        #expect(runningPage.distanceMeters == 5000)
+        #expect(runningPage.time == 1800)
+        #expect(runningPage.load > 0)
+        #expect(runningPage.plannedDistanceMeters > 0)
+        #expect(runningPage.plannedTime > 0)
+        #expect(runningPage.plannedLoad > 0)
+        // Neither side's totals absorb the other's -- the plan's own duration (1800s) stays
+        // distinct from the performed activity's (also 1800s but a real, separately-measured
+        // figure), rather than one clobbering or summing into the other.
+        #expect(runningPage.plannedTime == 1800)
+        #expect(runningPage.time == 1800)
+    }
+
+    @Test("sportStatsPages(asOf:) computes expected*ChangeFraction against the previous week's performed total, not the plan alone (MVP2-31)")
+    func sportStatsPagesExpectedChangeFractionComparesAgainstPreviousPerformed() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let today = viewModel.displayedWeekStart
+        let previousWeekDay = calendar.date(byAdding: .day, value: -7, to: today)!
+        let previousWeekActivity = Activity(
+            source: .manual, sport: .running, start: previousWeekDay, duration: 1500, distanceMeters: 4000, perceivedExertion: 5
+        )
+        let thisWeekActivity = Activity(
+            source: .manual, sport: .running, start: today, duration: 1800, distanceMeters: 5000, perceivedExertion: 5
+        )
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .distance(5000), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: today.addingTimeInterval(86400))
+        try await store.upsert([previousWeekActivity, thisWeekActivity])
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: today)
+
+        let pages = viewModel.sportStatsPages(asOf: today)
+        let runningPage = try #require(pages.first { $0.sport == .running })
+
+        // Expected distance = 5000 (performed) + the plan's own projected distance, compared
+        // against last week's 4000 performed -- a strictly larger relative increase than
+        // performed-alone's own change fraction, since the plan adds on top of it.
+        #expect(runningPage.distanceChangeFraction == (5000.0 - 4000.0) / 4000.0)
+        #expect(runningPage.expectedDistanceChangeFraction > runningPage.distanceChangeFraction)
+    }
+
+    @Test("sportStatsPages(for:asOf:) compares a fully future week against the previous week's own expected (not performed-only) total (MVP2-31)")
+    func sportStatsPagesFutureWeekComparesAgainstPreviousExpected() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let today = viewModel.displayedWeekStart
+        let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: today)!
+        let twoWeeksOutStart = calendar.date(byAdding: .day, value: 14, to: today)!
+
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .distance(5000), target: .heartRateZone(2))])]
+        )
+        // Nothing performed at all -- `today`'s own week needs its own real plan too, so nextWeek
+        // has a genuine (non-zero) baseline to compare against; without one, `today`'s week's own
+        // expected total would itself be 0, and this test would just be exercising the same "+∞%"
+        // bug from a different angle instead of proving the fix.
+        let plans = [
+            PlannedActivity(workoutID: workout.id, date: today),
+            PlannedActivity(workoutID: workout.id, date: nextWeekStart),
+            PlannedActivity(workoutID: workout.id, date: twoWeeksOutStart),
+        ]
+        try await store.upsert([workout])
+        try await store.upsert(plans)
+        await viewModel.load(asOf: today)
+
+        // Before this fix, nextWeek's change fraction compared against `today`'s own week's
+        // performed-only total (0, since nothing's been performed yet) and twoWeeksOut's compared
+        // against nextWeek's performed-only total (also 0) -- both read as a meaningless "+∞%".
+        let nextWeekPage = try #require(viewModel.sportStatsPages(for: nextWeekStart, asOf: today).first { $0.sport == .running })
+        #expect(nextWeekPage.expectedDistanceChangeFraction.isFinite)
+
+        let twoWeeksOutPage = try #require(viewModel.sportStatsPages(for: twoWeeksOutStart, asOf: today).first { $0.sport == .running })
+        #expect(twoWeeksOutPage.expectedDistanceChangeFraction.isFinite)
+        // twoWeeksOut's own plan (5000m) is identical to nextWeek's own plan (5000m) -- comparing
+        // against nextWeek's planned total (the correct baseline, since nextWeek's performed total
+        // is itself 0) should read as "no change", not the same "+∞%" a performed-only baseline
+        // would still report.
+        #expect(twoWeeksOutPage.expectedDistanceChangeFraction == 0)
+    }
+
     @Test("sportStatsPages(asOf:) scopes the 80/20 intensity split to each page's own sport, not blended across sports")
     func sportStatsPagesPolarizedSplitIsScopedPerSport() async throws {
         let (store, stores) = makeStores()
@@ -706,7 +1091,7 @@ struct WeekViewModelTests {
         #expect(cyclingSplit.moderateToHighSeconds == 0)
     }
 
-    @Test("sportStatsPages(asOf:) includes a planned workout's projected intensity in a still-projected week's split")
+    @Test("sportStatsPages(asOf:) reports a planned workout's projected intensity under plannedPolarizedSplit, not polarizedSplit (MVP2-31)")
     func sportStatsPagesPolarizedSplitIncludesPlannedWorkoutProjection() async throws {
         let (store, stores) = makeStores()
         let athlete = AthleteProfile.fixture(
@@ -716,8 +1101,8 @@ struct WeekViewModelTests {
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
         let calendar = WeekViewModel.calendar(for: athlete)
 
-        // Entirely in the future -- no completed activities at all, so the split (and its
-        // isProjected flag) can only come from PlannedWorkoutProjector's estimate.
+        // Entirely in the future -- no completed activities at all, so `polarizedSplit` (performed)
+        // stays empty and the projection can only show up under `plannedPolarizedSplit`.
         let nextWeekStart = calendar.date(byAdding: .day, value: 7, to: viewModel.displayedWeekStart)!
         // `.heartRateZone(2)` lands in zone 2 with a 50/190 resting/max split (midpoint ratio 0.65
         // falls inside the karvonen zone-2 range), which `polarizedSplit` counts as "low" -- same
@@ -733,10 +1118,11 @@ struct WeekViewModelTests {
 
         let pages = viewModel.sportStatsPages(for: nextWeekStart, asOf: day(0))
 
-        let split = pages[0].polarizedSplit
-        #expect(split.total == 1800)
-        #expect(split.lowSeconds == 1800)
-        #expect(split.moderateToHighSeconds == 0)
+        #expect(pages[0].polarizedSplit.total == 0)
+        let plannedSplit = pages[0].plannedPolarizedSplit
+        #expect(plannedSplit.total == 1800)
+        #expect(plannedSplit.lowSeconds == 1800)
+        #expect(plannedSplit.moderateToHighSeconds == 0)
     }
 
     @Test("sportStatsPages(asOf:) invalidates its cache when the displayed week changes")
@@ -991,6 +1377,48 @@ struct WeekViewModelTests {
         #expect(viewModel.activities(on: viewModel.displayedWeekStart).map(\.id) == [currentWeekActivity.id])
     }
 
+    @Test("dailyLoadSplit(in:asOf:) returns the actual/planned split restricted to the requested range, even far outside the default window (MVP2-31)")
+    func dailyLoadSplitInRangeFiltersToThatRange() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let farPastDay = calendar.date(byAdding: .day, value: -200, to: viewModel.displayedWeekStart)!
+        let activity = Activity(
+            source: .manual, sport: .running, start: farPastDay, duration: 1800, perceivedExertion: 5
+        )
+        try await store.upsert([activity])
+
+        let rangeStart = calendar.date(byAdding: .day, value: -210, to: viewModel.displayedWeekStart)!
+        let split = await viewModel.dailyLoadSplit(in: rangeStart...viewModel.displayedWeekStart, asOf: day(0))
+
+        #expect(split.actual.contains { calendar.isDate($0.day, inSameDayAs: farPastDay) })
+    }
+
+    @Test("dailyLoadSplit(in:asOf:) doesn't drop data the currently displayed week still needs (MVP2-31)")
+    func dailyLoadSplitInRangeDoesNotClobberCurrentWeek() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        let calendar = WeekViewModel.calendar(for: athlete)
+
+        let currentWeekActivity = Activity(
+            source: .manual, sport: .running, start: viewModel.displayedWeekStart, duration: 1800, perceivedExertion: 5
+        )
+        try await store.upsert([currentWeekActivity])
+        await viewModel.load(asOf: day(0))
+        #expect(viewModel.activities(on: viewModel.displayedWeekStart).map(\.id) == [currentWeekActivity.id])
+
+        let farPastStart = calendar.date(byAdding: .day, value: -400, to: viewModel.displayedWeekStart)!
+        let farPastEnd = calendar.date(byAdding: .day, value: -370, to: viewModel.displayedWeekStart)!
+        _ = await viewModel.dailyLoadSplit(in: farPastStart...farPastEnd, asOf: day(0))
+
+        #expect(viewModel.activities(on: viewModel.displayedWeekStart).map(\.id) == [currentWeekActivity.id])
+    }
+
     @Test("load(asOf:) loads chartRange (3 weeks), not just the displayed week")
     func loadFetchesChartRangeIntoModel() async throws {
         let (store, stores) = makeStores()
@@ -1023,6 +1451,60 @@ struct WeekViewModelTests {
         try await model.load(in: day(0)...day(6), asOf: day(0))
 
         #expect(!viewModel.hasNoActivities)
+    }
+
+    @Test("the empty state gives way to the calendar once a plan is loaded, and returns when it is gone (MVP2-108)")
+    func emptyStateGivesWayToPlans() async throws {
+        let model = makeModel()
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+        #expect(viewModel.showsEmptyState)
+
+        let workout = StructuredWorkout(
+            name: "Easy", sport: .running, blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800))])]
+        )
+        try await model.add(workout, asOf: day(0))
+        let plan = PlannedActivity(workoutID: workout.id, date: day(2))
+        try await model.add(plan, asOf: day(0))
+
+        #expect(!viewModel.showsEmptyState)
+        // Still about Health alone: the Athlete tab keeps offering "Connect Apple Health".
+        #expect(viewModel.hasNoActivities)
+
+        try await model.deletePlan(id: plan.id, asOf: day(0))
+
+        #expect(viewModel.showsEmptyState)
+    }
+
+    @Test("a plan on a past day inside the loaded weeks counts too (MVP2-108)")
+    func emptyStateCountsPastPlans() async throws {
+        let (store, stores) = makeStores()
+        let workout = StructuredWorkout(
+            name: "Easy", sport: .running, blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800))])]
+        )
+        try await store.upsert([workout])
+        try await store.upsert([PlannedActivity(workoutID: workout.id, date: day(-3))])
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+
+        #expect(model.plans.count == 1)
+        #expect(!viewModel.showsEmptyState)
+    }
+
+    @Test("a plan outside the loaded weeks doesn't count, so the empty state stays")
+    func emptyStateIgnoresUnloadedPlans() async throws {
+        let (store, stores) = makeStores()
+        let workout = StructuredWorkout(
+            name: "Easy", sport: .running, blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800))])]
+        )
+        try await store.upsert([workout])
+        try await store.upsert([PlannedActivity(workoutID: workout.id, date: day(200))])
+        let model = TrainingModel(stores: stores, athlete: .fixture(timeZoneIdentifier: "UTC"))
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+        #expect(model.plans.isEmpty)
+        #expect(viewModel.showsEmptyState)
     }
 
     @Test("hasNoActivities stays false once imported, even if the current chart range has no activities")
@@ -1183,10 +1665,140 @@ struct WeekViewModelTests {
 
         #expect(!viewModel.hasNoActivities)
     }
+
+    @Test("dailyLoadSplit(for:) reports only a planned bar for a planned-but-not-yet-performed day (MVP2-30)")
+    func dailyLoadSplitPlannedOnlyWhenNotYetPerformed() async throws {
+        let (store, stores) = makeStores()
+        // Zone settings needed for `TRIMPPlanEstimator` to project a non-zero load for the
+        // `.heartRateZone(2)` workout below -- same fixture precedent
+        // `sportStatsPagesPolarizedSplitIncludesPlannedWorkoutProjection` uses.
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: day(0))
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        await viewModel.load(asOf: day(0))
+
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
+
+        #expect(split.planned.contains { $0.load > 0 })
+        #expect(split.actual.isEmpty)
+    }
+
+    @Test("dailyLoadSplit(for:) reports both bars, independently, once a planned day is also performed (MVP2-30)")
+    func dailyLoadSplitReportsBothOnceAlsoPerformed() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        let plan = PlannedActivity(workoutID: workout.id, date: day(0))
+        // A bit more load than the plan's own estimate -- the concrete "performed more than
+        // predicted" case from the MVP2-30 report this split exists to show correctly.
+        let activity = Activity(
+            source: .manual, sport: .running, start: day(0), duration: 2400, perceivedExertion: 5
+        )
+        try await store.upsert([workout])
+        try await store.upsert([plan])
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
+
+        #expect(split.planned.contains { $0.load > 0 })
+        #expect(split.actual.contains { $0.load > 0 })
+        // Both computed independently -- unlike `FitnessMetrics.load`'s either/or merge rule,
+        // the plan's own original estimate must still be there, not replaced by the actual figure.
+        let plannedDay = split.planned.first { calendar(for: athlete).isDate($0.day, inSameDayAs: day(0)) }
+        let actualDay = split.actual.first { calendar(for: athlete).isDate($0.day, inSameDayAs: day(0)) }
+        #expect(plannedDay?.load != actualDay?.load)
+    }
+
+    @Test("dailyLoadSplit(for:) reports only an actual bar for a completed activity with no matching plan (MVP2-30)")
+    func dailyLoadSplitActualOnlyWithNoPlan() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        let activity = Activity(
+            source: .manual, sport: .running, start: day(0), duration: 1800, perceivedExertion: 4
+        )
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
+
+        #expect(split.actual.contains { $0.load > 0 })
+        #expect(split.planned.isEmpty)
+    }
+
+    @Test("dailyLoadSplit(for:asOf:) doesn't show a planned bar for a day before today that was never performed (MVP2-30)")
+    func dailyLoadSplitExcludesPastNeverPerformedPlans() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(5))
+
+        let workout = StructuredWorkout(
+            name: "Easy Run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
+        )
+        // Dated before `today` and never performed -- unlike a still-upcoming plan, this should
+        // read as genuinely missed, not as a bar the chart keeps showing indefinitely (matching
+        // DailyLoadSeries/StatisticsCalculator.periodStats's own today-or-later merge rule for a
+        // plan's contribution).
+        let pastPlan = PlannedActivity(workoutID: workout.id, date: day(2))
+        try await store.upsert([workout])
+        try await store.upsert([pastPlan])
+        await viewModel.load(asOf: day(5))
+
+        let split = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(5))
+
+        #expect(split.planned.isEmpty)
+    }
+
+    @Test("dailyLoadSplit(for:asOf:) reuses its cached result until the underlying data actually changes (MVP2-30)")
+    func dailyLoadSplitCachesUntilDataChanges() async throws {
+        let (store, stores) = makeStores()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await viewModel.load(asOf: day(0))
+
+        let first = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
+        #expect(first.actual.isEmpty)
+
+        // Added directly through the store, bypassing `viewModel`/`model` entirely -- a stale
+        // cache that only invalidates on navigation (rather than on the activity/plan/workout
+        // counts this cache is actually keyed on) would still report the old, empty split here.
+        let activity = Activity(
+            source: .manual, sport: .running, start: day(0), duration: 1800, perceivedExertion: 4
+        )
+        try await store.upsert([activity])
+        await viewModel.load(asOf: day(0))
+
+        let second = viewModel.dailyLoadSplit(for: viewModel.displayedWeekStart, asOf: day(0))
+        #expect(second.actual.contains { $0.load > 0 })
+    }
+
+    private func calendar(for athlete: AthleteProfile) -> Calendar {
+        WeekViewModel.calendar(for: athlete)
+    }
 }
 
 @MainActor
-private final class FakeRefresher: ActivityRefreshing {
+final class FakeRefresher: ActivityRefreshing {
     private(set) var callCount = 0
     private(set) var authorizationRequested = false
     private let shouldThrow: Bool
@@ -1255,4 +1867,20 @@ private struct OverlapProducingImporter: ActivityImporting {
     func importActivities(since anchor: ImportAnchor?) async throws -> ImportResult {
         ImportResult(upserted: activities, deletedSources: [], anchor: ImportAnchor(data: Data([1])))
     }
+}
+
+/// A `RaceStore` that counts `races(in:)` reads, to see how many times a view model loads its model.
+private actor CountingRaceStore: RaceStore {
+    private let base: InMemoryStore
+    private(set) var reads = 0
+
+    init(base: InMemoryStore) { self.base = base }
+
+    func races(in range: ClosedRange<Date>) async throws -> [Race] {
+        reads += 1
+        return try await base.races(in: range)
+    }
+    func race(id: UUID) async throws -> Race? { try await base.race(id: id) }
+    func upsert(_ races: [Race]) async throws { try await base.upsert(races) }
+    func deleteRace(id: UUID) async throws { try await base.deleteRace(id: id) }
 }

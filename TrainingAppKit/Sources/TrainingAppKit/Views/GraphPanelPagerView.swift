@@ -12,8 +12,10 @@ import TrainingCore
 /// paging gesture underneath `TabView`'s own would only compound that.
 struct GraphPanelPagerView: View {
     let metrics: [FitnessMetrics]
+    let dailyLoadSplit: DailyLoadSplit
     let displayedWeekRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
+    let races: [Race]
     /// Called whenever the page changes, so `WeekView` can remember it across a week change or a
     /// scroll-triggered recycle (see `selectedIndex`'s own doc comment for why this is a one-way
     /// callback rather than a `@Binding`).
@@ -60,15 +62,19 @@ struct GraphPanelPagerView: View {
 
     init(
         metrics: [FitnessMetrics],
+        dailyLoadSplit: DailyLoadSplit,
         displayedWeekRange: ClosedRange<Date>,
         heartRateHistogram: HeartRateHistogram,
+        races: [Race],
         initialSelectedIndex: Int,
         onSelectedIndexChange: @escaping (Int) -> Void,
         onTapPage: @escaping (GraphPanelPage) -> Void
     ) {
         self.metrics = metrics
+        self.dailyLoadSplit = dailyLoadSplit
         self.displayedWeekRange = displayedWeekRange
         self.heartRateHistogram = heartRateHistogram
+        self.races = races
         self.onSelectedIndexChange = onSelectedIndexChange
         self.onTapPage = onTapPage
         _selectedIndex = State(initialValue: initialSelectedIndex)
@@ -79,13 +85,16 @@ struct GraphPanelPagerView: View {
             GeometryReader { geometry in
                 let pageWidth = geometry.size.width
                 HStack(spacing: 0) {
-                    DailyLoadChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
+                    DailyLoadChartView(
+                        actualLoads: dailyLoadSplit.actual, plannedLoads: dailyLoadSplit.planned,
+                        metrics: metrics, displayedWeekRange: displayedWeekRange, races: races
+                    )
                         .frame(width: pageWidth)
                         // Every page's content actually exists in the layout simultaneously (just
                         // offset out of the clipped, visible area) -- without this, VoiceOver's
                         // element list would include every page's chart, not just the visible one.
                         .accessibilityHidden(selectedIndex != 0)
-                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
+                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange, races: races)
                         .frame(width: pageWidth)
                         .accessibilityHidden(selectedIndex != 1)
                     HeartRateHistogramChartView(histogram: heartRateHistogram)
@@ -176,8 +185,10 @@ struct GraphPanelPagerView: View {
 /// were never interactive in the first place sidesteps the question entirely.
 struct GraphPanelStaticPreview: View {
     let metrics: [FitnessMetrics]
+    let dailyLoadSplit: DailyLoadSplit
     let displayedWeekRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
+    let races: [Race]
     let selectedIndex: Int
 
     var body: some View {
@@ -185,9 +196,12 @@ struct GraphPanelStaticPreview: View {
             Group {
                 switch selectedIndex {
                 case 0:
-                    DailyLoadChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
+                    DailyLoadChartView(
+                        actualLoads: dailyLoadSplit.actual, plannedLoads: dailyLoadSplit.planned,
+                        metrics: metrics, displayedWeekRange: displayedWeekRange, races: races
+                    )
                 case 1:
-                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange)
+                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange, races: races)
                 default:
                     HeartRateHistogramChartView(histogram: heartRateHistogram)
                 }

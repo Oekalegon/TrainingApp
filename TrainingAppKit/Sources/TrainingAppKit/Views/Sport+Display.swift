@@ -5,8 +5,6 @@ extension Sport {
     var displayName: String {
         switch self {
         case .running: "Running"
-        case .indoorRunning: "Indoor Running"
-        case .outdoorRunning: "Outdoor Running"
         case .cycling: "Cycling"
         case .swimming: "Swimming"
         case .strength: "Strength"
@@ -18,10 +16,33 @@ extension Sport {
         }
     }
 
+    /// The sports an athlete can choose between, e.g. for their main sport or a performed activity.
+    static let selectable: [Sport] = [
+        .running, .cycling, .swimming, .strength, .coreStrengthTraining, .walking, .rowing, .hiking
+    ]
+
+    /// The label with the venue when there is one, e.g. "Running · Trail".
+    func displayName(venue: Venue?) -> String {
+        guard let venue else { return displayName }
+        return "\(displayName) · \(venue.displayName)"
+    }
+
     /// An SF Symbol standing in for this sport in the week view's day list.
-    var symbolName: String {
-        switch self {
-        case .running, .indoorRunning, .outdoorRunning: "figure.run"
+    var symbolName: String { symbolName(venue: nil) }
+
+    /// The symbol for this sport done at `venue`: a treadmill, a track or an indoor bike where
+    /// there is one, else ``symbolName``'s.
+    func symbolName(venue: Venue?) -> String {
+        switch (self, venue) {
+        case (.running, .indoor(.treadmill)?): return "figure.run.treadmill"
+        case (.running, .indoor(.track)?), (.running, .outdoor(.track)?): return "figure.track.and.field"
+        case (.cycling, .indoor?): return "figure.indoor.cycle"
+        case (.walking, .indoor(.treadmill)?): return "figure.walk.treadmill"
+        case (.rowing, .indoor?): return "figure.indoor.rowing"
+        default: break
+        }
+        return switch self {
+        case .running: "figure.run"
         case .cycling: "figure.outdoor.cycle"
         case .swimming: "figure.pool.swim"
         case .strength: "figure.strengthtraining.traditional"
@@ -38,7 +59,7 @@ extension Sport {
     /// `.strength`/`.other` have no reliable distance, so they show just the headline line.
     var isEndurance: Bool {
         switch self {
-        case .running, .indoorRunning, .outdoorRunning, .cycling, .swimming, .walking, .rowing, .hiking: true
+        case .running, .cycling, .swimming, .walking, .rowing, .hiking: true
         case .strength, .coreStrengthTraining, .other: false
         }
     }
@@ -51,8 +72,68 @@ extension Sport {
     /// noise rather than a useful signal.
     var supportsLowIntensityTrainingSplit: Bool {
         switch self {
-        case .running, .indoorRunning, .outdoorRunning, .cycling: true
+        case .running, .cycling: true
         case .swimming, .strength, .coreStrengthTraining, .walking, .rowing, .hiking, .other: false
+        }
+    }
+}
+
+extension Venue {
+    /// A short, human-readable label.
+    var displayName: String {
+        switch self {
+        case .indoor(nil): "Indoors"
+        case .indoor(.treadmill): "Treadmill"
+        case .indoor(.track): "Indoor Track"
+        case .outdoor(nil): "Outdoors"
+        case .outdoor(.road): "Road"
+        case .outdoor(.track): "Outdoor Track"
+        case .outdoor(.trail): "Trail"
+        case .outdoor(.offtrail): "Off-Trail"
+        }
+    }
+}
+
+extension WorkoutPurpose {
+    /// A short, human-readable label.
+    var displayName: String {
+        switch self {
+        case .general: "Training"
+        case .maxHRTest: "Max Heart Rate Test"
+        case .lthrTest: "Lactate Threshold Test"
+        }
+    }
+
+    /// What a field test measures, shown under the picker.
+    var explanation: String {
+        switch self {
+        case .general: ""
+        case .maxHRTest: "Done to measure your maximum heart rate, read from the highest rate reached."
+        case .lthrTest: "Done to measure your lactate threshold heart rate, read from the last 20 minutes of the effort."
+        }
+    }
+}
+
+extension FieldTestError {
+    /// Why the test couldn't be measured and what to do about it, for the activity's detail sheet
+    /// (MVP2-157).
+    var explanation: String {
+        switch self {
+        case .noHeartRate:
+            "No usable heart rate was recorded, so the test couldn't be measured. "
+                + "Check that the watch sits snugly on your wrist next time."
+        case .effortNotLocated:
+            "The test's effort couldn't be found in this activity. "
+                + "Start the test from its scheduled workout on your Watch, so the steps are recorded."
+        case .effortTooShort(let recordedSeconds):
+            "The effort lasted \(Int((recordedSeconds / 60).rounded())) minutes, much shorter than planned, "
+                + "so its last 20 minutes aren't the test's. Repeat the test to measure it."
+        case .insufficientHeartRate:
+            "Heart rate was recorded for too little of the effort's last 20 minutes to average. "
+                + "Check that the watch sits snugly on your wrist next time."
+        case .implausibleValue(let bpm):
+            "The measured \(Int(bpm)) bpm isn't above your resting heart rate, so it can't be right. "
+                + "Check the sensor, then repeat the test."
         }
     }
 }

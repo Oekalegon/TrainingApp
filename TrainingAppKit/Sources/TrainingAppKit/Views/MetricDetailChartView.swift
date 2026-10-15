@@ -3,12 +3,14 @@ import SwiftUI
 import TrainingCore
 
 /// The Load (TRIMP) metric detail screen's own daily-load chart (MVP1-45/MVP1-60) — the same
-/// 3-week Daily Load data `DailyLoadChartView` plots (so paging between the two agrees), but with
-/// `subject` highlighted in full `.primary` against every other day muted to `.secondary`, rather
-/// than only distinguishing past (actual) from future (projected) bars. A still-projected day
-/// still renders from its own estimated TRIMP rather than a blank bar, so a `.day` subject falling
-/// on a still-planned day (or a `.week` subject spanning one) isn't left looking empty.
+/// planned-vs-performed bars `DailyLoadChartView` plots (MVP2-31, so paging between the two
+/// agrees), but with `subject` highlighted at full opacity against every other day dimmed, rather
+/// than only distinguishing planned from performed. A still-planned day still renders from its own
+/// estimated TRIMP rather than a blank bar, so a `.day` subject falling on one (or a `.week`
+/// subject spanning one) isn't left looking empty.
 struct LoadDetailChartView: View {
+    let actualLoads: [DailyLoad]
+    let plannedLoads: [DailyLoad]
     let metrics: [FitnessMetrics]
     /// The x-axis window to show -- `MetricDetailView`'s own `visibleRange`, which pans as the
     /// athlete drags across the chart (MVP1-45 swipe-to-scrub). `metrics` itself is a wider buffer
@@ -18,14 +20,16 @@ struct LoadDetailChartView: View {
     /// Which period is picked -- drives where `ChartAxisMarks` puts gridlines (week-start for
     /// Week/Month, month-start for 3M/6M, a fixed quarterly set of months for Year).
     let period: ChartPeriod
-    /// A single day's own bar highlighted (MVP1-45), or every bar inside a whole week highlighted
+    /// A single day's own bars highlighted (MVP1-45), or every bar inside a whole week highlighted
     /// (MVP1-60) — see `MetricDetailSubject`'s own doc comment.
     let subject: MetricDetailSubject
     let calendar: Calendar
+    /// The races in the loaded buffer, one per day (`WeekViewModel.chartRaces(in:)`), marked like the
+    /// main graphs mark them (MVP2-104); those outside `visibleRange` are skipped.
+    let races: [Race]
 
-    private var loads: [DailyLoad] {
-        DailyLoad.aggregating(metrics)
-    }
+    private static let actualBarWidth: MarkDimension = .ratio(0.45)
+    private static let dimmedOpacity = 0.4
 
     private var dayDomain: ClosedRange<Date> {
         let oneDay: TimeInterval = 24 * 60 * 60
@@ -39,11 +43,28 @@ struct LoadDetailChartView: View {
         }
     }
 
+    private func opacity(for day: Date) -> Double {
+        isHighlighted(day) ? 1 : Self.dimmedOpacity
+    }
+
     var body: some View {
         Chart {
-            ForEach(loads, id: \.day) { point in
-                BarMark(x: .value("Day", point.day, unit: .day), y: .value("TRIMP", point.load))
-                    .foregroundStyle(isHighlighted(point.day) ? Color.primary : Color.secondary.opacity(0.4))
+            // Same unstacked-overlay treatment as `DailyLoadChartView` (planned full width and
+            // muted, actual narrower and layered on top), with `subject`'s own day/week additionally
+            // dimmed down or not -- two independent dimensions on the same two bars, not a third one.
+            ForEach(plannedLoads, id: \.day) { point in
+                BarMark(
+                    x: .value("Day", point.day, unit: .day), y: .value("Planned TRIMP", point.load),
+                    stacking: .unstacked
+                )
+                .foregroundStyle(Color.secondary.opacity(opacity(for: point.day)))
+            }
+            ForEach(actualLoads, id: \.day) { point in
+                BarMark(
+                    x: .value("Day", point.day, unit: .day), y: .value("Performed TRIMP", point.load),
+                    width: Self.actualBarWidth, stacking: .unstacked
+                )
+                .foregroundStyle(Color.primary.opacity(opacity(for: point.day)))
             }
         }
         .chartXScale(domain: dayDomain)
@@ -53,6 +74,16 @@ struct LoadDetailChartView: View {
                 AxisTick()
                 if let date = value.as(Date.self) {
                     AxisValueLabel(ChartAxisMarks.labelText(for: date, period: period, calendar: calendar))
+                }
+            }
+        }
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                if let plotFrame = proxy.plotFrame {
+                    RaceChartMarkers(
+                        races: races, proxy: proxy, plotArea: geometry[plotFrame],
+                        dayOffset: RaceChartMarkers.halfDay
+                    )
                 }
             }
         }
@@ -97,6 +128,9 @@ struct FitnessTrendDetailChartView: View {
     /// actually in reads as more saturated than the rest. `nil` for Fitness/Fatigue (`zoneBandMarks`
     /// draws nothing for either) and for Form before `subjectValue` has loaded.
     let highlightedZone: TSBZone?
+    /// The races in the loaded buffer, one per day (`WeekViewModel.chartRaces(in:)`), marked like the
+    /// main graphs mark them (MVP2-104); those outside `visibleRange` are skipped.
+    let races: [Race]
     let today: Date = .now
 
     private static let emphasizedLineWidth: CGFloat = 3
@@ -274,13 +308,14 @@ struct FitnessTrendDetailChartView: View {
             plotContent.clipped()
         }
         .chartOverlay { proxy in
-            // The zone names, next to the boundary axis labels -- matching `FitnessChartView`'s
-            // own Form chart, so the same zone reads the same way in both places. Only for Form:
-            // Fitness/Fatigue show no zone bands, so there's nothing to name here for them.
-            if emphasized == .form {
-                GeometryReader { geometry in
-                    if let plotFrame = proxy.plotFrame {
-                        let plotArea = geometry[plotFrame]
+            GeometryReader { geometry in
+                if let plotFrame = proxy.plotFrame {
+                    let plotArea = geometry[plotFrame]
+                    RaceChartMarkers(races: races, proxy: proxy, plotArea: plotArea)
+                    // The zone names, next to the boundary axis labels -- matching `FitnessChartView`'s
+                    // own Form chart, so the same zone reads the same way in both places. Only for
+                    // Form: Fitness/Fatigue show no zone bands, so there's nothing to name here.
+                    if emphasized == .form {
                         ForEach(TSBZoneBand.all, id: \.label) { band in
                             let midValue = (band.lowerBound + band.upperBound) / 2
                             if let y = proxy.position(forY: midValue) {

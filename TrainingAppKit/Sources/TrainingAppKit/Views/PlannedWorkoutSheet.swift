@@ -1,0 +1,288 @@
+import SwiftUI
+import TrainingCore
+
+/// A short label for a guardrail finding's ``PlanRule`` — `TrainingCore` has no opinion on display
+/// strings, same reasoning as `Sport+Display.swift`.
+private extension PlanRule {
+    var displayName: String {
+        switch self {
+        case .ctlRamp: "Fitness ramping up fast"
+        case .atlToCTLRatio: "Fatigue-to-fitness ratio"
+        case .tsbBand: "Form (TSB) out of range"
+        case .monotony: "Monotony"
+        case .strain: "Strain"
+        case .raceDayTSB: "Form on race day"
+        case .recoveryMicro: "Recovery week load"
+        case .buildProgression: "Build week progression"
+        case .mesoProgress: "Fitness gain this block"
+        case .taperShape: "Taper shape"
+        case .consecutiveLoad: "Consecutive load without recovery"
+        }
+    }
+}
+
+private extension Severity {
+    var tintColor: Color {
+        switch self {
+        case .info: .secondary
+        case .warning: .orange
+        case .risk: .red
+        }
+    }
+}
+
+/// The "Create Planned Workout" sheet (MVP2-15, design doc): pick a `WorkoutTemplate`, adjust its
+/// parameters with a live expected-load preview, see non-blocking guardrail warnings for the
+/// hypothetical addition, then save. Own `NavigationStack`/no explicit close button, matching
+/// `WeekView`'s `.sheet(item: $selectedActivity)` convention.
+struct PlannedWorkoutSheet: View {
+    @Bindable var viewModel: PlannedWorkoutSheetViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var isShowingSaveError = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                PlannedWorkoutFormFields(viewModel: viewModel)
+            }
+            .navigationTitle("Planned Workout")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                // Symbol-only, matching Apple Health's own sheet toolbars, rather than "Cancel"/
+                // "Save" text buttons.
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task {
+                            if await viewModel.save() {
+                                dismiss()
+                            } else {
+                                isShowingSaveError = true
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "checkmark")
+                    }
+                    .accessibilityLabel("Save")
+                    .disabled(!viewModel.canSave || viewModel.isSaving)
+                }
+            }
+            .alert("Couldn't Save Workout", isPresented: $isShowingSaveError, presenting: viewModel.saveError) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { message in
+                Text(message)
+            }
+        }
+    }
+}
+
+/// The template/parameters/expected-load/guardrail `Form` sections `PlannedWorkoutSheet` shows —
+/// pulled out so `AddEntrySheet` (MVP2-22) can embed the same fields below its planned-workout/
+/// race type picker, inside its own `Form`/toolbar/save flow, without duplicating this content.
+/// `PlannedWorkoutSheet` itself (used standalone for MVP2-39's edit mode, which has no type
+/// picker) still owns the `Form`, title, toolbar, and save-error alert around this.
+struct PlannedWorkoutFormFields: View {
+    @Bindable var viewModel: PlannedWorkoutSheetViewModel
+
+    fileprivate static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
+    fileprivate static let dayRangeFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
+
+    /// The venue (MVP2-151): a picker when the template leaves it open, a read-only row when it fixes
+    /// it, nothing for a sport without venues. The sport is the template's, shown read-only.
+    @ViewBuilder
+    private var venueRow: some View {
+        if let sport = viewModel.sport {
+            LabeledContent("Sport", value: sport.displayName)
+        }
+        if viewModel.offersVenueChoice {
+            Picker("Venue", selection: $viewModel.venue) {
+                if viewModel.venue == nil { Text("Not Set").tag(nil as Venue?) }
+                ForEach(viewModel.venueOptions, id: \.self) { venue in
+                    Text(venue.displayName).tag(venue as Venue?)
+                }
+            }
+        } else if let venue = viewModel.venue {
+            LabeledContent("Venue", value: venue.displayName)
+        }
+    }
+
+    var body: some View {
+        // "Workout" in both modes: the section holds Name/Date (and, in create mode, the
+        // template picker) throughout -- it isn't just about picking a template, which "Template"
+        // used to say back when that field was the whole section (MVP2-15), before Name/Date
+        // joined it.
+        Section("Workout") {
+            if viewModel.isEditing {
+                // Editable (MVP2-110): saving a new name makes a new workout rather than renaming
+                // one that other plans may share (MVP2-39).
+                if viewModel.editedWorkoutName != nil {
+                    TextField("Name", text: $viewModel.workoutName)
+                } else {
+                    LabeledContent("Name", value: "Planned workout")
+                }
+                if viewModel.editedWorkoutName != nil, !viewModel.canEditParameters {
+                    Text(viewModel.templateIsMissing
+                        ? "This workout's parameters can't be changed — the template it was made from no longer exists."
+                        : "This workout's parameters can't be changed — it wasn't created from a template.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Picker("Template", selection: $viewModel.selectedTemplate) {
+                    Text("Select a template").tag(nil as WorkoutTemplate?)
+                    ForEach(viewModel.templates) { template in
+                        Text(template.name).tag(template as WorkoutTemplate?)
+                    }
+                }
+                TextField("Name", text: $viewModel.workoutName)
+            }
+            venueRow
+            // Lower-bounded so this can't be used to route around the same past-date rule
+            // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
+            // sheet opened for today could still be scrolled back to yesterday from here.
+            DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate()..., displayedComponents: .date)
+        }
+
+        if viewModel.isEditing, !viewModel.editableParameters.isEmpty {
+            Section("Parameters") {
+                ForEach(viewModel.editableParameters) { parameter in
+                    ParameterRow(
+                        parameter: parameter,
+                        value: Binding(
+                            get: { viewModel.parameterValues[parameter.key] ?? parameter.defaultValue },
+                            set: { viewModel.setParameterValue($0, forKey: parameter.key) }
+                        )
+                    )
+                }
+            }
+        }
+
+        if viewModel.isEditing {
+            Section("Expected Load") {
+                if let expectedLoad = viewModel.expectedLoad {
+                    HStack {
+                        Image(systemName: TrainingMetricKind.load.icon)
+                        // "~" unless the athlete set the load (MVP2-8).
+                        let text = EstimateMarker.text(
+                            "\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP", isEstimated: viewModel.isExpectedLoadEstimated
+                        )
+                        Text(text)
+                            .accessibilityLabel(EstimateMarker.spokenForm(of: text))
+                    }
+                }
+                Toggle("Override estimate", isOn: Binding(
+                    get: { viewModel.loadOverride != nil },
+                    set: { viewModel.loadOverride = $0 ? (viewModel.expectedLoad?.value.rounded() ?? 0) : nil }
+                ))
+                if viewModel.loadOverride != nil {
+                    TextField("TRIMP", value: $viewModel.loadOverride, format: .number.precision(.fractionLength(0)))
+                        #if os(iOS)
+                        .keyboardType(.numberPad)
+                        #endif
+                }
+            }
+        }
+
+        if let selectedTemplate = viewModel.selectedTemplate {
+            if !selectedTemplate.parameters.isEmpty {
+                Section("Parameters") {
+                    ForEach(selectedTemplate.parameters) { parameter in
+                        ParameterRow(
+                            parameter: parameter,
+                            value: Binding(
+                                get: { viewModel.parameterValues[parameter.key] ?? parameter.defaultValue },
+                                set: { viewModel.setParameterValue($0, forKey: parameter.key) }
+                            )
+                        )
+                    }
+                }
+            }
+
+            Section("Expected Load") {
+                if let expectedLoad = viewModel.expectedLoad {
+                    HStack {
+                        Image(systemName: TrainingMetricKind.load.icon)
+                        // "~" unless the athlete set the load (MVP2-8).
+                        let text = EstimateMarker.text(
+                            "\(expectedLoad.value.formatted(Self.loadFormat)) TRIMP", isEstimated: viewModel.isExpectedLoadEstimated
+                        )
+                        Text(text)
+                            .accessibilityLabel(EstimateMarker.spokenForm(of: text))
+                    }
+                } else {
+                    Text("Not available")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+
+        // Shown in both modes (in edit mode there's no selected template, only the edited
+        // plan's own projection).
+        if viewModel.isEditing || viewModel.selectedTemplate != nil {
+            let guardrailSummaries = viewModel.guardrailSummaries
+            if !guardrailSummaries.isEmpty {
+                Section("Guardrail Warnings") {
+                    ForEach(guardrailSummaries) { summary in
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(summary.rule.displayName)
+                                if summary.dayCount > 1 {
+                                    Text("\(summary.firstDay.formatted(Self.dayRangeFormat)) – \(summary.lastDay.formatted(Self.dayRangeFormat)) · \(summary.dayCount) days")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text(summary.firstDay.formatted(Self.dayRangeFormat))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(summary.severity.tintColor)
+                    }
+                }
+            }
+
+            if let guardrailDiagnostic = viewModel.guardrailDiagnostic {
+                Section {
+                    DisclosureGroup("Projected CTL/ATL/TSB/ratio by day") {
+                        Text(guardrailDiagnostic)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// One template parameter's label plus a slider bound to its current value, ranged/formatted per
+/// `ParameterUnit`.
+private struct ParameterRow: View {
+    let parameter: WorkoutTemplateParameter
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(parameter.name)
+                Spacer()
+                Text(parameter.formatted(value))
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: $value, in: parameter.sliderRange, step: parameter.sliderStep)
+                .accessibilityLabel(parameter.name)
+                .accessibilityValue(parameter.formatted(value))
+        }
+    }
+}

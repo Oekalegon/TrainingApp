@@ -1,0 +1,256 @@
+import SwiftUI
+import TrainingCore
+
+/// VoiceOver/tooltip text for `ActivityCard`'s overlap-warning badge (MVP1-63) — mirrors what
+/// `ActivityOverlapChecker`'s own doc comments say to do about each case, condensed to a phrase
+/// short enough to read as one badge's label rather than a full sentence.
+extension OverlapRecommendation {
+    var warningLabel: String {
+        switch self {
+        case .duplicate: "Possible duplicate activity"
+        case .merge: "Overlaps another activity with different data"
+        case .conflict: "Overlaps another activity"
+        case .join: "May be one session split in two"
+        case .possibleMultisport: "Close to another activity"
+        }
+    }
+}
+
+/// A completed activity, rendered as a filled card in the timeline between weekday rows (design
+/// doc §2.1, MVP1-41) rather than a plain list row — tapping it presents `ActivityDetailView` in a
+/// sheet (see `WeekView`'s `.sheet(item: $selectedActivity)`), so this is a plain `Button` rather
+/// than a `NavigationLink(value:)`/`navigationDestination` push.
+///
+/// Headline line: icon, sport name, and — trailing-aligned, same font as the name but secondary —
+/// a bolt icon plus the activity's Load (TRIMP), the single most important number here. Second
+/// line (endurance sports only): duration, distance, and climb (if over 50m, marked with a
+/// mountain icon), smaller and secondary, indented to align with the name above it rather than the
+/// icon. The time of day isn't shown in the card at all — `DayActivitiesSection` shows it on the
+/// timeline instead, aligned with this headline line.
+struct ActivityCard: View {
+    let activity: Activity
+    /// Everything the card shows beyond the activity itself — TRIMP, overlap badge, intensity tint and
+    /// the linked plan's expected values — from `WeekViewModel.activityCardContent(for:)`.
+    let content: WeekViewModel.ActivityCardContent
+    let onSelect: () -> Void
+
+    /// The headline line omits the number entirely when this is `nil` (couldn't be computed) or
+    /// rounds to `0` (nothing worth showing).
+    private var trainingLoad: Double? { content.trainingLoad }
+    /// `nil` when the activity isn't part of any overlap worth flagging, in which case no badge shows.
+    private var overlapWarning: OverlapRecommendation? { content.overlapWarning }
+    /// Shown as a small coloured circle leading the headline row (MVP2-51); `nil` leaves that slot
+    /// empty.
+    private var intensity: IntensityAssessment? { content.intensity }
+    /// The linked plan's expected values: its TRIMP follows the actual TRIMP after a slash, and its
+    /// duration and distance sit in a tertiary colour directly below the actual ones.
+    private var planned: WeekViewModel.LinkedPlanExpectation? { content.planned }
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: TimelineCardStyle.iconSpacing) {
+                    // Reserves `intensityMarkerWidth` whether or not `intensity` is set, so the
+                    // sport icon lands at the same x on every card.
+                    Group {
+                        if let intensity {
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(intensity.tint)
+                                // Decorative — `accessibilityValue(intensity?.accessibilityDescription)`
+                                // below already says what it means; without this, the symbol's own
+                                // default label would add a redundant "circle, filled" to the button.
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .frame(width: TimelineCardStyle.intensityMarkerWidth)
+                    Image(systemName: activity.sport.symbolName(venue: activity.venue))
+                        .foregroundStyle(.primary)
+                        .frame(width: TimelineCardStyle.iconWidth)
+                    Text(content.title)
+                        .bold()
+                        .foregroundStyle(.primary)
+                    if let overlapWarning {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel(overlapWarning.warningLabel)
+                    }
+                    Spacer()
+                    // Rounds first, then checks that against zero — `loadFormat` itself rounds to
+                    // the nearest whole number, so a raw value like 0.3 is `> 0` but would still
+                    // display as "0" if the raw (unrounded) value were what got checked here.
+                    if actualLoad != nil || plannedLoad != nil {
+                        HStack(spacing: 2) {
+                            Image(systemName: TrainingMetricKind.load.icon)
+                            loadText
+                        }
+                        .foregroundStyle(.secondary)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(loadAccessibilityLabel)
+                    }
+                }
+                .font(.subheadline)
+                if activity.sport.isEndurance {
+                    secondLineText
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, TimelineCardStyle.secondLineIndent)
+                        // Spelled out, so the clear marker slots aren't read as "tilde".
+                        .accessibilityLabel(secondLineAccessibilityLabel)
+                    if let plannedExtentText {
+                        plannedExtentText
+                            .font(.caption.monospacedDigit())
+                            .padding(.leading, TimelineCardStyle.secondLineIndent)
+                            .accessibilityLabel(plannedExtentAccessibilityLabel)
+                    }
+                }
+            }
+            .padding(TimelineCardStyle.contentPadding)
+            .background(TimelineCardStyle.background)
+            .clipShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: TimelineCardStyle.cornerRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        // The marker is visual only; say what it means.
+        // The sport's icon is decorative, so a plan's name as the title (e.g. "Tempo") needs the sport
+        // said too (MVP2-152).
+        .accessibilityValue(
+            [content.title == activity.sport.displayName && activity.venue == nil
+                ? nil : activity.sport.displayName(venue: activity.venue),
+             intensity?.accessibilityDescription]
+                .compactMap { $0 }.joined(separator: ", ")
+        )
+    }
+
+    /// "1:30:00   8 km   🏔120 m" — duration always shown as H:MM:SS, distance/climb omitted
+    /// entirely (not shown as "0 km"/"0 m") when the source doesn't report one. No separator
+    /// character between parts, just extra spacing (rather than a single plain space) to visually
+    /// group each part's own text/icon without implying they're one continuous phrase; climb alone
+    /// also gets a leading mountain icon (via `Text(Image(...))` concatenation) to set it apart
+    /// from the plain duration/distance numbers next to it.
+    private static let partSpacing = TimelineCardStyle.partSpacing
+
+    private var durationString: String {
+        TimelineCardStyle.durationText(activity.duration)
+    }
+
+    /// The actual TRIMP, or `nil` when it couldn't be scored or rounds to nothing — the same rule as
+    /// the headline's original number.
+    private var actualLoad: Double? {
+        guard let trainingLoad, trainingLoad.rounded() > 0 else { return nil }
+        return trainingLoad
+    }
+
+    /// The linked plan's expected TRIMP, under the same rounds-to-nothing rule.
+    private var plannedLoad: Double? {
+        guard let load = planned?.load, load.rounded() > 0 else { return nil }
+        return load
+    }
+
+    /// "85 / ~90": the actual TRIMP, then the expected one after a slash in a tertiary colour (a dash
+    /// stands in for an actual that couldn't be scored). Either carries a "~" when it's an estimate
+    /// (MVP2-8): the actual one when scored from perceived effort, the expected one unless the
+    /// athlete set it. Each piece carries its own monospaced digits so the pair reads as one figure.
+    private var loadText: Text {
+        let format = TimelineCardStyle.loadFormat
+        let actualString = actualLoad.map {
+            EstimateMarker.text($0.formatted(format), isEstimated: content.isTrainingLoadEstimated)
+        }
+        let actual = Text(actualString ?? "–").monospacedDigit()
+        guard let plannedLoad else { return actual }
+        let plannedString = EstimateMarker.text(plannedLoad.formatted(format), isEstimated: planned?.isLoadEstimated ?? false)
+        // Interpolating styled `Text`s rather than `+`, which is deprecated on the iOS 26 SDK.
+        let expected = Text(" / \(plannedString)").monospacedDigit().foregroundStyle(.tertiary)
+        return Text("\(actual)\(expected)")
+    }
+
+    private var loadAccessibilityLabel: String {
+        let format = TimelineCardStyle.loadFormat
+        var label = actualLoad.map {
+            "Load " + EstimateMarker.spoken($0.formatted(format), isEstimated: content.isTrainingLoadEstimated)
+        } ?? "Load not scored"
+        if let plannedLoad {
+            label += ", planned " + EstimateMarker.spoken(plannedLoad.formatted(format), isEstimated: planned?.isLoadEstimated ?? false)
+        }
+        return label
+    }
+
+    /// Whether the card has the linked plan's line under its own, so both lines reserve a marker
+    /// slot in front of each column (see ``markerSlot(isEstimated:)``).
+    private var hasPlannedLine: Bool {
+        planned?.duration != nil || planned?.distanceMeters != nil
+    }
+
+    /// The "~" in front of a column on the two lines a linked card compares (MVP2-8): visible for an
+    /// estimate, clear otherwise. A "~" isn't a digit, so `.monospacedDigit()` doesn't make it a
+    /// digit's width; giving every column on both lines the same slot keeps each planned value
+    /// directly under the actual one it compares with, whichever of them is estimated.
+    private func markerSlot(isEstimated: Bool) -> Text {
+        let marker = Text(EstimateMarker.symbol)
+        return isEstimated ? marker : marker.foregroundStyle(.clear)
+    }
+
+    /// The linked plan's expected duration and distance — both, whichever the workout is defined
+    /// by (the other is projected from the athlete's pace, and carries a "~", MVP2-8) — in the same
+    /// "duration   distance" layout as `secondLineText`, so each lands directly under the actual
+    /// value it compares with. Monospaced digits keep a duration's width equal to the actual
+    /// duration's, and the marker slots keep the "~" from shifting either column.
+    private var plannedExtentText: Text? {
+        let duration = planned?.duration.map {
+            Text("\(markerSlot(isEstimated: planned?.isDurationEstimated ?? false))\(TimelineCardStyle.durationText($0))")
+        }
+        let distance = planned?.distanceMeters.map {
+            Text("\(markerSlot(isEstimated: planned?.isDistanceEstimated ?? false))\(TimelineCardStyle.distanceText(meters: $0))")
+        }
+        switch (duration, distance) {
+        case (let duration?, let distance?):
+            return Text("\(duration)\(Self.partSpacing)\(distance)").foregroundStyle(.tertiary)
+        case (let duration?, nil):
+            return duration.foregroundStyle(.tertiary)
+        case (nil, let distance?):
+            return distance.foregroundStyle(.tertiary)
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    private var secondLineAccessibilityLabel: String {
+        var parts = [TimelineCardStyle.spokenDuration(activity.duration)]
+        if let distanceMeters = activity.distanceMeters {
+            parts.append(TimelineCardStyle.spokenDistance(meters: distanceMeters))
+        }
+        if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
+            parts.append("climb " + TimelineCardStyle.spokenDistance(meters: gainMeters))
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    private var plannedExtentAccessibilityLabel: String {
+        var parts: [String] = []
+        if let duration = planned?.duration {
+            let spoken = TimelineCardStyle.spokenDuration(duration)
+            parts.append("duration " + EstimateMarker.spoken(spoken, isEstimated: planned?.isDurationEstimated ?? false))
+        }
+        if let distance = planned?.distanceMeters {
+            let spoken = TimelineCardStyle.spokenDistance(meters: distance)
+            parts.append("distance " + EstimateMarker.spoken(spoken, isEstimated: planned?.isDistanceEstimated ?? false))
+        }
+        return "Planned " + parts.joined(separator: ", ")
+    }
+
+    /// The activity's own duration, distance and climb. Under a linked plan's line, the duration
+    /// and distance each get a clear marker slot, matching that line's (see
+    /// ``markerSlot(isEstimated:)``).
+    private var secondLineText: Text {
+        let slot = hasPlannedLine ? markerSlot(isEstimated: false) : Text("")
+        var text = Text("\(slot)\(durationString)")
+        if let distanceMeters = activity.distanceMeters {
+            let distanceString = TimelineCardStyle.distanceText(meters: distanceMeters)
+            text = Text("\(text)\(Self.partSpacing)\(slot)\(distanceString)")
+        }
+        if let gainMeters = activity.elevation?.gainMeters, gainMeters > 50 {
+            let gainString = TimelineCardStyle.distanceText(meters: gainMeters)
+            text = Text("\(text)\(Self.partSpacing)\(Image(systemName: "mountain.2")) \(gainString)")
+        }
+        return text
+    }
+}

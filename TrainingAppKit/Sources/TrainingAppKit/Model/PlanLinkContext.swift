@@ -1,0 +1,37 @@
+import Foundation
+import TrainingCore
+
+/// What the activity detail sheet needs to show and change an activity's link to a planned workout
+/// (MVP2-42) — see ``WeekViewModel/planLinkContext(for:)``.
+public struct PlanLinkContext: Equatable {
+    /// One planned workout the activity is, or could be, linked to.
+    public struct PlanOption: Identifiable, Equatable {
+        /// The plan's id — what ``WeekViewModel/linkActivity(_:toPlan:asOf:)`` takes.
+        public let id: UUID
+        /// The workout's name, or the sport's when the workout has none or is no longer in the library.
+        public let title: String
+        /// The workout's headline figure (duration or distance), if known.
+        public let extent: WeekViewModel.PlannedCardSummary.Extent?
+        /// Whether ``extent`` is forecast from the athlete's paces, shown with a "~" (MVP2-8).
+        public let isExtentEstimated: Bool
+    }
+
+    /// The plan this activity currently completes, if any.
+    public let linkedPlan: PlanOption?
+    /// The linked plan's workout as step cards (MVP2-144); empty without a linked plan or when its
+    /// workout is gone.
+    public var linkedPlanSteps: [WorkoutBlockCard] = []
+    /// Whether ``linkedPlanSteps`` carry what the athlete did in each step (MVP2-146): the activity has
+    /// the steps the Watch recorded and they fit the plan. A repeating block is then one card per
+    /// repetition. `false` shows the plan alone.
+    public var linkedPlanStepsAreRecorded = false
+    /// The stretch after the plan's last step, when the athlete went on past it (MVP2-146); shown as a
+    /// card after the steps. `nil` without recorded steps or without such a stretch.
+    public var linkedPlanAfter: WorkoutAfterPlanCard?
+    /// Whether the automatic match had a close runner-up, so the athlete should confirm or correct it
+    /// (``TrainingModel/planMatchAmbiguities``).
+    public let isAmbiguous: Bool
+    /// The other plans the activity could be linked to: same day, not already completed by another
+    /// activity. Never includes ``linkedPlan``.
+    public let candidates: [PlanOption]
+}

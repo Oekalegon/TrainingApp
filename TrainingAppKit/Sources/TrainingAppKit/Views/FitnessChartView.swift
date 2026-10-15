@@ -13,6 +13,10 @@ struct FitnessChartView: View {
     /// shaded behind the trend line so the 3-week chart stays visually anchored to whichever week
     /// the athlete has scrolled to.
     let displayedWeekRange: ClosedRange<Date>
+    /// The races in the chart's window (one per day, see `WeekViewModel.chartRaces(for:)`), each
+    /// marked with a solid vertical rule and an outlined A/B/C circle at the top of the plot
+    /// (MVP2-104).
+    let races: [Race]
     /// Days after this are projected/estimated rather than actual history (see
     /// `FitnessMetrics.isProjected`), so the Form lines render dashed past this point.
     let today: Date = .now
@@ -149,6 +153,7 @@ struct FitnessChartView: View {
             GeometryReader { geometry in
                 if let plotFrame = proxy.plotFrame {
                     let plotArea = geometry[plotFrame]
+                    RaceChartMarkers(races: races, proxy: proxy, plotArea: plotArea)
                     ForEach(TSBZoneBand.all, id: \.label) { band in
                         let midValue = (band.lowerBound + band.upperBound) / 2
                         if let y = proxy.position(forY: midValue) {

@@ -17,10 +17,50 @@ struct ActivityDetailView: View {
     /// actually run yet. Independent of `onResolveOverlap`: always available, not just when
     /// `viewModel.overlapContext` flags an issue.
     let onDelete: () async -> Void
+    /// Runs `WeekViewModel.joinActivities(_:with:)` with the other piece of a
+    /// ``OverlapRecommendation/join`` pair (MVP1-80). `async` for the same reason as
+    /// `onResolveOverlap`: the sheet closes only once the join has actually happened.
+    /// Returns whether the join happened; the sheet stays open (with a message) when it didn't.
+    let onJoin: (Activity) async -> Bool
+    /// Runs `WeekViewModel.unjoinActivity(_:)` for this (joined) activity (MVP1-80); same
+    /// success/stay-open contract as `onJoin`.
+    let onUnjoin: () async -> Bool
+    /// Loads the pieces this activity was joined from — empty for an ordinary activity — for the
+    /// "Joined from" section (MVP1-80).
+    let loadComponents: () async -> [Activity]
+    /// Runs `WeekViewModel.linkActivity(_:toPlan:)` for the given plan id (MVP2-42) — also used to
+    /// confirm the current match. Same success/stay-open contract as `onJoin`.
+    let onLinkPlan: (UUID) async -> Bool
+    /// Runs `WeekViewModel.unlinkActivity(_:)` (MVP2-42); same contract.
+    let onUnlinkPlan: () async -> Bool
+    /// Runs `WeekViewModel.setActivitySport(_:sport:venue:)` (MVP2-151); returns whether it was saved.
+    let onSetSport: (Sport, Venue?) async -> Bool
     @Environment(\.dismiss) private var dismiss
+    /// The pieces this activity was joined from, loaded once by `.task`; empty for an ordinary one.
+    @State private var components: [Activity] = []
+    /// Set when a join/unjoin was refused, so the sheet stays open and says so rather than
+    /// closing as if it had worked.
+    @State private var joinFailureMessage: String?
+    /// Set when a link/unlink was refused, for the same reason as `joinFailureMessage`.
+    @State private var planLinkFailureMessage: String?
+    /// The recorded step highlighted on the charts after a tap on its card (MVP2-146).
+    @State private var highlightedStepID: Int?
+    /// The sport and venue the pickers show, seeded from the activity and kept after a save, since
+    /// the view model doesn't change under the sheet.
+    @State private var sport: Sport?
+    @State private var venue: Venue?
+    @State private var sportFailureMessage: String?
+    /// Counts the changes made, so a save that finishes after a newer choice doesn't undo it.
+    @State private var sportChangeCount = 0
     /// Whether the "Delete Activity?" confirmation alert (MVP1-65) is presented — a destructive,
     /// irreversible-from-the-UI action, so it's never triggered directly from the bottom button.
     @State private var isShowingDeleteConfirmation = false
+
+    private static func timeFormat(timeZone: TimeZone) -> Date.FormatStyle {
+        var format = Date.FormatStyle.dateTime.hour().minute()
+        format.timeZone = timeZone
+        return format
+    }
 
     private var dateFormat: Date.FormatStyle {
         var format = Date.FormatStyle.dateTime.weekday(.wide).day().month(.wide).hour().minute()
@@ -41,11 +81,95 @@ struct ActivityDetailView: View {
                                 await onResolveOverlap(id)
                                 dismiss()
                             }
+                        },
+                        onJoin: {
+                            Task {
+                                if await onJoin(overlapContext.otherActivity) {
+                                    dismiss()
+                                } else {
+                                    joinFailureMessage = "These activities couldn't be joined."
+                                }
+                            }
                         }
                     )
+                    if let joinFailureMessage {
+                        Text(joinFailureMessage).foregroundStyle(.red)
+                    }
                 }
             }
 
+            if !components.isEmpty {
+                Section {
+                    ForEach(components) { piece in
+                        LabeledContent(
+                            piece.start.formatted(Self.timeFormat(timeZone: viewModel.timeZone)),
+                            value: Duration.seconds(piece.duration).formatted(.time(pattern: .hourMinuteSecond))
+                        )
+                    }
+                    Button("Unjoin Activities") {
+                        Task {
+                            if await onUnjoin() {
+                                dismiss()
+                            } else {
+                                joinFailureMessage = "This activity couldn't be unjoined."
+                            }
+                        }
+                    }
+                    if let joinFailureMessage {
+                        Text(joinFailureMessage).foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("Joined From")
+                } footer: {
+                    Text("This session was recorded in \(components.count) parts and is shown as one activity.")
+                }
+            }
+
+            if let planLinkContext = viewModel.planLinkContext {
+                planLinkSection(planLinkContext)
+            }
+
+            if let message = viewModel.fieldTestFailureMessage {
+                Section {
+                    Label {
+                        Text(message)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                    }
+                } header: {
+                    Text("Field Test")
+                }
+            }
+
+            sportSection
+
+            // The heart rate and pace over time (MVP2-146), with a band for each recorded step, above
+            // the step cards: a tap on a card highlights its span here.
+            if viewModel.chartData.hasHeartRate {
+                Section("Heart Rate Over Time") {
+                    ActivityHeartRateChart(data: viewModel.chartData, highlightedStepID: highlightedStepID)
+                    ActivityStepLegend(steps: viewModel.chartData.steps)
+                }
+            }
+            if viewModel.chartData.hasPace {
+                Section {
+                    ActivityPaceChart(
+                        data: viewModel.chartData, distanceSystem: .deviceDefault, highlightedStepID: highlightedStepID
+                    )
+                } header: {
+                    Text(DistanceSystem.deviceDefault == .metric ? "Pace Over Time (min/km)" : "Pace Over Time (min/mi)")
+                }
+            }
+
+            if let planLinkContext = viewModel.planLinkContext, !planLinkContext.linkedPlanSteps.isEmpty {
+                WorkoutStepCardSection(
+                    blocks: planLinkContext.linkedPlanSteps,
+                    title: planLinkContext.linkedPlanStepsAreRecorded ? "Recorded Steps" : "Planned Steps",
+                    // Only recorded steps have a span to highlight.
+                    selection: planLinkContext.linkedPlanStepsAreRecorded ? $highlightedStepID : nil,
+                    afterPlan: planLinkContext.linkedPlanAfter
+                )
+            }
             Section {
                 LabeledContent("Start", value: viewModel.activity.start.formatted(dateFormat))
                 LabeledContent("Duration", value: durationText)
@@ -56,7 +180,17 @@ struct ActivityDetailView: View {
 
             Section("Load") {
                 if viewModel.summary.load.confidence > 0 {
-                    LabeledContent("Training Load (TRIMP)", value: loadText)
+                    LabeledContent("Training Load (TRIMP)") {
+                        Text(loadText)
+                            .accessibilityLabel(EstimateMarker.spokenForm(of: loadText))
+                    }
+                    // Says what the "~" stands for (MVP2-8): the load comes from how hard the
+                    // athlete said it felt, not from heart rate.
+                    if viewModel.isLoadFromPerceivedEffort {
+                        Text("Estimated from perceived effort rather than heart rate.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 } else {
                     Text("Load could not be computed for this activity.")
                         .foregroundStyle(.secondary)
@@ -117,7 +251,10 @@ struct ActivityDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .navigationTitle(viewModel.activity.sport.displayName)
+        // The planned step cards' spacer rows are one point high (``WorkoutStepListSpacerRow``).
+        .environment(\.defaultMinListRowHeight, 1)
+        .navigationTitle(viewModel.title)
+        .task { components = await loadComponents() }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -136,6 +273,132 @@ struct ActivityDetailView: View {
         }
     }
 
+    /// The "Planned Workout" section (MVP2-42): which plan this activity completed, with the means to
+    /// confirm, change or undo that. Every action dismisses on success, since the sheet's view
+    /// model is a snapshot of the activity as it was when the sheet opened.
+    @ViewBuilder
+    private func planLinkSection(_ context: PlanLinkContext) -> some View {
+        Section {
+            if let linked = context.linkedPlan {
+                LabeledContent("Completes", value: linked.title)
+                if context.isAmbiguous {
+                    Text("Other planned workouts that day fit about as well. Confirm this match or pick another.")
+                        .foregroundStyle(.secondary)
+                    Button("Confirm Match") { changePlanLink { await onLinkPlan(linked.id) } }
+                }
+            }
+            ForEach(context.candidates) { option in
+                Button {
+                    changePlanLink { await onLinkPlan(option.id) }
+                } label: {
+                    let extent = EstimateMarker.text(extentText(option.extent), isEstimated: option.isExtentEstimated)
+                    LabeledContent(context.linkedPlan == nil ? "Link to \(option.title)" : "Switch to \(option.title)") {
+                        Text(extent)
+                            .accessibilityLabel(EstimateMarker.spokenForm(of: extent))
+                    }
+                }
+            }
+            if context.linkedPlan != nil {
+                Button("Unlink from Planned Workout", role: .destructive) {
+                    changePlanLink { await onUnlinkPlan() }
+                }
+            }
+            if let planLinkFailureMessage {
+                Text(planLinkFailureMessage).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Planned Workout")
+        } footer: {
+            if context.linkedPlan == nil {
+                Text("This activity isn't linked to a planned workout. Only plans on the same day can be linked.")
+            }
+        }
+    }
+
+    private var currentSport: Sport { sport ?? viewModel.activity.sport }
+    private var currentVenue: Venue? { sport == nil ? viewModel.activity.venue : venue }
+
+    /// The sport and venue the athlete can correct (MVP2-151), e.g. a treadmill run the Watch
+    /// recorded as outdoors. A linked activity starts with its plan's (TrainingKit).
+    private var sportSection: some View {
+        Section {
+            Picker("Sport", selection: Binding(get: { currentSport }, set: { setSport($0, venue: currentVenue) })) {
+                ForEach(sportOptions, id: \.self) { sport in
+                    Text(sport.displayName).tag(sport)
+                }
+            }
+            if !Venue.choices(for: currentSport).isEmpty {
+                Picker("Venue", selection: Binding(get: { currentVenue }, set: { setSport(currentSport, venue: $0) })) {
+                    Text("Not Set").tag(nil as Venue?)
+                    ForEach(venueOptions, id: \.self) { venue in
+                        Text(venue.displayName).tag(venue as Venue?)
+                    }
+                }
+            }
+            if let sportFailureMessage {
+                Text(sportFailureMessage).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Sport")
+        }
+    }
+
+    /// The selectable sports, plus the activity's own when it's another (e.g. imported from Health).
+    private var sportOptions: [Sport] {
+        Sport.selectable.contains(currentSport) ? Sport.selectable : Sport.selectable + [currentSport]
+    }
+
+    /// The venues for the sport, plus the activity's own when it's not one of them, e.g. a plain
+    /// "outdoors" HealthKit recorded.
+    private var venueOptions: [Venue] {
+        let choices = Venue.choices(for: currentSport)
+        guard let venue = currentVenue, !choices.contains(venue) else { return choices }
+        return [venue] + choices
+    }
+
+    private func setSport(_ newSport: Sport, venue newVenue: Venue?) {
+        // A venue the new sport doesn't have is dropped, but the activity's own is kept while its sport
+        // is unchanged (e.g. a plain "outdoors" from Health).
+        let keepsOwnVenue = newSport == currentSport && newVenue == currentVenue
+        let allowed = newVenue.flatMap { keepsOwnVenue || Venue.choices(for: newSport).contains($0) ? $0 : nil }
+        sportFailureMessage = nil
+        // Shown at once, so the pickers don't sit on the old value until the save is done (and the
+        // list under them reflows); put back if the save fails.
+        let previous = (sport, venue)
+        sport = newSport
+        venue = allowed
+        sportChangeCount += 1
+        let change = sportChangeCount
+        Task {
+            if await !onSetSport(newSport, allowed), change == sportChangeCount {
+                (sport, venue) = previous
+                sportFailureMessage = "The sport couldn't be changed."
+            }
+        }
+    }
+
+    private func changePlanLink(_ action: @escaping () async -> Bool) {
+        planLinkFailureMessage = nil
+        Task {
+            if await action() {
+                dismiss()
+            } else {
+                planLinkFailureMessage = "The planned workout couldn't be changed."
+            }
+        }
+    }
+
+    private func extentText(_ extent: WeekViewModel.PlannedCardSummary.Extent?) -> String {
+        switch extent {
+        case .duration(let seconds):
+            Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+        case .distance(let meters):
+            distanceText(meters)
+        case nil:
+            ""
+        }
+    }
+
     private var durationText: String {
         Duration.seconds(viewModel.summary.movingTime).formatted(.units(allowed: [.hours, .minutes, .seconds]))
     }
@@ -145,7 +408,8 @@ struct ActivityDetailView: View {
     }
 
     private var loadText: String {
-        viewModel.summary.load.value.formatted(.number.precision(.fractionLength(0)))
+        let text = viewModel.summary.load.value.formatted(.number.precision(.fractionLength(0)))
+        return EstimateMarker.text(text, isEstimated: viewModel.isLoadEstimated)
     }
 
     private func zoneText(seconds: TimeInterval, zone: Int) -> String {
@@ -170,7 +434,7 @@ struct ActivityDetailView: View {
 
 /// The "Overlap" section's content in `ActivityDetailView` (MVP1-63) — a plain-language
 /// description of the issue plus resolution buttons, both driven by `context.recommendation`.
-/// Split out from `ActivityDetailView.body` since a `switch` over all four recommendation types
+/// Split out from `ActivityDetailView.body` since a `switch` over all five recommendation types
 /// reads more clearly as its own small view than inline in that `List`.
 private struct OverlapSectionContent: View {
     /// The activity whose own detail sheet this section is inside — as distinct from
@@ -181,6 +445,9 @@ private struct OverlapSectionContent: View {
     /// Called with the id of whichever activity (`thisActivity` or `context.otherActivity`) the
     /// athlete picked to delete.
     let onResolve: (UUID) -> Void
+    /// Called when the athlete accepts a ``OverlapRecommendation/join`` — combines `thisActivity`
+    /// with `context.otherActivity` into one.
+    let onJoin: () -> Void
 
     private static func timeFormat(timeZone: TimeZone) -> Date.FormatStyle {
         var format = Date.FormatStyle.dateTime.hour().minute()
@@ -191,7 +458,7 @@ private struct OverlapSectionContent: View {
     /// "Cycling at 14:32" — names the other side of the pair for the section's description text.
     private var otherActivityDescription: Text {
         let time = Text(context.otherActivity.start, format: Self.timeFormat(timeZone: timeZone))
-        return Text("\(context.otherActivity.sport.displayName) at \(time)")
+        return Text("\(context.otherActivityTitle) at \(time)")
     }
 
     var body: some View {
@@ -215,6 +482,12 @@ private struct OverlapSectionContent: View {
             )
             .foregroundStyle(.secondary)
             resolutionButtons
+        case .join:
+            Text(
+                "This and \(otherActivityDescription) look like one session that was recorded in two parts."
+            )
+            .foregroundStyle(.secondary)
+            Button("Join into One Activity", action: onJoin)
         case .possibleMultisport:
             Text(
                 "This is close to \(otherActivityDescription) — likely a separate leg of the same multisport session. No action needed."

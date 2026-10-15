@@ -7,8 +7,16 @@ struct MetricChartContext {
     /// The 3-week window `WeekViewModel.chartMetrics(for:)` returns for the week containing
     /// `subject` — the same data `FitnessChartView`/`DailyLoadChartView` plot for the main week
     /// graph, so the numbers agree between the two places they're shown. Used only to seed the
-    /// screen's first paint before `metricsProvider` fetches its own, wider buffer.
+    /// screen's first paint before `bufferProvider` fetches its own, wider buffer.
     let metrics: [FitnessMetrics]
+    /// `WeekViewModel.dailyLoadSplit(for:)`'s own 3-week window for the week containing `subject`
+    /// — the Load kind's `LoadDetailChartView` own first-paint seed, mirroring `metrics`' role,
+    /// before `bufferProvider` fetches its own, wider buffer. Unused by the Fitness/Fatigue/
+    /// Form kinds, which only ever read `metrics`.
+    let dailyLoadSplit: DailyLoadSplit
+    /// `WeekViewModel.chartRaces(for:)`'s 3-week window for the week containing `subject`, the first
+    /// paint's race markers before `bufferProvider` supplies the buffer's own (MVP2-104).
+    let races: [Race]
     /// A specific day (a day-list pill tap) or a whole displayed week (a graph-panel tap) — see
     /// `MetricDetailSubject`'s own doc comment.
     let subject: MetricDetailSubject
@@ -54,17 +62,26 @@ struct MetricDetailView: View {
     /// The selected chart period — owned by `WeekView` (not this view), so it's retained across
     /// separate pushes rather than resetting to `.week` every time a different pill is tapped.
     @Binding var period: ChartPeriod
-    /// Fetches (and, if needed, loads) metrics for an arbitrary range — `WeekViewModel.metrics(in:asOf:)`
-    /// in practice. Called for every period, including `.week`, since the chart's own swipe-to-pan
-    /// (MVP1-45) needs a buffer wider than `chartContext.metrics` alone provides.
-    let metricsProvider: (ClosedRange<Date>) async -> [FitnessMetrics]
+    /// Fetches (and, if needed, loads) the metrics, daily-load split and races for an arbitrary
+    /// range — `WeekViewModel.chartBuffer(in:asOf:)` in practice. Called for every period, including
+    /// `.week`, since the chart's own swipe-to-pan (MVP1-45) needs a buffer wider than
+    /// `chartContext.metrics` alone provides. The daily-load split is only read by `.load`'s
+    /// `LoadDetailChartView`, but is fetched unconditionally rather than branching on `kind`,
+    /// matching how `chartContext.dailyLoadSplit` is always populated too.
+    let bufferProvider: (ClosedRange<Date>) async -> ChartBuffer
 
     /// What the chart actually renders from — always a wider buffer than what's on screen (see
     /// `ChartPanState.bufferRange(around:period:calendar:)`), so dragging the chart can pan the
     /// visible window without waiting on a refetch each time. Seeded from `chartContext.metrics`
-    /// for an instant first paint, then replaced by a proper buffer fetched via `metricsProvider`
+    /// for an instant first paint, then replaced by a proper buffer fetched via `bufferProvider`
     /// once `.task(id: period)` runs.
     @State private var displayedMetrics: [FitnessMetrics]
+    /// `displayedMetrics`' counterpart for the race markers (MVP2-104): seeded from
+    /// `chartContext.races`, then replaced by `bufferProvider`'s buffer.
+    @State private var displayedRaces: [Race]
+    /// `displayedMetrics`'s own counterpart for the Load kind's planned/performed split — same
+    /// seed-then-replace lifecycle, driven by `bufferProvider` alongside the metrics.
+    @State private var displayedDailyLoadSplit: DailyLoadSplit
     /// The chart's own pan/anchor/buffer-window state — a plain, testable type (see its own doc
     /// comment) rather than a handful of parallel `@State` vars living directly on this view.
     @State private var panState: ChartPanState
@@ -78,20 +95,22 @@ struct MetricDetailView: View {
     /// overlapping fetches can never race to overwrite `displayedMetrics`/`panState.loadedRange`
     /// with a stale result: whichever fetch starts last cancels every earlier one, and
     /// `loadBuffer(around:)` itself checks `Task.isCancelled` before writing, so a cancelled
-    /// fetch's result is simply dropped even if `metricsProvider` still runs it to completion.
+    /// fetch's result is simply dropped even if `bufferProvider` still runs it to completion.
     @State private var bufferTask: Task<Void, Never>?
 
     init(
         kind: TrainingMetricKind,
         chartContext: MetricChartContext,
         period: Binding<ChartPeriod>,
-        metricsProvider: @escaping (ClosedRange<Date>) async -> [FitnessMetrics]
+        bufferProvider: @escaping (ClosedRange<Date>) async -> ChartBuffer
     ) {
         self.kind = kind
         self.chartContext = chartContext
         self._period = period
-        self.metricsProvider = metricsProvider
+        self.bufferProvider = bufferProvider
+        self._displayedRaces = State(initialValue: chartContext.races)
         self._displayedMetrics = State(initialValue: chartContext.metrics)
+        self._displayedDailyLoadSplit = State(initialValue: chartContext.dailyLoadSplit)
         self._panState = State(
             initialValue: ChartPanState(
                 anchorDate: chartContext.anchorDate,
@@ -141,16 +160,18 @@ struct MetricDetailView: View {
     }
 
     /// Fetches a fresh buffer around `anchor` and applies it — unless this particular fetch has
-    /// been cancelled (a newer one superseded it) by the time `metricsProvider` returns, in which
+    /// been cancelled (a newer one superseded it) by the time `bufferProvider` returns, in which
     /// case its result is simply dropped rather than clobbering whatever the newer fetch already
     /// applied. See `bufferTask`'s own doc comment for why this check is what actually prevents the
-    /// race, not just cancelling the `Task` (cancellation alone doesn't stop `metricsProvider` from
+    /// race, not just cancelling the `Task` (cancellation alone doesn't stop `bufferProvider` from
     /// running to completion and returning a result).
     private func loadBuffer(around anchor: Date) async {
         let buffer = panState.bufferRange(around: anchor, period: period, calendar: chartContext.calendar)
-        let metrics = await metricsProvider(buffer)
+        let fetched = await bufferProvider(buffer)
         guard !Task.isCancelled else { return }
-        displayedMetrics = metrics
+        displayedMetrics = fetched.metrics
+        displayedRaces = fetched.races
+        displayedDailyLoadSplit = fetched.dailyLoadSplit
         panState.loadedRange = buffer
     }
 
@@ -179,10 +200,13 @@ struct MetricDetailView: View {
         return values.reduce(0, +) / Double(values.count)
     }
 
+    /// With a "~" when any of the subject's values is estimated from planned workouts rather than
+    /// completed activities (MVP2-8).
     private var subjectValueText: String {
         guard let subjectValue else { return "–" }
         let format = kind == .form ? Self.signedValueFormat : Self.unsignedValueFormat
-        return subjectValue.formatted(format)
+        let isProjected = chartContext.subject.isProjected(kind: kind, in: displayedMetrics, calendar: chartContext.calendar)
+        return EstimateMarker.text(subjectValue.formatted(format), isEstimated: isProjected)
     }
 
     /// "Average", shown above the value for a `.week` subject only -- a week's own value is a
@@ -255,6 +279,8 @@ struct MetricDetailView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(subjectValueText)
                     .font(.system(size: 40, weight: .bold, design: .rounded))
+                    // "estimated 42" rather than "tilde 42" (MVP2-8).
+                    .accessibilityLabel(EstimateMarker.spokenForm(of: subjectValueText))
                 // The subject's own TSB zone, at the same size the Form value's own unit would be
                 // if it had one, but `.primary` -- naming the zone is as central to reading Form's
                 // value as the number itself, not a secondary annotation.
@@ -319,11 +345,14 @@ struct MetricDetailView: View {
         switch kind {
         case .load:
             LoadDetailChartView(
+                actualLoads: displayedDailyLoadSplit.actual,
+                plannedLoads: displayedDailyLoadSplit.planned,
                 metrics: displayedMetrics,
                 visibleRange: visibleRange,
                 period: period,
                 subject: chartContext.subject,
-                calendar: chartContext.calendar
+                calendar: chartContext.calendar,
+                races: displayedRaces
             )
         case .fitness, .fatigue, .form:
             FitnessTrendDetailChartView(
@@ -333,7 +362,8 @@ struct MetricDetailView: View {
                 emphasized: kind,
                 subject: chartContext.subject,
                 calendar: chartContext.calendar,
-                highlightedZone: subjectZone
+                highlightedZone: subjectZone,
+                races: displayedRaces
             )
         }
     }

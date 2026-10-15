@@ -33,6 +33,21 @@ struct AthleteProfileHealthKitMergeTests {
         #expect(merged.sex == .female)
     }
 
+    @Test("the date of birth is stored whenever HealthKit reports one, and kept when it doesn't (MVP2-124)")
+    func dateOfBirthIsStoredWhenReported() {
+        let athlete = AthleteProfile.fixture()
+        let born = day(-10_000)
+        let snapshot = HealthKitAthleteSnapshot(
+            restingHeartRateBPM: nil, biologicalSex: nil, estimatedMaxHeartRateBPM: nil, dateOfBirth: born
+        )
+
+        let merged = athlete.merging(snapshot, asOf: day(0))
+        #expect(merged.dateOfBirth == born)
+
+        // A later read that couldn't get it (denied, offline) doesn't wipe what was stored.
+        #expect(merged.merging(emptySnapshot(), asOf: day(1)).dateOfBirth == born)
+    }
+
     @Test("a new heart-rate zone entry is appended when both resting and max HR are present and no entry exists yet")
     func appendsFirstZoneEntry() {
         let athlete = AthleteProfile.fixture()
@@ -112,5 +127,90 @@ struct AthleteProfileHealthKitMergeTests {
         let merged = athlete.merging(snapshot, asOf: day(0))
 
         #expect(merged.heartRateZoneHistory.isEmpty)
+    }
+
+    @Test("a max measured in a workout isn't replaced by a lower formula estimate on the next refresh (MVP2-56)")
+    func measuredMaxSurvivesLowerEstimate() {
+        let activityID = UUID()
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178)
+        athlete = athlete.raisingMaxHeartRate(to: 189, from: day(0), source: .workout(activityID: activityID))
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 50, biologicalSex: nil, estimatedMaxHeartRateBPM: 178)
+
+        let merged = athlete.merging(snapshot, asOf: day(5))
+
+        #expect(merged == athlete)
+        #expect(merged.currentHeartRateZoneSettings?.maxHeartRateBPM == 189)
+    }
+
+    @Test("a resting-HR change keeps the measured max and its source in the new entry (MVP2-56)")
+    func restingChangeCarriesMeasuredMax() {
+        let activityID = UUID()
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 178)
+        athlete = athlete.raisingMaxHeartRate(to: 189, from: day(0), source: .workout(activityID: activityID))
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 45, biologicalSex: nil, estimatedMaxHeartRateBPM: 178)
+
+        let merged = athlete.merging(snapshot, asOf: day(5))
+
+        let current = merged.currentHeartRateZoneSettings
+        #expect(current?.effectiveDate == day(5))
+        #expect(current?.restingHeartRateBPM == 45)
+        #expect(current?.maxHeartRateBPM == 189)
+        #expect(current?.maxHeartRateSource == .workout(activityID: activityID))
+    }
+
+    @Test("a changed age estimate never replaces the max on its own: the athlete is asked instead (MVP2-132)")
+    func higherEstimateDoesNotReplaceMax() {
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 170)
+        athlete = athlete.raisingMaxHeartRate(to: 175, from: day(0), source: .workout(activityID: UUID()))
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 50, biologicalSex: nil, estimatedMaxHeartRateBPM: 182)
+
+        #expect(athlete.merging(snapshot, asOf: day(5)) == athlete)
+    }
+
+    @Test("a changed estimate alone, with the resting HR unchanged, appends nothing (MVP2-132)")
+    func changedEstimateAloneAppendsNothing() {
+        let athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 50, biologicalSex: nil, estimatedMaxHeartRateBPM: 180)
+
+        #expect(athlete.merging(snapshot, asOf: day(5)) == athlete)
+    }
+
+    @Test("with the HealthKit resting-HR switch off, HealthKit's reading is ignored (MVP2-132)")
+    func switchOffIgnoresHealthKitRestingHeartRate() {
+        var athlete = AthleteProfile.fixture(restingHeartRateBPM: 50, maxHeartRateBPM: 190)
+        athlete.usesHealthKitRestingHeartRate = false
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 40, biologicalSex: .female, estimatedMaxHeartRateBPM: 190, dateOfBirth: day(-9000))
+
+        let merged = athlete.merging(snapshot, asOf: day(5))
+
+        #expect(merged.heartRateZoneHistory == athlete.heartRateZoneHistory)
+        // The rest of the snapshot still applies.
+        #expect(merged.sex == .female)
+        #expect(merged.dateOfBirth == day(-9000))
+    }
+
+    @Test("with the switch off and no entry yet, nothing is created: the athlete enters their own (MVP2-132)")
+    func switchOffCreatesNoFirstEntry() {
+        var athlete = AthleteProfile.fixture()
+        athlete.heartRateZoneHistory = []
+        athlete.usesHealthKitRestingHeartRate = false
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 48, biologicalSex: nil, estimatedMaxHeartRateBPM: 190)
+
+        #expect(athlete.merging(snapshot, asOf: day(0)).heartRateZoneHistory.isEmpty)
+    }
+
+    @Test("a resting-HR change keeps a manually entered max and its source (MVP2-132)")
+    func restingChangeCarriesManualMax() {
+        var athlete = AthleteProfile.fixture()
+        athlete = athlete.recordingHeartRateSettings(
+            HeartRateZoneSettings(effectiveDate: day(0), restingHeartRateBPM: 50, maxHeartRateBPM: 186, maxHeartRateSource: .manual)
+        )
+        let snapshot = HealthKitAthleteSnapshot(restingHeartRateBPM: 44, biologicalSex: nil, estimatedMaxHeartRateBPM: 180)
+
+        let current = athlete.merging(snapshot, asOf: day(5)).currentHeartRateZoneSettings
+
+        #expect(current?.restingHeartRateBPM == 44)
+        #expect(current?.maxHeartRateBPM == 186)
+        #expect(current?.maxHeartRateSource == .manual)
     }
 }

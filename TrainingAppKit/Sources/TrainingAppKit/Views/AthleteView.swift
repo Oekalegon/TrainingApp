@@ -1,17 +1,33 @@
+import ImageIO
 import SwiftUI
 import TrainingCore
 
-/// The read-only athlete account screen (design doc §2.3): everything here is display-only — no
-/// editing of the profile itself, no `heartRateZoneHistory` timeline, just what's currently in
-/// effect. The one action this screen offers, "Force Full Resync", doesn't edit the profile — it
-/// re-imports activities from scratch, for recovering from a mapping fix that already-imported
-/// activities wouldn't otherwise pick up (design doc §2.3).
+/// The Athlete tab (MVP2-123, design doc §2.3): the avatar and name, the live overlap warning, and a
+/// settings-style list of groups, each opening its own screen — Personal Information (with Heart
+/// Rate Zones and Pace Zones inside it), Connected Services (Apple Health, Apple Watch), Calendar
+/// and Developer. The screens it opens edit the profile where the athlete knows better than Health
+/// (MVP2-132); this list itself only navigates.
+///
+/// The `NavigationStack`'s path is owned by `AppTabView` (``path``), so the week view's Watch
+/// permission banner can open the Apple Watch synchronisation screen directly
+/// (``AthleteRoute/watchSettings``). The overlap warning stays on this list, not inside a group, so
+/// it's visible whenever the tab is (MVP1-67).
 struct AthleteView: View {
     let viewModel: AthleteViewModel
+    /// The week view model the screens' edits go through (MVP2-132).
+    let weekViewModel: WeekViewModel
+    /// The screens currently pushed, owned by `AppTabView`.
+    @Binding var path: [AthleteRoute]
     let isResyncing: Bool
     let onResync: () -> Void
     let isDeduplicating: Bool
     let onDeduplicate: () -> Void
+    /// Backs the Apple Health screen: an import is running, no activity was ever imported, and the
+    /// two actions it offers.
+    let isRefreshing: Bool
+    let hasNoActivities: Bool
+    let onImport: () -> Void
+    let onConnectHealth: () -> Void
     /// Every activity currently worth reviewing for an overlap issue (MVP1-67), live from
     /// `WeekViewModel.overlapReviewItems` — backs both ``OverlapWarningBanner`` (shown just below
     /// the avatar) and the review sheet it opens.
@@ -20,8 +36,18 @@ struct AthleteView: View {
     let activityDetailViewModel: (Activity) -> ActivityDetailViewModel
     let onResolveOverlap: (UUID) async -> Void
     let onDeleteActivity: (Activity) async -> Void
-    @State private var isConfirmingResync = false
-    @State private var isConfirmingDeduplicate = false
+    /// Join actions for the detail sheet (MVP1-80) — see `ActivityDetailView`.
+    let onJoinActivities: (Activity, Activity) async -> Bool
+    let onUnjoinActivity: (Activity) async -> Bool
+    let loadJoinedComponents: (Activity) async -> [Activity]
+    let onLinkPlan: (Activity, UUID) async -> Bool
+    let onUnlinkPlan: (Activity) async -> Bool
+    let onSetActivitySport: (Activity, Sport, Venue?) async -> Bool
+    /// Backs the Apple Watch screens (MVP2-117); `nil` where WorkoutKit isn't available, which hides
+    /// the Apple Watch row.
+    let watchSync: WatchScheduleSync?
+    /// Reads what HealthKit recorded for recent workouts, for the Developer screen (MVP2-146 spike).
+    var workoutInspector: (any WorkoutInspecting)?
     /// Whether the overlap-review sheet (MVP1-67), opened by tapping ``OverlapWarningBanner``, is
     /// presented.
     @State private var isShowingOverlapReview = false
@@ -34,15 +60,17 @@ struct AthleteView: View {
     @State private var selectedActivity: Activity?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section {
-                    HStack {
-                        Spacer()
-                        AvatarView(initials: viewModel.initials)
-                        Spacer()
+                    VStack(spacing: 8) {
+                        AvatarView(initials: viewModel.initials, imageData: viewModel.avatarImageData)
+                        Text(viewModel.displayName)
+                            .font(.title3.weight(.semibold))
                     }
+                    .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
+                    .accessibilityElement(children: .combine)
                 }
 
                 // Live, not dismissible (MVP1-67) — always visible while any overlap is
@@ -57,111 +85,21 @@ struct AthleteView: View {
                 }
 
                 Section {
-                    LabeledContent("Name", value: viewModel.displayName)
-                    LabeledContent("Sex", value: viewModel.athlete.sex.displayName)
-                }
-
-                if let settings = viewModel.currentHeartRateZoneSettings {
-                    Section("Heart Rate Zones") {
-                        LabeledContent("Resting HR", value: "\(Int(settings.restingHeartRateBPM.rounded())) bpm")
-                        LabeledContent("Max HR", value: "\(Int(settings.maxHeartRateBPM.rounded())) bpm")
-                        if let lactateThreshold = settings.lactateThresholdHeartRateBPM {
-                            LabeledContent("Lactate Threshold", value: "\(Int(lactateThreshold.rounded())) bpm")
-                        }
-                        LabeledContent("Method", value: settings.zoneMethod.displayName)
-                    }
-
-                    // Each zone's own bpm range under the settings above (MVP1-71) -- a separate
-                    // section, not more rows in "Heart Rate Zones", since these five are a distinct
-                    // reference table derived from those settings rather than another setting of
-                    // their own. Same colored-dot-before-name treatment as the activity detail
-                    // sheet's own zone list (MVP1-70), for the same `HeartRateZone.color` ramp.
-                    if !viewModel.heartRateZoneRanges.isEmpty {
-                        Section("Zones") {
-                            ForEach(viewModel.heartRateZoneRanges) { zoneRange in
-                                LabeledContent {
-                                    Text(bpmRangeText(zoneRange.bpmRange))
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Circle()
-                                            .fill(zoneRange.zone.color)
-                                            .frame(width: 8, height: 8)
-                                            .accessibilityHidden(true)
-                                        Text("Zone \(zoneRange.zone.rawValue)")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Section("Heart Rate Zones") {
-                        Text("No heart-rate zone settings on record yet.")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("Pace") {
-                    LabeledContent("Threshold Pace", value: viewModel.thresholdPaceText)
-                }
-
-                Section("Calendar") {
-                    LabeledContent("Week Starts On", value: viewModel.athlete.weekStartsOn.displayName)
-                    LabeledContent("Time Zone", value: viewModel.athlete.timeZone.identifier)
+                    AthleteRouteRow(route: .personalInformation)
+                    AthleteRouteRow(route: .connectedServices)
+                    AthleteRouteRow(route: .calendar)
                 }
 
                 Section {
-                    Button {
-                        isConfirmingResync = true
-                    } label: {
-                        HStack {
-                            Text("Force Full Resync")
-                            if isResyncing {
-                                Spacer()
-                                ProgressView()
-                            }
-                        }
-                    }
-                    .disabled(isResyncing || isDeduplicating)
-
-                    Button {
-                        isConfirmingDeduplicate = true
-                    } label: {
-                        HStack {
-                            Text("Deduplicate Activities")
-                            if isDeduplicating {
-                                Spacer()
-                                ProgressView()
-                            }
-                        }
-                    }
-                    .disabled(isResyncing || isDeduplicating)
-                } footer: {
-                    Text("Force Full Resync re-imports every activity from HealthKit from scratch. Use this if an activity's sport or name looks wrong after an app update. Deduplicate Activities removes any duplicate activities left over from an older version of the app.")
+                    AthleteRouteRow(route: .developer)
                 }
             }
             .navigationTitle("Athlete")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .confirmationDialog(
-                "Re-import your entire activity history from HealthKit?",
-                isPresented: $isConfirmingResync,
-                titleVisibility: .visible
-            ) {
-                Button("Force Full Resync", role: .destructive, action: onResync)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This can take a while for a long training history.")
-            }
-            .confirmationDialog(
-                "Remove duplicate activities?",
-                isPresented: $isConfirmingDeduplicate,
-                titleVisibility: .visible
-            ) {
-                Button("Deduplicate Activities", role: .destructive, action: onDeduplicate)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Permanently removes duplicate activities left over from an older version of the app. This can't be undone.")
+            .navigationDestination(for: AthleteRoute.self) { route in
+                destination(for: route)
             }
             .sheet(item: $selectedActivity) { activity in
                 // Its own NavigationStack: a sheet doesn't inherit the presenting view's
@@ -170,7 +108,13 @@ struct AthleteView: View {
                     ActivityDetailView(
                         viewModel: activityDetailViewModel(activity),
                         onResolveOverlap: { id in await onResolveOverlap(id) },
-                        onDelete: { await onDeleteActivity(activity) }
+                        onDelete: { await onDeleteActivity(activity) },
+                        onJoin: { other in await onJoinActivities(activity, other) },
+                        onUnjoin: { await onUnjoinActivity(activity) },
+                        loadComponents: { await loadJoinedComponents(activity) },
+                        onLinkPlan: { await onLinkPlan(activity, $0) },
+                        onUnlinkPlan: { await onUnlinkPlan(activity) },
+                        onSetSport: { await onSetActivitySport(activity, $0, $1) }
                     )
                 }
             }
@@ -200,21 +144,80 @@ struct AthleteView: View {
         }
     }
 
-    /// "120–133 bpm" — whole-number bpm on both ends, matching every other bpm figure on this
-    /// screen (Resting/Max/Lactate Threshold above).
-    private func bpmRangeText(_ range: ClosedRange<Double>) -> String {
-        "\(Int(range.lowerBound.rounded()))–\(Int(range.upperBound.rounded())) bpm"
+    /// The screen `route` opens.
+    @ViewBuilder
+    private func destination(for route: AthleteRoute) -> some View {
+        switch route {
+        case .personalInformation:
+            PersonalInformationView(viewModel: viewModel, weekViewModel: weekViewModel)
+        case .heartRateZones:
+            HeartRateZonesView(viewModel: viewModel, weekViewModel: weekViewModel, showsHealthKitSwitch: !hasNoActivities)
+        case .paceZones:
+            PaceZonesView(viewModel: viewModel, weekViewModel: weekViewModel)
+        case .connectedServices:
+            ConnectedServicesView(showsAppleWatch: watchSync != nil)
+        case .appleHealth:
+            AppleHealthView(
+                isRefreshing: isRefreshing, hasNoActivities: hasNoActivities,
+                onImport: onImport, onConnect: onConnectHealth
+            )
+        case .appleWatch:
+            AppleWatchView()
+        case .synchronisation:
+            if let watchSync {
+                WatchSynchronisationView(sync: watchSync)
+            }
+        case .calendar:
+            CalendarSettingsView(viewModel: viewModel, weekViewModel: weekViewModel)
+        case .developer:
+            DeveloperView(
+                isResyncing: isResyncing, onResync: onResync,
+                isDeduplicating: isDeduplicating, onDeduplicate: onDeduplicate,
+                workoutInspector: workoutInspector
+            )
+        }
     }
 }
 
-private struct AvatarView: View {
-    let initials: String
+/// A list row that pushes `route`: its icon and title.
+struct AthleteRouteRow: View {
+    let route: AthleteRoute
 
     var body: some View {
-        Text(initials)
-            .font(.title.bold())
-            .foregroundStyle(.white)
-            .frame(width: 72, height: 72)
-            .background(Circle().fill(.blue))
+        NavigationLink(value: route) {
+            Label(route.title, systemImage: route.systemImage)
+        }
+    }
+}
+
+/// The athlete's avatar (MVP2-132): the picture they chose, cropped to a circle, or their initials on
+/// blue when there's none or it can't be decoded.
+struct AvatarView: View {
+    let initials: String
+    /// The picked picture as encoded image data, if any.
+    var imageData: Data?
+
+    var body: some View {
+        Group {
+            if let image = decodedImage {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Text(initials)
+                    .font(.title.bold())
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.blue)
+            }
+        }
+        .frame(width: 72, height: 72)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    private var decodedImage: CGImage? {
+        guard let imageData, let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 }

@@ -1,0 +1,110 @@
+import Foundation
+import TrainingCore
+
+/// Linking a completed activity to the planned workout it fulfilled (MVP2-42). The matching itself
+/// is automatic (``TrainingModel``'s import runs ``PlanReconciler``); this is the athlete's way to
+/// confirm, correct or undo it.
+extension WeekViewModel {
+    /// The plan link `activity`'s detail sheet shows, or `nil` when there's nothing to show: the
+    /// activity isn't linked and no unmatched plan exists on its day.
+    public func planLinkContext(for activity: Activity) -> PlanLinkContext? {
+        let linked = activity.linkedPlanID.flatMap { id in model.plans.first { $0.id == id } }
+        let candidates = plans(on: activity.start)
+            .filter { $0.completedActivityID == nil && $0.id != linked?.id }
+            .map(planOption)
+        guard linked != nil || !candidates.isEmpty else { return nil }
+        let workout = linked.flatMap { plan in model.workouts.first { $0.id == plan.workoutID } }
+        // The recorded steps laid over the plan's (MVP2-146), when there are some and they fit.
+        let recorded = workout.flatMap { ActivityStepAligner.align(activity.steps, with: $0) }
+        // Each recorded step's position, so a tap on its card can highlight its span on the charts.
+        var recordedIDs: [ActivityStep: Int] = [:]
+        for (index, step) in activity.orderedSteps.enumerated() where recordedIDs[step] == nil { recordedIDs[step] = index }
+        let planSteps = recorded.map {
+            WorkoutBlockCard.cards(for: workout?.blocks ?? [], actuals: $0, recordedIDs: recordedIDs)
+        }
+            ?? WorkoutBlockCard.cards(for: workout?.blocks ?? [])
+        return PlanLinkContext(
+            linkedPlan: linked.map(planOption),
+            linkedPlanSteps: planSteps,
+            linkedPlanStepsAreRecorded: recorded != nil,
+            linkedPlanAfter: recorded == nil ? nil : ActivityAfterPlan.make(for: activity).map { WorkoutAfterPlanCard.make($0) },
+            isAmbiguous: model.planMatchAmbiguities.contains { $0.activityID == activity.id },
+            candidates: candidates
+        )
+    }
+
+    /// The workout of the plan `activity` completed, if it is linked to one still in the library.
+    func linkedWorkout(for activity: Activity) -> StructuredWorkout? {
+        activity.linkedPlanID
+            .flatMap { id in model.plans.first { $0.id == id } }
+            .flatMap { plan in model.workouts.first { $0.id == plan.workoutID } }
+    }
+
+    /// Links `activity` to the plan `planID` (replacing its current link), or confirms the current
+    /// one when they're the same.
+    ///
+    /// Then requests a Watch sync (MVP2-116), since the change can link or unlink a plan, and checks
+    /// whether the activity is now a field test with a result to confirm.
+    ///
+    /// - Returns: `true` if the link was made. `false` (nothing changed) if the plan isn't on the
+    ///   activity's day or a store failed — the sheet stays open with a message, like a refused join.
+    @discardableResult
+    public func linkActivity(_ activity: Activity, toPlan planID: UUID, asOf today: Date = .now) async -> Bool {
+        do {
+            try await model.linkActivity(id: activity.id, toPlan: planID, asOf: today)
+        } catch {
+            return false
+        }
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        requestWatchSync(asOf: today)
+        // The link decides whether the activity is a field test, and refreshing forgets why an earlier
+        // measurement failed, so look again (MVP2-155, MVP2-157).
+        await checkForFieldTestResult()
+        return true
+    }
+
+    /// Removes `activity`'s link to its plan. It isn't matched again automatically afterwards.
+    ///
+    /// Then requests a Watch sync (MVP2-116), since the change can link or unlink a plan.
+    ///
+    /// - Returns: `true` if the link was removed.
+    @discardableResult
+    public func unlinkActivity(_ activity: Activity, asOf today: Date = .now) async -> Bool {
+        do {
+            try await model.unlinkActivity(id: activity.id, asOf: today)
+        } catch {
+            return false
+        }
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        requestWatchSync(asOf: today)
+        // The link decides whether the activity is a field test, and refreshing forgets why an earlier
+        // measurement failed, so look again (MVP2-155, MVP2-157).
+        await checkForFieldTestResult()
+        return true
+    }
+
+    /// Sets `activity`'s sport and venue (MVP2-151), e.g. when the Watch recorded a treadmill run as
+    /// outdoors. The choice survives a re-import. Refreshes the week's caches and the pace history,
+    /// which the sport and venue feed.
+    ///
+    /// - Returns: `true` if the change was saved.
+    @discardableResult
+    public func setActivitySport(_ activity: Activity, sport: Sport, venue: Venue?, asOf today: Date = .now) async -> Bool {
+        do {
+            try await model.setSport(sport, venue: venue, forActivityID: activity.id, asOf: today)
+        } catch {
+            return false
+        }
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPaceHistoryIfNeeded(asOf: today, force: true)
+        return true
+    }
+
+    private func planOption(_ plan: PlannedActivity) -> PlanLinkContext.PlanOption {
+        let summary = plannedCardSummary(for: plan)
+        return PlanLinkContext.PlanOption(
+            id: plan.id, title: summary.name ?? summary.sport.displayName, extent: summary.extent,
+            isExtentEstimated: summary.isExtentEstimated
+        )
+    }
+}

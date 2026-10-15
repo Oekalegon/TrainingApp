@@ -25,3 +25,12 @@ struct DailyLoad: Hashable {
             .sorted { $0.day < $1.day }
     }
 }
+
+/// A week's ``DailyLoad`` split into what was actually performed vs. what's planned — see
+/// `WeekViewModel.dailyLoadSplit(for:)`'s own doc comment for why this is two independent figures
+/// rather than `FitnessMetrics.load`'s single merged one. Not `public`, matching `DailyLoad`
+/// itself: both are `DailyLoadChartView`-internal shapes, not part of `TrainingAppKit`'s public API.
+struct DailyLoadSplit: Hashable {
+    let actual: [DailyLoad]
+    let planned: [DailyLoad]
+}

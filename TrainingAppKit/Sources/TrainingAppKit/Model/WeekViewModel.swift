@@ -10,35 +10,156 @@ import TrainingCore
 @Observable
 @MainActor
 public final class WeekViewModel {
-    private let model: TrainingModel
+    // Internal (not private) so `WeekViewModel+Overlaps.swift`'s extension can reach it.
+    let model: TrainingModel
+    /// Keeps the Watch's scheduled workouts in step with the plans (MVP2-55); `nil` in tests and
+    /// where WorkoutKit isn't available.
+    let watchSync: WatchScheduleSync?
+    /// The Watch sync ``requestWatchSync(asOf:)`` last started, so tests can wait for it.
+    ///
+    /// When a request lands while a sync is already running, this becomes a task that finishes at
+    /// once, and the running sync does the extra round on its own; so wait on it only after a single
+    /// request.
+    @ObservationIgnored
+    private(set) var pendingWatchSync: Task<Void, Never>?
     private let refresher: any ActivityRefreshing
-    private let calendar: Calendar
+    /// The calendar of the athlete's time zone and week start, rebuilt only when either changes
+    /// (MVP2-132), since the athlete can now edit both. Read through ``calendar``.
+    @ObservationIgnored
+    private var calendarCache: (timeZone: TimeZone, weekStartsOn: Weekday, calendar: Calendar)
+    /// The athlete's calendar: ``Calendar`` for their time zone with their week start applied. Built
+    /// once and reused, so the week-swipe path doesn't create one per access; a changed time zone or
+    /// week start gets a new one on the next access.
+    private var calendar: Calendar {
+        let athlete = model.athlete
+        if calendarCache.timeZone != athlete.timeZone || calendarCache.weekStartsOn != athlete.weekStartsOn {
+            calendarCache = (athlete.timeZone, athlete.weekStartsOn, Self.calendar(for: athlete))
+        }
+        return calendarCache.calendar
+    }
     /// Computes ``trainingLoad(for:)`` — the same default calculators `ActivityDetailViewModel`
     /// uses, so a card's headline Load number always agrees with the detail sheet's own figure.
-    private let statisticsCalculator = StatisticsCalculator()
+    /// Not `private` only because `WeekViewModel+LinkedPlan.swift` projects workouts with it too.
+    ///
+    /// Its planned-load estimator is refined with what completed plans actually scored
+    /// (MVP2-159, see ``refreshPlannedLoadIfNeeded(force:)``), so the cards and stats agree
+    /// with TrainingKit's own load series; everything else about it is the default.
+    @ObservationIgnored
+    var statisticsCalculator = StatisticsCalculator()
+    /// Bumped whenever the refined planned-load estimator changes, so the caches that hold planned
+    /// loads (the daily-load split, the stats pages and the card caches) recompute. Observed, so cards
+    /// on screen re-read once a refinement lands, like ``paceHistoryGeneration``.
+    var plannedLoadGeneration = 0
+    /// The references the current refined estimator was built from, to tell whether a refresh changed
+    /// anything.
+    @ObservationIgnored
+    var plannedLoadReferences: [LinkedActivityRefinedEstimator.Reference]?
+    /// What the refined estimator was built under, for ``refreshPlannedLoadIfNeeded(force:)``.
+    @ObservationIgnored
+    var plannedLoadKey: PlannedLoadKey?
+    /// Taken by each ``refreshPlannedLoadIfNeeded(force:)`` before it reads the store, so only the
+    /// newest of overlapping refreshes applies its result.
+    @ObservationIgnored
+    var plannedLoadRefreshToken = 0
+    /// The refined estimator itself, to estimate a completed plan as it was before it was done
+    /// (``plannedLoadCalculator(before:)``); `nil` while there are no completed plans or before the
+    /// first refresh.
+    @ObservationIgnored
+    var refinedLoadEstimator: LinkedActivityRefinedEstimator?
 
     /// Sport-stats pages, cached per week (keyed by that week's `weekStart`) — see
     /// ``sportStatsPages(for:asOf:)``'s own doc comment. Not `@ObservationIgnored`: `WeekView`
     /// reads this indirectly through that method, and needs the read tracked the same way a plain
     /// stored property's would be.
     private var sportStatsPagesCaches: [Date: [SportStatsPage]] = [:]
-    /// `(model.activities.count, today)` as of the last time ``sportStatsPagesCaches`` was
-    /// populated — either changing invalidates the whole cache (an import/dedup could change any
-    /// cached week's activities, not just the displayed one, and a new calendar day shifts every
-    /// week's own change-vs-previous-week percentages).
+    /// `(model.activities.count, model.plans.count, model.workouts.count, today)` as of the last
+    /// time ``sportStatsPagesCaches`` was populated — any changing invalidates the whole cache (an
+    /// import/dedup could change any cached week's activities, not just the displayed one; a new
+    /// calendar day shifts every week's own change-vs-previous-week percentages; a plan or its
+    /// workout can change independently of `model.activities`, e.g. saving a new planned workout
+    /// via `PlannedWorkoutSheet`). The athlete is part of the key too: a changed max or resting
+    /// heart rate rescores every activity's load (MVP2-56). So is ``plansFingerprint()``: editing a
+    /// plan's load override, date or workout changes no count but does change the planned totals and
+    /// which of them are estimates (MVP2-8). And ``activitiesFingerprint()``: a resync can change an
+    /// activity's sport, distance or effort without changing the count (MVP2-54).
     @ObservationIgnored
-    private var sportStatsPagesCachesKey: (activityCount: Int, today: Date)?
+    private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int, plannedLoadGeneration: Int, plans: Int, activities: Int)?
 
     /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
     /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
     /// by ``refreshWeekCachesIfNeeded()``. Not `@ObservationIgnored`, for the same reason as
     /// ``sportStatsPagesCaches``.
     private var weekGraphCaches: [Date: HeartRateHistogram] = [:]
-    /// `model.activities.count` as of the last time ``weekGraphCaches`` was populated — see
-    /// ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch invalidates the whole
-    /// cache rather than trying to single out which weeks actually changed.
+    /// ``histogramFingerprint()`` of `model.activities` as of the last time ``weekGraphCaches`` was
+    /// populated — see ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch
+    /// invalidates the whole cache rather than trying to single out which weeks actually changed.
+    /// A fingerprint rather than the count: a resync can change an activity's heart-rate samples
+    /// without changing how many activities there are (MVP2-130).
     @ObservationIgnored
-    private var weekGraphCachesActivityCount: Int?
+    private var weekGraphCachesFingerprint: Int?
+    /// `model.athlete` as of the last time ``weekGraphCaches`` was populated. A change (e.g. a new
+    /// max heart rate, MVP2-56) moves the zone boundaries the histogram is shaded against, so it
+    /// marks every cached week stale the same way a changed activity fingerprint does.
+    @ObservationIgnored
+    private var weekGraphCachesAthlete: AthleteProfile?
+
+    /// ``dailyLoadSplit(for:)`` results, cached per week (keyed by that week's `weekStart`) — same
+    /// reasoning as ``sportStatsPagesCaches``: `WeekView.graphPanel(weekStart:isCurrentPage:)` calls
+    /// this for all three carousel pages (current plus both static previews) on every touch-move
+    /// frame of the week-swipe drag, and unlike ``chartMetrics(for:)`` (a cheap filter over
+    /// already-computed `model.metrics`), this does real per-activity TRIMP work
+    /// (`StatisticsCalculator.summary(for:athlete:)`) — exactly the MVP1-19 freeze class this
+    /// codebase already built ``sportStatsPagesCaches``/``weekGraphCaches`` to keep out of that path.
+    private var dailyLoadSplitCaches: [Date: DailyLoadSplit] = [:]
+    /// `(model.activities.count, model.plans.count, model.workouts.count)` as of the last time
+    /// ``dailyLoadSplitCaches`` was populated — three counts, not just `activityCount` the way
+    /// ``sportStatsPagesCachesKey`` does, since a plan or its workout can change independently of
+    /// `model.activities` (e.g. saving a new planned workout via `PlannedWorkoutSheet`), plus the
+    /// athlete, whose heart-rate settings every activity's load is scored with (MVP2-56), plus
+    /// ``plansFingerprint()``, since an edited override, date or workout moves a planned bar without
+    /// changing any count, plus ``activitiesFingerprint()``, since an activity changed in place (a
+    /// resync) moves a performed bar without changing the count (MVP2-54), plus ``plannedLoadGeneration``,
+    /// since a refined planned estimate moves a planned bar without any of those changing.
+    @ObservationIgnored
+    private var dailyLoadSplitCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, plans: Int, activities: Int, plannedLoadGeneration: Int)?
+
+    /// The card caches: ``plannedCardSummary(for:)``, ``linkedPlanExpectation(for:)`` and
+    /// ``intensity(for:)-(Activity)``/``intensity(for:)-(PlannedActivity)`` results. The day list
+    /// re-renders on every touch-move frame of the week-swipe drag, and each of these runs the TRIMP
+    /// estimator, a workout projection or the intensity classifier — the same freeze class
+    /// ``dailyLoadSplitCaches`` exists to keep out of that path.
+    ///
+    /// Each entry remembers the inputs it was computed from (see `InputKeyedCache`), so an in-place
+    /// edit — a plan's load override, a workout's parameters, an activity's link — refreshes it
+    /// though no count changed; `refreshCardCachesIfNeeded()` drops them all when the athlete or the
+    /// intensity thresholds change, and prunes deleted items. Not `private` only because the
+    /// extensions using them live in their own files.
+    @ObservationIgnored
+    var plannedSummaryCache = InputKeyedCache<PlannedCardSummary>()
+    /// ``scoredLoad(for:)`` per activity (MVP2-127, MVP2-128): the card, the stats bar's estimate flags
+    /// and the day row's Load pill all ask for it, each time running a full statistics pass.
+    @ObservationIgnored
+    var scoredLoadCache = InputKeyedCache<TrainingLoad?>()
+    @ObservationIgnored
+    var linkedExpectationCache = InputKeyedCache<LinkedPlanExpectation?>()
+    @ObservationIgnored
+    var activityIntensityCache = InputKeyedCache<IntensityAssessment?>()
+    @ObservationIgnored
+    var planIntensityCache = InputKeyedCache<IntensityAssessment?>()
+    /// What the card caches were filled under, for `refreshCardCachesIfNeeded()`.
+    @ObservationIgnored
+    var cardCacheAthlete: AthleteProfile?
+    @ObservationIgnored
+    var cardCacheIntensityParameters: IntensityClassifierParameters?
+    @ObservationIgnored
+    var cardCacheCounts: [Int]?
+
+    /// Bumped whenever ``paceHistory`` is replaced, so the card and stats caches that project
+    /// workouts with it recompute. Observed, so cards on screen re-read once a history lands.
+    var paceHistoryGeneration = 0
+    /// What ``paceHistory`` was built from, for `refreshPaceHistoryIfNeeded(asOf:force:)`.
+    @ObservationIgnored
+    var paceHistoryKey: PaceHistoryKey?
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the week currently
     /// on screen.
@@ -56,11 +177,69 @@ public final class WeekViewModel {
     public private(set) var isDeduplicating = false
 
     /// Creates a week view model showing the week containing `today`.
-    public init(model: TrainingModel, refresher: any ActivityRefreshing, today: Date = .now) {
+    /// A workout that held a heart rate above the athlete's max, waiting for them to confirm or
+    /// decline raising it (MVP2-56). `WeekView` shows it as an alert. See
+    /// ``checkForMaxHeartRateSuggestion(asOf:)``.
+    public internal(set) var maxHeartRateSuggestion: MaxHeartRateSuggestion?
+    /// Set when saving an accepted max heart rate failed, for `WeekView` to report; cleared when
+    /// shown.
+    public internal(set) var maxHeartRateUpdateFailed = false
+    /// `true` while an accepted max heart rate is being saved. Until it lands, `model.athlete`
+    /// still has the old max, so a check in that window would ask about the same workout again.
+    @ObservationIgnored
+    var isApplyingMaxHeartRate = false
+    /// What a field test measured, waiting for the athlete to confirm or decline it (MVP2-155).
+    /// `WeekView` shows it as an alert. See ``checkForFieldTestResult()``.
+    public internal(set) var fieldTestResult: FieldTestResult?
+    /// Set when saving an accepted field-test result failed, for `WeekView` to report; cleared when
+    /// shown.
+    public internal(set) var fieldTestUpdateFailed = false
+    /// `true` while an accepted field-test result is being saved, so a check in that window doesn't
+    /// ask about the same test again.
+    @ObservationIgnored
+    var isApplyingFieldTest = false
+    /// Why each test activity couldn't be measured (MVP2-157): shown on its detail sheet, and a check
+    /// doesn't measure it again until an import changes the activities.
+    @ObservationIgnored
+    var fieldTestFailures: [UUID: FieldTestError] = [:]
+    /// What the athlete has already declined (max heart rate suggestions and field-test results, which
+    /// share it: both are keyed by activity), and whether the history scan has run.
+    @ObservationIgnored
+    let maxHeartRatePromptHistory: any MaxHeartRatePromptHistory
+    /// The first-run introduction and the Health and iCloud banners (MVP2-147).
+    public let onboarding: OnboardingViewModel
+
+    /// Creates the week view model.
+    ///
+    /// - Parameters:
+    ///   - model: The training model to read from and write to.
+    ///   - refresher: Runs HealthKit imports for pull-to-refresh.
+    ///   - maxHeartRatePromptHistory: What the athlete already said about max heart rate
+    ///     suggestions; defaults to the app's `UserDefaults`-backed record.
+    ///   - watchSync: Run again after anything that changes plans or their links (MVP2-55,
+    ///     MVP2-116); `nil` skips it.
+    ///   - onboardingProgress: What the athlete has already dismissed (MVP2-147); defaults to the
+    ///     app's `UserDefaults`-backed record.
+    ///   - iCloud: Looks up the iCloud account for the warning banner; `nil` never warns.
+    ///   - today: The day whose week is shown first.
+    public init(
+        model: TrainingModel,
+        refresher: any ActivityRefreshing,
+        maxHeartRatePromptHistory: (any MaxHeartRatePromptHistory)? = nil,
+        watchSync: WatchScheduleSync? = nil,
+        onboardingProgress: (any OnboardingProgress)? = nil,
+        iCloud: (any ICloudAccountChecking)? = nil,
+        today: Date = .now
+    ) {
         self.model = model
         self.refresher = refresher
+        self.watchSync = watchSync
+        self.maxHeartRatePromptHistory = maxHeartRatePromptHistory ?? UserDefaultsMaxHeartRatePromptHistory()
+        self.onboarding = OnboardingViewModel(
+            model: model, progress: onboardingProgress ?? UserDefaultsOnboardingProgress(), iCloud: iCloud
+        )
         let calendar = Self.calendar(for: model.athlete)
-        self.calendar = calendar
+        self.calendarCache = (model.athlete.timeZone, model.athlete.weekStartsOn, calendar)
         self.displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
     }
 
@@ -74,6 +253,20 @@ public final class WeekViewModel {
     /// (empty-for-this-week) calendar.
     public var hasNoActivities: Bool {
         !model.hasEverImportedActivities
+    }
+
+    /// Whether the week view shows its "No training data yet" prompt instead of the calendar
+    /// (MVP2-108): nothing has been imported from Health **and** no plan is loaded.
+    ///
+    /// A plan makes the calendar worth showing even before Health is connected: on a fresh install a
+    /// calendar import (MVP2-103) or a new plan would otherwise show no sign it exists. Any loaded plan
+    /// counts, a missed one on a past day too: it is something the athlete put in the calendar. It looks only
+    /// at the loaded plans (``TrainingModel/plans``, the weeks around the displayed one), so a plan
+    /// months away doesn't count until its weeks are shown; the empty state keeps its week
+    /// navigation, so moving there loads the plans and reveals the calendar. ``hasNoActivities``
+    /// stays about Health alone: the Athlete tab uses it to offer "Connect Apple Health".
+    public var showsEmptyState: Bool {
+        hasNoActivities && model.plans.isEmpty
     }
 
     /// The athlete's timezone — views should format every date they show with this, not the
@@ -170,6 +363,125 @@ public final class WeekViewModel {
             .sorted { $0.day < $1.day }
     }
 
+    /// The races inside ``chartRange(for:)`` for `weekStart` (see ``chartRaces(in:)``), for the
+    /// graph panel's race markers (MVP2-104).
+    public func chartRaces(for weekStart: Date) -> [Race] {
+        chartRaces(in: chartRange(for: weekStart))
+    }
+
+    /// The loaded races inside `range`, in date order, one per day: the most important (primary,
+    /// then secondary, then tertiary; by name when equal), since markers for two races on one day
+    /// would sit on top of each other (MVP2-104). Only races the model has loaded: the metric detail
+    /// charts get theirs from ``chartBuffer(in:asOf:)``, which loads the range first.
+    ///
+    /// Not cached, unlike the other chart inputs, though ``chartRaces(for:)`` runs on the week-swipe path:
+    /// the work is one date comparison per loaded race, and a day lookup only for the few races that
+    /// fall in `range`, and an uncached read can never show a race that was just edited or deleted.
+    public func chartRaces(in range: ClosedRange<Date>) -> [Race] {
+        let order = RacePriority.allCases
+        func rank(_ race: Race) -> Int { order.firstIndex(of: race.priority) ?? 0 }
+        var byDay: [Date: Race] = [:]
+        for race in model.races where range.contains(race.date) {
+            let day = calendar.startOfDay(for: race.date)
+            if let existing = byDay[day], (rank(existing), existing.name) <= (rank(race), race.name) { continue }
+            byDay[day] = race
+        }
+        return byDay.values.sorted { $0.date < $1.date }
+    }
+
+    /// ``chartRange(for:)``'s own range for `weekStart`'s daily load, split into what was actually
+    /// performed vs. what's planned (MVP2-30) — for `DailyLoadChartView`'s bars.
+    ///
+    /// Deliberately *not* `chartMetrics(for:)`'s merged `FitnessMetrics.load`: that figure follows
+    /// `DailyLoadSeries`'s either/or merge rule (today/future use whichever of actual-or-planned
+    /// applies, never both), which is right for CTL/ATL but wrong for this chart — a planned
+    /// workout the athlete hasn't done yet should show only its planned bar, but once performed
+    /// (possibly at a different load than predicted), both the original planned estimate and the
+    /// real performed figure should stay visible together. Both halves are computed independently
+    /// at the day level, not per-workout: `PlanReconciler` (MVP2-19, matching a specific plan to its
+    /// specific completed activity) doesn't exist yet, so "a day has both" is the closest available
+    /// signal, the same granularity `StatisticsCalculator.periodStats` already merges at. The
+    /// planned side only covers `today` or later, matching that same merge rule (and
+    /// `DailyLoadSeries`'s) — a plan from before `today` that was never performed reads as
+    /// genuinely missed, not as a bar this chart keeps showing indefinitely.
+    ///
+    /// Cached per week: unlike `chartMetrics(for:)` (a cheap filter over already-computed
+    /// `model.metrics`), this does real per-activity TRIMP work
+    /// (`StatisticsCalculator.summary(for:athlete:)`), and `WeekView.graphPanel(weekStart:isCurrentPage:)`
+    /// calls it for all three carousel pages on every touch-move frame of the week-swipe drag — see
+    /// ``dailyLoadSplitCaches``'s own doc comment for why this needs the same per-week caching
+    /// ``sportStatsPages(for:asOf:)``/``heartRateHistogram(for:)`` already have.
+    func dailyLoadSplit(for weekStart: Date, asOf today: Date = .now) -> DailyLoadSplit {
+        let key = (model.activities.count, model.plans.count, model.workouts.count)
+        let plans = plansFingerprint()
+        let activities = activitiesFingerprint()
+        let keyIsCurrent = dailyLoadSplitCachesKey.map {
+            $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
+                && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
+                && $0.plans == plans && $0.activities == activities
+                && $0.plannedLoadGeneration == plannedLoadGeneration
+        } ?? false
+        if !keyIsCurrent {
+            dailyLoadSplitCaches.removeAll()
+            dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today, plans, activities, plannedLoadGeneration)
+        }
+        if let cached = dailyLoadSplitCaches[weekStart] {
+            return cached
+        }
+        let split = computeDailyLoadSplit(in: chartRange(for: weekStart), asOf: today)
+        dailyLoadSplitCaches[weekStart] = split
+        return split
+    }
+
+    /// `dailyLoadSplit(for:asOf:)`'s own actual/planned split, but over an arbitrary `range` rather
+    /// than a week's fixed ``chartRange(for:)`` — for `MetricDetailView`'s Load chart, which pans
+    /// across a caller-chosen window (MVP1-45's Week/Month/3M/6M/Year periods) instead of the fixed
+    /// 3-week carousel `DailyLoadChartView` shows. Not cached, matching ``metrics(in:asOf:)``'s own
+    /// precedent for the same reason: this is only ever called from a pan/period-change buffer
+    /// reload, never from the per-frame swipe-drag hot path ``dailyLoadSplit(for:asOf:)`` itself
+    /// has to guard against.
+    ///
+    /// Loads `range` first through ``loadWindow(covering:asOf:)``; ``metrics(in:asOf:)`` explains why the
+    /// union with the displayed week's window is loaded rather than `range` alone.
+    func dailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date = .now) async -> DailyLoadSplit {
+        await loadWindow(covering: range, asOf: today)
+        return computeDailyLoadSplit(in: range, asOf: today)
+    }
+
+    private func computeDailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date) -> DailyLoadSplit {
+        let athlete = model.athlete
+        let todayStart = calendar.startOfDay(for: today)
+
+        let activitiesByDay = Dictionary(grouping: model.activities.filter { range.contains(calendar.startOfDay(for: $0.start)) }) {
+            calendar.startOfDay(for: $0.start)
+        }
+        let actual = activitiesByDay.map { day, activities in
+            DailyLoad(day: day, load: activities.reduce(0) { $0 + statisticsCalculator.summary(for: $1, athlete: athlete).load.value })
+        }
+
+        let workoutsByID = Dictionary(uniqueKeysWithValues: model.workouts.map { ($0.id, $0) })
+        let plansByDay = Dictionary(grouping: model.plans.filter { plan in
+            let day = calendar.startOfDay(for: plan.date)
+            return range.contains(day) && day >= todayStart
+        }) {
+            calendar.startOfDay(for: $0.date)
+        }
+        let planned = plansByDay.map { day, plans -> DailyLoad in
+            let load = plans.reduce(0.0) { total, plan in
+                guard let workout = workoutsByID[plan.workoutID] else { return total }
+                let estimate = plan.expectedLoadOverride
+                    ?? statisticsCalculator.estimator.estimatedLoad(for: workout, athlete: athlete).value
+                return total + estimate
+            }
+            return DailyLoad(day: day, load: load)
+        }
+
+        return DailyLoadSplit(
+            actual: actual.filter { $0.load > 0 }.sorted { $0.day < $1.day },
+            planned: planned.filter { $0.load > 0 }.sorted { $0.day < $1.day }
+        )
+    }
+
     /// The date range of ``displayedWeekStart`` — the week currently visible in the day list, not
     /// necessarily today's. Used to highlight that week's background on the fitness chart, so the
     /// 3-week trend stays visually anchored to whichever week the athlete has scrolled to.
@@ -219,15 +531,188 @@ public final class WeekViewModel {
             .filter { calendar.isDate($0.date, inSameDayAs: day) }
     }
 
+    /// `plans(on:)` minus those already matched to a completed activity (`completedActivityID !=
+    /// nil`) — that activity's own card represents them, so the day list shouldn't lay out a row
+    /// for them at all.
+    public func pendingPlans(on day: Date) -> [PlannedActivity] {
+        plans(on: day).filter { $0.completedActivityID == nil }
+    }
+
+    /// Races on `day` (MVP2-104), most important first (primary, then secondary, then tertiary) so
+    /// the day row lists them in a stable, meaningful order.
+    public func races(on day: Date) -> [Race] {
+        let onDay = model.races.filter { calendar.isDate($0.date, inSameDayAs: day) }
+        // Most days have no race: skip the sort, which runs for every day of three pages per drag frame.
+        guard onDay.count > 1 else { return onDay }
+        // `allCases` is declared most important first (primary, secondary, tertiary).
+        let order = RacePriority.allCases
+        return onDay.sorted {
+            let (a, b) = (order.firstIndex(of: $0.priority) ?? 0, order.firstIndex(of: $1.priority) ?? 0)
+            return a == b ? $0.name < $1.name : a < b
+        }
+    }
+
     /// The workout a plan schedules, if still in the library.
     public func workout(for plan: PlannedActivity) -> StructuredWorkout? {
         model.workouts.first { $0.id == plan.workoutID }
+    }
+
+    /// Everything a planned activity's card shows (MVP2-37), derived from the plan and its workout.
+    public struct PlannedCardSummary: Equatable, Sendable {
+        /// The one measure a workout is defined by, for places with room for a single figure (the
+        /// activity sheet's plan-link options). The card shows both ``duration`` and
+        /// ``distanceMeters``, the forecast one marked with a "~".
+        public enum Extent: Equatable, Sendable {
+            case duration(TimeInterval)
+            case distance(meters: Double)
+        }
+
+        /// `.running` when the plan's workout is no longer in the library.
+        public let sport: Sport
+        /// Where the workout is done; `nil` when unset or when the workout is gone.
+        public let venue: Venue?
+        /// `nil` when the plan's workout is no longer in the library.
+        public let name: String?
+        /// ``PlannedActivity/expectedLoadOverride``, else the estimator's figure; `nil` when the
+        /// workout is missing.
+        public let load: Double?
+        /// Whether ``load`` is the estimator's figure, shown with a "~" (MVP2-8); `false` for the
+        /// athlete's own override, which is a target.
+        public let isLoadEstimated: Bool
+        public let extent: Extent?
+        /// Expected duration: the sum of the steps' times for a workout of time steps only, else
+        /// forecast from the athlete's paces. `nil` when the workout is missing.
+        public let duration: TimeInterval?
+        /// Expected distance: the sum of the steps' distances for a workout of distance steps only,
+        /// else forecast from the athlete's paces. `nil` when the workout is missing, when it can't be
+        /// forecast (no heart-rate zone settings recorded) or when it comes to nothing.
+        public let distanceMeters: Double?
+        /// Whether ``duration`` is a forecast, shown with a "~" (MVP2-8): the workout has a distance
+        /// or open step (`StructuredWorkout.isDurationForecast`).
+        public let isDurationEstimated: Bool
+        /// Whether ``distanceMeters`` is a forecast, shown with a "~" (MVP2-8): the workout isn't made
+        /// solely of distance steps (`StructuredWorkout.isDistanceForecast`).
+        public let isDistanceEstimated: Bool
+        /// How many earlier activities the forecast came from; `0` for the pace model alone. The
+        /// detail sheet's footer says so.
+        public let forecastActivityCount: Int
+
+        /// Whether ``extent`` is a forecast: the duration's flag for a duration, never for a distance
+        /// (only a workout of distance steps alone is shown by its distance).
+        public var isExtentEstimated: Bool {
+            switch extent {
+            case .duration?: isDurationEstimated
+            case .distance?, nil: false
+            }
+        }
+
+        /// The summary for `plan` given its `workout` (`nil` when no longer in the library). Shared by
+        /// the day list's card and ``PlannedWorkoutDetailViewModel``, so both always show the same
+        /// numbers. A workout made up solely of distance-goal steps gets its distance as ``extent``;
+        /// every other workout its expected duration. Whatever the steps don't set is forecast from
+        /// `history` (MVP2-35, MVP2-111; see
+        /// `StatisticsCalculator.projection(for:athlete:paceHistory:before:excluding:)`).
+        ///
+        /// "Distance steps alone" uses the same rule as the estimate flags
+        /// (`StructuredWorkout.isDistanceForecast`, which skips blocks repeated zero times), so a
+        /// distance shown as the workout's target is never one taken from the forecast.
+        static func make(
+            plan: PlannedActivity, workout: StructuredWorkout?, athlete: AthleteProfile,
+            calculator: StatisticsCalculator, history: PaceHistory = .empty
+        ) -> PlannedCardSummary {
+            guard let workout else {
+                return PlannedCardSummary(
+                    sport: .running, venue: nil, name: nil, load: plan.expectedLoadOverride, isLoadEstimated: false,
+                    extent: nil, duration: nil, distanceMeters: nil,
+                    isDurationEstimated: false, isDistanceEstimated: false, forecastActivityCount: 0
+                )
+            }
+            let load = plan.expectedLoadOverride
+                ?? calculator.estimator.estimatedLoad(for: workout, athlete: athlete).value
+            let projection = calculator.projection(
+                for: workout, athlete: athlete, paceHistory: history, before: plan.date
+            )
+
+            // `isDistanceForecast` is `true` for a workout with no steps at all, so it's never shown
+            // as "0 m".
+            let extent: Extent
+            let expectedDistance: Double?
+            if workout.isDistanceForecast {
+                extent = .duration(projection.duration)
+                expectedDistance = projection.distanceMeters
+            } else {
+                let stepDistance = workout.blocks.reduce(0.0) { total, block in
+                    let blockDistance = block.steps.reduce(0.0) { sum, step in
+                        if case .distance(let meters) = step.goal { return sum + meters }
+                        return sum
+                    }
+                    return total + blockDistance * Double(block.repetitions)
+                }
+                extent = .distance(meters: stepDistance)
+                expectedDistance = stepDistance
+            }
+
+            return PlannedCardSummary(
+                sport: workout.sport, venue: workout.venue, name: workout.name, load: load, isLoadEstimated: plan.isExpectedLoadEstimated,
+                extent: extent, duration: projection.duration,
+                distanceMeters: expectedDistance.flatMap { $0 > 0 ? $0 : nil },
+                isDurationEstimated: workout.isDurationForecast, isDistanceEstimated: workout.isDistanceForecast,
+                forecastActivityCount: projection.matchedActivityCount
+            )
+        }
+    }
+
+    /// The card content for `plan` (MVP2-37): its expected duration and distance, whichever the
+    /// steps don't set forecast from ``paceHistory``.
+    public func plannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
+        refreshCardCachesIfNeeded()
+        let workout = workout(for: plan)
+        return plannedSummaryCache.value(for: plan.id, inputs: projectionInputs(for: plan, workout: workout)) {
+            computePlannedCardSummary(for: plan)
+        }
+    }
+
+    private func computePlannedCardSummary(for plan: PlannedActivity) -> PlannedCardSummary {
+        PlannedCardSummary.make(
+            plan: plan, workout: workout(for: plan), athlete: model.athlete, calculator: statisticsCalculator,
+            history: paceHistory
+        )
     }
 
     /// `day`'s fitness metrics, if computed — `nil` before ``load(asOf:)`` has covered it (e.g.
     /// the first frame, before `.task` runs). Used by the day list's CTL/ATL/TSB pills (MVP1-40).
     public func metrics(on day: Date) -> FitnessMetrics? {
         model.metrics.first { calendar.isDate($0.day, inSameDayAs: day) }
+    }
+
+    /// `day`'s metrics (see ``metrics(on:)``), whether its Form (TSB) pill shows an estimate
+    /// (MVP2-8; see `FitnessMetrics.isFormProjected(on:in:calendar:)` — Load, Fitness and Fatigue
+    /// follow `day`'s own ``FitnessMetrics/isProjected`` instead), and whether its Load pill does
+    /// because an activity was scored from perceived effort (MVP2-127), for the day list's pill row.
+    ///
+    /// One scan of `model.metrics` for both: every day row calls this on each week-swipe frame. The
+    /// series is one entry per day in order, so the previous day is normally the entry before
+    /// `day`'s; anything else falls back to a lookup.
+    public func dayMetrics(on day: Date) -> (metrics: FitnessMetrics?, isFormProjected: Bool, isLoadEstimated: Bool) {
+        let series = model.metrics
+        guard let index = series.firstIndex(where: { calendar.isDate($0.day, inSameDayAs: day) }) else {
+            return (nil, false, false)
+        }
+        let isLoadEstimated = isLoadEstimated(on: day)
+        if index > 0, let previousDay = calendar.date(byAdding: .day, value: -1, to: day),
+           calendar.isDate(series[index - 1].day, inSameDayAs: previousDay) {
+            return (series[index], series[index - 1].isProjected, isLoadEstimated)
+        }
+        return (series[index], FitnessMetrics.isFormProjected(on: day, in: series, calendar: calendar), isLoadEstimated)
+    }
+
+    /// Whether `day`'s Load pill is an estimate because a completed activity that day was scored from
+    /// perceived effort rather than heart rate (MVP2-127), the same test its card makes (MVP2-8). A day
+    /// with any such activity counts, since its total load then includes an estimate. A projected day
+    /// is estimated by `FitnessMetrics.isProjected` instead. Each activity's score is cached
+    /// (``scoredLoad(for:)``), so this stays cheap on the week-swipe path.
+    private func isLoadEstimated(on day: Date) -> Bool {
+        activities(on: day).contains { scoredLoad(for: $0)?.method.isEstimate ?? false }
     }
 
     /// One page per sport for the week view's stats pager (MVP1-52; design doc: "a weekly overview
@@ -254,20 +739,32 @@ public final class WeekViewModel {
     /// each of its 3 carousel pages' own pinned stats bar, including the previous/next week's,
     /// which re-evaluate on every touch-move frame of the day list's own swipe gesture just like
     /// the current page does. Without a cache keyed per week, each of those frames on each page
-    /// would redundantly re-run two full `periodStats` computations (one `LoadCalculator`
+    /// would redundantly re-run two full `periodStatsSplit` computations (one `LoadCalculator`
     /// invocation per activity, each) even though neither that page's own week nor the underlying
     /// data changed — the same class of freeze this codebase already fixed once for the day list
     /// itself (MVP1-19). The whole cache is invalidated together (not per week) whenever
-    /// `model.activities.count` or `today`'s calendar day changes, since either can shift every
-    /// cached week's own figures at once.
+    /// `model.activities`/`model.plans`/`model.workouts`' counts or `today`'s calendar day changes
+    /// — any of those can shift every cached week's own figures at once, and a plan/workout can
+    /// change independently of `model.activities` (e.g. saving a new planned workout via
+    /// `PlannedWorkoutSheet`). A new ``paceHistory`` invalidates it too: the planned distance and
+    /// time are forecast from it. So does a new ``plannedLoadGeneration``: the planned load is refined
+    /// from completed plans.
     public func sportStatsPages(for weekStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
-        let activityCount = model.activities.count
+        let key = (model.activities.count, model.plans.count, model.workouts.count)
+        let plans = plansFingerprint()
+        let activities = activitiesFingerprint()
         let keyIsCurrent = sportStatsPagesCachesKey.map {
-            $0.activityCount == activityCount && calendar.isDate($0.today, inSameDayAs: today)
+            $0.activityCount == key.0 && $0.planCount == key.1 && $0.workoutCount == key.2
+                && $0.athlete == model.athlete && calendar.isDate($0.today, inSameDayAs: today)
+                && $0.paceHistoryGeneration == paceHistoryGeneration
+                && $0.plannedLoadGeneration == plannedLoadGeneration && $0.plans == plans
+                && $0.activities == activities
         } ?? false
         if !keyIsCurrent {
             sportStatsPagesCaches.removeAll()
-            sportStatsPagesCachesKey = (activityCount, today)
+            sportStatsPagesCachesKey = (
+                key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration, plannedLoadGeneration, plans, activities
+            )
         }
         if let cached = sportStatsPagesCaches[weekStart] {
             return cached
@@ -277,51 +774,176 @@ public final class WeekViewModel {
         return pages
     }
 
+    /// A hash of what each plan contributes to the week's totals — its id, date, workout, load
+    /// override and whether it's matched to a completed activity (a matched plan counts as that
+    /// activity, not as planned) — for the stats and daily-load cache keys. The counts alone miss an edit in place.
+    /// Cheap enough for the swipe path: a handful of fields per loaded plan, no statistics.
+    private func plansFingerprint() -> Int {
+        var hasher = Hasher()
+        for plan in model.plans {
+            hasher.combine(plan.id)
+            hasher.combine(plan.date)
+            hasher.combine(plan.workoutID)
+            hasher.combine(plan.expectedLoadOverride)
+            hasher.combine(plan.completedActivityID)
+        }
+        return hasher.finalize()
+    }
+
+    /// A hash of what each activity contributes to the stats and daily load — id, sport, start,
+    /// duration, distance, effort, plan link and heart-rate sample count — so a resync that changes
+    /// activities in place (same count) still invalidates the caches. Cheap enough for the swipe path
+    /// (a handful of fields per loaded activity, no statistics). Deliberately approximate: it counts
+    /// heart-rate samples rather than hashing them, so a same-length series with other values goes
+    /// unnoticed.
+    private func activitiesFingerprint() -> Int {
+        var hasher = Hasher()
+        for activity in model.activities {
+            hasher.combine(activity.id)
+            hasher.combine(activity.sport)
+            hasher.combine(activity.start)
+            hasher.combine(activity.duration)
+            hasher.combine(activity.distanceMeters)
+            hasher.combine(activity.perceivedExertion)
+            hasher.combine(activity.linkedPlanID)
+            hasher.combine(activity.heartRate.count)
+        }
+        return hasher.finalize()
+    }
+
     private func computeSportStatsPages(weekStart: Date, asOf today: Date) -> [SportStatsPage] {
-        let current = periodStats(weekStart: weekStart, asOf: today)
+        let current = periodStatsSplit(weekStart: weekStart, asOf: today)
         let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
-        let previous = periodStats(weekStart: previousWeekStart, asOf: today)
+        let previous = periodStatsSplit(weekStart: previousWeekStart, asOf: today)
 
         let mainSport = model.athlete.mainSport
-        let otherSports = current.bySport.keys
+        let otherSports = Set(current.actual.keys).union(current.planned.keys)
             .filter { $0 != mainSport }
             .sorted { lhs, rhs in
-                let lhsDistance = current.bySport[lhs]?.distanceMeters ?? 0
-                let rhsDistance = current.bySport[rhs]?.distanceMeters ?? 0
+                let lhsDistance = current.actual[lhs]?.distanceMeters ?? 0
+                let rhsDistance = current.actual[rhs]?.distanceMeters ?? 0
                 return lhsDistance != rhsDistance ? lhsDistance > rhsDistance : lhs.displayName < rhs.displayName
             }
-        let loadChangeFraction = Self.changeFraction(current.totalLoad - previous.totalLoad, of: previous.totalLoad)
+        let currentTotalLoad = current.actual.values.reduce(0) { $0 + $1.load }
+        let previousTotalLoad = previous.actual.values.reduce(0) { $0 + $1.load }
+        let plannedTotalLoad = current.planned.values.reduce(0) { $0 + $1.load }
+        let previousPlannedTotalLoad = previous.planned.values.reduce(0) { $0 + $1.load }
+        // The previous week's own *expected* total (performed + still-planned as of `today`), not
+        // its performed-only total — for a week fully in the past this is the same number (nothing
+        // of that week is still "planned" relative to `today`), but for two still-future weeks
+        // shown back to back, the earlier one's performed total is always 0 (it hasn't happened
+        // yet), which would make every later week's own change read as a meaningless "+∞%". Using
+        // the previous week's expected total instead gives a real baseline in both cases: the
+        // week right after the one containing `today` compares against that week's own
+        // performed-so-far-plus-still-planned total, and a week further out compares against the
+        // week before it's own still-fully-planned total.
+        let previousExpectedTotalLoad = previousTotalLoad + previousPlannedTotalLoad
+        let estimates = weekEstimates(weekStart: weekStart, asOf: today)
+        let loadChangeFraction = Self.changeFraction(currentTotalLoad - previousExpectedTotalLoad, of: previousExpectedTotalLoad)
+        let expectedLoadChangeFraction = Self.changeFraction(
+            (currentTotalLoad + plannedTotalLoad) - previousExpectedTotalLoad, of: previousExpectedTotalLoad
+        )
 
         return ([mainSport] + otherSports).map { sport in
-            let currentSport = current.bySport[sport] ?? Self.zeroSportStats(sport)
-            let previousSport = previous.bySport[sport] ?? Self.zeroSportStats(sport)
+            let currentActual = current.actual[sport] ?? Self.zeroSportStats(sport)
+            let previousActual = previous.actual[sport] ?? Self.zeroSportStats(sport)
+            let currentPlanned = current.planned[sport] ?? Self.zeroSportStats(sport)
+            let previousPlanned = previous.planned[sport] ?? Self.zeroSportStats(sport)
+            // See `previousExpectedTotalLoad`'s own doc comment for why this is performed+planned,
+            // not performed-only.
+            let previousExpectedDistance = previousActual.distanceMeters + previousPlanned.distanceMeters
+            let previousExpectedTime = previousActual.time + previousPlanned.time
             return SportStatsPage(
                 sport: sport,
-                distanceMeters: currentSport.distanceMeters,
-                time: currentSport.time,
+                distanceMeters: currentActual.distanceMeters,
+                time: currentActual.time,
                 distanceChangeFraction: Self.changeFraction(
-                    currentSport.distanceMeters - previousSport.distanceMeters, of: previousSport.distanceMeters
+                    currentActual.distanceMeters - previousExpectedDistance, of: previousExpectedDistance
                 ),
-                timeChangeFraction: Self.changeFraction(currentSport.time - previousSport.time, of: previousSport.time),
-                load: current.totalLoad,
+                timeChangeFraction: Self.changeFraction(currentActual.time - previousExpectedTime, of: previousExpectedTime),
+                load: currentTotalLoad,
                 loadChangeFraction: loadChangeFraction,
-                polarizedSplit: currentSport.timeInZone.polarizedSplit
+                polarizedSplit: currentActual.timeInZone.polarizedSplit,
+                plannedDistanceMeters: currentPlanned.distanceMeters,
+                plannedTime: currentPlanned.time,
+                plannedLoad: plannedTotalLoad,
+                plannedPolarizedSplit: currentPlanned.timeInZone.polarizedSplit,
+                expectedDistanceChangeFraction: Self.changeFraction(
+                    (currentActual.distanceMeters + currentPlanned.distanceMeters) - previousExpectedDistance,
+                    of: previousExpectedDistance
+                ),
+                expectedTimeChangeFraction: Self.changeFraction(
+                    (currentActual.time + currentPlanned.time) - previousExpectedTime, of: previousExpectedTime
+                ),
+                expectedLoadChangeFraction: expectedLoadChangeFraction,
+                isLoadEstimated: estimates.performedLoad,
+                isExpectedDistanceEstimated: estimates.plannedDistanceSports.contains(sport),
+                isExpectedTimeEstimated: estimates.plannedTimeSports.contains(sport),
+                isExpectedLoadEstimated: estimates.performedLoad || estimates.plannedLoad
             )
         }
     }
 
-    /// Descriptive totals (every sport, not just one) for the calendar week starting `weekStart` —
-    /// shared by ``sportStatsPages(asOf:)`` for both the displayed week and the previous one.
-    private func periodStats(weekStart: Date, asOf today: Date) -> PeriodStats {
+    /// Which of a week's stats-bar totals include an estimate (MVP2-8), from the same activities and
+    /// plans `StatisticsCalculator.periodStatsSplit` counts: activities up to and including today,
+    /// plans from today on that aren't yet matched to a completed activity and whose workout is
+    /// still in the library.
+    private struct WeekEstimates {
+        /// An activity's load was scored from perceived effort rather than heart rate.
+        var performedLoad = false
+        /// A plan's load is the estimator's figure rather than one the athlete set.
+        var plannedLoad = false
+        /// Sports with a plan whose distance is forecast from the athlete's paces.
+        var plannedDistanceSports: Set<Sport> = []
+        /// Sports with a plan whose duration is forecast from the athlete's paces.
+        var plannedTimeSports: Set<Sport> = []
+    }
+
+    private func weekEstimates(weekStart: Date, asOf today: Date) -> WeekEstimates {
+        let todayStart = calendar.startOfDay(for: today)
+        let rangeStart = calendar.startOfDay(for: weekStart)
+        let rangeEnd = calendar.date(byAdding: .day, value: 6, to: rangeStart) ?? rangeStart
+        var estimates = WeekEstimates()
+
+        estimates.performedLoad = model.activities.contains { activity in
+            let day = calendar.startOfDay(for: activity.start)
+            guard day >= rangeStart, day <= rangeEnd, day <= todayStart else { return false }
+            return scoredLoad(for: activity)?.method.isEstimate ?? false
+        }
+
+        let workoutsByID = Dictionary(model.workouts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for plan in model.plans {
+            let day = calendar.startOfDay(for: plan.date)
+            guard plan.completedActivityID == nil,
+                  day >= rangeStart, day <= rangeEnd, day >= todayStart,
+                  let workout = workoutsByID[plan.workoutID]
+            else { continue }
+            if plan.isExpectedLoadEstimated {
+                estimates.plannedLoad = true
+            }
+            if workout.isDistanceForecast {
+                estimates.plannedDistanceSports.insert(workout.sport)
+            }
+            if workout.isDurationForecast {
+                estimates.plannedTimeSports.insert(workout.sport)
+            }
+        }
+        return estimates
+    }
+
+    /// Descriptive totals (every sport, not just one), performed and planned independently, for
+    /// the calendar week starting `weekStart` — shared by ``sportStatsPages(asOf:)`` for both the
+    /// displayed week and the previous one.
+    private func periodStatsSplit(weekStart: Date, asOf today: Date) -> PeriodStatsSplit {
         let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
-        return statisticsCalculator.periodStats(
+        return statisticsCalculator.periodStatsSplit(
             activities: model.activities,
             plans: model.plans,
             workouts: model.workouts,
             athlete: model.athlete,
             range: weekStart...weekEnd,
             asOf: today,
-            previous: nil
+            paceHistory: paceHistory
         )
     }
 
@@ -340,108 +962,32 @@ public final class WeekViewModel {
         return delta / previousTotal
     }
 
-    /// `activity.id` → the overlap issue worth warning about, for every activity named by a real
-    /// (non-``OverlapRecommendation/possibleMultisport``) advice — one pass over
-    /// ``TrainingModel/overlapAdvice`` rather than the N passes ``overlapWarning(for:)`` would need
-    /// re-filtering it per activity. `TrainingModel.overlapAdvice` itself reruns
-    /// `ActivityOverlapChecker.findOverlaps(in:)` on every access (its own doc comment warns a
-    /// SwiftUI-`body` caller to cache it), and `DayActivitiesSection` calls ``overlapWarning(for:)``
-    /// once per activity card while building the day list — the same `body`-during-swipe path
-    /// `sportStatsPagesCaches`/`weekGraphCaches` already exist to keep MVP1-19's freeze from
-    /// recurring, so batching this into a single dictionary build per access is worth doing even
-    /// though `ActivityOverlapChecker` itself is cheap at today's realistic activity counts.
-    private var overlapWarningsByActivityID: [UUID: OverlapRecommendation] {
-        var result: [UUID: OverlapRecommendation] = [:]
-        for advice in model.overlapAdvice {
-            if case .possibleMultisport = advice.recommendation { continue }
-            for id in [advice.first, advice.second] where result[id] == nil {
-                result[id] = advice.recommendation
-            }
-        }
-        return result
-    }
-
-    /// The overlap issue worth warning about for `activity`, if any (MVP1-63) — skips
-    /// ``OverlapRecommendation/possibleMultisport``: that case describes activities that
-    /// legitimately sit close together (e.g. a triathlon's separately-logged legs) rather than a
-    /// problem, so it isn't surfaced as a warning; `.duplicate`/`.merge`/`.conflict` all are.
-    public func overlapWarning(for activity: Activity) -> OverlapRecommendation? {
-        overlapWarningsByActivityID[activity.id]
-    }
-
-    /// `activity`'s overlap context — its recommendation plus the specific other activity it
-    /// overlaps with — for the activity detail sheet's resolution UI (MVP1-63). Unlike
-    /// ``overlapWarning(for:)``, this doesn't skip ``OverlapRecommendation/possibleMultisport``:
-    /// the detail sheet is where all four recommendation types are meant to surface distinctly
-    /// (MVP1-29), even the ones that don't need a delete action.
-    public func overlapContext(for activity: Activity) -> OverlapContext? {
-        for advice in model.overlapAdvice where advice.first == activity.id || advice.second == activity.id {
-            let otherID = advice.first == activity.id ? advice.second : advice.first
-            guard let other = model.activities.first(where: { $0.id == otherID }) else { continue }
-            return OverlapContext(recommendation: advice.recommendation, otherActivity: other)
-        }
-        return nil
-    }
-
-    /// One row per activity worth reviewing for an overlap issue (MVP1-63) — every activity named
-    /// by a non-``OverlapRecommendation/possibleMultisport`` advice, deduplicated (an activity
-    /// appearing in more than one pair only lists once, under whichever advice named it first) and
-    /// sorted by start time. Backs the sheet the import summary banner opens onto.
-    public var overlapReviewItems: [OverlapReviewItem] {
-        var seenIDs: Set<UUID> = []
-        var items: [OverlapReviewItem] = []
-        for advice in model.overlapAdvice {
-            if case .possibleMultisport = advice.recommendation { continue }
-            for id in [advice.first, advice.second] where !seenIDs.contains(id) {
-                guard let activity = model.activities.first(where: { $0.id == id }) else { continue }
-                seenIDs.insert(id)
-                items.append(OverlapReviewItem(activity: activity, recommendation: advice.recommendation))
-            }
-        }
-        return items.sorted { $0.activity.start < $1.activity.start }
-    }
-
-    /// How many activities currently have an overlap issue worth reviewing (MVP1-67) — the same
-    /// live count ``overlapReviewItems`` lists, surfaced as a plain `Int` for the Athlete tab's
-    /// warning banner and its tab-bar badge. Always current: unlike the one-time
-    /// `overlapImportSummary` snapshot this replaced, it reflects whatever `model.overlapAdvice`
-    /// says right now, so resolving an overlap (``resolveOverlap(deleting:)``) updates both
-    /// surfaces the moment the delete lands, with no separate "refresh the summary" step needed.
-    public var overlapWarningCount: Int {
-        overlapReviewItems.count
-    }
-
-    /// Resolves one side of an overlap by deleting it (MVP1-63) — the activity detail sheet's
-    /// action for ``OverlapRecommendation/duplicate(keep:remove:)``/``OverlapRecommendation/merge``/
-    /// ``OverlapRecommendation/conflict``: "remove this one, keep the other".
-    public func resolveOverlap(deleting id: UUID, asOf today: Date = .now) async {
-        await deleteActivity(id: id, asOf: today)
-    }
-
-    /// The activity detail sheet's general "Delete Activity" action (MVP1-65), independent of any
-    /// overlap — e.g. a bad HealthKit import the athlete just wants gone, not something
-    /// ``TrainingModel/overlapAdvice`` flagged. The view gates this behind its own confirmation
-    /// alert before calling it; this method itself performs the delete unconditionally.
-    public func deleteActivity(_ activity: Activity, asOf today: Date = .now) async {
-        await deleteActivity(id: activity.id, asOf: today)
-    }
-
-    /// Shared by ``resolveOverlap(deleting:)`` and ``deleteActivity(_:asOf:)`` — both ultimately
-    /// just delete one activity by id (MVP1-64's soft-delete/tombstone semantics live entirely in
-    /// `TrainingModel.deleteActivity(id:asOf:)` itself, not here). Failures fail silently, same as
-    /// every other store-mutating action here — MVP 1 has no error UI.
-    private func deleteActivity(id: UUID, asOf today: Date) async {
-        try? await model.deleteActivity(id: id, asOf: today)
-        await refreshWeekCachesIfNeeded()
-    }
-
     /// `activity`'s training load (TRIMP), computed the same way ``activityDetailViewModel(for:)``
     /// does — the day list's activity cards show this as their headline number (MVP1-41). `nil`
     /// when no calculator could score the activity (`confidence == 0`), so the card shows nothing
     /// rather than a misleading "0".
     public func trainingLoad(for activity: Activity) -> Double? {
-        let summary = statisticsCalculator.summary(for: activity, athlete: model.athlete)
-        return summary.load.confidence > 0 ? summary.load.value : nil
+        scoredLoad(for: activity)?.value
+    }
+
+    /// ``trainingLoad(for:)`` with how it was computed, so a card can mark a load scored from
+    /// perceived effort rather than heart rate as an estimate (MVP2-8). `nil` when no calculator
+    /// could score the activity.
+    ///
+    /// Cached per activity (``scoredLoadCache``), keyed on what scores it: its sport, start, duration,
+    /// effort and heart-rate sample count; the athlete's settings clear it
+    /// (`refreshCardCachesIfNeeded()`). Like ``activitiesFingerprint()``, it counts heart-rate samples
+    /// rather than hashing them, so a same-length series with other values goes unnoticed.
+    func scoredLoad(for activity: Activity) -> TrainingLoad? {
+        refreshCardCachesIfNeeded()
+        let inputs = [
+            activity.sport.hashValue, activity.start.hashValue, activity.duration.hashValue,
+            activity.perceivedExertion ?? -1, activity.heartRate.count,
+        ]
+        return scoredLoadCache.value(for: activity.id, inputs: inputs) {
+            let summary = statisticsCalculator.summary(for: activity, athlete: model.athlete)
+            return summary.load.confidence > 0 ? summary.load : nil
+        }
     }
 
     /// `weekStart`'s heart-rate histogram, for the graph panel's "Heart Rate Histogram" page
@@ -471,7 +1017,7 @@ public final class WeekViewModel {
     /// settled, and a caller that only cares about the displayed week's own data (already updated
     /// first) isn't kept waiting by anything else, since `WeekView` never awaits this call itself.
     ///
-    /// A changed `activityCount` marks every currently cached week stale and due for
+    /// A changed activity fingerprint or athlete (MVP2-56) marks every currently cached week stale and due for
     /// recomputation, but deliberately doesn't clear ``weekGraphCaches`` up front to do that —
     /// `weekGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
     /// (synchronously, before this method's first `await`) was visible to
@@ -484,24 +1030,35 @@ public final class WeekViewModel {
     /// shows one (very briefly) outdated frame rather than a spurious empty one — never a
     /// user-visible difference in practice, since the underlying activities rarely change whichever
     /// week's own histogram they'd affect this dramatically between one frame and the next.
-    public func refreshWeekCachesIfNeeded() async {
-        let activityCount = model.activities.count
-        let activityCountChanged = weekGraphCachesActivityCount != activityCount
-        if activityCountChanged {
-            weekGraphCachesActivityCount = activityCount
+    ///
+    /// - Parameters:
+    ///   - today: The day the pace history is read up to (see ``refreshPaceHistoryIfNeeded(asOf:force:)``).
+    ///   - activitiesChanged: `true` after an import, resync, dedup, link, join or delete, which can
+    ///     change the stored activities the pace history and the refined planned load are built from
+    ///     without anything the week view itself keys on changing; forces a refresh of both.
+    public func refreshWeekCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
+        if activitiesChanged { fieldTestFailures.removeAll() }
+        let fingerprint = histogramFingerprint()
+        let inputsChanged = weekGraphCachesFingerprint != fingerprint
+            || weekGraphCachesAthlete != model.athlete
+        if inputsChanged {
+            weekGraphCachesFingerprint = fingerprint
+            weekGraphCachesAthlete = model.athlete
         }
         let window = cachedWeekStarts
         let windowSet = Set(window)
         weekGraphCaches = weekGraphCaches.filter { windowSet.contains($0.key) }
 
         let displayedWeekStart = self.displayedWeekStart
-        if activityCountChanged || weekGraphCaches[displayedWeekStart] == nil {
+        if inputsChanged || weekGraphCaches[displayedWeekStart] == nil {
             await cacheWeekGraph(weekStart: displayedWeekStart, priority: .userInitiated)
         }
         for weekStart in window where weekStart != displayedWeekStart
-            && (activityCountChanged || weekGraphCaches[weekStart] == nil) {
+            && (inputsChanged || weekGraphCaches[weekStart] == nil) {
             await cacheWeekGraph(weekStart: weekStart, priority: .utility)
         }
+        await refreshPaceHistoryIfNeeded(asOf: today, force: activitiesChanged)
+        await refreshPlannedLoadIfNeeded(force: activitiesChanged)
     }
 
     /// Computes one week's heart-rate histogram off the main actor and stores it in
@@ -509,7 +1066,7 @@ public final class WeekViewModel {
     /// stale result for a week no longer near ``displayedWeekStart`` is simply dropped, not
     /// cached).
     private func cacheWeekGraph(weekStart: Date, priority: TaskPriority) async {
-        let activityCount = model.activities.count
+        let fingerprint = weekGraphCachesFingerprint
         let weekActivities = activities(forWeekStarting: weekStart)
         let athlete = model.athlete
         let statisticsCalculator = self.statisticsCalculator
@@ -524,16 +1081,37 @@ public final class WeekViewModel {
                 weekActivities, athlete: athlete, asOf: asOf, statisticsCalculator: statisticsCalculator
             )
         }.value
-        guard isStillCacheable(weekStart, activityCount: activityCount) else { return }
+        guard isStillCacheable(weekStart, fingerprint: fingerprint), athlete == model.athlete else { return }
         weekGraphCaches[weekStart] = histogram
     }
 
-    /// Whether a background computation for `weekStart` (started when `activityCount` was
-    /// `model.activities.count`) is still worth storing — `false` once either has moved on, since
-    /// the result is now either stale (a subsequent import changed the underlying activities) or
-    /// for a week that's fallen outside the 3-week window this cache keeps.
-    private func isStillCacheable(_ weekStart: Date, activityCount: Int) -> Bool {
-        cachedWeekStarts.contains(weekStart) && activityCount == model.activities.count
+    /// Whether a background computation for `weekStart` (started under `fingerprint`, the one
+    /// ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`` had just stored) is still worth
+    /// storing — `false` once either has moved on, since the result is now either stale (a
+    /// subsequent import changed the underlying activities) or for a week that's fallen outside the
+    /// 3-week window this cache keeps.
+    ///
+    /// Compares against the stored ``weekGraphCachesFingerprint`` rather than re-hashing every
+    /// sample: a refresh that sees changed data stores its new fingerprint first, so an older
+    /// result is dropped here, and data that changed before any refresh is caught by the next one.
+    private func isStillCacheable(_ weekStart: Date, fingerprint: Int?) -> Bool {
+        cachedWeekStarts.contains(weekStart) && fingerprint == weekGraphCachesFingerprint
+    }
+
+    /// A hash of what the heart-rate histogram reads from each activity — id, start, duration and
+    /// every heart-rate sample — so activities changed in place (same count) still invalidate
+    /// ``weekGraphCaches`` (MVP2-130). Unlike ``activitiesFingerprint()`` it hashes the samples
+    /// themselves: it only runs when the week caches refresh, not on the week-swipe path, and the
+    /// histogram is exactly what those samples feed.
+    private func histogramFingerprint() -> Int {
+        var hasher = Hasher()
+        for activity in model.activities {
+            hasher.combine(activity.id)
+            hasher.combine(activity.start)
+            hasher.combine(activity.duration)
+            hasher.combine(activity.heartRate)
+        }
+        return hasher.finalize()
     }
 
     /// `true` if `day` is `today`'s calendar day in the athlete's timezone — used by the day
@@ -542,9 +1120,130 @@ public final class WeekViewModel {
         calendar.isDate(day, inSameDayAs: today)
     }
 
+    /// `true` if `day` is strictly before `today`'s calendar day, in the athlete's timezone — a
+    /// planned workout only makes sense for today or later, so `WeekView`'s "add planned workout"
+    /// affordance disables itself (MVP2-15) on a day this returns `true` for, rather than opening
+    /// a sheet for a day that's already happened.
+    public func isPast(_ day: Date, asOf today: Date = .now) -> Bool {
+        Self.isPast(day, asOf: today, calendar: calendar)
+    }
+
+    /// ``isPast(_:asOf:)`` for any `calendar`, so code without a `WeekViewModel`'s own calendar
+    /// (the search results' missed plans, MVP2-21) applies the same rule.
+    static func isPast(_ day: Date, asOf today: Date, calendar: Calendar) -> Bool {
+        calendar.startOfDay(for: day) < calendar.startOfDay(for: today)
+    }
+
     /// The detail view model for `activity`, pushed when it's tapped in the day list.
     public func activityDetailViewModel(for activity: Activity) -> ActivityDetailViewModel {
-        ActivityDetailViewModel(activity: activity, athlete: model.athlete, overlapContext: overlapContext(for: activity))
+        ActivityDetailViewModel(
+            activity: activity, athlete: model.athlete, overlapContext: overlapContext(for: activity),
+            planLinkContext: planLinkContext(for: activity), planWorkout: linkedWorkout(for: activity),
+            title: activityTitle(for: activity),
+            fieldTestFailureMessage: fieldTestFailures[activity.id]?.explanation
+        )
+    }
+
+    /// The view model for the "Create Planned Workout" sheet (MVP2-15), opened from a day row's
+    /// add affordance — `date` defaults the sheet to that day, still editable inside it.
+    public func plannedWorkoutSheetViewModel(date: Date) -> PlannedWorkoutSheetViewModel {
+        let viewModel = PlannedWorkoutSheetViewModel(
+            model: model, date: date, estimator: statisticsCalculator.estimator, scheduler: plannedWorkoutScheduler
+        )
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
+    }
+
+    /// The view model for the Library tab (MVP2-21). A plan made from the tab uses the Watch
+    /// setting at the time (MVP2-118) and runs the Watch sync afterwards.
+    public func workoutLibraryViewModel() -> WorkoutLibraryViewModel {
+        // `nil` while sending to the Watch is off, so no fallback to the live bridge here.
+        let viewModel = WorkoutLibraryViewModel(model: model, estimator: { [weak self] in
+            // Reading the generation makes a view that asks for the estimator re-read once a refinement lands.
+            _ = self?.plannedLoadGeneration
+            return self?.statisticsCalculator.estimator ?? TRIMPPlanEstimator()
+        }) { [weak self] in
+            guard let self else { return nil }
+            return self.plannedWorkoutScheduler
+        }
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
+    }
+
+    /// The view model for the search results (MVP2-21), sharing `library` with the Library tab. Opening
+    /// a result first loads this model around its day (``ensureLoaded(around:asOf:)``).
+    public func searchViewModel(library: WorkoutLibraryViewModel) -> SearchViewModel {
+        let viewModel = SearchViewModel(model: model, library: library)
+        viewModel.prepareDetail = { [weak self] date in await self?.ensureLoaded(around: date) }
+        return viewModel
+    }
+
+    /// The view model for the "Add Race" sheet (MVP2-17), opened from a day row's add affordance
+    /// alongside ``plannedWorkoutSheetViewModel(date:)`` — `date` defaults the sheet to that day,
+    /// still editable inside it.
+    public func raceSheetViewModel(date: Date) -> RaceSheetViewModel {
+        RaceSheetViewModel(model: model, date: date)
+    }
+
+    /// The view model for the week view's "Export Calendar" sheet (MVP2-100), opened from the
+    /// toolbar's share button.
+    public func calendarExportViewModel() -> CalendarExportViewModel {
+        CalendarExportViewModel(model: model)
+    }
+
+    /// The view model for the week view's "Import Calendar" sheet (MVP2-103), opened from the
+    /// toolbar's import button.
+    public func calendarImportViewModel() -> CalendarImportViewModel {
+        let viewModel = CalendarImportViewModel(model: model)
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        return viewModel
+    }
+
+    /// The view model for the detail sheet shown when `plan`'s card is tapped (MVP2-38).
+    ///
+    /// - Parameters:
+    ///   - plan: The plan whose card was tapped.
+    ///   - today: Decides whether the plan was missed, for its Apple Watch status (MVP2-122); fixed
+    ///     when the sheet opens.
+    public func plannedWorkoutDetailViewModel(
+        for plan: PlannedActivity, asOf today: Date = .now
+    ) -> PlannedWorkoutDetailViewModel {
+        let viewModel = PlannedWorkoutDetailViewModel(
+            model: model, plan: plan, statisticsCalculator: statisticsCalculator, scheduler: plannedWorkoutScheduler
+        )
+        viewModel.onPlansChanged = { [weak self] in self?.requestWatchSync() }
+        viewModel.watchStatus = { [weak self] in self?.watchStatus(for: $0, asOf: today) }
+        return viewModel
+    }
+
+    /// What the planned-workout sheets schedule a saved plan with: the Watch sync's scheduler, or
+    /// none while the athlete has turned sending to the Watch off (MVP2-118), so a save neither
+    /// checks the workout against the Watch nor schedules it. Without a sync (WorkoutKit
+    /// unavailable, or a test that didn't pass one) it's the default, as before.
+    var plannedWorkoutScheduler: (any PlannedWorkoutScheduling)? {
+        guard let watchSync else { return PlannedWorkoutSchedulers.live }
+        return watchSync.editingScheduler
+    }
+
+    /// Runs the Watch sync (MVP2-55) after a plan is saved, deleted or imported, or a plan's link to
+    /// an activity may have changed (MVP2-116): a linked plan's entry is kept as done, and an
+    /// unlinked one in the window goes back on the Watch. A no-op without a sync.
+    ///
+    /// - Parameter today: The action's injected day, so the sync's 7-day window matches it.
+    func requestWatchSync(asOf today: Date = .now) {
+        guard let watchSync else { return }
+        pendingWatchSync = watchSync.requestSync(asOf: today)
+    }
+
+    /// Whether the week view shows the banner saying planned workouts won't reach the Watch because
+    /// the athlete declined permission (MVP2-117). `false` without a sync.
+    public var showsWatchPermissionBanner: Bool {
+        watchSync?.showsPermissionDeniedBanner ?? false
+    }
+
+    /// Hides the Watch permission banner until permission is granted and later declined again.
+    func dismissWatchPermissionBanner() {
+        watchSync?.dismissPermissionDeniedBanner()
     }
 
     /// The view model for the athlete account screen, presented from the week view's toolbar.
@@ -573,14 +1272,94 @@ public final class WeekViewModel {
         displayedWeekStart = Self.weekStart(containing: date, calendar: calendar)
     }
 
+    /// Loads the weeks around `date` into `model` as well as the displayed ones, so a detail sheet
+    /// opened from the search results (MVP2-21) for a plan or activity outside the week view's window
+    /// finds its plan, workout, link and overlaps in `model`, and follows an edit made in it.
+    /// Loads the *union* with the current window, for the same reason as ``metrics(in:asOf:)``.
+    /// A failed load leaves `model` as it was, and the sheet opens anyway.
+    public func ensureLoaded(around date: Date, asOf today: Date = .now) async {
+        let range = Self.loadRange(for: Self.weekStart(containing: date, calendar: calendar), calendar: calendar)
+        let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
+        if currentLoadRange.contains(range.lowerBound), currentLoadRange.contains(range.upperBound) { return }
+        let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
+        try? await model.load(in: unionRange, asOf: today)
+        await refreshWeekCachesIfNeeded(asOf: today)
+    }
+
     /// Loads ``loadRange(for:calendar:)`` for ``displayedWeekStart`` from the stores into `model`
     /// — wider than ``chartRange`` itself, so `WeekView`'s neighbor carousel pages already have
     /// their own complete chart data before the athlete ever swipes to them (MVP1-32). Errors are
     /// swallowed — a failed load leaves `model` exactly as it was (`TrainingModel.load(in:)`'s own
     /// guarantee), so there's nothing for the view to reconcile; MVP 1 has no load-failure UI.
     public func load(asOf today: Date = .now) async {
-        try? await model.load(in: Self.loadRange(for: displayedWeekStart, calendar: calendar), asOf: today)
-        await refreshWeekCachesIfNeeded()
+        do {
+            try await model.load(in: Self.loadRange(for: displayedWeekStart, calendar: calendar), asOf: today)
+            // Only a load that worked says whether Health was ever imported (MVP2-147).
+            onboarding.markLoaded()
+        } catch {}
+        await refreshWeekCachesIfNeeded(asOf: today)
+    }
+
+    /// Looks up whether the athlete was never asked to allow distance (MVP2-146), for the "Allow
+    /// distance" banner. Call it when the app becomes active.
+    public func refreshHealthAccessStatus() async {
+        onboarding.setHasUnansweredDistanceAccess(await refresher.hasUnansweredDistanceAccess())
+    }
+
+    /// Whether the week view shows the "Allow distance" banner (see ``OnboardingViewModel/showsDistanceBanner``).
+    public var showsDistanceBanner: Bool {
+        onboarding.showsDistanceBanner
+    }
+
+    /// The banner at the bottom of the week view (MVP2-117, MVP2-147, MVP2-146).
+    public enum BottomBanner: Equatable, Sendable {
+        /// Nothing has been imported from Health but plans exist.
+        case connectHealth
+        /// Health is connected but distance was never asked for.
+        case allowDistance
+        /// Planned workouts can't reach the Watch.
+        case watchPermission
+        /// iCloud isn't available.
+        case iCloud
+    }
+
+    /// The one banner the week view shows, if any. Several can apply at once, and stacked they would
+    /// cover most of the calendar, so only the most important shows: Health (without it there is no
+    /// training data) before the Watch (planned workouts won't arrive) before iCloud (data stays on
+    /// the device). Dismissing or resolving it brings up the next.
+    public var bottomBanner: BottomBanner? {
+        if showsConnectHealthBanner { return .connectHealth }
+        if showsDistanceBanner { return .allowDistance }
+        if showsWatchPermissionBanner { return .watchPermission }
+        if onboarding.showsICloudBanner { return .iCloud }
+        return nil
+    }
+
+    /// Asks the athlete to allow distance, then reads every workout again
+    /// (MVP2-146): workouts already imported have no per-step figures, and distance is only there once
+    /// it was allowed. The same re-import as Force Full Resync, run once on the athlete's say-so.
+    ///
+    /// - Parameter today: The day the re-import is run for.
+    public func allowMoreHealthData(asOf today: Date = .now) async {
+        // Set before the first `await`: the Health sheet is up for a while, and a second tap in that
+        // time mustn't ask again or start a second re-import.
+        guard !isAllowingHealthData, !isResyncing else { return }
+        isAllowingHealthData = true
+        defer { isAllowingHealthData = false }
+        try? await refresher.requestAuthorization()
+        await refreshHealthAccessStatus()
+        await resyncActivities(asOf: today)
+    }
+
+    /// `true` from the tap on "Allow Distance" until the re-import has finished (MVP2-146): the banner
+    /// shows it and ignores further taps.
+    public private(set) var isAllowingHealthData = false
+
+    /// Whether the week view shows the "Connect Health Data" banner (MVP2-147): nothing has been
+    /// imported from Health, the athlete hasn't dismissed it, and the calendar is showing because a
+    /// plan is loaded (see ``showsEmptyState``).
+    public var showsConnectHealthBanner: Bool {
+        onboarding.showsHealthBanner(showsCalendar: !showsEmptyState)
     }
 
     /// `model.metrics` restricted to `range`, in day order — for the metrics detail view's period
@@ -592,27 +1371,73 @@ public final class WeekViewModel {
     /// until the next natural navigation reloads it. The union is a strict superset of both, so
     /// nothing the main view relies on is ever lost by calling this.
     public func metrics(in range: ClosedRange<Date>, asOf today: Date = .now) async -> [FitnessMetrics] {
+        await loadWindow(covering: range, asOf: today)
+        return loadedMetrics(in: range)
+    }
+
+    /// Loads the union of `range` and the displayed week's load window into `model` and refreshes the
+    /// week caches (see ``metrics(in:asOf:)`` for why the union): the single load every `…(in:)`
+    /// chart-range read goes through.
+    private func loadWindow(covering range: ClosedRange<Date>, asOf today: Date) async {
         let currentLoadRange = Self.loadRange(for: displayedWeekStart, calendar: calendar)
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
         try? await model.load(in: unionRange, asOf: today)
-        await refreshWeekCachesIfNeeded()
-        return model.metrics.filter { range.contains($0.day) }.sorted { $0.day < $1.day }
+        await refreshWeekCachesIfNeeded(asOf: today)
+    }
+
+    /// `model.metrics` inside `range`, in day order, without loading anything.
+    private func loadedMetrics(in range: ClosedRange<Date>) -> [FitnessMetrics] {
+        model.metrics.filter { range.contains($0.day) }.sorted { $0.day < $1.day }
+    }
+
+    /// The metrics, daily-load split and races for `range`, for a metric detail chart's buffer
+    /// (MVP2-137).
+    ///
+    /// Loads `range` once (MVP2-138), then reads all three from the model with no suspension in
+    /// between, so they describe the same loaded state and a caller can't read the races before
+    /// they're loaded. See ``metrics(in:asOf:)`` for why loading `range` keeps what the displayed
+    /// week needs.
+    func chartBuffer(in range: ClosedRange<Date>, asOf today: Date = .now) async -> ChartBuffer {
+        await loadWindow(covering: range, asOf: today)
+        return ChartBuffer(
+            metrics: loadedMetrics(in: range),
+            dailyLoadSplit: computeDailyLoadSplit(in: range, asOf: today),
+            races: chartRaces(in: range)
+        )
     }
 
     /// Runs a pull-to-refresh import via `refresher`. `TrainingModel.importActivities(from:)`
     /// already reloads `activities` and recomputes `metrics` for whatever range was last loaded
     /// (``chartRange``, assuming ``load(asOf:)`` already ran once for it), so nothing further is
     /// needed here. Failures fail silently back to the pre-refresh state (design doc §3.4).
+    ///
+    /// Then requests a Watch sync (MVP2-116), since an import can link or unlink a plan. It does so
+    /// even when the import fails: the sync is idempotent, and still moves the window on.
     public func refresh(asOf today: Date = .now) async {
         isRefreshing = true
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        requestWatchSync(asOf: today)
+        await checkForMaxHeartRateSuggestion(asOf: today)
+    }
+
+    /// Brings the caches up to date after workouts were imported without this view model, by the
+    /// background import (MVP2-121, see `TrainingAppEnvironment.importArrivedWorkouts(asOf:)`), which
+    /// has already imported them and synced the Watch. What ``refresh(asOf:)`` does after its own
+    /// import: the week caches and pace history, and the max heart rate suggestion.
+    ///
+    /// - Parameter today: Passed through to the cache refresh and the suggestion check.
+    public func activitiesImportedElsewhere(asOf today: Date = .now) async {
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
     /// The empty-state "Connect Health data" action (design doc §2.1): requests authorization,
     /// then runs the same import ``refresh(asOf:)`` does. Failures fail silently, same as
     /// ``refresh(asOf:)`` — MVP 1 has no error UI, and the empty state simply stays empty.
+    ///
+    /// Then requests a Watch sync (MVP2-116) once the import succeeded, since it can link plans.
     public func connectHealthData(asOf today: Date = .now) async {
         isRefreshing = true
         defer { isRefreshing = false }
@@ -622,7 +1447,9 @@ public final class WeekViewModel {
         } catch {
             return
         }
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        requestWatchSync(asOf: today)
+        await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
     /// The athlete screen's "Force Full Resync" action (design doc §2.3): re-imports every
@@ -631,11 +1458,16 @@ public final class WeekViewModel {
     /// already imported before the fix — `Sport` is resolved once at import time and persisted,
     /// not recomputed on read. Failures fail silently, same as ``refresh(asOf:)`` — MVP 1 has no
     /// error UI.
+    ///
+    /// Then requests a Watch sync (MVP2-116), since an import can link or unlink a plan. Like
+    /// ``refresh(asOf:)``, it does so even when the import fails.
     public func resyncActivities(asOf today: Date = .now) async {
         isResyncing = true
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        requestWatchSync(asOf: today)
+        await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
     /// The athlete screen's "Deduplicate Activities" action (MVP1-44): removes duplicate
@@ -645,11 +1477,14 @@ public final class WeekViewModel {
     /// rather than `refresher`, since this is a plain store cleanup with no `ActivityImporting`
     /// dependency. Failures fail silently, same as ``resyncActivities(asOf:)`` — MVP 1 has no
     /// error UI.
+    ///
+    /// Then requests a Watch sync (MVP2-116), since the change can link or unlink a plan.
     public func deduplicateActivities(asOf today: Date = .now) async {
         isDeduplicating = true
         defer { isDeduplicating = false }
         try? await model.deduplicateActivities(asOf: today)
-        await refreshWeekCachesIfNeeded()
+        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        requestWatchSync(asOf: today)
     }
 
     static func calendar(for athlete: AthleteProfile) -> Calendar {

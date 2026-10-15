@@ -1,0 +1,103 @@
+import Foundation
+import TrainingCore
+
+/// Everything a day-list card shows, bundled per card so `DayActivitiesSection` takes one closure
+/// per card kind rather than one per fact.
+extension WeekViewModel {
+    /// What a completed activity's card shows beyond the activity itself.
+    public struct ActivityCardContent: Equatable {
+        /// The headline: the linked plan's workout name, else the sport's name (MVP2-152); see
+        /// ``WeekViewModel/activityTitle(for:)``.
+        public let title: String
+        /// The activity's TRIMP — the headline number (MVP1-41); `nil` when no calculator could score
+        /// it, in which case the card omits the number rather than showing a misleading "0".
+        public let trainingLoad: Double?
+        /// Whether ``trainingLoad`` is an estimate — scored from perceived effort rather than heart
+        /// rate — shown with a "~" (MVP2-8).
+        public let isTrainingLoadEstimated: Bool
+        /// The activity's overlap issue, if any (MVP1-63), shown as a warning badge.
+        public let overlapWarning: OverlapRecommendation?
+        /// The activity's intensity (MVP2-43), shown as a subdued background tint.
+        public let intensity: IntensityAssessment?
+        /// What the plan the activity is linked to expected, shown beside and under the actual values.
+        public let planned: LinkedPlanExpectation?
+    }
+
+    /// What a planned activity's card shows beyond the plan itself.
+    public struct PlannedCardContent: Equatable {
+        /// The name, sport, expected load, duration and distance (MVP2-37).
+        public let summary: PlannedCardSummary
+        /// The workout's intended intensity (MVP2-43), shown as the colour of the card's ring marker.
+        public let intensity: IntensityAssessment?
+        /// Whether the plan's day has passed without a completed activity matching it: drawn as an
+        /// outlined card with secondary text and no expected load — planned but didn't happen.
+        public let isMissed: Bool
+        /// Whether the plan is on the Apple Watch, or why its workout can't go there (MVP2-119);
+        /// `nil` for neither, and always `nil` on a missed plan.
+        public let watchStatus: PlannedWatchStatus?
+    }
+
+    /// A planned card's Apple Watch status (MVP2-119).
+    public enum PlannedWatchStatus: Equatable {
+        /// The Watch sync put the plan on the Watch: a small Watch mark on the card.
+        case onWatch
+        /// The plan's workout can't go on the Watch, with the reason, e.g. "Apple Watch doesn't
+        /// support this alert for cycling.": a warning line on the card.
+        case unsupported(reason: String)
+    }
+
+    /// The card content for a completed `activity`.
+    public func activityCardContent(for activity: Activity) -> ActivityCardContent {
+        let load = scoredLoad(for: activity)
+        return ActivityCardContent(
+            title: activityTitle(for: activity),
+            trainingLoad: load?.value,
+            isTrainingLoadEstimated: load?.method.isEstimate ?? false,
+            overlapWarning: overlapWarning(for: activity),
+            intensity: intensity(for: activity),
+            planned: linkedPlanExpectation(for: activity)
+        )
+    }
+
+    /// The card content for a planned activity, with `today` deciding whether it was missed.
+    public func plannedCardContent(for plan: PlannedActivity, asOf today: Date = .now) -> PlannedCardContent {
+        PlannedCardContent(
+            summary: plannedCardSummary(for: plan),
+            intensity: intensity(for: plan),
+            isMissed: isMissed(plan, asOf: today),
+            watchStatus: watchStatus(for: plan, asOf: today)
+        )
+    }
+
+    /// `plan`'s Apple Watch status (MVP2-119): a warning when its workout can't go on the Watch,
+    /// else the mark when the last Watch sync sent it. The planned card and the planned-workout
+    /// detail sheet (MVP2-122) both show it from here. `nil` on a missed or done plan, without a
+    /// sync, or while the athlete has turned sending off (MVP2-118), since the Watch doesn't matter
+    /// then.
+    ///
+    /// Two dictionary and set lookups, cheap enough for the card closures the week swipe calls on
+    /// every frame; reading the sync's observed properties redraws the cards after each sync.
+    ///
+    /// - Parameters:
+    ///   - plan: The plan to look up.
+    ///   - today: Decides whether `plan` was missed.
+    func watchStatus(for plan: PlannedActivity, asOf today: Date = .now) -> PlannedWatchStatus? {
+        guard plan.completedActivityID == nil, !isMissed(plan, asOf: today) else { return nil }
+        guard let watchSync, watchSync.isEnabled else { return nil }
+        if let reason = watchSync.unsupportedWorkouts[plan.workoutID] {
+            return .unsupported(reason: reason)
+        }
+        return watchSync.sentPlanIDs.contains(plan.id) ? .onWatch : nil
+    }
+
+    /// Whether `plan`'s day has passed without a completed activity matching it.
+    private func isMissed(_ plan: PlannedActivity, asOf today: Date) -> Bool {
+        plan.completedActivityID == nil && isPast(plan.date, asOf: today)
+    }
+
+    /// ``isMissed(_:asOf:)``'s rule for any `calendar` — the search results for plans use it
+    /// (MVP2-21), so a result and its card agree. Both go through `isPast`'s one day comparison.
+    static func isMissed(_ plan: PlannedActivity, asOf today: Date, calendar: Calendar) -> Bool {
+        plan.completedActivityID == nil && isPast(plan.date, asOf: today, calendar: calendar)
+    }
+}

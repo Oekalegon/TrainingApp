@@ -25,11 +25,18 @@ private let weekSwipeCoordinateSpace = "WeekView.weekSwipe"
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
 public struct WeekView: View {
     let viewModel: WeekViewModel
+    /// Opens the Athlete tab's Apple Watch synchronisation screen, from the Watch permission banner (MVP2-117, MVP2-123).
+    let onShowWatchSettings: () -> Void
+    @Environment(\.openURL) private var openURL
     #if os(iOS)
     @Environment(\.colorScheme) private var colorScheme
     #endif
     /// Whether the "Select Date" sheet is presented.
     @State private var isShowingDatePicker = false
+    /// Whether the "Export Calendar" sheet (MVP2-100) is showing.
+    @State private var isShowingCalendarExport = false
+    /// Whether the "Import Calendar" sheet (MVP2-103) is showing.
+    @State private var isShowingCalendarImport = false
     /// `MetricDetailView`'s own navigation-push state (MVP1-45/MVP1-60), or `nil` while none is
     /// pushed — set by tapping a day-list pill (`onSelectMetric` below, a `.day` subject) or the
     /// graph panel itself (`showGraphInfo(forPage:)`, a `.week` subject). A single `Hashable`/
@@ -56,6 +63,14 @@ public struct WeekView: View {
     /// The activity currently shown in the detail sheet, or `nil` when none is presented.
     /// `Activity` is `Identifiable`, so `.sheet(item:)` handles show/dismiss from this alone.
     @State private var selectedActivity: Activity?
+    /// The planned activity whose detail sheet is presented (MVP2-38), or `nil` when none is —
+    /// `PlannedActivity` is `Identifiable`, so `.sheet(item:)` drives it like `selectedActivity`.
+    @State private var selectedPlan: PlannedActivity?
+    /// The day a day row's "add" button (MVP2-15, MVP2-17, MVP2-22) was tapped for, or `nil` when
+    /// `AddEntrySheet` isn't presented — wrapped in `DayAddDate` (`Date` alone isn't
+    /// `Identifiable`) so `.sheet(item:)` can drive it the same way `selectedActivity` drives the
+    /// activity sheet.
+    @State private var addingEntryDate: DayAddDate?
     /// Horizontal offset applied to the previous/current/next page `HStack`, on top of its base
     /// "current page centered" position — 0 while idle, tracking the finger during a drag, then
     /// animated to a full page width (commit) or back to 0 (cancel) once the drag ends. Nothing
@@ -114,8 +129,12 @@ public struct WeekView: View {
     /// previous week rather than springing back.
     private static let commitThreshold: CGFloat = 0.3
 
-    public init(viewModel: WeekViewModel) {
+    /// - Parameters:
+    ///   - viewModel: The week view's model.
+    ///   - onShowWatchSettings: Opens the Athlete tab's Apple Watch synchronisation screen, from the Watch permission banner's button.
+    public init(viewModel: WeekViewModel, onShowWatchSettings: @escaping () -> Void = {}) {
         self.viewModel = viewModel
+        self.onShowWatchSettings = onShowWatchSettings
     }
 
     #if os(iOS)
@@ -141,7 +160,7 @@ public struct WeekView: View {
     public var body: some View {
         NavigationStack {
             Group {
-                if viewModel.hasNoActivities {
+                if viewModel.showsEmptyState {
                     EmptyStateView(isConnecting: viewModel.isRefreshing) {
                         Task { await viewModel.connectHealthData() }
                     }
@@ -154,11 +173,46 @@ public struct WeekView: View {
             // DayActivitiesSection's pills/timeline (recessed relative to this) and its activity
             // cards (elevated relative to this) both have something to visually contrast against.
             .background(weekViewBackground.ignoresSafeArea())
-            // Covers the empty-state -> week-content swap once `hasNoActivities` flips (e.g. after
-            // "Connect Health Data" completes): that happens asynchronously, well after the button's
+            // MVP2-117: an inset rather than an overlay, so the last day row can still scroll clear
+            // of the banner; at the bottom, so the large title and the week swipe aren't touched.
+            .safeAreaInset(edge: .bottom) {
+                // One banner at a time (MVP2-146): see ``WeekViewModel/bottomBanner``.
+                Group {
+                    switch viewModel.bottomBanner {
+                    case .connectHealth:
+                        HealthConnectBanner(
+                            isConnecting: viewModel.isRefreshing,
+                            onConnect: { Task { await viewModel.connectHealthData() } },
+                            onDismiss: { viewModel.onboarding.dismissHealthBanner() }
+                        )
+                    case .allowDistance:
+                        HealthDistanceBanner(
+                            isUpdating: viewModel.isAllowingHealthData || viewModel.isResyncing,
+                            onAllow: { Task { await viewModel.allowMoreHealthData() } },
+                            onDismiss: { viewModel.onboarding.dismissDistanceBanner() }
+                        )
+                    case .watchPermission:
+                        WatchPermissionBanner(
+                            onShowWatchSettings: onShowWatchSettings,
+                            onDismiss: { viewModel.dismissWatchPermissionBanner() }
+                        )
+                    case .iCloud:
+                        ICloudUnavailableBanner(
+                            onOpenSettings: { SystemSettings.url.map { openURL($0) } },
+                            onDismiss: { viewModel.onboarding.dismissICloudBanner() }
+                        )
+                    case nil:
+                        EmptyView()
+                    }
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            .animation(.default, value: viewModel.bottomBanner)
+            // Covers the empty-state -> week-content swap once `showsEmptyState` flips (e.g. after
+            // "Connect Health Data" completes, or a first plan is made): that happens asynchronously, well after the button's
             // own `Task` returns, so there's no synchronous call site to wrap in `withAnimation` —
             // animating on the value change itself is the only way to catch it.
-            .animation(Self.weekChangeAnimation, value: viewModel.hasNoActivities)
+            .animation(Self.weekChangeAnimation, value: viewModel.showsEmptyState)
             // The native title/subtitle (MVP1-56), not a custom header view: this gets the toolbar
             // buttons' Liquid Glass styling for free, rather than reimplementing it by hand.
             // Left at the default (large) display mode, not forced `.inline`: `weekContent`'s single
@@ -188,20 +242,101 @@ public struct WeekView: View {
                         viewModel.goToNextWeek()
                     }
                 }
+                // MVP2-109: one menu rather than four buttons, so the toolbar leaves room for the
+                // week title to show when the large title collapses.
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Today", systemImage: "calendar") {
-                        goToToday()
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Select Date", systemImage: "calendar.badge.clock") {
-                        pickedDate = viewModel.displayedWeekStart
-                        isShowingDatePicker = true
+                    Menu("More Actions", systemImage: "ellipsis") {
+                        Button("Today", systemImage: "calendar") {
+                            goToToday()
+                        }
+                        Button("Select Date", systemImage: "calendar.badge.clock") {
+                            pickedDate = viewModel.displayedWeekStart
+                            isShowingDatePicker = true
+                        }
+                        Button("Export Calendar", systemImage: "square.and.arrow.up") {
+                            isShowingCalendarExport = true
+                        }
+                        Button("Import Calendar", systemImage: "square.and.arrow.down") {
+                            isShowingCalendarImport = true
+                        }
                     }
                 }
             }
             .task(id: viewModel.displayedWeekStart) {
                 await viewModel.load()
+                // Cheap once the history scan has run: a check over the loaded activities only.
+                await viewModel.checkForMaxHeartRateSuggestion()
+            }
+            // MVP2-56: a workout held a heart rate above the athlete's max. Raising it moves every
+            // zone and training-load score from that day on, so it's never done without asking.
+            .alert(
+                "New Max Heart Rate?",
+                isPresented: Binding(
+                    get: { viewModel.maxHeartRateSuggestion != nil },
+                    // Dismissal only clears the prompt; the buttons say what the athlete chose.
+                    // Each acts on the suggestion it was shown with, so the order SwiftUI runs the
+                    // action and this setter in doesn't matter.
+                    set: { isPresented in
+                        if !isPresented { viewModel.clearMaxHeartRatePrompt() }
+                    }
+                ),
+                presenting: viewModel.maxHeartRateSuggestion
+            ) { suggestion in
+                Button("Update to \(Int(suggestion.peakBPM)) bpm") {
+                    Task { await viewModel.acceptMaxHeartRateSuggestion(suggestion) }
+                }
+                Button("Not Now", role: .cancel) {
+                    viewModel.declineMaxHeartRateSuggestion(suggestion)
+                }
+            } message: { suggestion in
+                Text(viewModel.maxHeartRatePromptMessage(for: suggestion))
+            }
+            .alert(
+                "Couldn't Update Max Heart Rate",
+                isPresented: Binding(
+                    get: { viewModel.maxHeartRateUpdateFailed },
+                    set: { isPresented in
+                        if !isPresented { viewModel.acknowledgeMaxHeartRateUpdateFailure() }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Your max heart rate wasn't changed. You'll be asked again.")
+            }
+            // MVP2-155: a field test measured a new max heart rate or lactate threshold. Like the
+            // alert above, it's never applied without asking, and "Keep Current" leaves the old value.
+            .alert(
+                viewModel.fieldTestResult.map(viewModel.fieldTestPromptTitle(for:)) ?? "",
+                isPresented: Binding(
+                    get: { viewModel.fieldTestResult != nil },
+                    set: { isPresented in
+                        if !isPresented { viewModel.clearFieldTestPrompt() }
+                    }
+                ),
+                presenting: viewModel.fieldTestResult
+            ) { result in
+                Button(viewModel.fieldTestAcceptTitle(for: result)) {
+                    Task { await viewModel.acceptFieldTestResult(result) }
+                }
+                Button("Keep Current", role: .cancel) {
+                    viewModel.declineFieldTestResult(result)
+                }
+            } message: { result in
+                Text(viewModel.fieldTestPromptMessage(for: result))
+            }
+            .alert(
+                "Couldn't Update Heart Rate Settings",
+                isPresented: Binding(
+                    get: { viewModel.fieldTestUpdateFailed },
+                    set: { isPresented in
+                        if !isPresented { viewModel.acknowledgeFieldTestUpdateFailure() }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Your heart rate settings weren't changed. You'll be asked again.")
             }
             .sheet(item: $selectedActivity) { activity in
                 // Its own NavigationStack: a sheet doesn't inherit the presenting view's
@@ -212,12 +347,33 @@ public struct WeekView: View {
                     ActivityDetailView(
                         viewModel: viewModel.activityDetailViewModel(for: activity),
                         onResolveOverlap: { id in await viewModel.resolveOverlap(deleting: id) },
-                        onDelete: { await viewModel.deleteActivity(activity) }
+                        onDelete: { await viewModel.deleteActivity(activity) },
+                        onJoin: { other in await viewModel.joinActivities(activity, with: other) },
+                        onUnjoin: { await viewModel.unjoinActivity(activity) },
+                        loadComponents: { await viewModel.joinedComponents(of: activity) },
+                        onLinkPlan: { await viewModel.linkActivity(activity, toPlan: $0) },
+                        onUnlinkPlan: { await viewModel.unlinkActivity(activity) },
+                        onSetSport: { await viewModel.setActivitySport(activity, sport: $0, venue: $1) }
                     )
                 }
             }
+            .sheet(item: $selectedPlan) { plan in
+                PlannedWorkoutDetailSheet(viewModel: viewModel.plannedWorkoutDetailViewModel(for: plan))
+            }
             .sheet(isPresented: $isShowingDatePicker) {
                 datePickerSheet
+            }
+            .sheet(isPresented: $isShowingCalendarExport) {
+                CalendarExportSheet(viewModel: viewModel.calendarExportViewModel())
+            }
+            .sheet(isPresented: $isShowingCalendarImport) {
+                CalendarImportSheet(viewModel: viewModel.calendarImportViewModel())
+            }
+            .sheet(item: $addingEntryDate) { entryDate in
+                AddEntrySheet(
+                    plannedWorkoutViewModel: viewModel.plannedWorkoutSheetViewModel(date: entryDate.date),
+                    raceViewModel: viewModel.raceSheetViewModel(date: entryDate.date)
+                )
             }
             // A navigation push onto this same `NavigationStack`, not a `.sheet` -- these are
             // full detail screens (chart + explanation + zone card), not a quick modal glance, so
@@ -228,7 +384,7 @@ public struct WeekView: View {
                     kind: presentation.kind,
                     chartContext: chartContext(for: presentation),
                     period: $metricsChartPeriod,
-                    metricsProvider: { range in await viewModel.metrics(in: range) }
+                    bufferProvider: { range in await viewModel.chartBuffer(in: range) }
                 )
             }
             // Same reasoning as the destination above -- a real push, not a sheet.
@@ -253,6 +409,8 @@ public struct WeekView: View {
         let weekStart = WeekViewModel.weekStart(containing: anchor, calendar: viewModel.athleteCalendar)
         return MetricChartContext(
             metrics: viewModel.chartMetrics(for: weekStart),
+            dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
+            races: viewModel.chartRaces(for: weekStart),
             subject: presentation.subject,
             calendar: viewModel.athleteCalendar
         )
@@ -457,8 +615,10 @@ public struct WeekView: View {
         if isCurrentPage {
             GraphPanelPagerView(
                 metrics: viewModel.chartMetrics(for: weekStart),
+                dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
                 displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
+                races: viewModel.chartRaces(for: weekStart),
                 initialSelectedIndex: graphPanelSelectedIndex,
                 onSelectedIndexChange: { graphPanelSelectedIndex = $0 },
                 onTapPage: { page in showGraphInfo(for: page) }
@@ -466,8 +626,10 @@ public struct WeekView: View {
         } else {
             GraphPanelStaticPreview(
                 metrics: viewModel.chartMetrics(for: weekStart),
+                dailyLoadSplit: viewModel.dailyLoadSplit(for: weekStart),
                 displayedWeekRange: viewModel.displayedWeekRange(for: weekStart),
                 heartRateHistogram: viewModel.heartRateHistogram(for: weekStart),
+                races: viewModel.chartRaces(for: weekStart),
                 selectedIndex: graphPanelSelectedIndex
             )
         }
@@ -495,21 +657,27 @@ public struct WeekView: View {
             Section {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(dates.enumerated()), id: \.element) { index, day in
+                        let dayMetrics = viewModel.dayMetrics(on: day)
                         DayActivitiesSection(
                             date: day,
                             isToday: viewModel.isToday(day),
                             showsConnector: true,
-                            metrics: viewModel.metrics(on: day),
+                            metrics: dayMetrics.metrics,
+                            isFormProjected: dayMetrics.isFormProjected,
+                            isLoadEstimated: dayMetrics.isLoadEstimated,
                             activities: viewModel.activities(on: day),
-                            plans: viewModel.plans(on: day),
-                            workoutName: { viewModel.workout(for: $0)?.name },
-                            trainingLoad: { viewModel.trainingLoad(for: $0) },
-                            overlapWarning: { viewModel.overlapWarning(for: $0) },
+                            plans: viewModel.pendingPlans(on: day),
+                            races: viewModel.races(on: day),
+                            activityCard: { viewModel.activityCardContent(for: $0) },
+                            plannedCard: { viewModel.plannedCardContent(for: $0) },
                             timeZone: viewModel.athleteTimeZone,
                             onSelectActivity: { selectedActivity = $0 },
+                            onSelectPlan: { selectedPlan = $0 },
                             onSelectMetric: { kind in
                                 metricsInfoPresentation = MetricsInfoPresentation(kind: kind, subject: .day(day))
-                            }
+                            },
+                            canAddWorkout: !viewModel.isPast(day),
+                            onAddEntry: { addingEntryDate = DayAddDate(date: day) }
                         )
                     }
                     // Continues the timeline past the last day's own connector (which stops at
@@ -550,7 +718,7 @@ public struct WeekView: View {
         VStack(spacing: 0) {
             Divider()
             SportStatsPagerView(pages: viewModel.sportStatsPages(for: weekStart))
-                .padding(.vertical, 12)
+                .padding(.vertical, 4)
             Divider()
         }
         .background(.thinMaterial)
@@ -659,4 +827,11 @@ private struct MetricsInfoPresentation: Identifiable, Hashable {
     let id = UUID()
     let kind: TrainingMetricKind
     let subject: MetricDetailSubject
+}
+
+/// `WeekView.addingEntryDate`'s value (MVP2-15, MVP2-22) — just wraps a `Date` so `.sheet(item:)`
+/// can drive presentation the way it does for `selectedActivity`/`metricsInfoPresentation`.
+private struct DayAddDate: Identifiable, Hashable {
+    let id = UUID()
+    let date: Date
 }
