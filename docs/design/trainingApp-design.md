@@ -88,12 +88,22 @@ across launches.
 
 ### 2.1 Week view
 
+The view shows a **period**, not always a calendar week (MVP5-107): the planned 7-, 10- or 14-day
+micro-cycle containing the selected date, else the calendar week (cut short where it meets a micro, so
+periods never overlap). Paging steps to the neighboring period in the plan, crossing micro/calendar-week
+boundaries and differing lengths; day arithmetic uses the athlete's calendar, so a DST change inside a
+micro doesn't shift it. For a planned micro the title is "Micro N" (N is the micro's position in its
+macro, for a 7-day micro too), the subtitle stays the date range, and a strip at the top of the pinned stats bar shows macro › meso › micro, the
+phase and the load role, with an edit-plan button that is disabled until plan editing exists (and hidden from VoiceOver). The "N" counts from the macro-cycle's first micro, so it is read from the cycle store rather than from the cycles near the displayed period. Outside a plan the title is the
+calendar week of the year.
+
 - **Top**: a paged graph panel (Swift Charts, MVP1-55) — swipe between "Daily load" (each day's
   TRIMP as bars), "Form" (CTL/ATL/TSB lines), and "Time in zone" (a heart-rate histogram, binned
   every 5bpm, plotted as one smoothed line over muted zone-1-through-5 bands with a light-gray
   marker at the 80th percentile — Seiler's 80/20 polarized-training threshold, computed only from
-  in-zone time), with a page-dot indicator below. "Daily load" and "Form" share the same 3-week
-  window centered on the displayed week (the week before, the displayed week, the week after), fed
+  in-zone time), with a page-dot indicator below. "Daily load" and "Form" share the same
+  window centered on the displayed period (the period before, the displayed period, the period after; 3 weeks
+  for calendar weeks, but the neighbors come from the plan and may differ in length from a micro), fed
   from `TrainingModel.metrics: [FitnessMetrics]`; "Time in zone" is scoped to just the displayed
   week and its own domain (zone 1's lower bound through zone 5's upper, each padded 15bpm), built
   on demand from that week's raw heart-rate samples (`WeekViewModel.heartRateHistogram(for:)`)
@@ -1063,7 +1073,7 @@ import wiring. Tracked as a separate todo (see §7).
 
 ### 3.4 Refresh
 
-`TrainingModel.load(in:asOf:)` is called on launch (window ≈ the 3-week chart range, expanded
+`TrainingModel.load(in:asOf:)` is called on launch (window ≈ the chart range of three periods, 3 weeks for calendar weeks, expanded
 somewhat so `recompute` has enough trailing history for CTL's warm-up) and again on
 `scenePhase == .active` (foreground). No periodic background refresh in MVP 1. Activities reach a
 device only through its own HealthKit import, never through CloudKit (§3.2), so what the athlete

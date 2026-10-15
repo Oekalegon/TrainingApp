@@ -15,6 +15,20 @@ import TrainingCore
 /// sport (see `SportStatsPage`'s own doc comment for why).
 struct SportStatsPagerView: View {
     let pages: [SportStatsPage]
+    /// `true` when the row sits directly under the plan strip (MVP5-107): its height then hugs the
+    /// content instead of the roomier default, so the margin below matches the one above the strip.
+    var hugsContent = false
+
+    /// The row height: the default 64pt, or with ``hugsContent`` one that fits the tallest page
+    /// (three lines where a page has both performed and still-planned figures, else two) plus the
+    /// strip's own margin.
+    private var rowHeight: CGFloat {
+        guard hugsContent else { return defaultRowHeight }
+        return pages.contains(where: \.showsPerformedAndPlanned) ? threeLineRowHeight : twoLineRowHeight
+    }
+    @ScaledMetric(relativeTo: .footnote) private var defaultRowHeight: CGFloat = 64
+    @ScaledMetric(relativeTo: .footnote) private var threeLineRowHeight: CGFloat = 58
+    @ScaledMetric(relativeTo: .footnote) private var twoLineRowHeight: CGFloat = 46
 
     /// Index into `pages`, not a `Sport` tag: unlike `WeekView`'s own day-list carousel (always
     /// exactly 3 fixed slots), the *number* of pages here varies week to week, so an index is what
@@ -100,7 +114,7 @@ struct SportStatsPagerView: View {
             .clipped()
         }
         .padding(.horizontal)
-        .frame(height: 64)
+        .frame(height: rowHeight)
         // Without this, paging to a non-main-sport index and then navigating to a week with fewer
         // pages could leave `selectedIndex` pointing past the end of the new `pages`, or simply on
         // whatever sport happens to now sit at that same index rather than back on the main sport.

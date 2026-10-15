@@ -10,14 +10,50 @@ struct DisplayPeriodTests {
         Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86400)
     }
 
-    private func makeModel() -> TrainingModel {
+    private func makeModel(timeZone: String = "UTC", weekStartsOn: Weekday = .monday) -> TrainingModel {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store,
             cycleStore: store, raceStore: store, athleteStore: store
         )
-        let athlete = AthleteProfile.fixture(weekStartsOn: .monday, timeZoneIdentifier: "UTC")
+        let athlete = AthleteProfile.fixture(weekStartsOn: weekStartsOn, timeZoneIdentifier: timeZone)
         return TrainingModel(stores: stores, athlete: athlete)
+    }
+
+    /// A view model on a plan of five micro-cycles of `length` days, the middle one containing `day(0)`.
+    private func uniformViewModel(_ model: TrainingModel, length: Int) async throws -> WeekViewModel {
+        let calendar = calendar(model)
+        let start = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        try await seedPlan(model, lengths: Array(repeating: length, count: 5), anchoredAt: start, index: 2)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        viewModel.goToToday(asOf: day(0))
+        return viewModel
+    }
+
+    /// Adds a macro and meso spanning `lengths.count` consecutive micro-cycles of the given lengths,
+    /// with the micro at `index` starting on `anchoredAt`.
+    private func seedPlan(
+        _ model: TrainingModel, lengths: [Int], anchoredAt anchor: Date, index: Int,
+        phase: CyclePhase = .build
+    ) async throws {
+        let calendar = calendar(model)
+        var cursor = calendar.date(byAdding: .day, value: -lengths[..<index].reduce(0, +), to: anchor)!
+        var micros: [(Date, Date)] = []
+        for length in lengths {
+            let last = calendar.date(byAdding: .day, value: length - 1, to: cursor)!
+            micros.append((cursor, last))
+            cursor = calendar.date(byAdding: .day, value: length, to: cursor)!
+        }
+        let whole = micros.first!.0...micros.last!.1
+        let macro = TrainingCycle(level: .macro, phase: .build, name: "Ultra prep", dateRange: whole)
+        let meso = TrainingCycle(level: .meso, phase: phase, name: "Build 1", dateRange: whole, parentID: macro.id)
+        let cycles = micros.enumerated().map { offset, range in
+            TrainingCycle(
+                level: .micro, phase: phase, name: "Micro \(offset + 1)",
+                dateRange: range.0...range.1, parentID: meso.id
+            )
+        }
+        try await model.add([macro, meso] + cycles)
     }
 
     private func calendar(_ model: TrainingModel) -> Calendar {
@@ -64,12 +100,10 @@ struct DisplayPeriodTests {
     }
 
     @Test("the view model's ranges, days and navigation follow the displayed length", arguments: [7, 10, 14])
-    func viewModelFollowsLength(length: Int) {
+    func viewModelFollowsLength(length: Int) async throws {
         let model = makeModel()
         let calendar = calendar(model)
-        let viewModel = WeekViewModel(
-            model: model, refresher: FakeRefresher(), today: day(0), displayedLengthInDays: length
-        )
+        let viewModel = try await uniformViewModel(model, length: length)
         let start = viewModel.displayedWeekStart
 
         #expect(viewModel.weekDates.count == length)
@@ -96,12 +130,10 @@ struct DisplayPeriodTests {
     }
 
     @Test("the date range description ends on the period's last day", arguments: [7, 10, 14])
-    func descriptionEndsOnLastDay(length: Int) {
+    func descriptionEndsOnLastDay(length: Int) async throws {
         let model = makeModel()
         let calendar = calendar(model)
-        let viewModel = WeekViewModel(
-            model: model, refresher: FakeRefresher(), today: day(0), displayedLengthInDays: length
-        )
+        let viewModel = try await uniformViewModel(model, length: length)
         let last = viewModel.displayedPeriod.lastDay(calendar: calendar)
         let expected = last.formatted(
             Date.FormatStyle(calendar: calendar, timeZone: viewModel.athleteTimeZone).day().month(.abbreviated).year()
@@ -111,12 +143,10 @@ struct DisplayPeriodTests {
     }
 
     @Test("the cache window is the displayed period and one neighbor either side", arguments: [7, 10, 14])
-    func cacheWindowFollowsLength(length: Int) async {
+    func cacheWindowFollowsLength(length: Int) async throws {
         let model = makeModel()
         let calendar = calendar(model)
-        let viewModel = WeekViewModel(
-            model: model, refresher: FakeRefresher(), today: day(0), displayedLengthInDays: length
-        )
+        let viewModel = try await uniformViewModel(model, length: length)
         await viewModel.refreshWeekCachesIfNeeded(asOf: day(0))
 
         let period = viewModel.displayedPeriod
@@ -131,13 +161,257 @@ struct DisplayPeriodTests {
     }
 
     @Test("the stats pages compare against the previous period of the same length", arguments: [7, 10, 14])
-    func statsCompareWithPreviousPeriod(length: Int) {
+    func statsCompareWithPreviousPeriod(length: Int) async throws {
         let model = makeModel()
-        let viewModel = WeekViewModel(
-            model: model, refresher: FakeRefresher(), today: day(0), displayedLengthInDays: length
-        )
+        let viewModel = try await uniformViewModel(model, length: length)
         // No data: the pages still build for any length, with nothing to compare.
         let pages = viewModel.sportStatsPages(for: viewModel.displayedWeekStart, asOf: day(0))
         #expect(!pages.isEmpty)
+    }
+
+    // MARK: Planned micro-cycles (MVP5-107)
+
+    private func start(of micro: Int, lengths: [Int], first: Date, calendar: Calendar) -> Date {
+        calendar.date(byAdding: .day, value: lengths[..<micro].reduce(0, +), to: first)!
+    }
+
+    @Test("a date inside a 10- or 14-day micro shows that micro, a date outside shows the calendar week", arguments: [10, 14])
+    func microContainingDate(length: Int) async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        let lengths = [length, 7, length]
+        try await seedPlan(model, lengths: lengths, anchoredAt: first, index: 0)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: length - 1, to: first)!)
+        #expect(viewModel.displayedPeriod == DisplayPeriod(start: first, lengthInDays: length))
+        #expect(viewModel.weekDates.count == length)
+
+        let outside = calendar.date(byAdding: .day, value: 3 * length + 20, to: first)!
+        viewModel.goToWeek(containing: outside)
+        #expect(viewModel.displayedPeriod == DisplayPeriod.calendarWeek(containing: outside, calendar: calendar))
+    }
+
+    @Test("paging crosses micro, 7-day micro and calendar-week boundaries in both directions")
+    func pagingAcrossBoundaries() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        let lengths = [10, 14, 7]
+        try await seedPlan(model, lengths: lengths, anchoredAt: first, index: 0)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        viewModel.goToWeek(containing: first)
+
+        var starts: [Date] = [viewModel.displayedWeekStart]
+        var seen: [Int] = [viewModel.displayedLengthInDays]
+        for _ in 0..<4 {
+            viewModel.goToNextWeek()
+            starts.append(viewModel.displayedWeekStart)
+            seen.append(viewModel.displayedLengthInDays)
+        }
+        // 10 → 14 → 7 (planned), then the rest of that calendar week (4 days) and whole weeks.
+        #expect(seen == [10, 14, 7, 4, 7])
+        #expect(starts[1] == calendar.date(byAdding: .day, value: 10, to: first))
+        #expect(starts[2] == calendar.date(byAdding: .day, value: 24, to: first))
+        #expect(starts[3] == calendar.date(byAdding: .day, value: 31, to: first))
+
+        for expected in starts.dropLast().reversed() {
+            viewModel.goToPreviousWeek()
+            #expect(viewModel.displayedWeekStart == expected)
+        }
+        #expect(viewModel.displayedLengthInDays == 10)
+    }
+
+    @Test("neighbors come from the plan, so the chart and load windows follow their lengths")
+    func neighborsDifferInLength() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        let lengths = [7, 10, 14, 7, 10]
+        try await seedPlan(model, lengths: lengths, anchoredAt: first, index: 0)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 7, to: first)!) // the 10-day micro
+
+        #expect(dayCount(viewModel.chartRange, calendar) == 7 + 10 + 14)
+        #expect(dayCount(viewModel.chartRange(for: viewModel.displayedWeekStart), calendar) == 31)
+        let load = viewModel.chartRange.lowerBound
+        #expect(load == first)
+        #expect(viewModel.cachedPeriods.map(\.lengthInDays) == [7, 10, 14])
+        #expect(viewModel.weekDates(offsetWeeks: 1).count == 14)
+        #expect(viewModel.weekDates(offsetWeeks: -1).count == 7)
+    }
+
+    @Test("a calendar week next to a micro is cut short so periods never overlap")
+    func calendarWeekIsClippedAtMicro() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let monday = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        // A 10-day micro starting on the Thursday after `monday`.
+        let microStart = calendar.date(byAdding: .day, value: 10, to: monday)!
+        try await seedPlan(model, lengths: [10], anchoredAt: microStart, index: 0)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 8, to: monday)!)
+        let before = viewModel.displayedPeriod
+        #expect(before.lastDay(calendar: calendar) == calendar.date(byAdding: .day, value: -1, to: microStart))
+        viewModel.goToNextWeek()
+        #expect(viewModel.displayedWeekStart == microStart)
+        viewModel.goToNextWeek()
+        // The week after the micro starts the day after it, not on a Monday.
+        #expect(viewModel.displayedWeekStart == calendar.date(byAdding: .day, value: 10, to: microStart))
+    }
+
+    @Test("the header context names macro, meso, micro, phase and the week in the plan")
+    func cycleContextHeader() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        try await seedPlan(model, lengths: [7, 10, 14], anchoredAt: first, index: 0, phase: "ultra-specific")
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 12, to: first)!)
+        await viewModel.refreshMicroOrder()
+        let context = try #require(viewModel.cycleContext())
+        #expect(context.breadcrumb == "Ultra prep › Build 1 › Micro 2")
+        #expect(context.weekInPlan == 2)
+        #expect(context.lengthInDays == 10)
+        #expect(context.phase == "ultra-specific")
+        #expect(context.phaseTitle == "Ultra-Specific")
+        #expect(context.loadRole == .build)
+        #expect(viewModel.displayedTitle == "Micro 2")
+
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 300, to: first)!)
+        #expect(viewModel.cycleContext() == nil)
+        #expect(viewModel.displayedTitle == "Week \(viewModel.displayedWeekOfYear)")
+    }
+
+    @Test("a plan that loads after the jump switches the calendar week to its micro")
+    func loadRefreshesDisplayedPeriod() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        #expect(viewModel.displayedLengthInDays == 7)
+
+        try await seedPlan(model, lengths: [14], anchoredAt: first, index: 0)
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.displayedPeriod == DisplayPeriod(start: first, lengthInDays: 14))
+    }
+
+    @Test("a 10-day micro across the autumn DST change keeps 10 calendar days and pages cleanly")
+    func dstBoundary() async throws {
+        let model = makeModel(timeZone: "Europe/Amsterdam")
+        let calendar = calendar(model)
+        // Clocks go back on 2026-10-25, a 25-hour day inside the micro.
+        let micro = calendar.date(from: DateComponents(year: 2026, month: 10, day: 22))!
+        try await seedPlan(model, lengths: [7, 10, 14], anchoredAt: micro, index: 1)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: micro)
+        viewModel.goToWeek(containing: calendar.date(from: DateComponents(year: 2026, month: 10, day: 26))!)
+
+        let period = viewModel.displayedPeriod
+        #expect(period == DisplayPeriod(start: micro, lengthInDays: 10))
+        let days = viewModel.weekDates
+        #expect(days.count == 10)
+        #expect(days.allSatisfy { calendar.startOfDay(for: $0) == $0 })
+        #expect(calendar.component(.day, from: days[3]) == 25)
+        #expect(calendar.dateComponents([.hour], from: days[3], to: days[4]).hour == 25)
+        #expect(calendar.component(.day, from: period.lastDay(calendar: calendar)) == 31)
+
+        viewModel.goToNextWeek()
+        #expect(viewModel.displayedWeekStart == calendar.date(from: DateComponents(year: 2026, month: 11, day: 1)))
+        #expect(viewModel.displayedLengthInDays == 14)
+        viewModel.goToPreviousWeek()
+        #expect(viewModel.displayedPeriod == period)
+    }
+
+    @Test("a micro starting mid-week still replaces the picked calendar week once the plan loads")
+    func midWeekMicroAfterLateLoad() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let monday = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        let wednesday = calendar.date(byAdding: .day, value: 2, to: monday)!
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        // Written to the store only, so `model.cycles` doesn't know it yet.
+        let macro = TrainingCycle(level: .macro, phase: .build, name: "Plan", dateRange: wednesday...calendar.date(byAdding: .day, value: 9, to: wednesday)!)
+        let meso = TrainingCycle(level: .meso, phase: .build, name: "Block", dateRange: macro.dateRange, parentID: macro.id)
+        let micro = TrainingCycle(level: .micro, phase: .build, name: "Micro", dateRange: macro.dateRange, parentID: meso.id)
+        try await model.stores.cycleStore.upsert([macro, meso, micro])
+
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 3, to: monday)!)
+        #expect(viewModel.displayedLengthInDays == 7)
+        await viewModel.load(asOf: day(0))
+
+        #expect(viewModel.displayedPeriod == DisplayPeriod(start: wednesday, lengthInDays: 10))
+    }
+
+    @Test("the position in the plan follows changes to the plan")
+    func microOrderFollowsPlanChanges() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        try await seedPlan(model, lengths: [7, 7, 7], anchoredAt: first, index: 2)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        viewModel.goToWeek(containing: first)
+        await viewModel.refreshMicroOrder()
+        #expect(viewModel.displayedTitle == "Micro 3")
+
+        let firstMicro = try #require(model.cycles.filter { $0.level == .micro }.min { $0.dateRange.lowerBound < $1.dateRange.lowerBound })
+        try await model.stores.cycleStore.deleteCycle(id: firstMicro.id)
+        await viewModel.refreshWeekCachesIfNeeded(asOf: day(0))
+
+        #expect(viewModel.displayedTitle == "Micro 2")
+    }
+
+    @Test("with Sunday as the week start, calendar weeks run Sunday to Saturday and meet a micro cleanly")
+    func sundayWeekStart() async throws {
+        let model = makeModel(weekStartsOn: .sunday)
+        let calendar = calendar(model)
+        let sunday = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        #expect(calendar.component(.weekday, from: sunday) == Weekday.sunday.rawValue)
+        let microStart = calendar.date(byAdding: .day, value: 11, to: sunday)!
+        try await seedPlan(model, lengths: [10], anchoredAt: microStart, index: 0)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+
+        viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 8, to: sunday)!)
+        #expect(viewModel.displayedWeekStart == calendar.date(byAdding: .day, value: 7, to: sunday))
+        #expect(viewModel.displayedLengthInDays == 4)
+        viewModel.goToNextWeek()
+        #expect(viewModel.displayedWeekStart == microStart)
+    }
+
+    @Test("a gap between two micros is covered by calendar weeks, each date in exactly one period")
+    func gapBetweenMicros() async throws {
+        let model = makeModel()
+        let calendar = calendar(model)
+        let first = WeekViewModel.weekStart(containing: day(0), calendar: calendar)
+        let laterStart = calendar.date(byAdding: .day, value: 24, to: first)!
+        try await seedPlan(model, lengths: [10], anchoredAt: first, index: 0)
+        try await seedSecondPlan(model, lengths: [7], anchoredAt: laterStart)
+        let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        viewModel.goToWeek(containing: first)
+        await viewModel.load(asOf: day(0))
+
+        var covered = 0
+        var cursor = first
+        while cursor < calendar.date(byAdding: .day, value: 31, to: first)! {
+            #expect(viewModel.displayedWeekStart == cursor)
+            covered += viewModel.displayedLengthInDays
+            cursor = calendar.date(byAdding: .day, value: viewModel.displayedLengthInDays, to: cursor)!
+            viewModel.goToNextWeek()
+        }
+        #expect(covered == 31)
+    }
+
+    /// A second macro with one micro-cycle, so a plan can have a gap.
+    private func seedSecondPlan(_ model: TrainingModel, lengths: [Int], anchoredAt anchor: Date) async throws {
+        let calendar = calendar(model)
+        let last = calendar.date(byAdding: .day, value: lengths[0] - 1, to: anchor)!
+        let macro = TrainingCycle(level: .macro, phase: .build, name: "Later", dateRange: anchor...last)
+        let meso = TrainingCycle(level: .meso, phase: .build, name: "Later block", dateRange: anchor...last, parentID: macro.id)
+        let micro = TrainingCycle(level: .micro, phase: .build, name: "Later micro", dateRange: anchor...last, parentID: meso.id)
+        try await model.add([macro, meso, micro])
     }
 }
