@@ -9,9 +9,9 @@ struct CycleHeaderView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(context.breadcrumb)
-                    .font(.callout.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                 Text(detail)
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -21,7 +21,7 @@ struct CycleHeaderView: View {
                 .disabled(true)
         }
         .padding(.horizontal)
-        .padding(.top, 8)
+        .padding(.top, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
