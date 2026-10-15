@@ -13,7 +13,7 @@ public struct CycleContext: Hashable, Sendable {
     public let phase: CyclePhase
     /// How hard the micro is meant to be.
     public let loadRole: MicroLoadRole?
-    /// The micro's 1-based position among the macro's micro-cycles; `nil` without a macro.
+    /// The micro's 1-based position (its "Microcycle N") among the macro's micro-cycles; `nil` without a macro.
     public let weekInPlan: Int?
     /// The micro's length in days (7, 10, 14, …).
     public let lengthInDays: Int
@@ -91,6 +91,25 @@ extension WeekViewModel {
         return period
     }
 
+    /// Fetches the whole of the displayed micro's macro-cycle from the cycle store and records the
+    /// order of its micro-cycles, for ``CycleContext/weekInPlan``.
+    func refreshMicroOrder() async {
+        guard let micro = micro(containing: displayedWeekStart) else { return }
+        let loaded = Dictionary(model.cycles.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        guard let meso = micro.parentID.flatMap({ loaded[$0] }),
+              let macro = meso.level == .macro ? meso : meso.parentID.flatMap({ loaded[$0] }),
+              let all = try? await model.stores.cycleStore.cycles(in: macro.dateRange)
+        else { return }
+        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let ids = all.filter { candidate in
+            guard candidate.level == .micro, let parent = candidate.parentID.flatMap({ byID[$0] }) else { return false }
+            return parent.id == macro.id || parent.parentID == macro.id
+        }
+        .sorted { $0.dateRange.lowerBound < $1.dateRange.lowerBound }
+        .map(\.id)
+        if microOrderByMacro[macro.id] != ids { microOrderByMacro[macro.id] = ids }
+    }
+
     /// Shows `period`, remembering its start as the date to keep resolving from.
     func show(_ period: DisplayPeriod) {
         anchorDate = period.start
@@ -115,14 +134,10 @@ extension WeekViewModel {
         let meso = micro.parentID.flatMap { byID[$0] }
         let macro = meso?.parentID.flatMap { byID[$0] } ?? (meso?.level == .macro ? meso : nil)
         let meso2 = meso?.level == .meso ? meso : nil
-        var weekInPlan: Int?
-        if let macro {
-            let siblings = microcycles.filter { candidate in
-                let parent = candidate.parentID.flatMap { byID[$0] }
-                return parent?.id == macro.id || parent?.parentID == macro.id
-            }
-            weekInPlan = siblings.firstIndex { $0.id == micro.id }.map { $0 + 1 }
-        }
+        let weekInPlan = macro
+            .flatMap { microOrderByMacro[$0.id] }
+            .flatMap { $0.firstIndex(of: micro.id) }
+            .map { $0 + 1 }
         let range = period(of: micro)
         return CycleContext(
             macroName: macro?.name, mesoName: meso2?.name, microName: micro.name, phase: micro.phase,
@@ -130,9 +145,10 @@ extension WeekViewModel {
         )
     }
 
-    /// The title for the week view: "Week N" with N the micro's position in the plan, else the
-    /// calendar week of the year (MVP1-56).
+    /// The title for the week view: "Microcycle N" with N the micro's position in the plan (also for
+    /// a 7-day micro), else "Week N" for the calendar week of the year (MVP1-56).
     public var displayedTitle: String {
-        "Week \(cycleContext()?.weekInPlan ?? displayedWeekOfYear)"
+        if let number = cycleContext()?.weekInPlan { return "Microcycle \(number)" }
+        return "Week \(displayedWeekOfYear)"
     }
 }

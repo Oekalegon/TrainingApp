@@ -271,6 +271,7 @@ struct DisplayPeriodTests {
         let viewModel = WeekViewModel(model: model, refresher: FakeRefresher(), today: day(0))
 
         viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 12, to: first)!)
+        await viewModel.refreshMicroOrder()
         let context = try #require(viewModel.cycleContext())
         #expect(context.breadcrumb == "Ultra prep › Build 1 › Micro 2")
         #expect(context.weekInPlan == 2)
@@ -278,7 +279,7 @@ struct DisplayPeriodTests {
         #expect(context.phase == "ultra-specific")
         #expect(context.phaseTitle == "Ultra-Specific")
         #expect(context.loadRole == .build)
-        #expect(viewModel.displayedTitle == "Week 2")
+        #expect(viewModel.displayedTitle == "Microcycle 2")
 
         viewModel.goToWeek(containing: calendar.date(byAdding: .day, value: 300, to: first)!)
         #expect(viewModel.cycleContext() == nil)

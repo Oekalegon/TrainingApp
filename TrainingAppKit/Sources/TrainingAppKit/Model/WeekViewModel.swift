@@ -171,6 +171,10 @@ public final class WeekViewModel {
     /// later, ``refreshDisplayedPeriod()`` can switch from a calendar week to the micro-cycle.
     @ObservationIgnored
     var anchorDate: Date
+    /// Each macro-cycle's micro-cycle ids in date order, fetched from the cycle store whole: only the
+    /// cycles near the displayed period are in `model.cycles`, so counting there would number a
+    /// micro from the edge of the loaded window instead of from its plan's start.
+    var microOrderByMacro: [UUID: [UUID]] = [:]
     /// The period currently on screen: ``displayedWeekStart`` for ``displayedLengthInDays`` days.
     public var displayedPeriod: DisplayPeriod {
         DisplayPeriod(start: displayedWeekStart, lengthInDays: displayedLengthInDays)
@@ -1307,6 +1311,7 @@ public final class WeekViewModel {
             try await model.load(in: loadRange(for: displayedWeekStart), asOf: today)
             // The plan may only now cover the date the athlete jumped to (see ``anchorDate``).
             refreshDisplayedPeriod()
+            await refreshMicroOrder()
             // Only a load that worked says whether Health was ever imported (MVP2-147).
             onboarding.markLoaded()
         } catch {}

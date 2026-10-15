@@ -92,8 +92,8 @@ The view shows a **period**, not always a calendar week (MVP5-107): the planned 
 micro-cycle containing the selected date, else the calendar week (cut short where it meets a micro, so
 periods never overlap). Paging steps to the neighboring period in the plan, crossing micro/calendar-week
 boundaries and differing lengths; day arithmetic uses the athlete's calendar, so a DST change inside a
-micro doesn't shift it. For a planned micro the title is "Week N" (N is the micro's position in its
-macro), the subtitle stays the date range, and a strip above the chart shows macro › meso › micro, the
+micro doesn't shift it. For a planned micro the title is "Microcycle N" (N is the micro's position in its
+macro, for a 7-day micro too), the subtitle stays the date range, and a strip above the chart shows macro › meso › micro, the
 phase and the load role, with a (not yet working) edit-plan button. Outside a plan the title is the
 calendar week of the year.
 
