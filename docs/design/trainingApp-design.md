@@ -82,11 +82,11 @@ MVP2-21) and "Athlete" (§2.3), with a search field on every tab (§2.5). All ar
 and the search results via `MicroCycleViewModel.workoutLibraryViewModel()` and `searchViewModel(library:)`),
 owned by `AppTabView` and constructed once for the app's lifetime, as are the Library and search
 tabs' view models. `AppTabView` holds the selected tab and the Athlete tab's pushed screens
-(`[AthleteRoute]`) only so the week view's Watch permission banner can open the Athlete tab's Apple
+(`[AthleteRoute]`) only so the micro-cycle view's Watch permission banner can open the Athlete tab's Apple
 Watch ▸ Synchronisation screen directly (MVP2-117, MVP2-123); neither is remembered or restored
 across launches.
 
-### 2.1 Week view
+### 2.1 Micro-cycle view (formerly "week view", renamed in MVP5-108)
 
 The view shows a **period**, not always a calendar week (MVP5-107): the planned 7-, 10- or 14-day
 micro-cycle containing the selected date, else the calendar week (cut short where it meets a micro, so
@@ -135,7 +135,7 @@ calendar week of the year.
   repeating the same five zones a third time.
 - **Below**: a vertical timeline, one row per day of the displayed week (MVP1-39) — a weekday pill
   ("Wed 9", highlighted for today) linked into the timeline by a connecting line (which continues
-  past the last day down to the bottom of the week view, not just the last pill), with that day's
+  past the last day down to the bottom of the micro-cycle view, not just the last pill), with that day's
   `Activity`s and `PlannedActivity`s beside it. Every day gets a row, whether or not it has
   activities — the pill is what makes the list read as a timeline of the week, not just a list of
   things that happened; a day with neither renders its pill with an empty content column rather
@@ -145,7 +145,7 @@ calendar week of the year.
   (MVP1-40). A day with no completed activities shows only the Form pill — Load/Fitness/Fatigue
   describe that day's training input, which has nothing to say on a day nothing happened, while
   Form is a trend that still moves whether or not the athlete trained that day. Tapping any pill
-  (MVP1-45) pushes `MetricDetailView` onto the week view's own `NavigationStack`
+  (MVP1-45) pushes `MetricDetailView` onto the micro-cycle view's own `NavigationStack`
   (`.navigationDestination(item:)`) — a real back button and push transition, not a
   dismiss-by-swiping `.sheet`, since this is a full detail screen (chart + explanation + zone
   card) rather than a quick modal glance. `.navigationTitle` names the metric (e.g. "Form (TSB)")
@@ -353,7 +353,7 @@ calendar week of the year.
   forecast from — and dropped when the athlete or intensity thresholds change, because the
   list re-renders on every frame of the week-swipe drag and an id- or count-keyed cache would go
   stale on an in-place edit.
-- The week view sits on its own light (dark in dark mode) grey background, distinct from the plain
+- The micro-cycle view sits on its own light (dark in dark mode) grey background, distinct from the plain
   system background: the weekday pills, metric pills, and the timeline line itself are recessed
   relative to it (a `Color.primary`-based translucent overlay, so "slightly darker in light mode,
   slightly lighter in dark mode" falls out automatically rather than needing two authored values),
@@ -407,7 +407,7 @@ calendar week of the year.
   - Daily fitness numbers in the file are never imported: they are recalculated. A TRIMP that was
     edited in the file, or was an override, becomes the plan's load override. Imported plans due in the
     next 7 days go on the Watch the next time the app becomes active (§3.5).
-- **Pull-to-refresh**: pulling down on the week view triggers a fresh HealthKit import
+- **Pull-to-refresh**: pulling down on the micro-cycle view triggers a fresh HealthKit import
   (`TrainingModel.importActivities(from:)`) followed by `recompute`, with a progress indicator
   (standard `.refreshable` spinner) shown until it completes. This is the only user-initiated
   import trigger in MVP 1 — see §3.4.
@@ -427,7 +427,7 @@ calendar week of the year.
   legs) is deliberately not treated as a warning here, since it isn't a problem. Purely passive;
   resolving it happens in the activity detail sheet (§2.2). The aggregate count across every
   outstanding overlap lives on the Athlete tab instead (§2.3), not here.
-- **New max heart rate prompt** (MVP2-56): after each import, and when the week view loads,
+- **New max heart rate prompt** (MVP2-56): after each import, and when the micro-cycle view loads,
   `MicroCycleViewModel.checkForMaxHeartRateSuggestion(asOf:)` looks for a workout that *held* a heart
   rate above the athlete's current max (TrainingKit's `PeakHeartRateDetector`: 10 s or longer, so
   sensor spikes don't count).
@@ -453,7 +453,7 @@ calendar week of the year.
   (a workout whose `purpose` is `.maxHRTest` or `.lthrTest`, made in the library or the template
   editor's Purpose picker, MVP2-156) that was linked to its plan gets its own alert.
   `MicroCycleViewModel.checkForFieldTestResult()` runs at the start of the max heart rate check, after
-  every import and when the week view loads.
+  every import and when the micro-cycle view loads.
   - TrainingKit measures the result (`TrainingModel.fieldTestResult(forActivity:)`, MVP2-154); the
     alert reads "We measured 171 bpm in your max heart rate test on 24 Sep, below your max heart
     rate of 178 bpm. Update …?". A test's max may be **lower** than the one on record; an ordinary
@@ -497,7 +497,7 @@ calendar week of the year.
   - **Continue** leaves it, connected or not. Nothing is required and nothing blocks the app: the
     sheet can't be swiped away, so leaving it is always Continue, which is remembered
     (`OnboardingProgress`, `UserDefaults`, per device).
-- **Banners** at the bottom of the week view, all the same dismissible `PermissionBanner`, **one at a
+- **Banners** at the bottom of the micro-cycle view, all the same dismissible `PermissionBanner`, **one at a
   time** (`MicroCycleViewModel.bottomBanner`, MVP2-146): several can apply at once and stacked they would
   cover most of the calendar, so the most important shows (Health, then the Watch (MVP2-117), then
   iCloud) and dismissing it brings up the next:
@@ -521,7 +521,7 @@ calendar week of the year.
 
 ### 2.2 Activity detail
 
-Presented as a sheet when an activity in the week view is tapped (dismissed via the standard
+Presented as a sheet when an activity in the micro-cycle view is tapped (dismissed via the standard
 swipe-down gesture). Shows, from the `Activity` and its computed `TrainingLoad`:
 
 - **Charts over time** (MVP2-146): a "Heart Rate Over Time" chart and, with speed, a "Pace Over Time"
@@ -804,7 +804,7 @@ The screens:
       permission: turning it off removes the app's workouts from the Watch and stops the sync and the
       planned-workout sheets from scheduling (§3.5), without changing the permission. Turning it on
       asks for permission if the athlete hasn't been asked yet, then syncs. With the permission
-      refused, the switch stays on but nothing is sent; the footer and the week view's banner say why.
+      refused, the switch stays on but nothing is sent; the footer and the micro-cycle view's banner say why.
       Hidden on a device that can't schedule workouts.
     - A **Watch Permission** row: "Allowed", "Not asked yet", "Not allowed" or "Unavailable". While
       the switch is on and the athlete hasn't been asked, an "Allow Sending to Apple Watch" button
@@ -814,7 +814,7 @@ The screens:
       switch off, the footer says planned workouts aren't sent instead.
 
     The section reads the permission when it appears (`refreshAuthorization()`), and the sync that
-    runs when the app becomes active updates it. The week view's Watch permission banner opens the
+    runs when the app becomes active updates it. The micro-cycle view's Watch permission banner opens the
     tab with this screen already pushed (`AthleteRoute.watchSettings`).
 - **Calendar** (`CalendarSettingsView`, MVP2-132 editing): week-starts-on (a picker) and time zone (a
   searchable list of every identifier, `TimeZonePickerView`). Both are single values that apply to all
@@ -858,10 +858,10 @@ browsing. MVP 5's plan builder will live in this tab too.
   the next one due that isn't done yet.
 - **Plan This Workout** opens the "Create Planned Workout" sheet (§2.1) with the template already
   picked and today as the date. It uses the Watch setting at that moment (MVP2-118) and runs the
-  Watch sync after saving, like the week view's sheet.
+  Watch sync after saving, like the micro-cycle view's sheet.
 
 A template's plans are found through their workouts' `templateID`, across every plan in the store
-(`PlanStore.plans(in:)` over all dates): `TrainingModel.plans` only holds the week view's loaded
+(`PlanStore.plans(in:)` over all dates): `TrainingModel.plans` only holds the micro-cycle view's loaded
 window. The view model reloads them each time the tab appears and after a plan is saved from it.
 
 **Structured Workout creator (MVP2-140).** The "+" in the navigation bar opens
@@ -970,7 +970,7 @@ Results update as the athlete types, in three sections:
 - **Workout Templates**: name, default title or sport (`WorkoutLibraryViewModel.entries(matching:)`);
   a result pushes the library's template detail (§2.4).
 - **Planned Workouts**: the workout's name, sport or date; a result opens the planned-workout
-  detail sheet (§2.1). The subtitle says "Done" or "Missed", by the week view's missed rule
+  detail sheet (§2.1). The subtitle says "Done" or "Missed", by the micro-cycle view's missed rule
   (`MicroCycleViewModel.isMissed(_:asOf:calendar:)`), so a result and its card always agree.
 - **Activities**: sport, date, or the name of the planned workout they're linked to; a result
   opens the activity detail (§2.2).
@@ -981,7 +981,7 @@ dates match as written in the athlete's timezone and locale ("Saturday, Septembe
 shows a prompt; no match shows the standard "No Results" view.
 
 Plans and activities are read from the stores over all dates each time the search results appear, since
-`TrainingModel` only holds the week view's window, and again when a detail sheet closes after it
+`TrainingModel` only holds the micro-cycle view's window, and again when a detail sheet closes after it
 changed something (an edit, delete, link or join). Each result's searchable text, dates included,
 is written once at that reload, so typing only compares strings. A reload that finishes after a
 later one started is dropped, in this tab and the Library tab alike. Activities are kept as light
@@ -1089,7 +1089,7 @@ replaces it with a lower formula estimate. A *higher* estimate does still replac
 goes through `TrainingModel.updateAthlete(asOf:_:)` (MVP2-101), so it runs in TrainingKit's
 import queue on the current profile and can't race with an accepted max-HR update.
 
-Pull-to-refresh on the week view is the one place MVP 1 goes further than a passive reload: it
+Pull-to-refresh on the micro-cycle view is the one place MVP 1 goes further than a passive reload: it
 calls `TrainingModel.importActivities(from:)` (§3.3) to pull anything new from HealthKit, then
 `recompute`, surfacing a `.refreshable`-driven progress indicator for the duration. Errors
 (HealthKit not authorized, import failure) fail silently back to the pre-refresh state — MVP 1
@@ -1125,7 +1125,7 @@ the foreground, which also moves the window on after midnight.
   past week's plans keep their entry while slots remain, linked ones first, then the most recent.
   Unlinked past plans are kept too: the sync runs as the app opens, before the HealthKit import has
   linked a workout done since, and removing its entry would lose the Watch's "done" mark.
-- **Each run.** It reads every plan from the store (not just the week view's loaded range), removes
+- **Each run.** It reads every plan from the store (not just the micro-cycle view's loaded range), removes
   every other entry with TrainingKit's `WorkoutKitBridge.unscheduleAll(except:)` — plans older than a
   week, plans beyond the window, deleted plans, and entries from before MVP2-55 that carry a
   workout's id — then schedules the chosen plans. A sync requested while one runs makes that run
