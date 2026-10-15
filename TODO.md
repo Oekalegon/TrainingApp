@@ -49,8 +49,8 @@ Scoping and design: `docs/design/mvp5-plan-assistant.md`.
 - [ ] **MVP5-122** (TrainingKit) Resolve steps' intensity from athlete zones; fill work-step targets from a phase's fraction-of-race-target profile
 - [ ] **MVP5-123** (TrainingKit/App) Re-plan from today, keeping paradigm, race and cycles, starting from current fitness
 - [ ] **MVP5-105** (App) Running availability settings screen (weekdays, then slots per selected day)
-- [ ] **MVP5-106** (App) Make `WeekViewModel` period-aware (`DisplayPeriod`): no hard-coded 7 days in range, chart, load and cache keys; no visible change
-- [ ] **MVP5-107** (App) Show a 7/10/14-day micro-cycle when the selected date is inside a planned micro, else the calendar week; paging crosses the boundary; header shows macro › meso › micro and phase
+- [x] **MVP5-106** (App) Make `WeekViewModel` period-aware (`DisplayPeriod`): no hard-coded 7 days in range, chart, load and cache keys; no visible change Done: `DisplayPeriod` (start + length, calendar-week factory) drives ranges, chart, load and cache windows (done 2026-10-15, #149)
+- [ ] **MVP5-107** (App) Show a 7/10/14-day micro-cycle when the selected date is inside a planned micro, else the calendar week; paging crosses the boundary; header shows macro › meso › micro and phase. Take neighbouring periods from the plan (they differ in length from a micro), update the design doc's "3-week" chart text, and test the DST boundary
 - [ ] **MVP5-108** (App) Rename `WeekView`/`WeekViewModel` to `MicroCycleView`/`MicroCycleViewModel` (mechanical PR, after MVP5-107)
 - [ ] `PlanPreferences` (training days, per-day sport/session type, starting volume, weekly ramp): see MVP5-104
 - [ ] Create Plan wizard sheet
