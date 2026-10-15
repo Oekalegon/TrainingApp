@@ -138,7 +138,7 @@ extension MicroCycleViewModel {
         let day = calendar.startOfDay(for: anchorDate)
         guard let from = calendar.date(byAdding: .day, value: -45, to: day),
               let to = calendar.date(byAdding: .day, value: 45, to: day),
-              let cycles = try? await model.stores.cycleStore.cycles(in: from...to)
+              let cycles = try? await model.stores.activeCycles(in: from...to)
         else { return }
         peekedCycles = cycles
     }
@@ -153,7 +153,7 @@ extension MicroCycleViewModel {
         guard let micro = micro(containing: displayedWeekStart),
               let meso = micro.parentID.flatMap({ index.byID[$0] }),
               let macro = meso.level == .macro ? meso : meso.parentID.flatMap({ index.byID[$0] }),
-              let all = try? await model.stores.cycleStore.cycles(in: macro.dateRange)
+              let all = try? await model.stores.activeCycles(in: macro.dateRange)
         else { return }
         let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let ids = all.filter { candidate in

@@ -12,7 +12,9 @@ import TrainingCore
 /// what should be on the Watch with what is, so it can run any number of times: scheduling an
 /// unchanged plan is a no-op.
 ///
-/// Reads every plan from the store rather than `TrainingModel.plans`, which holds only the range the
+/// Reads the active plan's workouts from the store (MVP5-125: a draft or archived plan's aren't put on
+/// the Watch, and the entries of a plan that stops being active are removed; ``StoreSet/activePlannedActivities(in:)``
+/// still includes completed workouts of any plan) rather than `TrainingModel.plans`, which holds only the range the
 /// week view loaded: removing entries for plans that aren't listed would otherwise remove entries
 /// for plans outside that range.
 ///
@@ -203,7 +205,7 @@ public final class WatchScheduleSync {
             return
         }
         let stores = model.stores
-        guard let plans = try? await stores.planStore.plans(in: Date.distantPast...Date.distantFuture),
+        guard let plans = try? await stores.activePlannedActivities(in: Date.distantPast...Date.distantFuture),
               let workouts = try? await stores.workoutStore.workouts()
         else { return }
 

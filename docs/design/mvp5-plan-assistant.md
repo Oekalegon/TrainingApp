@@ -221,3 +221,11 @@ Steps 1 and 2 are independent and can run in parallel.
 
 ## 8. Open questions
 None blocking. Still to confirm from the book when encoding the triphasic phases (MVP5-100): the exact session profiles (interval work lengths and race-target fractions) per phase.
+
+## Plans screen (MVP5-125)
+
+Several plans exist side by side (TrainingKit MVP5-124) and only the active one feeds the calendar, the
+micro-cycle view, the statistics and the Watch. The Athlete tab's **Training Plans** screen lists them and
+activates, archives, duplicates, renames and deletes them, and previews a draft's projected form against
+the active plan's, which is the check before the plan assistant's commit step (MVP5-121) replaces the active
+plan. Details: `trainingApp-design.md` §2.3.
