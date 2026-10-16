@@ -169,8 +169,6 @@ struct AthleteView: View {
             }
         case .calendar:
             CalendarSettingsView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
-        case .runningAvailability:
-            RunningAvailabilityView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
         case .developer:
             DeveloperView(
                 isResyncing: isResyncing, onResync: onResync,

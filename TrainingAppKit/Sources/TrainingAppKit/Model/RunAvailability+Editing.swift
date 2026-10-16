@@ -1,6 +1,6 @@
 import TrainingCore
 
-/// The edits the Running Availability screen makes (MVP5-105), as pure functions of the value so
+/// The edits the Running Availability section of the Calendar screen makes (MVP5-105), as pure functions of the value so
 /// they're tested without a view. The screen applies one, shows the result at once and saves it
 /// through ``MicroCycleViewModel/setRunAvailability(_:asOf:)``.
 extension RunAvailability {

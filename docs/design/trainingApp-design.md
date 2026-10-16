@@ -823,13 +823,14 @@ The screens:
   footer says so. `MicroCycleViewModel` rebuilds its calendar when either changes, keeps the displayed week on
   the day it showed (`setWeekStartsOn`/`setTimeZone`) and reloads. A dated time-zone history was
   considered and left out.
-- **Running Availability** (`RunningAvailabilityView`, MVP5-105): a row in the Calendar screen (under week start and time zone) whose value is
-  a summary (`AthleteViewModel.runAvailabilitySummary`: "Not set", "Every day", or "Mon, Wed (AM), …") opens
-  the editor. It lists the seven weekdays from `AthleteProfile.weekStartsOn`, each a switch; selecting a day
-  offers both slots (morning, afternoon / evening), shown as switches directly under the day, expanded in place, and
-  switching off both clears the day. It is `AthleteProfile.runAvailability`, an athlete-level setting saved
-  with the preferences that sync (`setRunAvailability`) and reused by every new plan (MVP5 design doc §4),
-  not stored per plan. `RunAvailabilityEditor` holds the shown choice while it saves and reverts it (with an alert) when the save fails. Run types per day are not here; they belong to a plan.
+- **Running Availability** (`RunningAvailabilitySections`, MVP5-105): not a screen of its own but the lower part of
+  the Calendar screen, below week start and time zone. It lists the seven weekdays from
+  `AthleteProfile.weekStartsOn`, each a switch; selecting a day offers both slots (morning, afternoon / evening),
+  shown as switches directly under the day, expanded in place, and switching off both clears the day. It is
+  `AthleteProfile.runAvailability`, an athlete-level setting saved with the preferences that sync
+  (`setRunAvailability`) and reused by every new plan (MVP5 design doc §4), not stored per plan.
+  `RunAvailabilityEditor` holds the shown choice while it saves and reverts it (with an alert) when the save
+  fails. Run types per day are not here; they belong to a plan.
 - **Training Plans** (`PlansView`, `PlanDetailView`, `PlansViewModel`, MVP5-125): the **Plans tab** (not an Athlete screen), in its own `NavigationStack`. It opens on the active plan's detail (or, with none active, a "No Active Plan" prompt); the toolbar has **All Plans** (the list below) and an add menu: **New Plan** (a name prompt that creates an empty draft and opens it; `PlansViewModel.create(named:)`) and **Add Race** (`AddRaceSheet`; individual workouts are deliberately not added from this tab). The list shows every `TrainingPlan` (TrainingKit MVP5-124),
   grouped Active, Drafts and Archived (archived and cancelled), each row showing the name, the workout
   count and the span of its workouts. A plan row pushes a detail screen with the actions, also in the row's

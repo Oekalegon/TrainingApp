@@ -55,36 +55,6 @@ struct RunAvailabilityEditingTests {
         #expect(Weekday.saturday.weekOrder == [.saturday, .sunday, .monday, .tuesday, .wednesday, .thursday, .friday])
     }
 
-    @Test("the summary names the days in week order, marking single slots")
-    func summary() {
-        var athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
-        athlete.weekStartsOn = .monday
-        #expect(AthleteViewModel(athlete: athlete).runAvailabilitySummary == "Not set")
-
-        athlete.runAvailability = RunAvailability(slots: [
-            .sunday: [.morning, .afternoonEvening],
-            .wednesday: [.morning],
-            .monday: [.afternoonEvening],
-        ])
-        #expect(AthleteViewModel(athlete: athlete).runAvailabilitySummary == "Mon (PM), Wed (AM), Sun")
-
-        athlete.weekStartsOn = .sunday
-        #expect(AthleteViewModel(athlete: athlete).runAvailabilitySummary == "Sun, Mon (PM), Wed (AM)")
-
-        athlete.runAvailability = RunAvailability(
-            slots: Dictionary(uniqueKeysWithValues: Weekday.allCases.map { ($0, Set(DaySlot.allCases)) })
-        )
-        #expect(AthleteViewModel(athlete: athlete).runAvailabilitySummary == "Every day")
-    }
-
-    @Test("the summary follows a Saturday week start")
-    func summarySaturdayStart() {
-        var athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
-        athlete.weekStartsOn = .saturday
-        athlete.runAvailability = RunAvailability(slots: [.monday: [.morning], .saturday: [.morning, .afternoonEvening]])
-        #expect(AthleteViewModel(athlete: athlete).runAvailabilitySummary == "Sat, Mon (AM)")
-    }
-
     @Test("saved availability is on the profile and in the store, and a fresh model reads it back")
     func persistenceRoundTrip() async throws {
         let (viewModel, model, store) = makeViewModel()

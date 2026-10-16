@@ -1,7 +1,7 @@
 import Foundation
 import TrainingCore
 
-/// The state behind the Running Availability screen (MVP5-105): the availability the athlete is
+/// The state behind the Running Availability section of the Calendar screen (MVP5-105): the availability the athlete is
 /// editing, shown at once while it saves, and whether the last save failed.
 ///
 /// Each change is applied to what is shown, so quick successive toggles compose, and then saved

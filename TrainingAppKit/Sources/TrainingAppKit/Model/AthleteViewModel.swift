@@ -33,27 +33,10 @@ public struct AthleteViewModel {
         athlete.runAvailability
     }
 
-    /// The weekdays in the order the Running Availability screen lists them: the athlete's week
+    /// The weekdays in the order the Running Availability section of the Calendar screen lists them: the athlete's week
     /// start first (`AthleteProfile.weekStartsOn`, which follows the device locale until changed).
     var runAvailabilityWeekdays: [Weekday] {
         athlete.weekStartsOn.weekOrder
-    }
-
-    /// The one-line summary on the Athlete tab's Running Availability row (MVP5-105): "Not set",
-    /// "Every day", or the days in week order, such as "Mon, Wed, Sat". A day with only one of the two
-    /// slots is marked "(AM)" or "(PM)".
-    var runAvailabilitySummary: String {
-        let days = runAvailabilityWeekdays.filter { runAvailability.isAvailable(on: $0) }
-        guard !days.isEmpty else { return "Not set" }
-        if days.count == 7, days.allSatisfy({ runAvailability[$0].count == DaySlot.allCases.count }) {
-            return "Every day"
-        }
-        return days.map { day in
-            let slots = runAvailability[day]
-            if slots == [.morning] { return "\(day.shortName) (AM)" }
-            if slots == [.afternoonEvening] { return "\(day.shortName) (PM)" }
-            return day.shortName
-        }.joined(separator: ", ")
     }
 
     /// The athlete's picture as encoded image data, if they chose one (MVP2-132); the avatar shows the
