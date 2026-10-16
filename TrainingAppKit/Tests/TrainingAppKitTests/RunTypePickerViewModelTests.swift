@@ -138,3 +138,31 @@ struct PeakVolumeDraftTests {
         #expect(draft.unitLabel == "h")
     }
 }
+
+/// MVP5-112: the interim on-device store for the athlete's run types.
+@MainActor
+@Suite("AthleteRunTypesStore")
+struct AthleteRunTypesStoreTests {
+    private func store() -> AthleteRunTypesStore {
+        let defaults = UserDefaults(suiteName: "AthleteRunTypesStoreTests-\(UUID().uuidString)")!
+        return AthleteRunTypesStore(defaults: defaults)
+    }
+
+    @Test("nothing saved gives no run types and 7 days")
+    func empty() {
+        let loaded = store().load()
+        #expect(loaded.preferences.dayRunTypes.isEmpty)
+        #expect(loaded.microLength == 7)
+    }
+
+    @Test("run types and length round-trip, keeping days beyond the length")
+    func roundTrip() {
+        let store = store()
+        var preferences = PlanPreferences()
+        preferences.setRunTypes([.long, .easy], onDay: 12)
+        store.save(preferences, microLength: 10)
+        let loaded = store.load()
+        #expect(loaded.preferences.dayRunTypes == [12: [.long, .easy]])
+        #expect(loaded.microLength == 10)
+    }
+}

@@ -37,6 +37,8 @@ struct CalendarSettingsView: View {
             }
 
             RunningAvailabilitySections(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
+
+            AthleteRunTypesSections(weekStart: viewModel.athlete.weekStartsOn)
         }
         .navigationTitle(AthleteRoute.calendar.title)
         #if os(iOS)
