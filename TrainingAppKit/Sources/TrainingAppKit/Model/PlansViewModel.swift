@@ -210,6 +210,26 @@ public final class PlansViewModel {
         return copy
     }
 
+    /// Creates an empty draft plan named `name`. A name that is empty after trimming is refused.
+    ///
+    /// - Returns: The new plan, or `nil` if it was refused or failed (see ``actionError``).
+    @discardableResult
+    public func create(named name: String) async -> TrainingPlan? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            actionError = "A plan needs a name."
+            return nil
+        }
+        var plan: TrainingPlan?
+        await perform("Couldn't create the plan") { [model, now] in
+            plan = try await model.createTrainingPlan(named: trimmed, status: .draft, asOf: now())
+        }
+        return plan
+    }
+
+    /// The plan in use, if any.
+    public var activeEntry: Entry? { entries.first(where: \.isActive) }
+
     /// Renames `entry`'s plan. A name that is empty after trimming is refused.
     public func rename(_ entry: Entry, to name: String) async {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)

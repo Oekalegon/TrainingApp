@@ -254,4 +254,40 @@ struct PlansViewModelTests {
         await micro.activePlanChanged(asOf: today)
         #expect(micro.peekedCycles.isEmpty)
     }
+
+    @Test("creates an empty draft, refuses a blank name, and exposes the active plan")
+    func createsDraftAndExposesActive() async throws {
+        let (store, model) = try await makeModel()
+        let viewModel = makeViewModel(model)
+        await viewModel.reload()
+        #expect(viewModel.activeEntry == nil)
+
+        #expect(await viewModel.create(named: "   ") == nil)
+        #expect(viewModel.actionError != nil)
+
+        let created = await viewModel.create(named: " Spring ")
+        #expect(created?.name == "Spring")
+        #expect(viewModel.entries.map(\.plan.name) == ["Spring"])
+        #expect(viewModel.entries.first?.plan.status == .draft)
+        #expect(viewModel.actionError == nil)
+
+        let live = try await addPlan("Live", status: .active, workouts: 1, to: model, store: store)
+        await viewModel.reload()
+        #expect(viewModel.activeEntry?.id == live.id)
+    }
+
+    @Test("the micro-cycle view keeps its calendar when every plan is archived")
+    func calendarStaysWithOnlyArchivedPlans() async throws {
+        let (store, model) = try await makeModel()
+        let live = try await addPlan("Live", status: .active, workouts: 1, to: model, store: store)
+        let micro = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: today)
+        await micro.load(asOf: today)
+        let viewModel = makeViewModel(model)
+        try await model.setStatus(.archived, ofTrainingPlan: live.id, asOf: today)
+        await viewModel.reload()
+        await micro.activePlanChanged(asOf: today)
+
+        #expect(model.plans.isEmpty)
+        #expect(!micro.showsEmptyState)
+    }
 }

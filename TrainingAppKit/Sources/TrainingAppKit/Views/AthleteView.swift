@@ -88,7 +88,6 @@ struct AthleteView: View {
                     AthleteRouteRow(route: .personalInformation)
                     AthleteRouteRow(route: .connectedServices)
                     AthleteRouteRow(route: .calendar)
-                    AthleteRouteRow(route: .plans)
                 }
 
                 Section {
@@ -170,8 +169,6 @@ struct AthleteView: View {
             }
         case .calendar:
             CalendarSettingsView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
-        case .plans:
-            PlansView(microCycleViewModel: microCycleViewModel)
         case .developer:
             DeveloperView(
                 isResyncing: isResyncing, onResync: onResync,
