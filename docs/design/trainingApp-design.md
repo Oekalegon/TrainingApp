@@ -825,8 +825,10 @@ The screens:
   considered and left out.
 - **Running Availability** (`RunningAvailabilitySections`, MVP5-105): not a screen of its own but the lower part of
   the Calendar screen, below week start and time zone. It lists the seven weekdays from
-  `AthleteProfile.weekStartsOn`, each a switch; selecting a day offers both slots (morning, afternoon / evening),
-  shown as switches directly under the day, expanded in place, and switching off both clears the day. It is
+  `AthleteProfile.weekStartsOn`, each a switch. Selecting a day means any time of day (both slots, which also
+  allows a two-a-day) and expands it in place to an optional segmented control, Any Time / Morning /
+  Afternoon / Evening (`SlotChoice`), for the days that only work in one part of the day; the athlete never has to
+  choose a slot. It is
   `AthleteProfile.runAvailability`, an athlete-level setting saved with the preferences that sync
   (`setRunAvailability`) and reused by every new plan (MVP5 design doc §4), not stored per plan.
   `RunAvailabilityEditor` holds the shown choice while it saves and reverts it (with an alert) when the save

@@ -37,9 +37,9 @@ final class RunAvailabilityEditor {
         await apply { $0.togglingDay(weekday) }
     }
 
-    /// Switches `slot` on or off for `weekday`, and saves.
-    func toggleSlot(_ slot: DaySlot, on weekday: Weekday) async {
-        await apply { $0.togglingSlot(slot, on: weekday) }
+    /// Narrows `weekday` to `choice` (any time, morning, or afternoon / evening), and saves.
+    func setSlots(_ choice: SlotChoice, on weekday: Weekday) async {
+        await apply { $0.settingSlots(choice, on: weekday) }
     }
 
     private func apply(_ change: (RunAvailability) -> RunAvailability) async {

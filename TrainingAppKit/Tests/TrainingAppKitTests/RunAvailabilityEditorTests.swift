@@ -38,7 +38,7 @@ struct RunAvailabilityEditorTests {
         let editor = makeEditor(profile)
 
         await editor.toggleDay(.monday)
-        await editor.toggleSlot(.morning, on: .monday)
+        await editor.setSlots(.afternoonEvening, on: .monday)
 
         #expect(editor.shown[.monday] == [.afternoonEvening])
         #expect(profile.availability[.monday] == [.afternoonEvening])
