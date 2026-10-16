@@ -1,11 +1,12 @@
 import SwiftUI
 import TrainingCore
 
-/// One weekday of Running Availability (MVP5-105, MVP5-112), opened from the list of weekdays. Three sections of
-/// selectable list rows (no segmented controls):
+/// One weekday of Running Availability (MVP5-105, MVP5-112), opened from the list of weekdays. Three sections, the choices
+/// being selectable list rows except the number of runs:
 ///
-/// 1. The weekday with a short explanation, the switch "Can run on <weekday>" and, for an available day with
-///    more than one part, the maximum number of runs (1 up to the selected parts) with its explanation.
+/// 1. The weekday (large) with a short explanation, the switch "Can run on <weekday>" and, for an available day with
+///    more than one part, the maximum number of runs: a compact segmented control (1 up to the selected parts) at
+///    the trailing edge of the title's row, with its explanation below.
 /// 2. The parts of the day (morning, afternoon, evening), any combination. Switching the last one off switches
 ///    the day off; switching the day on selects all three.
 /// 3. The run types wanted that day, several allowed, each with a short description. A type picked for some days stays off the
@@ -16,6 +17,7 @@ import TrainingCore
 struct RunAvailabilityDayView: View {
     let editor: RunAvailabilityEditor
     let weekday: Weekday
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         @Bindable var editor = editor
@@ -24,7 +26,7 @@ struct RunAvailabilityDayView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(weekday.displayName).font(.headline)
+                    Text(weekday.displayName).font(.largeTitle.weight(.bold))
                     Text("Say whether you could run on a \(weekday.displayName), when, and what kind of runs you want.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
@@ -35,16 +37,28 @@ struct RunAvailabilityDayView: View {
                 // One part implies one run, so there is nothing to choose.
                 let maxRuns = shown.maxRuns(on: weekday)
                 if available, maxRuns > 1 {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Maximum number of runs").font(.headline)
+                    VStack(alignment: .leading, spacing: 6) {
+                        let layout = dynamicTypeSize.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                            : AnyLayout(HStackLayout(spacing: 12))
+                        layout {
+                            Text("Maximum number of runs").font(.headline)
+                            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
+                            Picker("Maximum number of runs", selection: Binding(
+                                get: { shown.runs(on: weekday) },
+                                set: { count in Task { await editor.setRuns(count, on: weekday) } }
+                            )) {
+                                ForEach(1...maxRuns, id: \.self) { count in
+                                    Text("\(count)").tag(count)
+                                        .accessibilityLabel("\(weekday.displayName) \(count) \(count == 1 ? "run" : "runs") at most")
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : CGFloat(maxRuns) * 56)
+                        }
                         Text("The most runs you want this day, one in each part of the day. The plan decides the actual number.")
                             .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    ForEach(1...maxRuns, id: \.self) { count in
-                        selectableRow(title: "\(count) \(count == 1 ? "run" : "runs")", selected: shown.runs(on: weekday) == count,
-                                      label: "\(weekday.displayName) \(count) \(count == 1 ? "run" : "runs") at most", single: true) {
-                            await editor.setRuns(count, on: weekday)
-                        }
                     }
                 }
             }
