@@ -90,7 +90,7 @@ struct RunningAvailabilitySections: View {
     /// chooses may go on any running day, which the footer says.
     private func runTypeChips(for weekday: Weekday, availability: RunAvailability) -> some View {
         let named = availability.dayRunTypes[weekday] ?? []
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .trailing, spacing: 6) {
             HStack {
                 Text("Run types").font(.footnote).foregroundStyle(.secondary)
                 Spacer()
