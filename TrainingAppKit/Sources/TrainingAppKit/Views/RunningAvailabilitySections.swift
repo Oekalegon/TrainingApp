@@ -3,11 +3,13 @@ import TrainingCore
 
 /// Running Availability (MVP5-105, MVP5 design doc §4), the sections the Calendar screen shows below
 /// the week start and time zone: the weekdays the athlete can run, and for each selected day, optionally,
-/// when: any combination of morning, afternoon and evening (all three by default). It is the athlete's own setting, kept on the profile and
+/// when: any combination of morning, afternoon and evening (all three by default). It is the athlete's own setting, kept on the
+/// profile and
 /// reused by every new plan, so it's set once here rather than per plan.
 ///
 /// Days are listed from the athlete's week start. Switching a day on selects all three parts of
-/// the day, and three chips directly under it switch each part on or off; switching the last part off switches the day off. A change shows at once and saves in the background; when the save fails it is taken
+/// the day, and three chips directly under it switch each part on or off; switching the last part off switches the day off. A change shows at
+/// once and saves in the background; when the save fails it is taken
 /// back and an alert says so (see ``RunAvailabilityEditor``). Meant to sit inside a `List`.
 struct RunningAvailabilitySections: View {
     let viewModel: AthleteViewModel
@@ -51,7 +53,7 @@ struct RunningAvailabilitySections: View {
         } header: {
             Text("Running Availability")
         } footer: {
-            Text("The days you can run, and for each one which of morning, afternoon and evening. The parts you pick are when you could run; how many runs a day gets is not set here yet. Plans are built from these, so you only set them once.")
+            Text("The days you can run, and for each one the parts of the day you could run in. Plans are built from these, so you only set them once.")
         }
         .alert("Couldn't Save", isPresented: $editor.didFail) {
             Button("OK", role: .cancel) {}
@@ -76,6 +78,6 @@ struct RunningAvailabilitySections: View {
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(label)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAddTraits(selected ? [.isSelected, .isToggle] : .isToggle)
     }
 }

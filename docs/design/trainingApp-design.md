@@ -825,8 +825,8 @@ The screens:
   considered and left out.
 - **Running Availability** (`RunningAvailabilitySections`, MVP5-105): not a screen of its own but the lower part of
   the Calendar screen, below week start and time zone. It lists the seven weekdays from
-  `AthleteProfile.weekStartsOn`, each a switch. Switching a day on selects all three parts of the day (Morning, Afternoon, Evening; any two allow a
-  two-a-day) and expands it in place, in the same row with no divider, to three toggle chips (MVP5-130), one per
+  `AthleteProfile.weekStartsOn`, each a switch. Switching a day on selects all three parts of the day (Morning, Afternoon, Evening; for now any two allow a
+  two-a-day, until MVP5-131/132 add a number of runs per day) and expands it in place, in the same row with no divider, to three toggle chips (MVP5-130), one per
   part (all selected by default, so no separate All Day option; the number of runs a day gets is not set here, see MVP5-131, MVP5-132), for the days that only work in some parts of the day; the athlete never has to choose. Switching the
   last part off switches the day off, so a selected day always has a part. The chips stack vertically at
   accessibility Dynamic Type sizes. Availability saved with the old combined afternoon / evening part reads as
