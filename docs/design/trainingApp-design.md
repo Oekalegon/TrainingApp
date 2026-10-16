@@ -823,13 +823,13 @@ The screens:
   footer says so. `MicroCycleViewModel` rebuilds its calendar when either changes, keeps the displayed week on
   the day it showed (`setWeekStartsOn`/`setTimeZone`) and reloads. A dated time-zone history was
   considered and left out.
-- **Training Plans** (`PlansView`, `PlansViewModel`, MVP5-125): the **Plans tab** (not an Athlete screen), in its own `NavigationStack`. It opens on the active plan's detail (or, with none active, a "No Active Plan" prompt); the toolbar has **All Plans** (the list below) and an add menu: **New Plan** (a name prompt that creates an empty draft and opens it; `PlansViewModel.create(named:)`) and **Add Race** (`AddRaceSheet`; individual workouts are deliberately not added from this tab). The list shows every `TrainingPlan` (TrainingKit MVP5-124),
+- **Training Plans** (`PlansView`, `PlanDetailView`, `PlansViewModel`, MVP5-125): the **Plans tab** (not an Athlete screen), in its own `NavigationStack`. It opens on the active plan's detail (or, with none active, a "No Active Plan" prompt); the toolbar has **All Plans** (the list below) and an add menu: **New Plan** (a name prompt that creates an empty draft and opens it; `PlansViewModel.create(named:)`) and **Add Race** (`AddRaceSheet`; individual workouts are deliberately not added from this tab). The list shows every `TrainingPlan` (TrainingKit MVP5-124),
   grouped Active, Drafts and Archived (archived and cancelled), each row showing the name, the workout
   count and the span of its workouts. A plan row pushes a detail screen with the actions, also in the row's
   context menu: **Activate** (also a leading swipe; the previous active plan becomes a draft, or a
   cancelled plan kept as history if activities completed workouts under it), **Rename**, **Duplicate**
   (a draft copy of the cycles and the not-yet-completed workouts from today on), **Archive**, and **Delete**
-  (a trailing swipe behind a confirmation). A plan an activity completed a workout of is history: its
+  (a trailing swipe behind a confirmation). The active plan has no Delete (archive it first). A plan an activity completed a workout of is history: its
   Delete is disabled and `delete(_:)` refuses with a hint to archive it, checked against the store. Failures
   show in an alert and leave the list as it was. The detail also shows **Projected Form**: the draft's TSB
   next to the active plan's on a chart, a one-line summary of the peak and final fitness, and the

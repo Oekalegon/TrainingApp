@@ -290,4 +290,10 @@ struct PlansViewModelTests {
         #expect(model.plans.isEmpty)
         #expect(!micro.showsEmptyState)
     }
+
+    @Test("today comes from the injected clock")
+    func todayIsInjected() async throws {
+        let (_, model) = try await makeModel()
+        #expect(makeViewModel(model).today() == today)
+    }
 }

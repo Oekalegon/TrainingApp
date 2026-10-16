@@ -34,7 +34,7 @@ Scoping and design: `docs/design/mvp5-plan-assistant.md`.
 - [ ] **MVP5-102** (TrainingKit) `TrainingParadigm` data type, `PlanGuardrails.Overrides`, and new paradigm rules (`intensityDistribution`, `hardSessionSpacing`, `hardSessionsPerMicro`)
 - [ ] **MVP5-103** (TrainingKit) Built-in paradigms: 80/20 polarized, triphasic
 - [x] **MVP5-104** (TrainingKit) `PlanPreferences` with `runAvailability: [Weekday: Set<DaySlot>]` (morning, afternoon/evening), independent of the paradigm (done 2026-10-15). Follow-up (done in #153): the list and the Plans tab (opens on the active plan, toolbar All Plans / New Plan), and the calendar stays when every plan is archived
-- [ ] **MVP5-126** (App) Add workouts to a draft plan: a plan made with New Plan is empty and the planned-workout sheet only adds to the active plan
+- [ ] **MVP5-126** (App) Fill a draft made with New Plan: individual workouts are deliberately not added by hand from the Plans tab, so a draft gets its workouts from the plan assistant (MVP5-121)
 - [ ] **MVP5-110** (TrainingKit) `RunType` (easy, recovery, threshold, interval, long) mapped to `IntensityCategory`; `PlanPreferences.dayRunTypes: [Int: Set<RunType>]` (per micro day, several types allowed, tied to micro length); `maxWeeklyVolume` (peak, per 7 days); maps onto the generic `SessionType`, which stays small (the library's specifics live in the templates)
 - [ ] **MVP5-111** (TrainingKit) Key-race handling in the generator: primary race anchors the macro, secondary gets a mini-taper and recovery, tertiary has none
 - [ ] **MVP5-112** (App) Per-micro-day run type picker (multi-select; weekdays shown for 7/14-day micros, not 10) and the wizard; peak weekly volume field; key-race picker in the wizard

@@ -227,6 +227,9 @@ public final class PlansViewModel {
         return plan
     }
 
+    /// The current day, in the athlete's time zone as far as a default date for a sheet needs.
+    public func today() -> Date { now() }
+
     /// The plan in use, if any.
     public var activeEntry: Entry? { entries.first(where: \.isActive) }
 

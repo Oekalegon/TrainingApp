@@ -1203,7 +1203,7 @@ public final class MicroCycleViewModel {
     }
 
     /// The view model for the "Add Race" sheet (MVP2-17), opened from a day row's add affordance
-    /// alongside ``plannedWorkoutSheetViewModel(date:)`` — `date` defaults the sheet to that day,
+    /// alongside ``plannedWorkoutSheetViewModel(date:)``, and from the Plans tab's `AddRaceSheet` (MVP5-125) — `date` defaults the sheet to that day,
     /// still editable inside it.
     public func raceSheetViewModel(date: Date) -> RaceSheetViewModel {
         RaceSheetViewModel(model: model, date: date)
