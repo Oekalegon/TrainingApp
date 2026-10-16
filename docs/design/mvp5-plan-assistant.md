@@ -104,6 +104,7 @@ var runAvailability: [Weekday: Set<DaySlot>]   // absent or empty = no running t
 
 - Day selected, one slot: one run, planned at that time of day. Both slots: two-a-day is allowed, not required. Guardrails and paradigm hard-session rules still apply (never two hard runs on one day).
 - When the generator lays out a micro of any length, each micro day gets a date, and that date's weekday decides whether (and when) it can hold a run. In a 10-day micro the same micro day lands on different weekdays from one micro to the next, so the generator places sessions on whichever days are available and moves hard and rest days to fit.
+- **Per-slot options (MVP5-127, MVP5-128).** Each available slot can also say whether a **long run is possible** (the athlete has the time) and whether a **track is available**. Like availability they are facts about the athlete's week, not about a plan, so they live on `RunAvailability`, optional with defaults (existing data decodes unchanged). The generator places long runs only on slots that allow them and track sessions only on track slots; with none it chooses another quality session instead of failing, since interval work never requires a track. Which run type goes on which micro day stays per plan (§4a).
 - Availability does not depend on the paradigm, so changing paradigm never asks the athlete to re-pick it.
 - Edited in Athlete settings and pre-filled in the Create Plan wizard, where it can be overridden for that plan only. The generator uses the slot for the planned start time and ordering within a day.
 
