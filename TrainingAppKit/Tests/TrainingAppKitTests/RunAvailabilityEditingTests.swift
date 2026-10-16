@@ -69,6 +69,47 @@ struct RunAvailabilityEditingTests {
         #expect(try JSONDecoder().decode(RunAvailability.self, from: Data(written.utf8)) == edited)
     }
 
+    @Test("runs per day default to 1, are capped by the selected parts and survive switching parts off")
+    func runsPerDay() {
+        var availability = RunAvailability().togglingDay(.saturday)
+        #expect(availability.runs(on: .saturday) == 1)
+        #expect(availability.maxRuns(on: .saturday) == 3)
+
+        availability = availability.settingRuns(2, on: .saturday)
+        #expect(availability.runs(on: .saturday) == 2)
+        #expect(availability.runs(on: .monday) == 0)
+
+        // Fewer parts than runs: the stepper's range shrinks and the shown number is capped...
+        availability = availability.togglingSlot(.morning, on: .saturday).togglingSlot(.afternoon, on: .saturday)
+        #expect(availability.maxRuns(on: .saturday) == 1)
+        #expect(availability.runs(on: .saturday) == 1)
+        // ...and the stored number returns when the parts do.
+        availability = availability.togglingSlot(.morning, on: .saturday)
+        #expect(availability.runs(on: .saturday) == 2)
+
+        // Back to 1 removes the stored entry.
+        #expect(availability.settingRuns(1, on: .saturday).runsPerDay.isEmpty)
+    }
+
+    @Test("availability stored without runsPerDay loads as one run a day")
+    func legacyRuns() throws {
+        let json = #"{"slots":{"2":["morning","evening"]},"slotOptions":{}}"#
+        let decoded = try JSONDecoder().decode(RunAvailability.self, from: Data(json.utf8))
+        #expect(decoded.runs(on: .monday) == 1)
+    }
+
+    @Test("runs per day round trip through the store")
+    func runsPersist() async throws {
+        let (viewModel, _, store) = makeViewModel()
+        let availability = RunAvailability().togglingDay(.saturday).settingRuns(2, on: .saturday)
+
+        #expect(await viewModel.setRunAvailability(availability, asOf: now))
+
+        let stored = try #require(try await store.athleteProfile())
+        #expect(stored.runAvailability.runs(on: .saturday) == 2)
+        #expect(viewModel.athleteViewModel.runAvailability.runs(on: .saturday) == 2)
+    }
+
     @Test("weekdays list from the athlete's week start")
     func weekOrder() {
         #expect(Weekday.monday.weekOrder == [.monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday])

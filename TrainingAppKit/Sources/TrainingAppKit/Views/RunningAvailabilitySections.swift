@@ -3,12 +3,12 @@ import TrainingCore
 
 /// Running Availability (MVP5-105, MVP5 design doc §4), the sections the Calendar screen shows below
 /// the week start and time zone: the weekdays the athlete can run, and for each selected day, optionally,
-/// when: any combination of morning, afternoon and evening (all three by default). It is the athlete's own setting, kept on the
+/// when: any combination of morning, afternoon and evening (all three by default), and how many runs (MVP5-132, 1 by default). It is the athlete's own setting, kept on the
 /// profile and
 /// reused by every new plan, so it's set once here rather than per plan.
 ///
 /// Days are listed from the athlete's week start. Switching a day on selects all three parts of
-/// the day, and three chips directly under it switch each part on or off; switching the last part off switches the day off. A change shows at
+/// the day, and three chips directly under it switch each part on or off; a stepper under them sets the number of runs that day, from 1 up to the number of selected parts (the generator puts each run in its own part; TrainingKit keeps a higher stored number when parts are switched off, and reads it capped). Switching the last part off switches the day off. A change shows at
 /// once and saves in the background; when the save fails it is taken
 /// back and an alert says so (see ``RunAvailabilityEditor``). Meant to sit inside a `List`.
 struct RunningAvailabilitySections: View {
@@ -46,6 +46,20 @@ struct RunningAvailabilitySections: View {
                                 }
                             }
                         }
+                        // The number of runs that day, at most one per selected part.
+                        Stepper(
+                            value: Binding(
+                                get: { shown.runs(on: weekday) },
+                                set: { count in Task { await editor.setRuns(count, on: weekday) } }
+                            ),
+                            in: 1...shown.maxRuns(on: weekday)
+                        ) {
+                            Text(shown.runs(on: weekday) == 1 ? "1 run" : "\(shown.runs(on: weekday)) runs")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityLabel("\(weekday.displayName) runs")
+                        .accessibilityValue("\(shown.runs(on: weekday))")
                     }
                 }
                 .padding(.vertical, 2)
@@ -53,7 +67,7 @@ struct RunningAvailabilitySections: View {
         } header: {
             Text("Running Availability")
         } footer: {
-            Text("The days you can run, and for each one the parts of the day you could run in. Plans are built from these, so you only set them once.")
+            Text("The days you can run, and for each one the parts of the day you could run in, and how many runs. Plans are built from these, so you only set them once.")
         }
         .alert("Couldn't Save", isPresented: $editor.didFail) {
             Button("OK", role: .cancel) {}

@@ -28,6 +28,21 @@ extension RunAvailability {
         copy[weekday] = slots
         return copy
     }
+
+    /// The availability with the number of runs on `weekday` set to `count` (MVP5-132). The number is
+    /// stored as given and TrainingKit caps what is read (``runs(on:)``) at the day's free parts, so
+    /// a number above the selected parts is not lost when parts are switched off and on again.
+    func settingRuns(_ count: Int, on weekday: Weekday) -> RunAvailability {
+        var copy = self
+        copy.setRuns(count, on: weekday)
+        return copy
+    }
+
+    /// The most runs the stepper offers on `weekday`: one per selected part, as the generator puts
+    /// each run in its own part. At least 1, so the stepper of a day that is off is still valid.
+    func maxRuns(on weekday: Weekday) -> Int {
+        max(self[weekday].count, 1)
+    }
 }
 
 extension Weekday {

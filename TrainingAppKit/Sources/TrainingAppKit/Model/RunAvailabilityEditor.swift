@@ -42,6 +42,11 @@ final class RunAvailabilityEditor {
         await apply { $0.togglingSlot(slot, on: weekday) }
     }
 
+    /// Sets the number of runs on `weekday` and saves (MVP5-132).
+    func setRuns(_ count: Int, on weekday: Weekday) async {
+        await apply { $0.settingRuns(count, on: weekday) }
+    }
+
     private func apply(_ change: (RunAvailability) -> RunAvailability) async {
         let updated = change(shown)
         pending = updated
