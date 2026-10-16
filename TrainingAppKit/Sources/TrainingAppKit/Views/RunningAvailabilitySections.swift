@@ -8,7 +8,7 @@ import TrainingCore
 /// reused by every new plan, so it's set once here rather than per plan.
 ///
 /// Days are listed from the athlete's week start. Switching a day on selects all three parts of
-/// the day, and a segmented control directly under it switches each part on or off (any combination); a second one, 1 / 2 / 3, sets the number of runs that day, from 1 up to the number of selected parts, and hidden when only one part is selected, since that implies one run (the generator puts each run in its own part; TrainingKit keeps a higher stored number when parts are switched off, and reads it capped). Switching the last part off switches the day off. A change shows at
+/// the day, and a segmented control directly under it switches each part on or off (any combination); a second one, 1 / 2 / 3, sets the maximum number of runs that day (the plan decides the actual number), from 1 up to the number of selected parts, and hidden when only one part is selected, since that implies one run (the generator puts each run in its own part; TrainingKit keeps a higher stored number when parts are switched off, and reads it capped). Switching the last part off switches the day off. A change shows at
 /// once and saves in the background; when the save fails it is taken
 /// back and an alert says so (see ``RunAvailabilityEditor``). Meant to sit inside a `List`.
 struct RunningAvailabilitySections: View {
@@ -50,9 +50,10 @@ struct RunningAvailabilitySections: View {
                             // One part implies one run, so there is nothing to choose.
                             if maxRuns > 1 {
                                 HStack(spacing: 8) {
-                                    Text("Runs").font(.footnote).foregroundStyle(.secondary)
+                                    Text("Maximum number of runs").font(.footnote).foregroundStyle(.secondary)
+                                        .lineLimit(2).multilineTextAlignment(.trailing)
                                     segmented(width: CGFloat(maxRuns) * 37, (1...maxRuns).map { count in
-                                        Segment(title: "\(count)", label: "\(weekday.displayName) \(count) \(count == 1 ? "run" : "runs")",
+                                        Segment(title: "\(count)", label: "\(weekday.displayName) \(count) \(count == 1 ? "run" : "runs") at most",
                                                 selected: runs == count, enabled: true) {
                                             await editor.setRuns(count, on: weekday)
                                         }
@@ -68,7 +69,7 @@ struct RunningAvailabilitySections: View {
         } header: {
             Text("Running Availability")
         } footer: {
-            Text("The days you can run, and for each one the parts of the day you could run in, and how many runs. Plans are built from these, so you only set them once.")
+            Text("The days you can run, and for each one the parts of the day you could run in, and the most runs a day. Plans are built from these, so you only set them once.")
         }
         .alert("Couldn't Save", isPresented: $editor.didFail) {
             Button("OK", role: .cancel) {}

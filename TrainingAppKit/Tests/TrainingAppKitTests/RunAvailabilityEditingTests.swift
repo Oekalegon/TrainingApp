@@ -87,6 +87,10 @@ struct RunAvailabilityEditingTests {
         availability = availability.togglingSlot(.morning, on: .saturday)
         #expect(availability.runs(on: .saturday) == 2)
 
+        // Switching the day off and on again starts from the default of 1.
+        #expect(availability.togglingDay(.saturday).togglingDay(.saturday).runs(on: .saturday) == 1)
+        #expect(availability.togglingDay(.saturday).runsPerDay.isEmpty)
+
         // Back to 1 removes the stored entry.
         #expect(availability.settingRuns(1, on: .saturday).runsPerDay.isEmpty)
     }
