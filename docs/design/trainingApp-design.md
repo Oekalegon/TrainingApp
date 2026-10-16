@@ -825,10 +825,9 @@ The screens:
   considered and left out.
 - **Running Availability** (`RunningAvailabilitySections`, MVP5-105): not a screen of its own but the lower part of
   the Calendar screen, below week start and time zone. It lists the seven weekdays from
-  `AthleteProfile.weekStartsOn`, each a switch. Switching a day on selects all three parts of the day (Morning, Afternoon, Evening; for now any two allow a
-  two-a-day, until MVP5-131/132 add a number of runs per day) and expands it in place, in the same row with no divider, to three toggle chips (MVP5-130), one per
-  part (all selected by default, so no separate All Day option; the number of runs a day gets is not set here, see MVP5-131, MVP5-132), for the days that only work in some parts of the day; the athlete never has to choose. Switching the
-  last part off switches the day off, so a selected day always has a part. The chips stack vertically at
+  `AthleteProfile.weekStartsOn`, each a switch. Switching a day on selects all three parts of the day (Morning, Afternoon, Evening; how many runs a day gets is a separate number) and expands it in place, in the same row with no divider, to a multi-select segmented control (MVP5-130), one segment per
+  part (all selected by default, so no separate All Day option; the maximum number of runs is set by the control below), for the days that only work in some parts of the day; the athlete never has to choose. Switching the
+  last part off switches the day off, so a selected day always has a part. Under it a second segmented control, **Maximum number of runs 1 | 2 | 3**, sets the most runs that day (the actual number depends on the plan) (MVP5-132, `RunAvailability.setRuns`, default 1); it offers only as many numbers as there are selected parts (1 | 2 with two parts) and is hidden with one part, which implies one run, since the generator puts each run in its own part. TrainingKit keeps a higher stored number when parts are switched off and reads it capped at the free parts (`runs(on:)`), so it returns when the parts do; data without the field reads as 1, and switching a day off (or its last part) or on resets it to 1. Both controls are compact (not as wide as the day switch) and their segments stack vertically at
   accessibility Dynamic Type sizes. Availability saved with the old combined afternoon / evening part reads as
   afternoon and evening (TrainingKit MVP5-129). It is
   `AthleteProfile.runAvailability`, an athlete-level setting saved with the preferences that sync
