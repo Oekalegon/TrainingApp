@@ -48,7 +48,7 @@ Scoping and design: `docs/design/mvp5-plan-assistant.md`.
 - [ ] **MVP5-121** (App) Plan preview and commit: layout, workouts, projected form, compromises, list of planned workouts to be replaced
 - [ ] **MVP5-122** (TrainingKit) Resolve steps' intensity from athlete zones; fill work-step targets from a phase's fraction-of-race-target profile
 - [ ] **MVP5-123** (TrainingKit/App) Re-plan from today, keeping paradigm, race and cycles, starting from current fitness
-- [x] **MVP5-105** (App) Running availability settings screen (weekdays, then slots per selected day) (done 2026-10-16, PR TBD)
+- [x] **MVP5-105** (App) Running availability settings screen (weekdays, then slots per selected day) (done 2026-10-16, PR #154)
 - [x] **MVP5-106** (App) Make `WeekViewModel` period-aware (`DisplayPeriod`): no hard-coded 7 days in range, chart, load and cache keys; no visible change Done: `DisplayPeriod` (start + length, calendar-week factory) drives ranges, chart, load and cache windows (done 2026-10-15, #149)
 - [x] **MVP5-107** (App) Show a 7/10/14-day micro-cycle when the selected date is inside a planned micro, else the calendar week; paging crosses the boundary; header shows macro › meso › micro and phase. Take neighbouring periods from the plan (they differ in length from a micro), update the design doc's "3-week" chart text, and test the DST boundary Done: planned micro (7/10/14 days) or calendar week, plan-derived neighbors, plan header strip (done 2026-10-15, #150)
 - [x] **MVP5-108** (App) Rename `WeekView`/`WeekViewModel` to `MicroCycleView`/`MicroCycleViewModel` (mechanical PR, after MVP5-107) Done: types, files, tests and docs renamed, no behaviour change (done 2026-10-15, #151)
