@@ -25,27 +25,31 @@ struct RunningAvailabilitySections: View {
         let shown = editor.shown
         Section {
             ForEach(viewModel.runAvailabilityWeekdays, id: \.self) { weekday in
-                Toggle(weekday.displayName, isOn: Binding(
-                    get: { shown.isAvailable(on: weekday) },
-                    set: { _ in Task { await editor.toggleDay(weekday) } }
-                ))
-                .accessibilityHint("Selected days can be narrowed to morning or afternoon and evening")
-                // A selected day expands in place to an optional choice of when: any time unless
-                // the athlete narrows it to the morning or the afternoon / evening.
-                if shown.isAvailable(on: weekday) {
-                    Picker("\(weekday.displayName) time", selection: Binding(
-                        get: { shown.slotChoice(on: weekday) },
-                        set: { choice in Task { await editor.setSlots(choice, on: weekday) } }
-                    )) {
-                        ForEach(SlotChoice.allCases, id: \.self) { choice in
-                            Text(choice.shortName)
-                                .accessibilityLabel(choice.displayName)
-                                .tag(choice)
+                // One row per day, so the choice sits under the day's switch without a divider.
+                VStack(spacing: 10) {
+                    Toggle(weekday.displayName, isOn: Binding(
+                        get: { shown.isAvailable(on: weekday) },
+                        set: { _ in Task { await editor.toggleDay(weekday) } }
+                    ))
+                    .accessibilityHint("Selected days can be narrowed to morning or afternoon and evening")
+                    // A selected day expands in place to an optional choice of when: any time unless
+                    // the athlete narrows it to the morning or the afternoon / evening.
+                    if shown.isAvailable(on: weekday) {
+                        Picker("\(weekday.displayName) time", selection: Binding(
+                            get: { shown.slotChoice(on: weekday) },
+                            set: { choice in Task { await editor.setSlots(choice, on: weekday) } }
+                        )) {
+                            ForEach(SlotChoice.allCases, id: \.self) { choice in
+                                Text(choice.shortName)
+                                    .accessibilityLabel(choice.displayName)
+                                    .tag(choice)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .font(.footnote)
                     }
-                    .pickerStyle(.segmented)
-                    .font(.footnote)
                 }
+                .padding(.vertical, 2)
             }
         } header: {
             Text("Running Availability")
