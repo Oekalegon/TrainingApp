@@ -696,7 +696,7 @@ Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0). A settings-
 `AppTabView` owns so a screen can be opened from another tab. Display of
 `TrainingModel.athlete: AthleteProfile`, shown to confirm the imported biometric data looks right, and
 (MVP2-132) editable where the athlete knows better than Health: the name, heart-rate settings, threshold
-pace, week start and time zone. Sex and age come from Health and aren't edited. Every edit goes through
+pace, week start, time zone and running availability (MVP5-105). Sex and age come from Health and aren't edited. Every edit goes through
 `TrainingModel.updateAthlete(asOf:_:)` (`MicroCycleViewModel+AthleteEditing`): it saves before it assigns, so a
 failed save changes nothing and the screen says so, and it invalidates the fitness-metrics cache from the
 earliest changed date. The other app settings are the Apple Watch ones (MVP2-117, MVP2-118).
@@ -823,6 +823,16 @@ The screens:
   footer says so. `MicroCycleViewModel` rebuilds its calendar when either changes, keeps the displayed week on
   the day it showed (`setWeekStartsOn`/`setTimeZone`) and reloads. A dated time-zone history was
   considered and left out.
+- **Running Availability** (`RunningAvailabilitySections`, MVP5-105): not a screen of its own but the lower part of
+  the Calendar screen, below week start and time zone. It lists the seven weekdays from
+  `AthleteProfile.weekStartsOn`, each a switch. Selecting a day means any time of day (both slots, which also
+  allows a two-a-day) and expands it in place to an optional segmented control, Any Time / Morning /
+  Afternoon / Evening (`SlotChoice`), for the days that only work in one part of the day; the athlete never has to
+  choose a slot. It is
+  `AthleteProfile.runAvailability`, an athlete-level setting saved with the preferences that sync
+  (`setRunAvailability`) and reused by every new plan (MVP5 design doc §4), not stored per plan.
+  `RunAvailabilityEditor` holds the shown choice while it saves and reverts it (with an alert) when the save
+  fails. Run types per day are not here; they belong to a plan.
 - **Training Plans** (`PlansView`, `PlanDetailView`, `PlansViewModel`, MVP5-125): the **Plans tab** (not an Athlete screen), in its own `NavigationStack`. It opens on the active plan's detail (or, with none active, a "No Active Plan" prompt); the toolbar has **All Plans** (the list below) and an add menu: **New Plan** (a name prompt that creates an empty draft and opens it; `PlansViewModel.create(named:)`) and **Add Race** (`AddRaceSheet`; individual workouts are deliberately not added from this tab). The list shows every `TrainingPlan` (TrainingKit MVP5-124),
   grouped Active, Drafts and Archived (archived and cancelled), each row showing the name, the workout
   count and the span of its workouts. A plan row pushes a detail screen with the actions, also in the row's
@@ -1052,8 +1062,8 @@ Apple's guideline 5.1.3(ii) forbids storing health information in iCloud:
 
 - **Synced through CloudKit:** planned workouts, the workout library, cycles, training plans (MVP5-125: the
   `StoreSet` carries the plan store, so every planned workout and cycle belongs to a plan), races, goals (MVP2-139), and the
-  athlete's own preferences (name, picture, time zone, week start, main sport, the pace history and the Apple
-  Health resting-heart-rate switch).
+  athlete's own preferences (name, picture, time zone, week start, main sport, the pace history, the Apple
+  Health resting-heart-rate switch and the running availability).
 - **Local to the device:** activities with their heart-rate samples, tombstones of deleted
   activities, joins, the fitness-metrics cache, and the whole profile including what comes from
   HealthKit (sex, date of birth, heart-rate settings) and the HealthKit import anchor.

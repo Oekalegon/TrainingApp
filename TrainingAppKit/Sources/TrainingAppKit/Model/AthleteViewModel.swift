@@ -28,6 +28,17 @@ public struct AthleteViewModel {
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }
 
+    /// When the athlete can run (MVP5-105), the athlete-level setting every new plan starts from.
+    public var runAvailability: RunAvailability {
+        athlete.runAvailability
+    }
+
+    /// The weekdays in the order the Running Availability section of the Calendar screen lists them: the athlete's week
+    /// start first (`AthleteProfile.weekStartsOn`, which follows the device locale until changed).
+    var runAvailabilityWeekdays: [Weekday] {
+        athlete.weekStartsOn.weekOrder
+    }
+
     /// The athlete's picture as encoded image data, if they chose one (MVP2-132); the avatar shows the
     /// monogram otherwise.
     public var avatarImageData: Data? {
