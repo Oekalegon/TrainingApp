@@ -29,10 +29,12 @@ extension RunAvailability {
         var slots = self[weekday]
         if slots.contains(slot) { slots.remove(slot) } else { slots.insert(slot) }
         copy[weekday] = slots
+        // A cleared day starts again from the default of one run, like `togglingDay`.
+        if slots.isEmpty { copy.setRuns(1, on: weekday) }
         return copy
     }
 
-    /// The availability with the number of runs on `weekday` set to `count` (MVP5-132). The number is
+    /// The availability with the maximum number of runs on `weekday` set to `count` (MVP5-132). The number is
     /// stored as given and TrainingKit caps what is read (``runs(on:)``) at the day's free parts, so
     /// a number above the selected parts is not lost when parts are switched off and on again.
     func settingRuns(_ count: Int, on weekday: Weekday) -> RunAvailability {
@@ -41,8 +43,8 @@ extension RunAvailability {
         return copy
     }
 
-    /// The most runs the stepper offers on `weekday`: one per selected part, as the generator puts
-    /// each run in its own part. At least 1, so the stepper of a day that is off is still valid.
+    /// The most runs the "Maximum number of runs" control offers on `weekday`: one per selected part,
+    /// as the generator puts each run in its own part. At least 1, so a day that is off still has a valid range.
     func maxRuns(on weekday: Weekday) -> Int {
         max(self[weekday].count, 1)
     }

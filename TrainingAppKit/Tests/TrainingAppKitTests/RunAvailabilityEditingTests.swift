@@ -91,6 +91,13 @@ struct RunAvailabilityEditingTests {
         #expect(availability.togglingDay(.saturday).togglingDay(.saturday).runs(on: .saturday) == 1)
         #expect(availability.togglingDay(.saturday).runsPerDay.isEmpty)
 
+        // Switching the last part off clears the day and its maximum too.
+        var parts = RunAvailability().togglingDay(.sunday).settingRuns(3, on: .sunday)
+        for slot in DaySlot.allCases { parts = parts.togglingSlot(slot, on: .sunday) }
+        #expect(!parts.isAvailable(on: .sunday))
+        #expect(parts.runsPerDay.isEmpty)
+        #expect(parts.togglingSlot(.morning, on: .sunday).runs(on: .sunday) == 1)
+
         // Back to 1 removes the stored entry.
         #expect(availability.settingRuns(1, on: .saturday).runsPerDay.isEmpty)
     }
