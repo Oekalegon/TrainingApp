@@ -26,7 +26,7 @@ So the vocabulary the user asked for is mostly there. The new work is the **para
 - **Conflicts:** when a preference conflicts with a guardrail the generator backs off and the preview lists each preference it overrode and why.
 - **Running only.** Other sports remain manual planned workouts.
 - **80/20 is measured by planned time in zone, per micro.**
-- **Availability is stored per weekday** (the calendar revolves around weeks). **Preferred run types are stored per micro day**, several allowed per day.
+- **Availability is stored per weekday** (the calendar revolves around weeks). **Preferred run types are stored per weekday too** (on `RunAvailability`, TrainingKit#117), several allowed per day.
 - **Peak volume is asked per 7 days**; the generator scales it for other micro lengths.
 
 ## 2. Paradigm
@@ -150,10 +150,10 @@ Header shows the cycle context: macro › meso › micro name and phase.
 
 ### 6.1 Pipeline
 
-1. **Inputs:** paradigm, key races (primary anchors the plan), start date, availability (per weekday), preferred run types (per micro day), volume measure, starting volume, peak weekly volume, ramp, long-run cap, taper days, optional conditioning phase.
+1. **Inputs:** paradigm, key races (primary anchors the plan), start date, availability (per weekday), preferred run types (per weekday), volume measure, starting volume, peak weekly volume, ramp, long-run cap, taper days, optional conditioning phase.
 2. **Cycles:** the paradigm lays out phases as whole mesocycles, backwards from the primary race (`CycleLayoutBuilder`), and the cycles are held in memory, not saved.
 3. **Volume curve:** one target per micro (6.2).
-4. **Day assignment:** for each micro, each micro day gets a date; the date's weekday decides if it's available and in which slot; preferred run types pick what goes where (6.3).
+4. **Day assignment:** for each micro, each micro day gets a date; the date's weekday decides if it's available and in which slot; preferred run types (per weekday) pick what goes where (6.3).
 5. **Workout selection and sizing:** each session gets a template chosen by content and sized to its share of the micro's target (6.4).
 6. **Evaluate and adjust:** project load with the existing `DailyLoadSeries` / `FitnessMetricsCalculator`, run `PlanEvaluator` with the paradigm's guardrails, apply fixed adjustments, repeat up to N times (6.5).
 7. **Preview:** proposal, remaining findings, every compromise (6.6). Nothing is saved until the athlete accepts.
@@ -168,7 +168,7 @@ Header shows the cycle context: macro › meso › micro name and phase.
 
 ### 6.3 Day assignment
 
-- Hard days (`threshold`, `interval`) and the long run are placed first on available days that match the athlete's preferred run types for that micro day, then easy and recovery runs fill the rest.
+- Hard days (`threshold`, `interval`) and the long run are placed first on available days that match the athlete's preferred run types for that weekday, then easy and recovery runs fill the rest.
 - Each day's preferred run types are a set; the planner picks one that suits the phase and the paradigm's rules (spacing between hard sessions, hard sessions per micro).
 - Two-a-days use the second slot for easy or recovery runs by default.
 - An unavailable day gets no session. If a micro has too few available days for what the phase needs, the planner drops the least important session and reports it.

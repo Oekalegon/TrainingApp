@@ -38,5 +38,12 @@ struct RunningAvailabilitySections: View {
         } footer: {
             Text("Choose a day to set when you could run, the most runs, and the run types you want. Plans are built from these, so you only set them once.")
         }
+        .alert("Couldn't Save", isPresented: Binding(
+            get: { editor.didFail && !editor.isDayScreenShown }, set: { if !$0 { editor.didFail = false } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The change couldn't be saved. Try again.")
+        }
     }
 }

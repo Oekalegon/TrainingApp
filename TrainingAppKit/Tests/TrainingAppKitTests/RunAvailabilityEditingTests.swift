@@ -219,3 +219,22 @@ struct RunAvailabilitySummaryTests {
         #expect(availability.summary(on: .monday) == "Morning, Afternoon, Evening · 2 runs · Threshold, Interval")
     }
 }
+
+/// MVP5-112: summary and display strings.
+@Suite("RunAvailability summary details")
+struct RunAvailabilitySummaryDetailTests {
+    @Test("the number of runs is read capped at the selected parts")
+    func capped() {
+        let availability = RunAvailability().togglingDay(.monday).settingRuns(3, on: .monday)
+            .togglingSlot(.morning, on: .monday).togglingSlot(.afternoon, on: .monday)
+        #expect(availability.summary(on: .monday) == "Evening")
+    }
+
+    @Test("every run type has a name and a description")
+    func displayStrings() {
+        for type in RunType.allCases {
+            #expect(!type.displayName.isEmpty)
+            #expect(!type.summary.isEmpty)
+        }
+    }
+}

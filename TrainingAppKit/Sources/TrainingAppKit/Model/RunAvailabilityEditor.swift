@@ -17,6 +17,9 @@ final class RunAvailabilityEditor {
     private var changeCount = 0
     /// Whether a save failed and the screen should say so; the screen clears it when dismissed.
     var didFail = false
+    /// Whether a weekday screen is open (it sets this while visible). The failure alert is shown by that screen then, and
+    /// by the list otherwise, so a save that fails after the athlete has left the screen is still reported once.
+    var isDayScreenShown = false
 
     private let saved: () -> RunAvailability
     private let save: (RunAvailability) async -> Bool

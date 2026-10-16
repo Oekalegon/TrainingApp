@@ -13,11 +13,13 @@ import TrainingCore
 ///    others; types no day picks can go on any running day.
 ///
 /// A change shows at once and saves in the background; when the save fails it is taken back and an alert says so
-/// (see ``RunAvailabilityEditor``).
+/// (see ``RunAvailabilityEditor``): here while this screen is open, on the list once it has been left.
 struct RunAvailabilityDayView: View {
     let editor: RunAvailabilityEditor
     let weekday: Weekday
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The width of one segment of the runs control; scales with the text size.
+    @ScaledMetric(relativeTo: .body) private var segmentWidth = 56
 
     var body: some View {
         @Bindable var editor = editor
@@ -26,7 +28,7 @@ struct RunAvailabilityDayView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(weekday.displayName).font(.largeTitle.weight(.bold))
+                    Text(weekday.displayName).font(.largeTitle.weight(.bold)).accessibilityAddTraits(.isHeader)
                     Text("Say whether you could run on a \(weekday.displayName), when, and what kind of runs you want.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
@@ -55,7 +57,7 @@ struct RunAvailabilityDayView: View {
                             }
                             .pickerStyle(.segmented)
                             .labelsHidden()
-                            .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : CGFloat(maxRuns) * 56)
+                            .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : CGFloat(maxRuns) * segmentWidth)
                         }
                         Text("The most runs you want this day, one in each part of the day. The plan decides the actual number.")
                             .font(.subheadline).foregroundStyle(.secondary)
@@ -97,7 +99,11 @@ struct RunAvailabilityDayView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .alert("Couldn't Save", isPresented: $editor.didFail) {
+        .onAppear { editor.isDayScreenShown = true }
+        .onDisappear { editor.isDayScreenShown = false }
+        .alert("Couldn't Save", isPresented: Binding(
+            get: { editor.didFail && editor.isDayScreenShown }, set: { if !$0 { editor.didFail = false } }
+        )) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("The change couldn't be saved. Try again.")
@@ -120,13 +126,14 @@ struct RunAvailabilityDayView: View {
                 }
                 Spacer()
                 Image(systemName: "checkmark").foregroundStyle(Color.accentColor).fontWeight(.semibold).opacity(selected ? 1 : 0)
+                    .accessibilityHidden(true)
             }
             .frame(minHeight: 32)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
-        .accessibilityValue(detail ?? "")
+        .accessibilityHint(detail ?? "")
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }

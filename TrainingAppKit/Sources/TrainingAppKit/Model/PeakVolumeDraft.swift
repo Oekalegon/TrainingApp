@@ -37,7 +37,7 @@ struct PeakVolumeDraft: Equatable {
         case valid
         /// Not a positive number.
         case invalid
-        /// Above what a week can hold; see ``PeakVolumeDraft/maximum(for:)``.
+        /// Above what a week can hold; see ``PeakVolumeDraft/maximum``.
         case tooLarge
     }
 
@@ -64,8 +64,9 @@ struct PeakVolumeDraft: Equatable {
         }
     }
 
-    /// The most a week can hold, in the display unit: 500 km (310 mi), 40 h or 5000 TRIMP.
-    func maximum(for measure: PeakVolumeMeasure) -> Double {
+    /// The most a week can hold, in the display unit: 500 km (310 mi), 40 h or 5000 TRIMP. Provisional until
+    /// TrainingKit defines the peak volume (MVP5-133).
+    var maximum: Double {
         switch measure {
         case .distance: distanceSystem == .metric ? 500 : 310
         case .duration: 40
@@ -76,7 +77,8 @@ struct PeakVolumeDraft: Equatable {
     /// The typed number: a decimal comma is read as a point; `nil` when the text is not a finite number.
     private var number: Double? {
         let trimmed = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
-        guard let number = Double(trimmed), number.isFinite else { return nil }
+        // Plain decimals only: `Double` would also take hex ("0x10"), exponents ("1e3"), "inf" and "nan".
+        guard trimmed.wholeMatch(of: /[0-9]*\.?[0-9]+|[0-9]+\./) != nil, let number = Double(trimmed), number.isFinite else { return nil }
         return number
     }
 
@@ -84,7 +86,7 @@ struct PeakVolumeDraft: Equatable {
     var validation: Validation {
         if text.trimmingCharacters(in: .whitespaces).isEmpty { return .empty }
         guard let number, number > 0 else { return .invalid }
-        return number > maximum(for: measure) ? .tooLarge : .valid
+        return number > maximum ? .tooLarge : .valid
     }
 
     /// A message for the field when the text is not valid; `nil` when it is valid or empty.
@@ -92,7 +94,7 @@ struct PeakVolumeDraft: Equatable {
         switch validation {
         case .empty, .valid: nil
         case .invalid: "Enter a number above zero."
-        case .tooLarge: "That is more than a week can hold. The most is \(Int(maximum(for: measure))) \(unitLabel)."
+        case .tooLarge: "That is more than a week can hold. The most is \(Int(maximum)) \(unitLabel)."
         }
     }
 

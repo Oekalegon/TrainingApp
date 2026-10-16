@@ -53,7 +53,7 @@ Scoping and design: `docs/design/mvp5-plan-assistant.md`.
 - [ ] **MVP5-116** (TrainingKit) Replace the `maxBuildProgressionFraction` rule with a longest-run rule (+10% over the longest run of the previous 4 weeks); update `PlanRule`, evaluator, tests
 - [ ] **MVP5-117** (TrainingKit) Volume curve: per-micro targets in TRIMP/distance/time from start, ramp, peak (per 7 days), phase and role
 - [ ] **MVP5-118** (TrainingKit) Template content analysis (interval work-length ranges) and per-phase session profiles; hard filter, closest fit, rotation, parameter progression
-- [ ] **MVP5-119** (TrainingKit) Day assignment: availability by weekday, preferred run types by micro day, hard-session spacing, two-a-day
+- [ ] **MVP5-119** (TrainingKit) Day assignment: availability by weekday, preferred run types by weekday, hard-session spacing, two-a-day
 - [ ] **MVP5-120** (TrainingKit) Bounded adjust loop against `PlanEvaluator` and a plan proposal type listing findings and compromises (preferences overridden, shortened phases, missing templates); only `.risk` findings make a plan unacceptable, so also surface `.warning` findings (race-day TSB, high TSB) in the proposal
 - [ ] **MVP5-121** (App) Plan preview and commit: layout, workouts, projected form, compromises, list of planned workouts to be replaced
 - [ ] **MVP5-122** (TrainingKit) Resolve steps' intensity from athlete zones; fill work-step targets from a phase's fraction-of-race-target profile

@@ -28,7 +28,7 @@ struct PeakVolumeDraftTests {
         #expect(PeakVolumeDraft(measure: .trimp, text: "450").value == 450)
     }
 
-    @Test("zero, negative, text and infinity are invalid", arguments: ["0", "-5", "abc", "inf", "nan", "1.2.3"])
+    @Test("zero, negative, text and infinity are invalid", arguments: ["0", "-5", "abc", "inf", "nan", "1.2.3", "0x10", "1e3", "."])
     func invalid(text: String) {
         let draft = PeakVolumeDraft(measure: .trimp, text: text)
         #expect(draft.validation == .invalid)
@@ -52,5 +52,13 @@ struct PeakVolumeDraftTests {
         draft.setMeasure(.duration)
         #expect(draft.text.isEmpty)
         #expect(draft.unitLabel == "h")
+    }
+
+    @Test("the imperial maximum is 310 miles and decimals are accepted")
+    func imperialMaximum() {
+        #expect(PeakVolumeDraft(measure: .distance, text: "310", distanceSystem: .imperial).validation == .valid)
+        #expect(PeakVolumeDraft(measure: .distance, text: "311", distanceSystem: .imperial).validation == .tooLarge)
+        #expect(PeakVolumeDraft(measure: .duration, text: ".5").value == 1800)
+        #expect(PeakVolumeDraft(measure: .duration, text: "7.").value == 25_200)
     }
 }
