@@ -787,7 +787,7 @@ The screens:
     offers both slots (morning, afternoon / evening), shown as switches directly under the day, expanded in place, and
     switching off both clears the day. It is `AthleteProfile.runAvailability`, an athlete-level setting saved
     with the preferences that sync (`setRunAvailability`) and reused by every new plan (MVP5 design doc §4),
-    not stored per plan. Run types per day are not here; they belong to a plan.
+    not stored per plan. `RunAvailabilityEditor` holds the shown choice while it saves and reverts it (with an alert) when the save fails. Run types per day are not here; they belong to a plan.
   - **Pace Zones** (`PaceZonesView`, MVP2-132 editing): the pace model's threshold pace
     (`paceModel.thresholdPaceSecondsPerKilometer`), shown as min/km, and a note that the zones
     themselves aren't available yet (MVP8). Threshold pace is dated too (`AthleteProfile.paceHistory`):

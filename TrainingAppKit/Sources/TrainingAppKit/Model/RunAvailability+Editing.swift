@@ -28,11 +28,6 @@ extension RunAvailability {
         }
         return copy
     }
-
-    /// The weekdays the athlete can run on, ordered by calendar weekday starting from Sunday.
-    var availableWeekdays: [Weekday] {
-        Weekday.allCases.filter(isAvailable(on:))
-    }
 }
 
 extension Weekday {
@@ -43,7 +38,8 @@ extension Weekday {
         return Array(all[start...] + all[..<start])
     }
 
-    /// The three-letter label used in summaries: "Mon".
+    /// The three-letter label used in summaries: "Mon". Like ``displayName`` it is English only; both
+    /// need localising together.
     var shortName: String {
         String(displayName.prefix(3))
     }

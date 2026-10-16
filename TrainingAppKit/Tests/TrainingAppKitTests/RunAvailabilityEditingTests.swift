@@ -42,7 +42,7 @@ struct RunAvailabilityEditingTests {
 
         availability = availability.togglingSlot(.afternoonEvening, on: .saturday)
         #expect(!availability.isAvailable(on: .saturday))
-        #expect(availability.availableWeekdays == [.sunday])
+        #expect(availability.isAvailable(on: .sunday))
 
         availability = availability.togglingSlot(.morning, on: .wednesday)
         #expect(availability[.wednesday] == [.morning])
@@ -75,6 +75,14 @@ struct RunAvailabilityEditingTests {
             slots: Dictionary(uniqueKeysWithValues: Weekday.allCases.map { ($0, Set(DaySlot.allCases)) })
         )
         #expect(AthleteViewModel(athlete: athlete).runAvailabilitySummary == "Every day")
+    }
+
+    @Test("the summary follows a Saturday week start")
+    func summarySaturdayStart() {
+        var athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        athlete.weekStartsOn = .saturday
+        athlete.runAvailability = RunAvailability(slots: [.monday: [.morning], .saturday: [.morning, .afternoonEvening]])
+        #expect(AthleteViewModel(athlete: athlete).runAvailabilitySummary == "Sat, Mon (AM)")
     }
 
     @Test("saved availability is on the profile and in the store, and a fresh model reads it back")
