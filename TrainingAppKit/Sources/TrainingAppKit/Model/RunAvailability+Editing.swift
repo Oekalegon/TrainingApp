@@ -95,3 +95,17 @@ extension RunAvailability {
         return copy
     }
 }
+
+extension RunAvailability {
+    /// The line under a weekday in the Running Availability list: "Off", or the parts of the day, the number
+    /// of runs when above one and the run types named, e.g. "Morning, Evening · 2 runs · Interval, Threshold".
+    func summary(on weekday: Weekday) -> String {
+        guard isAvailable(on: weekday) else { return "Off" }
+        var parts = [DaySlot.allCases.filter { self[weekday].contains($0) }.map(\.displayName).joined(separator: ", ")]
+        let runs = runs(on: weekday)
+        if runs > 1 { parts.append("\(runs) runs") }
+        let types = RunType.allCases.filter { (dayRunTypes[weekday] ?? []).contains($0) }
+        if !types.isEmpty { parts.append(types.map(\.displayName).joined(separator: ", ")) }
+        return parts.joined(separator: " · ")
+    }
+}

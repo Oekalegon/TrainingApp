@@ -204,3 +204,18 @@ struct RunAvailabilityRunTypeTests {
         #expect(saved.dayRunTypes.isEmpty)
     }
 }
+
+/// MVP5-112: the line under a weekday in the list.
+@Suite("RunAvailability day summary")
+struct RunAvailabilitySummaryTests {
+    @Test("off, parts only, and with runs and types")
+    func summary() {
+        var availability = RunAvailability()
+        #expect(availability.summary(on: .monday) == "Off")
+        availability = availability.togglingDay(.monday)
+        #expect(availability.summary(on: .monday) == "Morning, Afternoon, Evening")
+        availability = availability.settingRuns(2, on: .monday)
+            .togglingRunType(.threshold, on: .monday).togglingRunType(.interval, on: .monday)
+        #expect(availability.summary(on: .monday) == "Morning, Afternoon, Evening · 2 runs · Threshold, Interval")
+    }
+}
