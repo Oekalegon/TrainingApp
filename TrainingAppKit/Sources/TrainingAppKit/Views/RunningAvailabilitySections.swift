@@ -3,15 +3,18 @@ import TrainingCore
 
 /// Running Availability (MVP5-105, MVP5 design doc §4), the sections the Calendar screen shows below
 /// the week start and time zone: the weekdays the athlete can run, and for each selected day, optionally,
-/// when: any time (the default), only the morning, or only the afternoon / evening. It is the athlete's own setting, kept on the profile and
+/// when: any combination of morning, afternoon and evening (all three by default). It is the athlete's own setting, kept on the
+/// profile and
 /// reused by every new plan, so it's set once here rather than per plan.
 ///
-/// Days are listed from the athlete's week start. Tapping a day selects it for any time of day, and
-/// a segmented control directly under it narrows it to one slot; tapping the day again clears it. A change shows at once and saves in the background; when the save fails it is taken
+/// Days are listed from the athlete's week start. Switching a day on selects all three parts of
+/// the day, and three chips directly under it switch each part on or off; switching the last part off switches the day off. A change shows at
+/// once and saves in the background; when the save fails it is taken
 /// back and an alert says so (see ``RunAvailabilityEditor``). Meant to sit inside a `List`.
 struct RunningAvailabilitySections: View {
     let viewModel: AthleteViewModel
     @State private var editor: RunAvailabilityEditor
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(viewModel: AthleteViewModel, microCycleViewModel: MicroCycleViewModel) {
         self.viewModel = viewModel
@@ -31,22 +34,18 @@ struct RunningAvailabilitySections: View {
                         get: { shown.isAvailable(on: weekday) },
                         set: { _ in Task { await editor.toggleDay(weekday) } }
                     ))
-                    .accessibilityHint("Selected days can be narrowed to morning or afternoon and evening")
-                    // A selected day expands in place to an optional choice of when: any time unless
-                    // the athlete narrows it to the morning or the afternoon / evening.
+                    .accessibilityHint("A selected day can be limited to some parts of the day")
+                    // A selected day expands in place to its parts of the day, each switched on or off.
                     if shown.isAvailable(on: weekday) {
-                        Picker("\(weekday.displayName) time", selection: Binding(
-                            get: { shown.slotChoice(on: weekday) },
-                            set: { choice in Task { await editor.setSlots(choice, on: weekday) } }
-                        )) {
-                            ForEach(SlotChoice.allCases, id: \.self) { choice in
-                                Text(choice.shortName)
-                                    .accessibilityLabel(choice.displayName)
-                                    .tag(choice)
+                        let layout = dynamicTypeSize.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+                        layout {
+                            ForEach(DaySlot.allCases, id: \.self) { slot in
+                                chip(slot.displayName, label: "\(weekday.displayName) \(slot.displayName)", selected: shown[weekday].contains(slot)) {
+                                    await editor.toggleSlot(slot, on: weekday)
+                                }
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .font(.footnote)
                     }
                 }
                 .padding(.vertical, 2)
@@ -54,12 +53,31 @@ struct RunningAvailabilitySections: View {
         } header: {
             Text("Running Availability")
         } footer: {
-            Text("The days you can run, and for each one whether any time of day or only morning or afternoon / evening. Plans are built from these, so you only set them once.")
+            Text("The days you can run, and for each one the parts of the day you could run in. Plans are built from these, so you only set them once.")
         }
         .alert("Couldn't Save", isPresented: $editor.didFail) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("The change couldn't be saved. Try again.")
         }
+    }
+
+    /// One part of the day as a toggle chip, filled when selected.
+    private func chip(_ title: String, label: String, selected: Bool, action: @escaping () async -> Void) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            Text(title)
+                .font(.footnote.weight(.medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .foregroundStyle(selected ? Color.white : Color.accentColor)
+                .background(selected ? Color.accentColor : Color.accentColor.opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? [.isSelected, .isToggle] : .isToggle)
     }
 }
