@@ -36,6 +36,15 @@ extension MicroCycleViewModel {
         }
     }
 
+    /// Sets when the athlete can run (MVP5-105). It's the athlete's own setting, kept on the profile
+    /// and reused by every new plan, not stored per plan.
+    ///
+    /// - Parameter availability: The free slots per weekday.
+    /// - Returns: Whether the profile was saved.
+    public func setRunAvailability(_ availability: RunAvailability, asOf today: Date = .now) async -> Bool {
+        await applyAthleteChange(asOf: today) { $0.runAvailability = availability }
+    }
+
     /// Records heart-rate settings from a date, replacing the entry for that day.
     ///
     /// - Parameter settings: Resting and maximum heart rate, lactate threshold and zone method.

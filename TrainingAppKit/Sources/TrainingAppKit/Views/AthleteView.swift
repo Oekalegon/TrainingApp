@@ -4,8 +4,8 @@ import TrainingCore
 
 /// The Athlete tab (MVP2-123, design doc §2.3): the avatar and name, the live overlap warning, and a
 /// settings-style list of groups, each opening its own screen — Personal Information (with Heart
-/// Rate Zones and Pace Zones inside it), Connected Services (Apple Health, Apple Watch), Calendar
-/// and Developer. The screens it opens edit the profile where the athlete knows better than Health
+/// Rate Zones and Pace Zones inside it), Connected Services (Apple Health, Apple Watch), Calendar,
+/// Running Availability (MVP5-105) and Developer. The screens it opens edit the profile where the athlete knows better than Health
 /// (MVP2-132); this list itself only navigates.
 ///
 /// The `NavigationStack`'s path is owned by `AppTabView` (``path``), so the week view's Watch
@@ -88,6 +88,15 @@ struct AthleteView: View {
                     AthleteRouteRow(route: .personalInformation)
                     AthleteRouteRow(route: .connectedServices)
                     AthleteRouteRow(route: .calendar)
+                    NavigationLink(value: AthleteRoute.runningAvailability) {
+                        LabeledContent {
+                            Text(viewModel.runAvailabilitySummary)
+                        } label: {
+                            Label(AthleteRoute.runningAvailability.title, systemImage: AthleteRoute.runningAvailability.systemImage)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityHint("Opens the days and times you can run")
                 }
 
                 Section {
@@ -169,6 +178,8 @@ struct AthleteView: View {
             }
         case .calendar:
             CalendarSettingsView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
+        case .runningAvailability:
+            RunningAvailabilityView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
         case .developer:
             DeveloperView(
                 isResyncing: isResyncing, onResync: onResync,

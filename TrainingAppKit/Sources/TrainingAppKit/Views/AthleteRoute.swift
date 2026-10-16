@@ -12,6 +12,7 @@ enum AthleteRoute: Hashable {
     case appleWatch
     case synchronisation
     case calendar
+    case runningAvailability
     case developer
 
     /// The path to the Apple Watch synchronisation settings, where the permission lives: what the
@@ -29,6 +30,7 @@ enum AthleteRoute: Hashable {
         case .appleWatch: "Apple Watch"
         case .synchronisation: "Synchronisation"
         case .calendar: "Calendar"
+        case .runningAvailability: "Running Availability"
         case .developer: "Developer"
         }
     }
@@ -44,6 +46,7 @@ enum AthleteRoute: Hashable {
         case .appleWatch: "applewatch"
         case .synchronisation: "arrow.triangle.2.circlepath"
         case .calendar: "calendar"
+        case .runningAvailability: "figure.run.circle"
         case .developer: "wrench.and.screwdriver"
         }
     }

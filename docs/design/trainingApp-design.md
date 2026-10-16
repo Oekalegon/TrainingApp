@@ -695,7 +695,7 @@ Reachable via the "Athlete" tab in the app's bottom tab bar (§2.0). A settings-
 `AppTabView` owns so a screen can be opened from another tab. Display of
 `TrainingModel.athlete: AthleteProfile`, shown to confirm the imported biometric data looks right, and
 (MVP2-132) editable where the athlete knows better than Health: the name, heart-rate settings, threshold
-pace, week start and time zone. Sex and age come from Health and aren't edited. Every edit goes through
+pace, week start, time zone and running availability (MVP5-105). Sex and age come from Health and aren't edited. Every edit goes through
 `TrainingModel.updateAthlete(asOf:_:)` (`MicroCycleViewModel+AthleteEditing`): it saves before it assigns, so a
 failed save changes nothing and the screen says so, and it invalidates the fitness-metrics cache from the
 earliest changed date. The other app settings are the Apple Watch ones (MVP2-117, MVP2-118).
@@ -780,6 +780,13 @@ The screens:
     be accepted (MVP2-56), as does a field-test result (MVP2-155), and when the age estimate later differs by at least 2 bpm while the current
     maximum is itself an estimate, a "Use Age Estimate (N bpm)" button offers it
     (`AthleteViewModel.offeredMaxHeartRateEstimate(asOf:)`).
+  - **Running Availability** (`RunningAvailabilityView`, MVP5-105): a row on the Athlete list whose value is
+    a summary (`AthleteViewModel.runAvailabilitySummary`: "Not set", "Every day", or "Mon, Wed (AM), …") opens
+    the editor. It lists the seven weekdays from `AthleteProfile.weekStartsOn`, each a switch; selecting a day
+    offers both slots (morning, afternoon / evening), shown as switches in a section per selected day, and
+    switching off both clears the day. It is `AthleteProfile.runAvailability`, an athlete-level setting saved
+    with the preferences that sync (`setRunAvailability`) and reused by every new plan (MVP5 design doc §4),
+    not stored per plan. Run types per day are not here; they belong to a plan.
   - **Pace Zones** (`PaceZonesView`, MVP2-132 editing): the pace model's threshold pace
     (`paceModel.thresholdPaceSecondsPerKilometer`), shown as min/km, and a note that the zones
     themselves aren't available yet (MVP8). Threshold pace is dated too (`AthleteProfile.paceHistory`):
@@ -1032,8 +1039,8 @@ Persistence is two stores in one `ModelContainer` (`TrainingPersistenceContainer
 Apple's guideline 5.1.3(ii) forbids storing health information in iCloud:
 
 - **Synced through CloudKit:** planned workouts, the workout library, cycles, races, goals (MVP2-139), and the
-  athlete's own preferences (name, picture, time zone, week start, main sport, the pace history and the Apple
-  Health resting-heart-rate switch).
+  athlete's own preferences (name, picture, time zone, week start, main sport, the pace history, the Apple
+  Health resting-heart-rate switch and the running availability).
 - **Local to the device:** activities with their heart-rate samples, tombstones of deleted
   activities, joins, the fitness-metrics cache, and the whole profile including what comes from
   HealthKit (sex, date of birth, heart-rate settings) and the HealthKit import anchor.
