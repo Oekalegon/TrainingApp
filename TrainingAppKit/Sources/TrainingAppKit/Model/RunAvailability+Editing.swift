@@ -75,3 +75,23 @@ extension DaySlot {
         }
     }
 }
+
+extension RunAvailability {
+    /// The availability with `type` named for `weekday`, or no longer named when it already is (MVP5-112). Naming a
+    /// type ties it to the weekdays that name it (TrainingKit, ``runTypes(on:)``), so the types a day shows as
+    /// chosen are only the ones it names, not the free ones the plan may add.
+    func togglingRunType(_ type: RunType, on weekday: Weekday) -> RunAvailability {
+        var copy = self
+        var types = dayRunTypes[weekday] ?? []
+        if types.contains(type) { types.remove(type) } else { types.insert(type) }
+        copy.setRunTypes(types, on: weekday)
+        return copy
+    }
+
+    /// The availability with no run type named for `weekday`, so the plan chooses.
+    func clearingRunTypes(on weekday: Weekday) -> RunAvailability {
+        var copy = self
+        copy.setRunTypes([], on: weekday)
+        return copy
+    }
+}

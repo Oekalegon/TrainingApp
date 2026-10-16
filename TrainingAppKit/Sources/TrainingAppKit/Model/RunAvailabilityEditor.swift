@@ -47,6 +47,16 @@ final class RunAvailabilityEditor {
         await apply { $0.settingRuns(count, on: weekday) }
     }
 
+    /// Names `type` for `weekday`, or stops naming it, and saves (MVP5-112).
+    func toggleRunType(_ type: RunType, on weekday: Weekday) async {
+        await apply { $0.togglingRunType(type, on: weekday) }
+    }
+
+    /// Stops naming any run type for `weekday` and saves (MVP5-112).
+    func clearRunTypes(on weekday: Weekday) async {
+        await apply { $0.clearingRunTypes(on: weekday) }
+    }
+
     private func apply(_ change: (RunAvailability) -> RunAvailability) async {
         let updated = change(shown)
         pending = updated

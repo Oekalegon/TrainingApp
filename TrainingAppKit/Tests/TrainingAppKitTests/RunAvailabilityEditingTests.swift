@@ -161,3 +161,46 @@ struct RunAvailabilityEditingTests {
         #expect(viewModel.athleteViewModel.runAvailability == RunAvailability())
     }
 }
+
+/// MVP5-112: naming run types per weekday.
+@Suite("RunAvailability run types")
+struct RunAvailabilityRunTypeTests {
+    @Test("several types can be named for a weekday and toggled off")
+    func toggle() {
+        var availability = RunAvailability().togglingDay(.thursday)
+        availability = availability.togglingRunType(.interval, on: .thursday).togglingRunType(.threshold, on: .thursday)
+        #expect(availability.dayRunTypes[.thursday] == [.interval, .threshold])
+        availability = availability.togglingRunType(.interval, on: .thursday)
+        #expect(availability.dayRunTypes[.thursday] == [.threshold])
+        availability = availability.togglingRunType(.threshold, on: .thursday)
+        #expect(availability.dayRunTypes.isEmpty)
+    }
+
+    @Test("clearing a weekday leaves the others")
+    func clear() {
+        let availability = RunAvailability().togglingDay(.sunday).togglingDay(.tuesday)
+            .togglingRunType(.long, on: .sunday).togglingRunType(.easy, on: .tuesday)
+            .clearingRunTypes(on: .sunday)
+        #expect(availability.dayRunTypes == [.tuesday: [.easy]])
+    }
+
+    @Test("a named type is tied to its weekdays, the rest are free")
+    func tied() {
+        let availability = RunAvailability().togglingDay(.sunday).togglingDay(.monday).togglingRunType(.long, on: .sunday)
+        #expect(availability.runTypes(on: .sunday).contains(.long))
+        #expect(!availability.runTypes(on: .monday).contains(.long))
+        #expect(availability.runTypes(on: .monday).contains(.interval))
+    }
+
+    @Test("the editor shows a run type at once and saves it")
+    @MainActor
+    func editor() async {
+        var saved = RunAvailability().togglingDay(.friday)
+        let editor = RunAvailabilityEditor(saved: { saved }, save: { saved = $0; return true })
+        await editor.toggleRunType(.long, on: .friday)
+        #expect(editor.shown.dayRunTypes[.friday] == [.long])
+        #expect(saved.dayRunTypes[.friday] == [.long])
+        await editor.clearRunTypes(on: .friday)
+        #expect(saved.dayRunTypes.isEmpty)
+    }
+}

@@ -110,18 +110,18 @@ var runAvailability: [Weekday: Set<DaySlot>]   // absent or empty = no running t
 
 ## 4a. Run type per day, peak volume, key races
 
-**Run type per day.** Each available day can carry a preferred run type:
+**Run type per weekday.** The athlete can say which run types they want on which weekday, as part of Running Availability (TrainingKit#117):
 
 ```swift
 enum RunType: String, Sendable, Codable, CaseIterable { case easy, recovery, threshold, interval, long }
-var dayRunTypes: [Int: Set<RunType>]   // micro day 0..<microLengthDays; absent or empty = generator chooses (typically easy)
+var dayRunTypes: [Weekday: Set<RunType>]   // on RunAvailability; absent = the plan chooses
 ```
 
-Unlike availability, preferred run types follow the **micro**, not the weekday: they describe the shape of the training cycle ("day 3 is a hard day, day 7 is the long run"), so they are keyed by micro day and tied to the paradigm's micro length. A day can list **several** acceptable types; the generator picks one that suits the phase, the previous days, and the paradigm's hard-session rules. The settings screen shows weekdays beside the micro days for 7- and 14-day micros but not for 10-day ones. Switching to a paradigm with a different micro length asks the athlete to re-pick the run types.
+Like availability this is athlete-level and independent of the paradigm and micro length. A day can name **several** types; the generator picks one that suits the phase, the previous days and the paradigm's hard-session rules. Naming a type ties it to the days that name it (a long run named for Sunday goes only on Sunday); a type no day names is free and allowed on every running day, so the plan may put an easy run on a Sunday that names a long run. Several days can name one type (long on Saturday and Sunday). The generator maps weekdays onto micro days by date, so a 10-day micro needs no re-picking. In the app the types are chips under each selected day in Running Availability.
 
 `SessionType` from TrainingKit design §8.1 is not in the code yet; `RunType` is its first cut (tempo, hills etc. can be added later). It maps onto the existing `IntensityCategory`: recovery = `veryLow`, easy and long = `low`, threshold and interval = `high`. The generator fills a day from library workouts of that type (MVP5-5 picks by category) and falls back to the closest match. Preferences are soft: a paradigm's hard-session rules (spacing, count per micro) can override them, and the wizard says so when it does. With two slots on a day, the type applies to the main run; the second defaults to easy or recovery.
 
-**Peak volume.** (Not in TrainingKit yet: MVP5-110 added `dayRunTypes` only, so the app's `PeakVolumeDraft` holds the value in meters, seconds or TRIMP until a type exists.) `maxWeeklyVolume: VolumeTarget` (distance or duration) is the ceiling the ramp climbs to and stops at, per 7 days so it means the same for 10- and 14-day micros (a 14-day micro may hold twice it). The ramp from `startingWeeklyVolume` is sized so the peak lands in the last build micro before the taper. If the guardrails stop the plan reaching it, the preview says so and shows the volume it did reach.
+**Peak volume.** (Not in TrainingKit yet: MVP5-110 added run types only, so the app's `PeakVolumeDraft` holds the value in meters, seconds or TRIMP until a type exists.) `maxWeeklyVolume: VolumeTarget` (distance or duration) is the ceiling the ramp climbs to and stops at, per 7 days so it means the same for 10- and 14-day micros (a 14-day micro may hold twice it). The ramp from `startingWeeklyVolume` is sized so the peak lands in the last build micro before the taper. If the guardrails stop the plan reaching it, the preview says so and shows the volume it did reach.
 
 **Key races.** Plans link to races through `Race` and `RacePriority`:
 - The macrocycle's `targetRaceID` is the **primary** race; the layout is built backwards from it (already how `CycleLayoutBuilder` works), so one plan has one primary race.

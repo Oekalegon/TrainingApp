@@ -4,7 +4,7 @@ import TrainingCore
 /// Running Availability (MVP5-105, MVP5 design doc §4), the sections the Calendar screen shows below
 /// the week start and time zone: the weekdays the athlete can run, and for each selected day, optionally,
 /// when: any combination of morning, afternoon and evening (all three by default), and the maximum
-/// number of runs (MVP5-132, 1 by default), both as compact segmented controls. It is the athlete's
+/// number of runs (MVP5-132, 1 by default), both as compact segmented controls, and the run types wanted that day (MVP5-112). It is the athlete's
 /// own setting, kept on the profile and reused by every new plan, so it's set once here rather than
 /// per plan.
 ///
@@ -68,6 +68,7 @@ struct RunningAvailabilitySections: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
+                        runTypeChips(for: weekday, availability: shown)
                     }
                 }
                 .padding(.vertical, 2)
@@ -75,12 +76,33 @@ struct RunningAvailabilitySections: View {
         } header: {
             Text("Running Availability")
         } footer: {
-            Text("The days you can run, and for each one the parts of the day you could run in, and the most runs a day. Plans are built from these, so you only set them once.")
+            Text("The days you can run, and for each one the parts of the day you could run in, and the most runs a day. A run type you pick for some days stays off the others; types no day picks can go on any running day. Plans are built from these, so you only set them once.")
         }
         .alert("Couldn't Save", isPresented: $editor.didFail) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("The change couldn't be saved. Try again.")
+        }
+    }
+
+    /// The run types the athlete wants on `weekday` (MVP5-112): a chip per type, several selectable, and
+    /// Clear when any is chosen. A type chosen for some days is kept off the others; a type no day
+    /// chooses may go on any running day, which the footer says.
+    private func runTypeChips(for weekday: Weekday, availability: RunAvailability) -> some View {
+        let named = availability.dayRunTypes[weekday] ?? []
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Run types").font(.footnote).foregroundStyle(.secondary)
+                Spacer()
+                if !named.isEmpty {
+                    Button("Clear") { Task { await editor.clearRunTypes(on: weekday) } }
+                        .buttonStyle(.borderless).font(.footnote)
+                        .accessibilityLabel("Clear run types for \(weekday.displayName)")
+                }
+            }
+            RunTypeChips(selected: named, dayName: weekday.displayName) { type in
+                Task { await editor.toggleRunType(type, on: weekday) }
+            }
         }
     }
 
