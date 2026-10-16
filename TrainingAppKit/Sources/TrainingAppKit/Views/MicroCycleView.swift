@@ -836,7 +836,7 @@ private struct MetricsInfoPresentation: Identifiable, Hashable {
 
 /// `MicroCycleView.addingEntryDate`'s value (MVP2-15, MVP2-22) — just wraps a `Date` so `.sheet(item:)`
 /// can drive presentation the way it does for `selectedActivity`/`metricsInfoPresentation`.
-private struct DayAddDate: Identifiable, Hashable {
+struct DayAddDate: Identifiable, Hashable {
     let id = UUID()
     let date: Date
 }

@@ -3,7 +3,7 @@ import TrainingCore
 
 /// A short label for a guardrail finding's ``PlanRule`` — `TrainingCore` has no opinion on display
 /// strings, same reasoning as `Sport+Display.swift`.
-private extension PlanRule {
+extension PlanRule {
     var displayName: String {
         switch self {
         case .tsbBand: "Form (TSB) out of range"
@@ -15,7 +15,7 @@ private extension PlanRule {
     }
 }
 
-private extension Severity {
+extension Severity {
     var tintColor: Color {
         switch self {
         case .info: .secondary
