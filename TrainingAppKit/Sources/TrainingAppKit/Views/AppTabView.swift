@@ -1,8 +1,8 @@
 import SwiftUI
 import TrainingCore
 
-/// The app's top-level screen (design doc §2.0): a bottom tab bar switching between the week view
-/// ("Week"), the workout library ("Library", MVP2-21) and the athlete account screen ("Athlete") —
+/// The app's top-level screen (design doc §2.0): a bottom tab bar switching between the micro-cycle
+/// view ("Week"), the training plans ("Plans", MVP5-125), the workout library ("Library", MVP2-21) and the athlete account screen ("Athlete") —
 /// replacing the week view's former "Athlete" toolbar button + sheet — plus a search field on every tab
 /// that searches workout templates, planned workouts and
 /// activities as the athlete types.
@@ -18,6 +18,7 @@ public struct AppTabView: View {
     /// The app's tabs, for `TabView`'s selection.
     private enum AppTab: Hashable {
         case week
+        case plans
         case library
         case athlete
     }
@@ -81,6 +82,10 @@ public struct AppTabView: View {
                     selectedTab = .athlete
                 })
                 .searchResults(searchResultsView, text: $searchText)
+            }
+
+            Tab("Plans", systemImage: "list.bullet.rectangle", value: AppTab.plans) {
+                PlansView(microCycleViewModel: viewModel)
             }
 
             Tab("Library", systemImage: "books.vertical", value: AppTab.library) {

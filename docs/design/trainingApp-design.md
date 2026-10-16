@@ -76,7 +76,7 @@ noisy diffs/merge conflicts, and `project.yml` is a much smaller surface to revi
 
 ### 2.0 Top-level navigation
 
-`AppTabView` is the app's root: a bottom tab bar with three tabs, "Week" (§2.1), "Library" (§2.4,
+`AppTabView` is the app's root: a bottom tab bar with four tabs, "Week" (§2.1), "Plans" (MVP5-125, the Training Plans entry in §2.3), "Library" (§2.4,
 MVP2-21) and "Athlete" (§2.3), with a search field on every tab (§2.5). All are built from the same
 `MicroCycleViewModel` instance (`AthleteView` reads it via `MicroCycleViewModel.athleteViewModel`, the Library
 and the search results via `MicroCycleViewModel.workoutLibraryViewModel()` and `searchViewModel(library:)`),
@@ -416,7 +416,8 @@ calendar week of the year.
   (`MicroCycleViewModel.showsEmptyState`), show an inline prompt — "Connect Health data" — that triggers
   the HealthKit authorization request. The first-run introduction (§2.1a) is separate.
   A loaded plan (a calendar import, MVP2-103, or a plan made in the Library) shows the calendar
-  instead (MVP2-108), so it isn't invisible before Health is connected; only the plans of the
+  instead (MVP2-108); so does any stored training plan (MVP5-125), which keeps the calendar, and its
+  "+" buttons, when every plan is archived and none is loaded; it isn't invisible before Health is connected; only the plans of the
   loaded weeks count, and the empty state keeps its week navigation, so moving to a week with plans
   reveals the calendar. "Connect Apple Health" stays on the Athlete tab (Connected Services) while
   nothing has been imported.
@@ -829,6 +830,24 @@ The screens:
   footer says so. `MicroCycleViewModel` rebuilds its calendar when either changes, keeps the displayed week on
   the day it showed (`setWeekStartsOn`/`setTimeZone`) and reloads. A dated time-zone history was
   considered and left out.
+- **Training Plans** (`PlansView`, `PlanDetailView`, `PlansViewModel`, MVP5-125): the **Plans tab** (not an Athlete screen), in its own `NavigationStack`. It opens on the active plan's detail (or, with none active, a "No Active Plan" prompt); the toolbar has **All Plans** (the list below) and an add menu: **New Plan** (a name prompt that creates an empty draft and opens it; `PlansViewModel.create(named:)`) and **Add Race** (`AddRaceSheet`; individual workouts are deliberately not added from this tab). The list shows every `TrainingPlan` (TrainingKit MVP5-124),
+  grouped Active, Drafts and Archived (archived and cancelled), each row showing the name, the workout
+  count and the span of its workouts. A plan row pushes a detail screen with the actions, also in the row's
+  context menu: **Activate** (also a leading swipe; the previous active plan becomes a draft, or a
+  cancelled plan kept as history if activities completed workouts under it), **Rename**, **Duplicate**
+  (a draft copy of the cycles and the not-yet-completed workouts from today on), **Archive**, and **Delete**
+  (a trailing swipe behind a confirmation). The active plan has no Delete (archive it first). A plan an activity completed a workout of is history: its
+  Delete is disabled and `delete(_:)` refuses with a hint to archive it, checked against the store. Failures
+  show in an alert and leave the list as it was. The detail also shows **Projected Form**: the draft's TSB
+  next to the active plan's on a chart, a one-line summary of the peak and final fitness, and the
+  `PlanEvaluator` findings of both (by rule, with the number of days). It is built in the view model from
+  the athlete's real fitness on the day before today plus each plan's planned workouts, and doesn't
+  touch the model or the stores. Only the active plan's workouts and cycles are in `TrainingModel.plans` and
+  `.cycles`, so the micro-cycle view, the search results, the calendar export and the Watch sync (§3.5) follow
+  it; after any change `PlansViewModel.onPlansChanged` calls `MicroCycleViewModel.activePlanChanged(asOf:)`, which
+  drops the cycles peeked from the previous plan, re-resolves the displayed period, refreshes the caches and
+  requests a Watch sync. The Library's counts still read every plan, so a template used only by a draft
+  can't be deleted unnoticed.
 - **Developer** (`DeveloperView`): **Inspect Recent Workouts** (MVP2-146 spike, `WorkoutInspectionView`):
   a read-only text report of what HealthKit recorded for the 30 most recent workouts: whether each was
   started from a plan (`workout.workoutPlan`), its events (laps, segments, pauses, markers), its
@@ -1038,7 +1057,8 @@ exists to support.
 Persistence is two stores in one `ModelContainer` (`TrainingPersistenceContainer.make`), because
 Apple's guideline 5.1.3(ii) forbids storing health information in iCloud:
 
-- **Synced through CloudKit:** planned workouts, the workout library, cycles, races, goals (MVP2-139), and the
+- **Synced through CloudKit:** planned workouts, the workout library, cycles, training plans (MVP5-125: the
+  `StoreSet` carries the plan store, so every planned workout and cycle belongs to a plan), races, goals (MVP2-139), and the
   athlete's own preferences (name, picture, time zone, week start, main sport, the pace history, the Apple
   Health resting-heart-rate switch and the running availability).
 - **Local to the device:** activities with their heart-rate samples, tombstones of deleted
@@ -1125,6 +1145,10 @@ The Watch's Workout app lists scheduled workouts 7 days back and 7 days ahead, a
 wakes the app, so the app keeps the next 7 days scheduled itself. `WatchScheduleSync.sync(asOf:)`
 runs when `AppTabView` sees `scenePhase == .active`: on launch and every time the app comes back to
 the foreground, which also moves the window on after midnight.
+
+Only the active plan's workouts are scheduled (MVP5-125): the sync reads them with
+`StoreSet.activePlannedActivities(in:)`, so activating another plan removes the old plan's entries on the
+next run (TrainingKit keeps the completed workouts of every plan in that set, which keeps them as done).
 
 - **Which plans.** `WatchSchedulePlanner` picks the plans dated today through 6 days ahead, in the
   athlete's time zone, that aren't linked to an activity and whose workout maps to a WorkoutKit

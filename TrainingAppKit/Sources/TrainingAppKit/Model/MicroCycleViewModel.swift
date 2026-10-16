@@ -293,8 +293,11 @@ public final class MicroCycleViewModel {
     /// months away doesn't count until its weeks are shown; the empty state keeps its week
     /// navigation, so moving there loads the plans and reveals the calendar. ``hasNoActivities``
     /// stays about Health alone: the Athlete tab uses it to offer "Connect Apple Health".
+    ///
+    /// A stored training plan counts too (MVP5-125): with every plan archived there is no active plan,
+    /// so no workouts are loaded, but the athlete still needs the calendar to plan into.
     public var showsEmptyState: Bool {
-        hasNoActivities && model.plans.isEmpty
+        hasNoActivities && model.plans.isEmpty && model.trainingPlans.isEmpty
     }
 
     /// The athlete's timezone — views should format every date they show with this, not the
@@ -1200,7 +1203,7 @@ public final class MicroCycleViewModel {
     }
 
     /// The view model for the "Add Race" sheet (MVP2-17), opened from a day row's add affordance
-    /// alongside ``plannedWorkoutSheetViewModel(date:)`` — `date` defaults the sheet to that day,
+    /// alongside ``plannedWorkoutSheetViewModel(date:)``, and from the Plans tab's `AddRaceSheet` (MVP5-125) — `date` defaults the sheet to that day,
     /// still editable inside it.
     public func raceSheetViewModel(date: Date) -> RaceSheetViewModel {
         RaceSheetViewModel(model: model, date: date)

@@ -5,7 +5,7 @@ import TrainingCore
 /// the planned workouts and the activities as the athlete types in the search field,
 /// which is there from every tab.
 ///
-/// Plans and activities come from the stores, over all dates, read by ``reload()``:
+/// Plans (the active plan's, MVP5-125) and activities come from the stores, over all dates, read by ``reload()``:
 /// `TrainingModel` only holds the week view's loaded window. Activities are kept as light
 /// ``ActivityResult``s, read as `ActivityListItem`s so the samples are never built; ``activity(id:)`` fetches the full one when a result
 /// is opened, and the week view's model is loaded around a result's day before its detail sheet
@@ -110,7 +110,7 @@ public final class SearchViewModel {
         do {
             let stores = model.stores
             let everything = Date.distantPast...Date.distantFuture
-            let allPlans = try await stores.planStore.plans(in: everything)
+            let allPlans = try await stores.activePlannedActivities(in: everything)
             let workouts = try await stores.workoutStore.workouts()
             let allActivities = try await stores.activityStore.activityListItems(in: everything)
 
