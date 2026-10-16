@@ -40,8 +40,8 @@ struct RunningAvailabilitySections: View {
                     if shown.isAvailable(on: weekday) {
                         let runs = shown.runs(on: weekday)
                         let maxRuns = shown.maxRuns(on: weekday)
-                        VStack(alignment: .leading, spacing: 8) {
-                            segmented(DaySlot.allCases.map { slot in
+                        VStack(alignment: .trailing, spacing: 6) {
+                            segmented(width: 230, DaySlot.allCases.map { slot in
                                 Segment(title: slot.displayName, label: "\(weekday.displayName) \(slot.displayName)",
                                         selected: shown[weekday].contains(slot), enabled: true) {
                                     await editor.toggleSlot(slot, on: weekday)
@@ -49,7 +49,8 @@ struct RunningAvailabilitySections: View {
                             })
                             HStack {
                                 Text("Runs").font(.footnote).foregroundStyle(.secondary)
-                                segmented((1...DaySlot.allCases.count).map { count in
+                                Spacer(minLength: 8)
+                                segmented(width: 110, (1...DaySlot.allCases.count).map { count in
                                     Segment(title: "\(count)", label: "\(weekday.displayName) \(count) \(count == 1 ? "run" : "runs")",
                                             selected: runs == count, enabled: count <= maxRuns) {
                                         await editor.setRuns(count, on: weekday)
@@ -57,8 +58,7 @@ struct RunningAvailabilitySections: View {
                                 }, singleSelection: true)
                             }
                         }
-                        .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : 300, alignment: .leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
                 .padding(.vertical, 2)
@@ -87,7 +87,7 @@ struct RunningAvailabilitySections: View {
     /// A row of joined segments in one rounded container, a selected one filled. Several can be
     /// selected at once (the parts of the day), or one (`singleSelection`, the number of runs). A
     /// disabled segment is dimmed. Stacks vertically at accessibility Dynamic Type sizes.
-    private func segmented(_ segments: [Segment], singleSelection: Bool = false) -> some View {
+    private func segmented(width: CGFloat, _ segments: [Segment], singleSelection: Bool = false) -> some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 2)) : AnyLayout(HStackLayout(spacing: 2))
         return layout {
@@ -97,10 +97,10 @@ struct RunningAvailabilitySections: View {
                     Task { await segment.action() }
                 } label: {
                     Text(segment.title)
-                        .font(.footnote.weight(.medium))
+                        .font(.caption.weight(.medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 28)
+                        .frame(maxWidth: .infinity, minHeight: 24)
                         .foregroundStyle(segment.selected ? Color.white : Color.accentColor)
                         .background(segment.selected ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 6))
                 }
@@ -113,5 +113,6 @@ struct RunningAvailabilitySections: View {
         }
         .padding(2)
         .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : width)
     }
 }
