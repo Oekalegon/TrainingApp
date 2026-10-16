@@ -116,3 +116,43 @@ struct RunAvailabilityEditorTests {
         #expect(editor.shown == profile.availability)
     }
 }
+
+/// MVP5-112: run types follow the same save rules as the other edits.
+@MainActor
+@Suite("RunAvailabilityEditor run types")
+struct RunAvailabilityEditorRunTypeTests {
+    private func makeEditor(_ profile: RunAvailabilityEditorTests.Profile) -> RunAvailabilityEditor {
+        RunAvailabilityEditor(saved: { profile.availability }, save: { await profile.save($0) })
+    }
+
+    @Test("a failed run type toggle or clear reverts to the saved types and reports it")
+    func failedRunTypes() async {
+        let profile = RunAvailabilityEditorTests.Profile()
+        let editor = makeEditor(profile)
+        await editor.toggleDay(.friday)
+        await editor.toggleRunType(.long, on: .friday)
+        profile.failing = [3]
+
+        await editor.toggleRunType(.interval, on: .friday)
+        #expect(editor.didFail)
+        #expect(editor.shown.dayRunTypes[.friday] == [.long])
+
+        editor.didFail = false
+        profile.failing = [4]
+        await editor.clearRunTypes(on: .friday)
+        #expect(editor.didFail)
+        #expect(editor.shown.dayRunTypes[.friday] == [.long])
+    }
+
+    @Test("run types are kept when a day is switched off and on again")
+    func keptAcrossDayToggle() async {
+        let profile = RunAvailabilityEditorTests.Profile()
+        let editor = makeEditor(profile)
+        await editor.toggleDay(.friday)
+        await editor.toggleRunType(.long, on: .friday)
+        await editor.toggleDay(.friday)
+        #expect(editor.shown.summary(on: .friday) == "Off")
+        await editor.toggleDay(.friday)
+        #expect(editor.shown.dayRunTypes[.friday] == [.long])
+    }
+}

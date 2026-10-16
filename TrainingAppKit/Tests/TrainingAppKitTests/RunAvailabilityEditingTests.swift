@@ -161,3 +161,80 @@ struct RunAvailabilityEditingTests {
         #expect(viewModel.athleteViewModel.runAvailability == RunAvailability())
     }
 }
+
+/// MVP5-112: naming run types per weekday.
+@Suite("RunAvailability run types")
+struct RunAvailabilityRunTypeTests {
+    @Test("several types can be named for a weekday and toggled off")
+    func toggle() {
+        var availability = RunAvailability().togglingDay(.thursday)
+        availability = availability.togglingRunType(.interval, on: .thursday).togglingRunType(.threshold, on: .thursday)
+        #expect(availability.dayRunTypes[.thursday] == [.interval, .threshold])
+        availability = availability.togglingRunType(.interval, on: .thursday)
+        #expect(availability.dayRunTypes[.thursday] == [.threshold])
+        availability = availability.togglingRunType(.threshold, on: .thursday)
+        #expect(availability.dayRunTypes.isEmpty)
+    }
+
+    @Test("clearing a weekday leaves the others")
+    func clear() {
+        let availability = RunAvailability().togglingDay(.sunday).togglingDay(.tuesday)
+            .togglingRunType(.long, on: .sunday).togglingRunType(.easy, on: .tuesday)
+            .clearingRunTypes(on: .sunday)
+        #expect(availability.dayRunTypes == [.tuesday: [.easy]])
+    }
+
+    @Test("a named type is tied to its weekdays, the rest are free")
+    func tied() {
+        let availability = RunAvailability().togglingDay(.sunday).togglingDay(.monday).togglingRunType(.long, on: .sunday)
+        #expect(availability.runTypes(on: .sunday).contains(.long))
+        #expect(!availability.runTypes(on: .monday).contains(.long))
+        #expect(availability.runTypes(on: .monday).contains(.interval))
+    }
+
+    @Test("the editor shows a run type at once and saves it")
+    @MainActor
+    func editor() async {
+        var saved = RunAvailability().togglingDay(.friday)
+        let editor = RunAvailabilityEditor(saved: { saved }, save: { saved = $0; return true })
+        await editor.toggleRunType(.long, on: .friday)
+        #expect(editor.shown.dayRunTypes[.friday] == [.long])
+        #expect(saved.dayRunTypes[.friday] == [.long])
+        await editor.clearRunTypes(on: .friday)
+        #expect(saved.dayRunTypes.isEmpty)
+    }
+}
+
+/// MVP5-112: the line under a weekday in the list.
+@Suite("RunAvailability day summary")
+struct RunAvailabilitySummaryTests {
+    @Test("off, parts only, and with runs and types")
+    func summary() {
+        var availability = RunAvailability()
+        #expect(availability.summary(on: .monday) == "Off")
+        availability = availability.togglingDay(.monday)
+        #expect(availability.summary(on: .monday) == "Morning, Afternoon, Evening")
+        availability = availability.settingRuns(2, on: .monday)
+            .togglingRunType(.threshold, on: .monday).togglingRunType(.interval, on: .monday)
+        #expect(availability.summary(on: .monday) == "Morning, Afternoon, Evening · 2 runs · Threshold, Interval")
+    }
+}
+
+/// MVP5-112: summary and display strings.
+@Suite("RunAvailability summary details")
+struct RunAvailabilitySummaryDetailTests {
+    @Test("the number of runs is read capped at the selected parts")
+    func capped() {
+        let availability = RunAvailability().togglingDay(.monday).settingRuns(3, on: .monday)
+            .togglingSlot(.morning, on: .monday).togglingSlot(.afternoon, on: .monday)
+        #expect(availability.summary(on: .monday) == "Evening")
+    }
+
+    @Test("every run type has a name and a description")
+    func displayStrings() {
+        for type in RunType.allCases {
+            #expect(!type.displayName.isEmpty)
+            #expect(!type.summary.isEmpty)
+        }
+    }
+}
