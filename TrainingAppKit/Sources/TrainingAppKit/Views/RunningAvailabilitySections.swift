@@ -8,7 +8,7 @@ import TrainingCore
 /// reused by every new plan, so it's set once here rather than per plan.
 ///
 /// Days are listed from the athlete's week start. Switching a day on selects all three parts of
-/// the day, and a segmented control directly under it switches each part on or off (any combination); a second one, 1 / 2 / 3, sets the number of runs that day, from 1 up to the number of selected parts, the others dimmed (the generator puts each run in its own part; TrainingKit keeps a higher stored number when parts are switched off, and reads it capped). Switching the last part off switches the day off. A change shows at
+/// the day, and a segmented control directly under it switches each part on or off (any combination); a second one, 1 / 2 / 3, sets the number of runs that day, from 1 up to the number of selected parts, and hidden when only one part is selected, since that implies one run (the generator puts each run in its own part; TrainingKit keeps a higher stored number when parts are switched off, and reads it capped). Switching the last part off switches the day off. A change shows at
 /// once and saves in the background; when the save fails it is taken
 /// back and an alert says so (see ``RunAvailabilityEditor``). Meant to sit inside a `List`.
 struct RunningAvailabilitySections: View {
@@ -47,15 +47,17 @@ struct RunningAvailabilitySections: View {
                                     await editor.toggleSlot(slot, on: weekday)
                                 }
                             })
-                            HStack {
-                                Text("Runs").font(.footnote).foregroundStyle(.secondary)
-                                Spacer(minLength: 8)
-                                segmented(width: 110, (1...DaySlot.allCases.count).map { count in
-                                    Segment(title: "\(count)", label: "\(weekday.displayName) \(count) \(count == 1 ? "run" : "runs")",
-                                            selected: runs == count, enabled: count <= maxRuns) {
-                                        await editor.setRuns(count, on: weekday)
-                                    }
-                                }, singleSelection: true)
+                            // One part implies one run, so there is nothing to choose.
+                            if maxRuns > 1 {
+                                HStack(spacing: 8) {
+                                    Text("Runs").font(.footnote).foregroundStyle(.secondary)
+                                    segmented(width: CGFloat(maxRuns) * 37, (1...maxRuns).map { count in
+                                        Segment(title: "\(count)", label: "\(weekday.displayName) \(count) \(count == 1 ? "run" : "runs")",
+                                                selected: runs == count, enabled: true) {
+                                            await editor.setRuns(count, on: weekday)
+                                        }
+                                    }, singleSelection: true)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
