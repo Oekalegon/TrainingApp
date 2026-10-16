@@ -38,10 +38,16 @@ struct RunAvailabilityEditorTests {
         let editor = makeEditor(profile)
 
         await editor.toggleDay(.monday)
-        await editor.setSlots(.afternoonEvening, on: .monday)
+        await editor.toggleSlot(.morning, on: .monday)
+        await editor.toggleSlot(.afternoon, on: .monday)
 
-        #expect(editor.shown[.monday] == [.afternoonEvening])
-        #expect(profile.availability[.monday] == [.afternoonEvening])
+        #expect(editor.shown[.monday] == [.evening])
+        #expect(profile.availability[.monday] == [.evening])
+
+        // Switching the last part off clears the day.
+        await editor.toggleSlot(.evening, on: .monday)
+        #expect(!editor.shown.isAvailable(on: .monday))
+        #expect(profile.availability == RunAvailability())
         #expect(!editor.didFail)
     }
 
@@ -56,6 +62,19 @@ struct RunAvailabilityEditorTests {
         #expect(editor.didFail)
         #expect(editor.shown == RunAvailability())
         #expect(profile.availability == RunAvailability())
+    }
+
+    @Test("a failed part toggle reverts to the saved parts")
+    func failedSlotToggle() async {
+        let profile = Profile()
+        let editor = makeEditor(profile)
+        await editor.toggleDay(.monday)
+        profile.failing = [2]
+
+        await editor.toggleSlot(.morning, on: .monday)
+
+        #expect(editor.didFail)
+        #expect(editor.shown[.monday] == [.morning, .afternoon, .evening])
     }
 
     @Test("quick toggles compose, and a failed earlier save is covered by the later one")

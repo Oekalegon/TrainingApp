@@ -32,14 +32,14 @@ final class RunAvailabilityEditor {
     /// What the screen shows: the pending choice, else what is saved.
     var shown: RunAvailability { pending ?? saved() }
 
-    /// Selects `weekday` (with every slot) or clears it, and saves.
+    /// Selects `weekday` (with all three parts) or clears it, and saves.
     func toggleDay(_ weekday: Weekday) async {
         await apply { $0.togglingDay(weekday) }
     }
 
-    /// Narrows `weekday` to `choice` (any time, morning, or afternoon / evening), and saves.
-    func setSlots(_ choice: SlotChoice, on weekday: Weekday) async {
-        await apply { $0.settingSlots(choice, on: weekday) }
+    /// Switches `slot` on or off for `weekday` and saves; switching off the last part clears the day.
+    func toggleSlot(_ slot: DaySlot, on weekday: Weekday) async {
+        await apply { $0.togglingSlot(slot, on: weekday) }
     }
 
     private func apply(_ change: (RunAvailability) -> RunAvailability) async {

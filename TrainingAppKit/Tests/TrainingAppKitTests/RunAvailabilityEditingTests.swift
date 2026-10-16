@@ -21,10 +21,10 @@ struct RunAvailabilityEditingTests {
         return (MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: now), model, store)
     }
 
-    @Test("selecting a day offers both slots and selecting it again clears it")
+    @Test("selecting a day offers all three parts and selecting it again clears it")
     func toggleDay() {
         let selected = RunAvailability().togglingDay(.tuesday)
-        #expect(selected[.tuesday] == [.morning, .afternoonEvening])
+        #expect(selected[.tuesday] == [.morning, .afternoon, .evening])
         #expect(selected.isAvailable(on: .tuesday))
 
         let cleared = selected.togglingDay(.tuesday)
@@ -32,22 +32,41 @@ struct RunAvailabilityEditingTests {
         #expect(!cleared.isAvailable(on: .tuesday))
     }
 
-    @Test("a selected day can be narrowed to one slot and widened again, staying selected")
-    func narrowing() {
+    @Test("parts toggle independently in any combination, and the last one off clears the day")
+    func togglingParts() {
         var availability = RunAvailability().togglingDay(.saturday).togglingDay(.sunday)
-        #expect(availability.slotChoice(on: .saturday) == .anyTime)
 
-        availability = availability.settingSlots(.morning, on: .saturday)
+        availability = availability.togglingSlot(.afternoon, on: .saturday)
+        #expect(availability[.saturday] == [.morning, .evening])
+        #expect(availability[.sunday] == [.morning, .afternoon, .evening])
+
+        availability = availability.togglingSlot(.morning, on: .saturday)
+        #expect(availability[.saturday] == [.evening])
+        #expect(availability.isAvailable(on: .saturday))
+
+        // Turning the last part off switches the day off.
+        availability = availability.togglingSlot(.evening, on: .saturday)
+        #expect(!availability.isAvailable(on: .saturday))
+        #expect(availability == RunAvailability().togglingDay(.sunday))
+
+        // A part turned on for a day that is off selects the day with just that part.
+        availability = availability.togglingSlot(.morning, on: .saturday)
         #expect(availability[.saturday] == [.morning])
-        #expect(availability.slotChoice(on: .saturday) == .morning)
-        #expect(availability[.sunday] == [.morning, .afternoonEvening])
+    }
 
-        availability = availability.settingSlots(.afternoonEvening, on: .saturday)
-        #expect(availability.slotChoice(on: .saturday) == .afternoonEvening)
+    @Test("availability stored with the legacy afternoonEvening slot reads as afternoon and evening")
+    func legacyPayload() throws {
+        let json = #"{"slots":{"2":["morning","afternoonEvening"],"3":["afternoonEvening"]},"slotOptions":{}}"#
+        let decoded = try JSONDecoder().decode(RunAvailability.self, from: Data(json.utf8))
+        #expect(decoded[.monday] == [.morning, .afternoon, .evening])
+        #expect(decoded[.tuesday] == [.afternoon, .evening])
 
-        availability = availability.settingSlots(.anyTime, on: .saturday)
-        #expect(availability[.saturday] == [.morning, .afternoonEvening])
-        #expect(availability.slotChoice(on: .wednesday) == .anyTime)
+        // The screen edits it like any other, and what is written back no longer has the legacy name.
+        let edited = decoded.togglingSlot(.afternoon, on: .tuesday)
+        #expect(edited[.tuesday] == [.evening])
+        let written = try String(decoding: JSONEncoder().encode(edited), as: UTF8.self)
+        #expect(!written.contains("afternoonEvening"))
+        #expect(try JSONDecoder().decode(RunAvailability.self, from: Data(written.utf8)) == edited)
     }
 
     @Test("weekdays list from the athlete's week start")
@@ -60,7 +79,7 @@ struct RunAvailabilityEditingTests {
     @Test("saved availability is on the profile and in the store, and a fresh model reads it back")
     func persistenceRoundTrip() async throws {
         let (viewModel, model, store) = makeViewModel()
-        let availability = RunAvailability().togglingDay(.monday).settingSlots(.morning, on: .monday)
+        let availability = RunAvailability().togglingDay(.monday).togglingSlot(.afternoon, on: .monday).togglingSlot(.evening, on: .monday)
 
         #expect(await viewModel.setRunAvailability(availability, asOf: now))
 
