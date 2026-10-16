@@ -823,7 +823,7 @@ The screens:
   footer says so. `MicroCycleViewModel` rebuilds its calendar when either changes, keeps the displayed week on
   the day it showed (`setWeekStartsOn`/`setTimeZone`) and reloads. A dated time-zone history was
   considered and left out.
-- **Training Plans** (`PlansView`, `PlansViewModel`, MVP5-125): the **Plans tab** (not an Athlete screen), in its own `NavigationStack`. It opens on the active plan's detail (or, with none active, a "No Active Plan" prompt); the toolbar has **All Plans** (the list below) and an add menu: **New Plan** (a name prompt that creates an empty draft and opens it; `PlansViewModel.create(named:)`) and **Add Workout or Race** (the week view's `AddEntrySheet`, for today, so races can be added from here). The list shows every `TrainingPlan` (TrainingKit MVP5-124),
+- **Training Plans** (`PlansView`, `PlansViewModel`, MVP5-125): the **Plans tab** (not an Athlete screen), in its own `NavigationStack`. It opens on the active plan's detail (or, with none active, a "No Active Plan" prompt); the toolbar has **All Plans** (the list below) and an add menu: **New Plan** (a name prompt that creates an empty draft and opens it; `PlansViewModel.create(named:)`) and **Add Race** (`AddRaceSheet`; individual workouts are deliberately not added from this tab). The list shows every `TrainingPlan` (TrainingKit MVP5-124),
   grouped Active, Drafts and Archived (archived and cancelled), each row showing the name, the workout
   count and the span of its workouts. A plan row pushes a detail screen with the actions, also in the row's
   context menu: **Activate** (also a leading swipe; the previous active plan becomes a draft, or a

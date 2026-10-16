@@ -127,7 +127,7 @@ struct PlansView: View {
     @State private var viewModel: PlansViewModel
     private let microCycleViewModel: MicroCycleViewModel
     @State private var path: [Destination] = []
-    /// The day the add-workout-or-race sheet is for, while it is shown.
+    /// The day the add-race sheet is for, while it is shown.
     @State private var addingEntryDate: DayAddDate?
     @State private var isCreating = false
     @State private var newPlanName = ""
@@ -171,7 +171,7 @@ struct PlansView: View {
                                 isCreating = true
                             }
                             .disabled(viewModel.isWorking)
-                            Button("Add Workout or Race…", systemImage: "flag.checkered") {
+                            Button("Add Race…", systemImage: "flag.checkered") {
                                 addingEntryDate = DayAddDate(date: .now)
                             }
                         }
@@ -187,10 +187,7 @@ struct PlansView: View {
         }
         .task { await viewModel.reload() }
         .sheet(item: $addingEntryDate, onDismiss: { Task { await viewModel.reload() } }) { entryDate in
-            AddEntrySheet(
-                plannedWorkoutViewModel: microCycleViewModel.plannedWorkoutSheetViewModel(date: entryDate.date),
-                raceViewModel: microCycleViewModel.raceSheetViewModel(date: entryDate.date)
-            )
+            AddRaceSheet(viewModel: microCycleViewModel.raceSheetViewModel(date: entryDate.date))
         }
         .alert("New Plan", isPresented: $isCreating) {
             TextField("Name", text: $newPlanName)
