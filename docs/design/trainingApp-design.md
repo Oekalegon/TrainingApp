@@ -784,7 +784,7 @@ The screens:
   - **Running Availability** (`RunningAvailabilityView`, MVP5-105): a row on the Athlete list whose value is
     a summary (`AthleteViewModel.runAvailabilitySummary`: "Not set", "Every day", or "Mon, Wed (AM), …") opens
     the editor. It lists the seven weekdays from `AthleteProfile.weekStartsOn`, each a switch; selecting a day
-    offers both slots (morning, afternoon / evening), shown as switches in a section per selected day, and
+    offers both slots (morning, afternoon / evening), shown as switches directly under the day, expanded in place, and
     switching off both clears the day. It is `AthleteProfile.runAvailability`, an athlete-level setting saved
     with the preferences that sync (`setRunAvailability`) and reused by every new plan (MVP5 design doc §4),
     not stored per plan. Run types per day are not here; they belong to a plan.
