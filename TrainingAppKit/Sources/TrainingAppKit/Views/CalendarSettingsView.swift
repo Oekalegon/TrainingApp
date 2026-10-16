@@ -3,7 +3,8 @@ import TrainingCore
 
 /// Calendar (MVP2-123, MVP2-132, design doc §2.3): the week's first day and the time zone, which the
 /// app buckets days and weeks by. Both can be changed. Each applies to all history, so changing one
-/// regroups every day and week and recalculates the fitness history once; the footer says so.
+/// regroups every day and week and recalculates the fitness history once; the footer says so. Below
+/// them, a Running Availability row (MVP5-105) shows when the athlete can run and opens its editor.
 struct CalendarSettingsView: View {
     let viewModel: AthleteViewModel
     let microCycleViewModel: MicroCycleViewModel
@@ -33,6 +34,18 @@ struct CalendarSettingsView: View {
                 }
             } footer: {
                 Text("These apply to all of your history. Changing either regroups your days and weeks and recalculates your fitness history.")
+            }
+
+            Section {
+                NavigationLink(value: AthleteRoute.runningAvailability) {
+                    LabeledContent {
+                        Text(viewModel.runAvailabilitySummary)
+                    } label: {
+                        Label(AthleteRoute.runningAvailability.title, systemImage: AthleteRoute.runningAvailability.systemImage)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Opens the days and times you can run")
             }
         }
         .navigationTitle(AthleteRoute.calendar.title)
