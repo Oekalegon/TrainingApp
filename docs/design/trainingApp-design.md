@@ -117,7 +117,7 @@ calendar week of the year.
   activities whose own zone settings differed (MVP1-78). Tapping anywhere on the panel (MVP1-60, not a
   separate button) pushes that page's own info screen for the *displayed* week — a plain tap, not
   a drag, so it doesn't compete with the panel's own swipe-to-page gesture. "Daily load" and "Form"
-  reuse `MetricDetailView` (MVP1-45's day-list-pill screen) with a `.week` subject rather than a
+  reuse `MetricDetailView` (MVP1-45's day-list-pill screen) with a `.period` subject rather than a
   `.day` one: an "Average" caption sits above the value (the mean across the displayed week, not
   one day's own reading — a `.day` subject shows no such caption at all, needing no disclosure),
   the date line shows the week's own range ("Sep 14 – Sep 20, 2026") instead of one weekday, and
@@ -677,7 +677,7 @@ the app uses the same estimator everywhere it shows a planned load, so the surfa
 - `MicroCycleViewModel.refreshPaceHistoryIfNeeded(asOf:force:)` has `TrainingModel.refreshPaceHistory(in:)`
   read the last 180 days of activities from the store into `TrainingModel.paceHistory`. It runs with
   the week caches: when the athlete, the library or the day changed, and always after an import,
-  resync, dedup, link, join or delete (`refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`). It
+  resync, dedup, link, join or delete (`refreshPeriodCachesIfNeeded(asOf:activitiesChanged:)`). It
   doesn't run on week navigation, which changes the loaded weeks but not the 180-day history. The
   card and stats caches are only invalidated when the history it read is actually different.
 - The planned card's duration and distance, a linked activity's planned line (from activities before that one

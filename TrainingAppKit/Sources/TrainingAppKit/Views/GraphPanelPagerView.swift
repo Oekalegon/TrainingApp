@@ -13,7 +13,7 @@ import TrainingCore
 struct GraphPanelPagerView: View {
     let metrics: [FitnessMetrics]
     let dailyLoadSplit: DailyLoadSplit
-    let displayedWeekRange: ClosedRange<Date>
+    let displayedPeriodRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
     let races: [Race]
     /// Called whenever the page changes, so `MicroCycleView` can remember it across a week change or a
@@ -54,7 +54,7 @@ struct GraphPanelPagerView: View {
     private static let commitThreshold: CGFloat = 0.3
     private static let pageChangeAnimation: Animation = .easeInOut(duration: 0.25)
     /// Tall enough for the tallest page's chart (172pt) plus its legend row and spacing —
-    /// `weekPageContent`'s `LazyVStack` needs a fixed height here since the three pages, laid out
+    /// `periodPageContent`'s `LazyVStack` needs a fixed height here since the three pages, laid out
     /// side by side in an `HStack`, don't otherwise report one shared height upward the way a
     /// single view would. Shared with `GraphPanelStaticPreview` so a mid-drag page transition
     /// between the two doesn't visibly change height.
@@ -63,7 +63,7 @@ struct GraphPanelPagerView: View {
     init(
         metrics: [FitnessMetrics],
         dailyLoadSplit: DailyLoadSplit,
-        displayedWeekRange: ClosedRange<Date>,
+        displayedPeriodRange: ClosedRange<Date>,
         heartRateHistogram: HeartRateHistogram,
         races: [Race],
         initialSelectedIndex: Int,
@@ -72,7 +72,7 @@ struct GraphPanelPagerView: View {
     ) {
         self.metrics = metrics
         self.dailyLoadSplit = dailyLoadSplit
-        self.displayedWeekRange = displayedWeekRange
+        self.displayedPeriodRange = displayedPeriodRange
         self.heartRateHistogram = heartRateHistogram
         self.races = races
         self.onSelectedIndexChange = onSelectedIndexChange
@@ -87,14 +87,14 @@ struct GraphPanelPagerView: View {
                 HStack(spacing: 0) {
                     DailyLoadChartView(
                         actualLoads: dailyLoadSplit.actual, plannedLoads: dailyLoadSplit.planned,
-                        metrics: metrics, displayedWeekRange: displayedWeekRange, races: races
+                        metrics: metrics, displayedPeriodRange: displayedPeriodRange, races: races
                     )
                         .frame(width: pageWidth)
                         // Every page's content actually exists in the layout simultaneously (just
                         // offset out of the clipped, visible area) -- without this, VoiceOver's
                         // element list would include every page's chart, not just the visible one.
                         .accessibilityHidden(selectedIndex != 0)
-                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange, races: races)
+                    FitnessChartView(metrics: metrics, displayedPeriodRange: displayedPeriodRange, races: races)
                         .frame(width: pageWidth)
                         .accessibilityHidden(selectedIndex != 1)
                     HeartRateHistogramChartView(histogram: heartRateHistogram)
@@ -169,7 +169,7 @@ struct GraphPanelPagerView: View {
 }
 
 /// A non-interactive stand-in for `GraphPanelPagerView`, used for the two off-screen (previous/
-/// next week) carousel pages in `MicroCycleView.weekPageContent` — see that call site's own doc comment
+/// next week) carousel pages in `MicroCycleView.periodPageContent` — see that call site's own doc comment
 /// for why. Those pages are never touched (always `.disabled`), so unlike `GraphPanelPagerView`
 /// they carry no local `@State` and no drag gesture at all: they just render whichever chart
 /// `selectedIndex` (owned by `MicroCycleView`, passed in fresh on every render) currently names, so they
@@ -186,7 +186,7 @@ struct GraphPanelPagerView: View {
 struct GraphPanelStaticPreview: View {
     let metrics: [FitnessMetrics]
     let dailyLoadSplit: DailyLoadSplit
-    let displayedWeekRange: ClosedRange<Date>
+    let displayedPeriodRange: ClosedRange<Date>
     let heartRateHistogram: HeartRateHistogram
     let races: [Race]
     let selectedIndex: Int
@@ -198,10 +198,10 @@ struct GraphPanelStaticPreview: View {
                 case 0:
                     DailyLoadChartView(
                         actualLoads: dailyLoadSplit.actual, plannedLoads: dailyLoadSplit.planned,
-                        metrics: metrics, displayedWeekRange: displayedWeekRange, races: races
+                        metrics: metrics, displayedPeriodRange: displayedPeriodRange, races: races
                     )
                 case 1:
-                    FitnessChartView(metrics: metrics, displayedWeekRange: displayedWeekRange, races: races)
+                    FitnessChartView(metrics: metrics, displayedPeriodRange: displayedPeriodRange, races: races)
                 default:
                     HeartRateHistogramChartView(histogram: heartRateHistogram)
                 }

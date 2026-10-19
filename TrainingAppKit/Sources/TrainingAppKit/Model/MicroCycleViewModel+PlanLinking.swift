@@ -55,7 +55,7 @@ extension MicroCycleViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         // The link decides whether the activity is a field test, and refreshing forgets why an earlier
         // measurement failed, so look again (MVP2-155, MVP2-157).
@@ -75,7 +75,7 @@ extension MicroCycleViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         // The link decides whether the activity is a field test, and refreshing forgets why an earlier
         // measurement failed, so look again (MVP2-155, MVP2-157).
@@ -95,7 +95,7 @@ extension MicroCycleViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         await refreshPaceHistoryIfNeeded(asOf: today, force: true)
         return true
     }

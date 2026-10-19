@@ -11,7 +11,7 @@ extension MicroCycleViewModel {
     /// `ActivityOverlapChecker.findOverlaps(in:)` on every access (its own doc comment warns a
     /// SwiftUI-`body` caller to cache it), and `DayActivitiesSection` calls ``overlapWarning(for:)``
     /// once per activity card while building the day list — the same `body`-during-swipe path
-    /// `sportStatsPagesCaches`/`weekGraphCaches` already exist to keep MVP1-19's freeze from
+    /// `sportStatsPagesCaches`/`periodGraphCaches` already exist to keep MVP1-19's freeze from
     /// recurring, so batching this into a single dictionary build per access is worth doing even
     /// though `ActivityOverlapChecker` itself is cheap at today's realistic activity counts.
     private var overlapWarningsByActivityID: [UUID: OverlapRecommendation] {
@@ -105,7 +105,7 @@ extension MicroCycleViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         return true
     }
@@ -122,7 +122,7 @@ extension MicroCycleViewModel {
         } catch {
             return false
         }
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         return true
     }
@@ -149,7 +149,7 @@ extension MicroCycleViewModel {
     /// every other store-mutating action here — MVP 1 has no error UI.
     private func deleteActivity(id: UUID, asOf today: Date) async {
         try? await model.deleteActivity(id: id, asOf: today)
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
     }
 }

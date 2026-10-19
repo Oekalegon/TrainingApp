@@ -66,7 +66,7 @@ extension MicroCycleViewModel {
             maxHeartRateUpdateFailed = true
             return
         }
-        await refreshWeekCachesIfNeeded(asOf: today)
+        await refreshPeriodCachesIfNeeded(asOf: today)
     }
 
     /// Records `suggestion`'s activity as declined, so it isn't suggested again, and dismisses

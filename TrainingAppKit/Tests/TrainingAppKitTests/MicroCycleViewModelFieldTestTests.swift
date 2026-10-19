@@ -235,7 +235,7 @@ struct MicroCycleViewModelFieldTestTests {
         #expect(viewModel.fieldTestFailures[activity.id] != nil)
         #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == viewModel.fieldTestFailures[activity.id]?.explanation)
 
-        await viewModel.refreshWeekCachesIfNeeded(asOf: day(3), activitiesChanged: true)
+        await viewModel.refreshPeriodCachesIfNeeded(asOf: day(3), activitiesChanged: true)
         #expect(viewModel.fieldTestFailures.isEmpty)
         #expect(viewModel.activityDetailViewModel(for: activity).fieldTestFailureMessage == nil)
     }

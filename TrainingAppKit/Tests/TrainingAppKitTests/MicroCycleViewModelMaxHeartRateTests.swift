@@ -99,9 +99,9 @@ struct MicroCycleViewModelMaxHeartRateTests {
         let activity = run(on: day(2), peak: 189)
         try await store.upsert([activity])
         await viewModel.load(asOf: day(3))
-        let weekStart = viewModel.displayedWeekStart
-        let statsLoadBefore = try #require(viewModel.sportStatsPages(for: weekStart, asOf: day(3)).first?.load)
-        let dailyLoadBefore = viewModel.dailyLoadSplit(for: weekStart, asOf: day(3)).actual.map(\.load).reduce(0, +)
+        let periodStart = viewModel.displayedPeriodStart
+        let statsLoadBefore = try #require(viewModel.sportStatsPages(for: periodStart, asOf: day(3)).first?.load)
+        let dailyLoadBefore = viewModel.dailyLoadSplit(for: periodStart, asOf: day(3)).actual.map(\.load).reduce(0, +)
         await viewModel.checkForMaxHeartRateSuggestion(asOf: day(3))
         let suggestion = try #require(viewModel.maxHeartRateSuggestion)
 
@@ -110,8 +110,8 @@ struct MicroCycleViewModelMaxHeartRateTests {
         #expect(viewModel.maxHeartRateSuggestion == nil)
         #expect(model.athlete.currentHeartRateZoneSettings?.maxHeartRateBPM == 189)
         #expect(try await store.athleteProfile()?.currentHeartRateZoneSettings?.maxHeartRateBPM == 189)
-        let statsLoadAfter = try #require(viewModel.sportStatsPages(for: weekStart, asOf: day(3)).first?.load)
-        let dailyLoadAfter = viewModel.dailyLoadSplit(for: weekStart, asOf: day(3)).actual.map(\.load).reduce(0, +)
+        let statsLoadAfter = try #require(viewModel.sportStatsPages(for: periodStart, asOf: day(3)).first?.load)
+        let dailyLoadAfter = viewModel.dailyLoadSplit(for: periodStart, asOf: day(3)).actual.map(\.load).reduce(0, +)
         #expect(statsLoadAfter < statsLoadBefore)
         #expect(dailyLoadAfter < dailyLoadBefore)
     }

@@ -104,20 +104,20 @@ struct WorkoutBackgroundImportTests {
         let model = TrainingModel(stores: stores, athlete: athlete)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: now)
-        let weekStart = viewModel.displayedWeekStart
-        await viewModel.load(asOf: weekStart)
-        #expect(viewModel.heartRateHistogram(for: weekStart).bins.isEmpty)
+        let periodStart = viewModel.displayedPeriodStart
+        await viewModel.load(asOf: periodStart)
+        #expect(viewModel.heartRateHistogram(for: periodStart).bins.isEmpty)
 
         // Imported behind the view model's back, as the background import does.
         let samples = stride(from: 0, through: 600, by: 30).map {
-            HeartRateSample(time: weekStart.addingTimeInterval(TimeInterval($0)), bpm: 160)
+            HeartRateSample(time: periodStart.addingTimeInterval(TimeInterval($0)), bpm: 160)
         }
-        try await store.upsert([Activity(source: .manual, sport: .running, start: weekStart, duration: 600, heartRate: samples)])
-        try await model.load(in: viewModel.chartRange, asOf: weekStart)
+        try await store.upsert([Activity(source: .manual, sport: .running, start: periodStart, duration: 600, heartRate: samples)])
+        try await model.load(in: viewModel.chartRange, asOf: periodStart)
 
-        await viewModel.activitiesImportedElsewhere(asOf: weekStart)
+        await viewModel.activitiesImportedElsewhere(asOf: periodStart)
 
-        #expect(viewModel.heartRateHistogram(for: weekStart).bins.contains { $0.bpm == 160 })
+        #expect(viewModel.heartRateHistogram(for: periodStart).bins.contains { $0.bpm == 160 })
     }
 }
 

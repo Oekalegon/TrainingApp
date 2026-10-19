@@ -133,7 +133,7 @@ struct MicroCycleViewModelRefinedLoadTests {
     @Test("a refresh after a new completed run moves the card, through the import path")
     func importRefreshesTheEstimate() async throws {
         let fixture = try await makeFixture()
-        await fixture.viewModel.refreshWeekCachesIfNeeded(asOf: day(0), activitiesChanged: true)
+        await fixture.viewModel.refreshPeriodCachesIfNeeded(asOf: day(0), activitiesChanged: true)
         #expect(abs((fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load ?? 0) - fixture.actualLoad) < 1e-6)
 
         // Another run of the same workout, much easier: the median moves between the two.
@@ -147,7 +147,7 @@ struct MicroCycleViewModelRefinedLoadTests {
             )]),
             asOf: day(0)
         )
-        await fixture.viewModel.refreshWeekCachesIfNeeded(asOf: day(0), activitiesChanged: true)
+        await fixture.viewModel.refreshPeriodCachesIfNeeded(asOf: day(0), activitiesChanged: true)
 
         let after = try #require(fixture.viewModel.plannedCardSummary(for: fixture.futurePlan).load)
         #expect(fixture.viewModel.plannedLoadGeneration == 2)

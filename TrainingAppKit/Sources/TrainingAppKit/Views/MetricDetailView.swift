@@ -32,7 +32,7 @@ struct MetricChartContext {
     var anchorDate: Date {
         switch subject {
         case .day(let day): return day
-        case .week(let range): return range.lowerBound
+        case .period(let range): return range.lowerBound
         }
     }
 }
@@ -193,7 +193,7 @@ struct MetricDetailView: View {
     }
 
     /// `subjectMetrics`'s own value for `kind` — that single day's value for a `.day` subject, or
-    /// the plain mean across the week for a `.week` one. `nil` when nothing's loaded yet.
+    /// the plain mean across the week for a `.period` one. `nil` when nothing's loaded yet.
     private var subjectValue: Double? {
         let values = subjectMetrics.map { value(for: kind, in: $0) }
         guard !values.isEmpty else { return nil }
@@ -209,7 +209,7 @@ struct MetricDetailView: View {
         return EstimateMarker.text(subjectValue.formatted(format), isEstimated: isProjected)
     }
 
-    /// "Average", shown above the value for a `.week` subject only -- a week's own value is a
+    /// "Average", shown above the value for a `.period` subject only -- a week's own value is a
     /// mean across every loaded day in it, not one day's own reading, so this disclosure sits
     /// above the number rather than folded into it (e.g. a one-word "Avg" prefix on the value
     /// itself, tried first and dropped: it read as part of the number rather than a label above
@@ -217,7 +217,7 @@ struct MetricDetailView: View {
     private var subjectCaptionText: String? {
         switch chartContext.subject {
         case .day: return nil
-        case .week: return "Average"
+        case .period: return "Average"
         }
     }
 

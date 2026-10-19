@@ -18,10 +18,10 @@ import TrainingCore
 /// happened this week" reading before the general "what zones are" background).
 struct HeartRateZoneDetailView: View {
     let histogram: HeartRateHistogram
-    /// `MicroCycleViewModel.displayedWeekDateRangeDescription` — this panel is only ever reachable by
+    /// `MicroCycleViewModel.displayedPeriodDateRangeDescription` — this panel is only ever reachable by
     /// tapping the *current* page, so it's always the displayed week already, not the page's own
     /// (possibly different) week the way `MetricChartContext` has to account for.
-    let weekDateRangeText: String
+    let periodDateRangeText: String
     /// Which of `chartCard`'s two pages (histogram, then the zone bar chart) is showing — a plain
     /// `@State` rather than `GraphPanelPagerView`'s hand-rolled drag gesture, since this screen has
     /// no competing horizontal gesture to avoid (it sits in a vertical-only `ScrollView`, not
@@ -88,7 +88,7 @@ struct HeartRateZoneDetailView: View {
     }
 
     /// Same layout as `MetricDetailView.valueHeader`: a caption above the value (here always shown,
-    /// not conditional on a `.week`-vs-`.day` subject the way that one is, since this screen only
+    /// not conditional on a `.period`-vs-`.day` subject the way that one is, since this screen only
     /// ever has one "kind" of value at a time), the value itself, then the week's own date range
     /// underneath. Follows `selectedChartIndex` (MVP1-76 follow-up) rather than showing one fixed
     /// value regardless of which chart page is on screen: the percentile/bpm reading belongs to
@@ -120,7 +120,7 @@ struct HeartRateZoneDetailView: View {
                 Text(lowIntensityValueText)
                     .font(.system(size: 40, weight: .bold, design: .rounded))
             }
-            Text(weekDateRangeText)
+            Text(periodDateRangeText)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

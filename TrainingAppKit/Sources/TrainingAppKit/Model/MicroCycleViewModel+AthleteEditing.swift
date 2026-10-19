@@ -148,7 +148,7 @@ extension MicroCycleViewModel {
     /// Keeps the displayed week on the day it showed, under a changed time zone or week start, then
     /// loads around it.
     private func realignAfterCalendarChange(asOf today: Date) async {
-        goToWeek(containing: displayedWeekStart)
+        goToPeriod(containing: displayedPeriodStart)
         await load(asOf: today)
     }
 }

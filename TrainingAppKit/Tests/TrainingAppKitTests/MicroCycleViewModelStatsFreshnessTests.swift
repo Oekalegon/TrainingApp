@@ -35,7 +35,7 @@ struct MicroCycleViewModelStatsFreshnessTests {
         let model = TrainingModel(stores: stores, athlete: athlete)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let probe = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: now)
-        let today = probe.displayedWeekStart
+        let today = probe.displayedPeriodStart
         let refresher = ImportingRefresher(model: model, importer: Importer(activities: activities(today)))
         let viewModel = MicroCycleViewModel(model: model, refresher: refresher, today: now)
         await viewModel.load(asOf: today)
@@ -58,34 +58,34 @@ struct MicroCycleViewModelStatsFreshnessTests {
         let f = await makeFixture(importing: {
             [Activity(source: .manual, sport: .running, start: $0, duration: 1800, distanceMeters: 5000, perceivedExertion: 5)]
         })
-        let weekStart = f.viewModel.displayedWeekStart
+        let periodStart = f.viewModel.displayedPeriodStart
         let activityDay = f.today
         // Prime every cache, with the data not there yet.
         _ = f.viewModel.sportStatsPages(asOf: f.today)
-        _ = f.viewModel.dailyLoadSplit(for: weekStart, asOf: f.today)
+        _ = f.viewModel.dailyLoadSplit(for: periodStart, asOf: f.today)
         #expect(f.viewModel.dayMetrics(on: activityDay).metrics?.load == 0)
 
         await f.viewModel.refresh(asOf: f.today)
 
         #expect(runningPage(f)?.distanceMeters == 5000)
-        #expect(f.viewModel.dailyLoadSplit(for: weekStart, asOf: f.today).actual.contains { $0.load > 0 })
+        #expect(f.viewModel.dailyLoadSplit(for: periodStart, asOf: f.today).actual.contains { $0.load > 0 })
         #expect((f.viewModel.dayMetrics(on: activityDay).metrics?.load ?? 0) > 0)
-        #expect(f.viewModel.chartMetrics(for: weekStart).contains { $0.load > 0 })
+        #expect(f.viewModel.chartMetrics(for: periodStart).contains { $0.load > 0 })
 
         let stored = try #require(f.viewModel.activities(on: activityDay).first)
         await f.viewModel.deleteActivity(stored, asOf: f.today)
 
         #expect((runningPage(f)?.distanceMeters ?? 0) == 0)
-        #expect(f.viewModel.dailyLoadSplit(for: weekStart, asOf: f.today).actual.isEmpty)
+        #expect(f.viewModel.dailyLoadSplit(for: periodStart, asOf: f.today).actual.isEmpty)
         #expect(f.viewModel.dayMetrics(on: activityDay).metrics?.load == 0)
     }
 
     @Test("a planned workout shows in the stats, the load chart and the metrics at once; deleting it removes it")
     func addAndDeletePlan() async throws {
         let f = await makeFixture()
-        let weekStart = f.viewModel.displayedWeekStart
+        let periodStart = f.viewModel.displayedPeriodStart
         _ = f.viewModel.sportStatsPages(asOf: f.today)
-        _ = f.viewModel.dailyLoadSplit(for: weekStart, asOf: f.today)
+        _ = f.viewModel.dailyLoadSplit(for: periodStart, asOf: f.today)
 
         let workout = easyRun()
         let plan = PlannedActivity(workoutID: workout.id, date: f.tomorrow)
@@ -93,25 +93,25 @@ struct MicroCycleViewModelStatsFreshnessTests {
         try await f.model.add(plan, asOf: f.today)
 
         #expect((runningPage(f)?.plannedTime ?? 0) == 1800)
-        #expect(f.viewModel.dailyLoadSplit(for: weekStart, asOf: f.today).planned.contains { $0.load > 0 })
+        #expect(f.viewModel.dailyLoadSplit(for: periodStart, asOf: f.today).planned.contains { $0.load > 0 })
         #expect((f.viewModel.dayMetrics(on: f.tomorrow).metrics?.load ?? 0) > 0)
 
         try await f.model.deletePlan(id: plan.id, asOf: f.today)
 
         #expect((runningPage(f)?.plannedTime ?? 0) == 0)
-        #expect(f.viewModel.dailyLoadSplit(for: weekStart, asOf: f.today).planned.isEmpty)
+        #expect(f.viewModel.dailyLoadSplit(for: periodStart, asOf: f.today).planned.isEmpty)
         #expect(f.viewModel.dayMetrics(on: f.tomorrow).metrics?.load == 0)
     }
 
     @Test("an activity changed in place (same count, e.g. after a resync) refreshes the stats and the load chart")
     func changedActivityInPlace() async throws {
         let f = await makeFixture()
-        let weekStart = f.viewModel.displayedWeekStart
+        let periodStart = f.viewModel.displayedPeriodStart
         let original = Activity(source: .manual, sport: .running, start: f.today, duration: 1800, distanceMeters: 5000, perceivedExertion: 5)
         try await f.store.upsert([original])
         await f.viewModel.load(asOf: f.today)
         #expect(runningPage(f)?.distanceMeters == 5000)
-        let firstLoad = f.viewModel.dailyLoadSplit(for: weekStart, asOf: f.today).actual.first?.load
+        let firstLoad = f.viewModel.dailyLoadSplit(for: periodStart, asOf: f.today).actual.first?.load
 
         var changed = original
         changed.distanceMeters = 8000
@@ -120,14 +120,14 @@ struct MicroCycleViewModelStatsFreshnessTests {
         await f.viewModel.load(asOf: f.today)
 
         #expect(runningPage(f)?.distanceMeters == 8000)
-        let secondLoad = f.viewModel.dailyLoadSplit(for: weekStart, asOf: f.today).actual.first?.load
+        let secondLoad = f.viewModel.dailyLoadSplit(for: periodStart, asOf: f.today).actual.first?.load
         #expect(try #require(secondLoad) > #require(firstLoad))
     }
 
     @Test("a heart-rate series changed in place (same count, e.g. after a resync) refreshes the histogram (MVP2-129)")
     func changedHeartRateInPlaceRefreshesHistogram() async throws {
         let f = await makeFixture()
-        let weekStart = f.viewModel.displayedWeekStart
+        let periodStart = f.viewModel.displayedPeriodStart
         let id = UUID()
         func activity(bpm: Double) -> Activity {
             let samples = stride(from: 0, through: 600, by: 30).map {
@@ -137,12 +137,12 @@ struct MicroCycleViewModelStatsFreshnessTests {
         }
         try await f.store.upsert([activity(bpm: 150)])
         await f.viewModel.load(asOf: f.today)
-        #expect(f.viewModel.heartRateHistogram(for: weekStart).bins.contains { $0.bpm == 150 })
+        #expect(f.viewModel.heartRateHistogram(for: periodStart).bins.contains { $0.bpm == 150 })
 
         try await f.store.upsert([activity(bpm: 175)])
         await f.viewModel.load(asOf: f.today)
 
-        let bins = f.viewModel.heartRateHistogram(for: weekStart).bins
+        let bins = f.viewModel.heartRateHistogram(for: periodStart).bins
         #expect(bins.contains { $0.bpm == 175 })
         #expect(!bins.contains { $0.bpm == 150 })
     }
@@ -150,7 +150,7 @@ struct MicroCycleViewModelStatsFreshnessTests {
     @Test("a missed planned workout (before today, never performed) counts nowhere")
     func missedPlanCountsNowhere() async throws {
         let f = await makeFixture()
-        let weekStart = f.viewModel.displayedWeekStart
+        let periodStart = f.viewModel.displayedPeriodStart
         // "Today" is mid-week; the plan is the day before and was never performed.
         let today = f.today.addingTimeInterval(3 * 86400)
         let missedDay = f.today.addingTimeInterval(2 * 86400)
@@ -163,10 +163,10 @@ struct MicroCycleViewModelStatsFreshnessTests {
         #expect((page?.plannedDistanceMeters ?? 0) == 0)
         #expect((page?.plannedLoad ?? 0) == 0)
         #expect((page?.time ?? 0) == 0)
-        #expect(f.viewModel.dailyLoadSplit(for: weekStart, asOf: today).planned.isEmpty)
-        #expect(f.viewModel.dailyLoadSplit(for: weekStart, asOf: today).actual.isEmpty)
+        #expect(f.viewModel.dailyLoadSplit(for: periodStart, asOf: today).planned.isEmpty)
+        #expect(f.viewModel.dailyLoadSplit(for: periodStart, asOf: today).actual.isEmpty)
         #expect(f.viewModel.dayMetrics(on: missedDay).metrics?.load == 0)
-        #expect(f.viewModel.chartMetrics(for: weekStart).allSatisfy { $0.day >= today || $0.load == 0 })
+        #expect(f.viewModel.chartMetrics(for: periodStart).allSatisfy { $0.day >= today || $0.load == 0 })
     }
 }
 

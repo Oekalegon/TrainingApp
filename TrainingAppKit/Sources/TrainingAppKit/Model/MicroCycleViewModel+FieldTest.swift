@@ -91,7 +91,7 @@ extension MicroCycleViewModel {
             fieldTestUpdateFailed = true
             return
         }
-        await refreshWeekCachesIfNeeded(asOf: today)
+        await refreshPeriodCachesIfNeeded(asOf: today)
     }
 
     /// Keeps the old value: records the test's activity as declined, so it isn't asked about again,

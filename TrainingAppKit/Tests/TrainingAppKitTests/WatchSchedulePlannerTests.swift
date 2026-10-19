@@ -75,16 +75,16 @@ struct WatchSchedulePlannerTests {
     @Test("keeps the last 7 days' plans, linked or not, without scheduling them; older ones go")
     func keepsRecentPastPlans() {
         let doneToday = plan(on: day(0), completed: true)
-        let doneLastWeek = plan(on: day(-7), completed: true)
+        let donePreviousPeriod = plan(on: day(-7), completed: true)
         let doneLongAgo = plan(on: day(-8), completed: true)
         // Done yesterday but not linked yet: the sync runs before the HealthKit import.
         let notYetLinked = plan(on: day(-1))
         let missedLongAgo = plan(on: day(-8))
 
-        let result = plan([doneToday, doneLastWeek, doneLongAgo, notYetLinked, missedLongAgo])
+        let result = plan([doneToday, donePreviousPeriod, doneLongAgo, notYetLinked, missedLongAgo])
 
         #expect(result.toSchedule.isEmpty)
-        #expect(result.keep == [doneToday.id, doneLastWeek.id, notYetLinked.id])
+        #expect(result.keep == [doneToday.id, donePreviousPeriod.id, notYetLinked.id])
     }
 
     @Test("with few slots left, linked past plans win over unlinked ones")

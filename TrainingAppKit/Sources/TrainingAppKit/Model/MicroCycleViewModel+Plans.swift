@@ -24,7 +24,7 @@ extension MicroCycleViewModel {
         peekedCycles = []
         await peekCycles()
         refreshDisplayedPeriod()
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
     }
 }
