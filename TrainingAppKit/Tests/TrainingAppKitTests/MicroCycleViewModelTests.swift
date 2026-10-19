@@ -99,7 +99,7 @@ struct MicroCycleViewModelTests {
         #expect(dayCount == 20)
     }
 
-    @Test("chartRange(for:) matches chartRange for the currently displayed week, and shifts for others")
+    @Test("chartRange(for:) matches chartRange for the currently displayed period, and shifts for others")
     func chartRangeForPeriodStartMatchesUnparameterizedForDisplayedPeriod() {
         let model = makeModel()
         let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
@@ -114,7 +114,7 @@ struct MicroCycleViewModelTests {
     }
 
     @Test(
-        "chartMetrics(for:) scopes to that week's own chartRange, independent of displayedPeriodStart (MVP1-32)"
+        "chartMetrics(for:) scopes to that period's own chartRange, independent of displayedPeriodStart (MVP1-32)"
     )
     func chartMetricsForPeriodStartIsScopedToThatPeriod() async throws {
         let (store, stores) = makeStores()
@@ -136,7 +136,7 @@ struct MicroCycleViewModelTests {
         #expect(!viewModel.chartMetrics.contains { calendar.isDate($0.day, inSameDayAs: dayInNextWeeksRange) })
     }
 
-    @Test("displayedPeriodRange(for:) matches displayedPeriodRange for the currently displayed week, and shifts for others")
+    @Test("displayedPeriodRange(for:) matches displayedPeriodRange for the currently displayed period, and shifts for others")
     func displayedPeriodRangeForPeriodStartMatchesUnparameterizedForDisplayedPeriod() {
         let model = makeModel()
         let viewModel = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))

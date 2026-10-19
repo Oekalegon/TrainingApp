@@ -13,15 +13,15 @@ private let chartSectionBackground = Color(.systemBackground)
 private let chartSectionBackground = Color.white
 #endif
 
-/// The named coordinate space `periodContent`'s week-swipe `DragGesture` and `periodPageHeader`'s
+/// The named coordinate space `periodContent`'s period-swipe `DragGesture` and `periodPageHeader`'s
 /// frame measurement (`statsBarFrame`) both use, so a swipe's start point can be compared against
 /// the stats bar's on-screen frame in the same terms. A file-scope constant, not a `MicroCycleView`
 /// static member: `MicroCycleView`'s own static members are inferred `@MainActor`-isolated (since `View`
 /// requires that for its instance side), which a plain `Sendable` `String` doesn't need to be.
 private let periodSwipeCoordinateSpace = "MicroCycleView.periodSwipe"
 
-/// The week tab's screen (design doc §2.1): a 3-week CTL/ATL/TSB chart centered on the displayed
-/// week, that week's activities/plans below it, swipe-to-navigate between weeks, "Today" and
+/// The week tab's screen (design doc §2.1): a three-period CTL/ATL/TSB chart centered on the displayed
+/// week, that period's activities/plans below it, swipe-to-navigate between weeks, "Today" and
 /// "Select Date" toolbar buttons, and pull-to-refresh import.
 public struct MicroCycleView: View {
     let viewModel: MicroCycleViewModel
@@ -87,9 +87,9 @@ public struct MicroCycleView: View {
     /// Decided once per gesture, alongside `isDraggingHorizontally` — `true` when the drag started
     /// inside `statsBarFrame` or `graphPanelFrame`, so this gesture is left entirely to
     /// `SportStatsPagerView`'s/`GraphPanelPagerView`'s own horizontal paging instead of also being
-    /// read as a week-swipe. Before those pagers moved inside `periodContent`'s own swipeable area
+    /// read as a period-swipe. Before those pagers moved inside `periodContent`'s own swipeable area
     /// (MVP1-56, MVP1-55), neither overlapped it, so this wasn't needed — now that they do, without
-    /// this, a swipe across either one changes the displayed week instead of (or as well as) paging
+    /// this, a swipe across either one changes the displayed period instead of (or as well as) paging
     /// it.
     @State private var isSwipeExemptFromPeriodChange = false
     /// The pinned stats bar's own on-screen frame, in `periodSwipeCoordinateSpace` — measured only
@@ -587,7 +587,7 @@ public struct MicroCycleView: View {
         // the moment the tap actually fires (touch-up), not at touch-down, so flipping it during
         // the drag suppresses the action. The non-current pages are always disabled outright, since
         // they're never meant to be tapped at all. `isSwipeExemptFromPeriodChange` carves out the one
-        // case that isn't a week-swipe at all (a drag starting on the pinned stats bar) — without
+        // case that isn't a period-swipe at all (a drag starting on the pinned stats bar) — without
         // it, this would also disable `SportStatsPagerView`'s own paging gesture for the whole drag,
         // defeating the exemption `handleDragChanged` grants it.
         .disabled(!isCurrentPage || (isDraggingHorizontally && !isSwipeExemptFromPeriodChange))
@@ -606,7 +606,7 @@ public struct MicroCycleView: View {
     /// slides into view — rendered the *same* chart (whatever `displayedPeriodStart` happened to be),
     /// so the page that visibly became current after a swipe or button navigation genuinely hadn't
     /// been showing its own data until that flip actually landed. Scoping each page to its own
-    /// `periodStart` means a neighbor page already shows its own correct, complete 3-week chart
+    /// `periodStart` means a neighbor page already shows its own correct, complete three-period chart
     /// beforehand — `load(asOf:)` fetches a wide enough range (`MicroCycleViewModel.loadRange(for:calendar:)`)
     /// for that to be true as soon as `displayedPeriodStart` last changed, not just after the page in
     /// question becomes current.
@@ -804,7 +804,7 @@ public struct MicroCycleView: View {
     }
 
     /// Jumps to the week containing today. No drag and no natural left/right direction (today
-    /// could be either side of the displayed week) to page toward, so this just updates
+    /// could be either side of the displayed period) to page toward, so this just updates
     /// `displayedPeriodStart` directly — each page's content picks up the new dates and animates its
     /// own row-level changes, without paging anywhere.
     ///
@@ -813,7 +813,7 @@ public struct MicroCycleView: View {
     /// `HeartRateHistogramChartView` apply their own `.animation(_:value:)`, so an explicit
     /// `withAnimation` around a `displayedPeriodStart` change is the only thing that would make
     /// Swift Charts interpolate — its marks are `Animatable` and, given an animation, smoothly
-    /// slide their values and `chartXScale` domain from the old 3-week window to the new one. Since
+    /// slide their values and `chartXScale` domain from the old three-period window to the new one. Since
     /// the data is already complete either way (see `completeSwipe`'s own doc comment), that
     /// interpolation has nothing to do with correctness, but visually it looks exactly like the
     /// target week's data "growing in" after the rest — the same symptom this whole fix is for. A
@@ -824,7 +824,7 @@ public struct MicroCycleView: View {
 }
 
 /// `MicroCycleView.metricsInfoPresentation`'s value (MVP1-45/MVP1-60) — which metric, and its subject (a
-/// day-list pill's own day, or the whole displayed week from a graph-panel tap). `Identifiable`/
+/// day-list pill's own day, or the whole displayed period from a graph-panel tap). `Identifiable`/
 /// `Hashable` (the latter for `.navigationDestination(item:)`, which needs it) via a fresh `UUID`
 /// per instance (not `kind`/`subject` themselves) so tapping the *same* metric/subject twice in a
 /// row while that push is already showing still counts as a new one.

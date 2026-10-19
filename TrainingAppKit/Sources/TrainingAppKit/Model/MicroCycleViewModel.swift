@@ -28,7 +28,7 @@ public final class MicroCycleViewModel {
     @ObservationIgnored
     private var calendarCache: (timeZone: TimeZone, weekStartsOn: Weekday, calendar: Calendar)
     /// The athlete's calendar: ``Calendar`` for their time zone with their week start applied. Built
-    /// once and reused, so the week-swipe path doesn't create one per access; a changed time zone or
+    /// once and reused, so the period-swipe path doesn't create one per access; a changed time zone or
     /// week start gets a new one on the next access.
     var calendar: Calendar {
         let athlete = model.athlete
@@ -67,14 +67,14 @@ public final class MicroCycleViewModel {
     @ObservationIgnored
     var refinedLoadEstimator: LinkedActivityRefinedEstimator?
 
-    /// Sport-stats pages, cached per week (keyed by that week's `periodStart`) — see
+    /// Sport-stats pages, cached per period (keyed by that period's `periodStart`) — see
     /// ``sportStatsPages(for:asOf:)``'s own doc comment. Not `@ObservationIgnored`: `MicroCycleView`
     /// reads this indirectly through that method, and needs the read tracked the same way a plain
     /// stored property's would be.
     private var sportStatsPagesCaches: [DisplayPeriod: [SportStatsPage]] = [:]
     /// `(model.activities.count, model.plans.count, model.workouts.count, today)` as of the last
     /// time ``sportStatsPagesCaches`` was populated — any changing invalidates the whole cache (an
-    /// import/dedup could change any cached week's activities, not just the displayed one; a new
+    /// import/dedup could change any cached period's activities, not just the displayed one; a new
     /// calendar day shifts every week's own change-vs-previous-week percentages; a plan or its
     /// workout can change independently of `model.activities`, e.g. saving a new planned workout
     /// via `PlannedWorkoutSheet`). The athlete is part of the key too: a changed max or resting
@@ -85,7 +85,7 @@ public final class MicroCycleViewModel {
     @ObservationIgnored
     private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int, plannedLoadGeneration: Int, plans: Int, activities: Int)?
 
-    /// Each week's heart-rate histogram, cached per week (keyed by that week's `periodStart`) — at
+    /// Each period's heart-rate histogram, cached per period (keyed by that period's `periodStart`) — at
     /// most 3 entries (``displayedPeriodStart`` and its immediate neighbors) at any time, refreshed
     /// by ``refreshPeriodCachesIfNeeded()``. Not `@ObservationIgnored`, for the same reason as
     /// ``sportStatsPagesCaches``.
@@ -99,14 +99,14 @@ public final class MicroCycleViewModel {
     private var periodGraphCachesFingerprint: Int?
     /// `model.athlete` as of the last time ``periodGraphCaches`` was populated. A change (e.g. a new
     /// max heart rate, MVP2-56) moves the zone boundaries the histogram is shaded against, so it
-    /// marks every cached week stale the same way a changed activity fingerprint does.
+    /// marks every cached period stale the same way a changed activity fingerprint does.
     @ObservationIgnored
     private var periodGraphCachesAthlete: AthleteProfile?
 
-    /// ``dailyLoadSplit(for:)`` results, cached per week (keyed by that week's `periodStart`) — same
+    /// ``dailyLoadSplit(for:)`` results, cached per period (keyed by that period's `periodStart`) — same
     /// reasoning as ``sportStatsPagesCaches``: `MicroCycleView.graphPanel(periodStart:isCurrentPage:)` calls
     /// this for all three carousel pages (current plus both static previews) on every touch-move
-    /// frame of the week-swipe drag, and unlike ``chartMetrics(for:)`` (a cheap filter over
+    /// frame of the period-swipe drag, and unlike ``chartMetrics(for:)`` (a cheap filter over
     /// already-computed `model.metrics`), this does real per-activity TRIMP work
     /// (`StatisticsCalculator.summary(for:athlete:)`) — exactly the MVP1-19 freeze class this
     /// codebase already built ``sportStatsPagesCaches``/``periodGraphCaches`` to keep out of that path.
@@ -125,7 +125,7 @@ public final class MicroCycleViewModel {
 
     /// The card caches: ``plannedCardSummary(for:)``, ``linkedPlanExpectation(for:)`` and
     /// ``intensity(for:)-(Activity)``/``intensity(for:)-(PlannedActivity)`` results. The day list
-    /// re-renders on every touch-move frame of the week-swipe drag, and each of these runs the TRIMP
+    /// re-renders on every touch-move frame of the period-swipe drag, and each of these runs the TRIMP
     /// estimator, a workout projection or the intensity classifier — the same freeze class
     /// ``dailyLoadSplitCaches`` exists to keep out of that path.
     ///
@@ -322,7 +322,7 @@ public final class MicroCycleViewModel {
     /// The days of the period `periods` periods away from ``displayedPeriodStart`` (negative for
     /// earlier, positive for later), without changing ``displayedPeriodStart`` itself.
     ///
-    /// Lets a view render the neighboring weeks (e.g. to peek during a swipe) purely from data
+    /// Lets a view render the neighboring periods (e.g. to peek during a swipe) purely from data
     /// already covered by ``chartRange`` — no navigation state changes, no separate load.
     public func periodDates(offsetPeriods periods: Int) -> [Date] {
         period(offset: periods).days(calendar: calendar)
@@ -336,7 +336,7 @@ public final class MicroCycleViewModel {
 
     /// Completed activities in the period starting `periodStart` (which need not be
     /// ``displayedPeriodStart``), in the same terms ``activities(on:)`` filters a single day by —
-    /// used to compute an arbitrary cached week's own graph data.
+    /// used to compute an arbitrary cached period's own graph data.
     private func activities(forPeriodStarting periodStart: Date) -> [Activity] {
         period(startingAt: periodStart).days(calendar: calendar)
             .flatMap { activities(on: $0) }
@@ -348,9 +348,9 @@ public final class MicroCycleViewModel {
         chartRange(for: displayedPeriodStart)
     }
 
-    /// The 3-week range `chartRange` would be if ``displayedPeriodStart`` were `periodStart` instead —
-    /// used by `MicroCycleView`'s carousel so each page renders its own week's chart rather than
-    /// whichever week happens to be ``displayedPeriodStart`` (MVP1-32).
+    /// The three-period range `chartRange` would be if ``displayedPeriodStart`` were `periodStart` instead —
+    /// used by `MicroCycleView`'s carousel so each page renders its own period's chart rather than
+    /// whichever period happens to be ``displayedPeriodStart`` (MVP1-32).
     public func chartRange(for periodStart: Date) -> ClosedRange<Date> {
         let period = period(startingAt: periodStart)
         return previousPeriod(of: period).start...nextPeriod(of: period).lastDay(calendar: calendar)
@@ -358,7 +358,7 @@ public final class MicroCycleViewModel {
 
     /// The range ``load(asOf:)`` actually fetches from the stores: wide enough to cover not just
     /// `periodStart`'s own ``chartRange(for:)``, but its immediate neighbors' as well (MVP1-32) — so
-    /// `MicroCycleView`'s carousel can render each neighbor page's own complete, correct 3-week chart
+    /// `MicroCycleView`'s carousel can render each neighbor page's own complete, correct three-period chart
     /// continuously (not just after actually navigating there), and a swipe or button navigation
     /// never finds anything left to load once it flips ``displayedPeriodStart``. Deliberately wider
     /// than ``chartRange(for:)`` itself, which stays exactly 3 weeks — that's still the range each
@@ -378,7 +378,7 @@ public final class MicroCycleViewModel {
 
     /// `model.metrics` restricted to ``chartRange(for:)``'s own range for `periodStart`, in day
     /// order — `MicroCycleView`'s carousel uses this (rather than the unparameterized ``chartMetrics``)
-    /// so each page renders *that page's own* 3-week window instead of whichever week happens to
+    /// so each page renders *that page's own* three-period window instead of whichever period happens to
     /// be ``displayedPeriodStart`` (MVP1-32).
     public func chartMetrics(for periodStart: Date) -> [FitnessMetrics] {
         let range = chartRange(for: periodStart)
@@ -398,7 +398,7 @@ public final class MicroCycleViewModel {
     /// would sit on top of each other (MVP2-104). Only races the model has loaded: the metric detail
     /// charts get theirs from ``chartBuffer(in:asOf:)``, which loads the range first.
     ///
-    /// Not cached, unlike the other chart inputs, though ``chartRaces(for:)`` runs on the week-swipe path:
+    /// Not cached, unlike the other chart inputs, though ``chartRaces(for:)`` runs on the period-swipe path:
     /// the work is one date comparison per loaded race, and a day lookup only for the few races that
     /// fall in `range`, and an uncached read can never show a race that was just edited or deleted.
     public func chartRaces(in range: ClosedRange<Date>) -> [Race] {
@@ -429,10 +429,10 @@ public final class MicroCycleViewModel {
     /// `DailyLoadSeries`'s) — a plan from before `today` that was never performed reads as
     /// genuinely missed, not as a bar this chart keeps showing indefinitely.
     ///
-    /// Cached per week: unlike `chartMetrics(for:)` (a cheap filter over already-computed
+    /// Cached per period: unlike `chartMetrics(for:)` (a cheap filter over already-computed
     /// `model.metrics`), this does real per-activity TRIMP work
     /// (`StatisticsCalculator.summary(for:athlete:)`), and `MicroCycleView.graphPanel(periodStart:isCurrentPage:)`
-    /// calls it for all three carousel pages on every touch-move frame of the week-swipe drag — see
+    /// calls it for all three carousel pages on every touch-move frame of the period-swipe drag — see
     /// ``dailyLoadSplitCaches``'s own doc comment for why this needs the same per-week caching
     /// ``sportStatsPages(for:asOf:)``/``heartRateHistogram(for:)`` already have.
     func dailyLoadSplit(for periodStart: Date, asOf today: Date = .now) -> DailyLoadSplit {
@@ -460,13 +460,13 @@ public final class MicroCycleViewModel {
     /// `dailyLoadSplit(for:asOf:)`'s own actual/planned split, but over an arbitrary `range` rather
     /// than a week's fixed ``chartRange(for:)`` — for `MetricDetailView`'s Load chart, which pans
     /// across a caller-chosen window (MVP1-45's Week/Month/3M/6M/Year periods) instead of the fixed
-    /// 3-week carousel `DailyLoadChartView` shows. Not cached, matching ``metrics(in:asOf:)``'s own
+    /// three-period carousel `DailyLoadChartView` shows. Not cached, matching ``metrics(in:asOf:)``'s own
     /// precedent for the same reason: this is only ever called from a pan/period-change buffer
     /// reload, never from the per-frame swipe-drag hot path ``dailyLoadSplit(for:asOf:)`` itself
     /// has to guard against.
     ///
     /// Loads `range` first through ``loadWindow(covering:asOf:)``; ``metrics(in:asOf:)`` explains why the
-    /// union with the displayed week's window is loaded rather than `range` alone.
+    /// union with the displayed period's window is loaded rather than `range` alone.
     func dailyLoadSplit(in range: ClosedRange<Date>, asOf today: Date = .now) async -> DailyLoadSplit {
         await loadWindow(covering: range, asOf: today)
         return computeDailyLoadSplit(in: range, asOf: today)
@@ -507,8 +507,8 @@ public final class MicroCycleViewModel {
     }
 
     /// The date range of ``displayedPeriodStart`` — the week currently visible in the day list, not
-    /// necessarily today's. Used to highlight that week's background on the fitness chart, so the
-    /// 3-week trend stays visually anchored to whichever week the athlete has scrolled to.
+    /// necessarily today's. Used to highlight that period's background on the fitness chart, so the
+    /// three-period trend stays visually anchored to whichever period the athlete has scrolled to.
     public var displayedPeriodRange: ClosedRange<Date> {
         displayedPeriodRange(for: displayedPeriodStart)
     }
@@ -525,7 +525,7 @@ public final class MicroCycleViewModel {
         calendar.component(.weekOfYear, from: displayedPeriodStart)
     }
 
-    /// A short "Sep 8 – Sep 14, 2026" description of the displayed week, for the subtitle under
+    /// A short "Sep 8 – Sep 14, 2026" description of the displayed period, for the subtitle under
     /// ``displayedWeekOfYear`` (MVP1-56) — the year sits on the end date only, unless the week
     /// crosses a year boundary (e.g. "Dec 29, 2026 – Jan 4, 2027"), in which case both ends show
     /// their own year so the range doesn't read as if it were entirely in the later one.
@@ -713,7 +713,7 @@ public final class MicroCycleViewModel {
     /// follow `day`'s own ``FitnessMetrics/isProjected`` instead), and whether its Load pill does
     /// because an activity was scored from perceived effort (MVP2-127), for the day list's pill row.
     ///
-    /// One scan of `model.metrics` for both: every day row calls this on each week-swipe frame. The
+    /// One scan of `model.metrics` for both: every day row calls this on each period-swipe frame. The
     /// series is one entry per day in order, so the previous day is normally the entry before
     /// `day`'s; anything else falls back to a lookup.
     public func dayMetrics(on day: Date) -> (metrics: FitnessMetrics?, isFormProjected: Bool, isLoadEstimated: Bool) {
@@ -733,14 +733,14 @@ public final class MicroCycleViewModel {
     /// perceived effort rather than heart rate (MVP2-127), the same test its card makes (MVP2-8). A day
     /// with any such activity counts, since its total load then includes an estimate. A projected day
     /// is estimated by `FitnessMetrics.isProjected` instead. Each activity's score is cached
-    /// (``scoredLoad(for:)``), so this stays cheap on the week-swipe path.
+    /// (``scoredLoad(for:)``), so this stays cheap on the period-swipe path.
     private func isLoadEstimated(on day: Date) -> Bool {
         activities(on: day).contains { scoredLoad(for: $0)?.method.isEstimate ?? false }
     }
 
     /// One page per sport for the week view's stats pager (MVP1-52; design doc: "a weekly overview
     /// highlighting one sport's duration/distance/TRIMP … above the rest") — ``AthleteProfile/mainSport``
-    /// always first, then every other sport with activity in the displayed week, most distance
+    /// always first, then every other sport with activity in the displayed period, most distance
     /// first (ties broken alphabetically) for a deterministic order. Always at least one page (the
     /// main sport's, zero-filled if it had no activity this week), so the pager never has nothing
     /// to show.
@@ -753,21 +753,21 @@ public final class MicroCycleViewModel {
 
     /// One page per sport for the given week's stats pager (MVP1-52; design doc: "a weekly overview
     /// highlighting one sport's duration/distance/TRIMP … above the rest") — ``AthleteProfile/mainSport``
-    /// always first, then every other sport with activity that week, most distance first (ties
+    /// always first, then every other sport with activity that period, most distance first (ties
     /// broken alphabetically) for a deterministic order. Always at least one page (the main
-    /// sport's, zero-filled if it had no activity that week), so the pager never has nothing to
+    /// sport's, zero-filled if it had no activity that period), so the pager never has nothing to
     /// show.
     ///
-    /// Cached per week (`periodStart`, not just ``displayedPeriodStart``): `MicroCycleView` calls this from
+    /// Cached per period (`periodStart`, not just ``displayedPeriodStart``): `MicroCycleView` calls this from
     /// each of its 3 carousel pages' own pinned stats bar, including the previous/next week's,
     /// which re-evaluate on every touch-move frame of the day list's own swipe gesture just like
-    /// the current page does. Without a cache keyed per week, each of those frames on each page
+    /// the current page does. Without a cache keyed per period, each of those frames on each page
     /// would redundantly re-run two full `periodStatsSplit` computations (one `LoadCalculator`
     /// invocation per activity, each) even though neither that page's own week nor the underlying
     /// data changed — the same class of freeze this codebase already fixed once for the day list
-    /// itself (MVP1-19). The whole cache is invalidated together (not per week) whenever
+    /// itself (MVP1-19). The whole cache is invalidated together (not per period) whenever
     /// `model.activities`/`model.plans`/`model.workouts`' counts or `today`'s calendar day changes
-    /// — any of those can shift every cached week's own figures at once, and a plan/workout can
+    /// — any of those can shift every cached period's own figures at once, and a plan/workout can
     /// change independently of `model.activities` (e.g. saving a new planned workout via
     /// `PlannedWorkoutSheet`). A new ``paceHistory`` invalidates it too: the planned distance and
     /// time are forecast from it. So does a new ``plannedLoadGeneration``: the planned load is refined
@@ -853,11 +853,11 @@ public final class MicroCycleViewModel {
         let previousPlannedTotalLoad = previous.planned.values.reduce(0) { $0 + $1.load }
         // The previous week's own *expected* total (performed + still-planned as of `today`), not
         // its performed-only total — for a week fully in the past this is the same number (nothing
-        // of that week is still "planned" relative to `today`), but for two still-future weeks
+        // of that period is still "planned" relative to `today`), but for two still-future weeks
         // shown back to back, the earlier one's performed total is always 0 (it hasn't happened
         // yet), which would make every later week's own change read as a meaningless "+∞%". Using
         // the previous week's expected total instead gives a real baseline in both cases: the
-        // week right after the one containing `today` compares against that week's own
+        // week right after the one containing `today` compares against that period's own
         // performed-so-far-plus-still-planned total, and a week further out compares against the
         // week before it's own still-fully-planned total.
         let previousExpectedTotalLoad = previousTotalLoad + previousPlannedTotalLoad
@@ -956,7 +956,7 @@ public final class MicroCycleViewModel {
 
     /// Descriptive totals (every sport, not just one), performed and planned independently, for
     /// the period starting `periodStart` — shared by ``sportStatsPages(asOf:)`` for both the
-    /// displayed week and the previous one.
+    /// displayed period and the previous one.
     private func periodStatsSplit(periodStart: Date, asOf today: Date) -> PeriodStatsSplit {
         let periodEnd = period(startingAt: periodStart).lastDay(calendar: calendar)
         return statisticsCalculator.periodStatsSplit(
@@ -1015,7 +1015,7 @@ public final class MicroCycleViewModel {
 
     /// `periodStart`'s heart-rate histogram, for the graph panel's "Heart Rate Histogram" page
     /// (MVP1-55) —
-    /// every completed activity in that week's raw heart-rate samples, binned by
+    /// every completed activity in that period's raw heart-rate samples, binned by
     /// `HeartRateHistogram.aggregating(_:athlete:)`. Empty until ``refreshPeriodCachesIfNeeded()``
     /// has cached `periodStart` — in practice near-instant for ``displayedPeriodStart`` and its
     /// immediate neighbors, which are the only weeks ever prefetched (see that method's own doc
@@ -1025,28 +1025,28 @@ public final class MicroCycleViewModel {
     }
 
     /// Prefetches (and evicts stale entries from) ``periodGraphCaches`` for ``displayedPeriodStart``
-    /// and its immediate neighbors, so paging to a neighboring week almost always finds its graph
+    /// and its immediate neighbors, so paging to a neighboring period almost always finds its graph
     /// data already cached — computed while the athlete was still looking at a different week —
     /// instead of needing a fresh async computation on every swipe. Called after every
     /// load/import/dedup that could change the underlying activities, and by `MicroCycleView` whenever
     /// ``displayedPeriodStart`` changes.
     ///
-    /// The displayed week itself is computed first, at `.userInitiated` priority, so the graph
+    /// The displayed period itself is computed first, at `.userInitiated` priority, so the graph
     /// panel actually on screen updates as promptly as possible; its neighbors follow at the
     /// lower `.utility` priority, so the scheduler still favors the visible week's own work over
     /// prefetching ones the athlete isn't looking at yet. All still awaited here (structured
     /// concurrency, not a detached fire-and-forget `Task`) — by the time `MicroCycleView`'s own
-    /// `.task(id: displayedPeriodStart)` next has anything else to do, the whole 3-week window is
-    /// settled, and a caller that only cares about the displayed week's own data (already updated
+    /// `.task(id: displayedPeriodStart)` next has anything else to do, the whole three-period window is
+    /// settled, and a caller that only cares about the displayed period's own data (already updated
     /// first) isn't kept waiting by anything else, since `MicroCycleView` never awaits this call itself.
     ///
-    /// A changed activity fingerprint or athlete (MVP2-56) marks every currently cached week stale and due for
+    /// A changed activity fingerprint or athlete (MVP2-56) marks every currently cached period stale and due for
     /// recomputation, but deliberately doesn't clear ``periodGraphCaches`` up front to do that —
     /// `periodGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
     /// (synchronously, before this method's first `await`) was visible to
     /// `HeartRateHistogramChartView` as a real, if momentary, "no data" state — the displayed
     /// week's own chart flashing to its empty-state view and back on every week-navigation
-    /// `.task(id:)` firing that happened to load a not-yet-seen neighboring week's activities
+    /// `.task(id:)` firing that happened to load a not-yet-seen neighboring period's activities
     /// (changing `activityCount`), even though the
     /// same chart was on screen, correct, immediately before and after. Leaving the stale entry in
     /// place until ``cachePeriodGraph(periodStart:priority:)`` overwrites it with a fresh one instead
@@ -1095,7 +1095,7 @@ public final class MicroCycleViewModel {
         let athlete = model.athlete
         let statisticsCalculator = self.statisticsCalculator
         // The week's own end (not `.now`/today), so `HeartRateHistogram.aggregating`'s zone
-        // boundaries reflect the zones actually in effect that week -- a week long in the past must
+        // boundaries reflect the zones actually in effect that period -- a week long in the past must
         // not shade against the athlete's *current* zones, which could be way off by then
         // (MVP1-78 follow-up).
         let asOf = displayedPeriodRange(for: periodStart).upperBound
@@ -1113,7 +1113,7 @@ public final class MicroCycleViewModel {
     /// ``refreshPeriodCachesIfNeeded(asOf:activitiesChanged:)`` had just stored) is still worth
     /// storing — `false` once either has moved on, since the result is now either stale (a
     /// subsequent import changed the underlying activities) or for a week that's fallen outside the
-    /// 3-week window this cache keeps.
+    /// three-period window this cache keeps.
     ///
     /// Compares against the stored ``periodGraphCachesFingerprint`` rather than re-hashing every
     /// sample: a refresh that sees changed data stores its new fingerprint first, so an older
@@ -1125,7 +1125,7 @@ public final class MicroCycleViewModel {
     /// A hash of what the heart-rate histogram reads from each activity — id, start, duration and
     /// every heart-rate sample — so activities changed in place (same count) still invalidate
     /// ``periodGraphCaches`` (MVP2-130). Unlike ``activitiesFingerprint()`` it hashes the samples
-    /// themselves: it only runs when the week caches refresh, not on the week-swipe path, and the
+    /// themselves: it only runs when the period caches refresh, not on the period-swipe path, and the
     /// histogram is exactly what those samples feed.
     private func histogramFingerprint() -> Int {
         var hasher = Hasher()
@@ -1275,12 +1275,12 @@ public final class MicroCycleViewModel {
         AthleteViewModel(athlete: model.athlete)
     }
 
-    /// Moves the displayed week forward by one week.
+    /// Moves the displayed period forward by one week.
     public func goToNextPeriod() {
         show(nextPeriod(of: displayedPeriod))
     }
 
-    /// Moves the displayed week back by one week.
+    /// Moves the displayed period back by one week.
     public func goToPreviousPeriod() {
         show(previousPeriod(of: displayedPeriod))
     }
@@ -1408,7 +1408,7 @@ public final class MicroCycleViewModel {
     }
 
     /// `model.metrics` restricted to `range`, in day order — for the metrics detail view's period
-    /// picker (MVP1-45), which can ask for a window (e.g. a year) wider than the 3-week default
+    /// picker (MVP1-45), which can ask for a window (e.g. a year) wider than the three-period default
     /// `chartMetrics(for:)` already has loaded. Loads the *union* of `range` and the currently
     /// loaded window before reading, never just `range` alone — `TrainingModel.load(in:)` replaces
     /// `model.activities`/`plans`/`metrics` outright rather than merging into them, so loading a
@@ -1420,8 +1420,8 @@ public final class MicroCycleViewModel {
         return loadedMetrics(in: range)
     }
 
-    /// Loads the union of `range` and the displayed week's load window into `model` and refreshes the
-    /// week caches (see ``metrics(in:asOf:)`` for why the union): the single load every `…(in:)`
+    /// Loads the union of `range` and the displayed period's load window into `model` and refreshes the
+    /// period caches (see ``metrics(in:asOf:)`` for why the union): the single load every `…(in:)`
     /// chart-range read goes through.
     private func loadWindow(covering range: ClosedRange<Date>, asOf today: Date) async {
         let currentLoadRange = loadRange(for: displayedPeriodStart)
@@ -1470,7 +1470,7 @@ public final class MicroCycleViewModel {
     /// Brings the caches up to date after workouts were imported without this view model, by the
     /// background import (MVP2-121, see `TrainingAppEnvironment.importArrivedWorkouts(asOf:)`), which
     /// has already imported them and synced the Watch. What ``refresh(asOf:)`` does after its own
-    /// import: the week caches and pace history, and the max heart rate suggestion.
+    /// import: the period caches and pace history, and the max heart rate suggestion.
     ///
     /// - Parameter today: Passed through to the cache refresh and the suggestion check.
     public func activitiesImportedElsewhere(asOf today: Date = .now) async {
