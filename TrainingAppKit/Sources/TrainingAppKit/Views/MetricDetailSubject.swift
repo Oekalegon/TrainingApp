@@ -14,22 +14,22 @@ import TrainingCore
 /// pulled out of `MetricDetailView`/`MetricDetailChartView` for.
 enum MetricDetailSubject: Hashable {
     case day(Date)
-    case week(ClosedRange<Date>)
+    case period(ClosedRange<Date>)
 
     /// This subject's own points within `all` — the single day's own point for a `.day` subject
     /// (matched via `calendar.isDate(_:inSameDayAs:)`, not `==`, the same reasoning
     /// `MicroCycleViewModel.metrics(on:)` already documents for the same comparison), or every point
-    /// inside a `.week` subject's own range for `MetricDetailView` to average.
+    /// inside a `.period` subject's own range for `MetricDetailView` to average.
     ///
     /// A half-open comparison for `.week`, not `range.contains(_:)` — `range` itself
-    /// (`MicroCycleViewModel.displayedWeekRange(for:)`) is `weekStart...weekStart+7days`, so a
+    /// (`MicroCycleViewModel.displayedPeriodRange(for:)`) is `periodStart...periodStart+7days`, so a
     /// `ClosedRange`'s inclusive upper bound would wrongly pull in the *next* week's own point for
     /// whichever day happens to land exactly on that boundary.
     func metrics(in all: [FitnessMetrics], calendar: Calendar) -> [FitnessMetrics] {
         switch self {
         case .day(let day):
             return all.filter { calendar.isDate($0.day, inSameDayAs: day) }
-        case .week(let range):
+        case .period(let range):
             return all.filter { $0.day >= range.lowerBound && $0.day < range.upperBound }
         }
     }
@@ -45,7 +45,7 @@ enum MetricDetailSubject: Hashable {
     }
 
     /// This subject's own date text for `MetricDetailView`'s header: a full "weekday, month day,
-    /// year" for a `.day` subject, or a plain "Sep 14 – Sep 20, 2026" range for a `.week` one — a
+    /// year" for a `.day` subject, or a plain "Sep 14 – Sep 20, 2026" range for a `.period` one — a
     /// full "weekday, month day, year" format applied to both ends of a week that doesn't cross a
     /// year boundary would repeat the year twice, which this avoids by only ever appending it once,
     /// to the range's own last actual day.
@@ -56,7 +56,7 @@ enum MetricDetailSubject: Hashable {
             format.calendar = calendar
             format.timeZone = calendar.timeZone
             return day.formatted(format)
-        case .week(let range):
+        case .period(let range):
             var format = Date.FormatStyle.dateTime.month(.abbreviated).day()
             format.calendar = calendar
             format.timeZone = calendar.timeZone

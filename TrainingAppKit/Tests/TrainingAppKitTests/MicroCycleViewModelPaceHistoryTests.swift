@@ -74,11 +74,11 @@ struct MicroCycleViewModelPaceHistoryTests {
         let easy = easyWorkout()
         try await model.add(easy, asOf: day(10))
         try await model.add(PlannedActivity(workoutID: easy.id, date: day(10)), asOf: day(10))
-        let weekStart = viewModel.displayedWeekStart
+        let periodStart = viewModel.displayedPeriodStart
 
-        let before = try #require(viewModel.sportStatsPages(for: weekStart, asOf: day(10)).first)
+        let before = try #require(viewModel.sportStatsPages(for: periodStart, asOf: day(10)).first)
         await viewModel.refreshPaceHistoryIfNeeded(asOf: day(10))
-        let after = try #require(viewModel.sportStatsPages(for: weekStart, asOf: day(10)).first)
+        let after = try #require(viewModel.sportStatsPages(for: periodStart, asOf: day(10)).first)
 
         #expect(abs(before.plannedDistanceMeters - 2400 / 0.36) < 0.5)
         #expect(after.plannedDistanceMeters > 2400 * 2.9)
@@ -96,7 +96,7 @@ struct MicroCycleViewModelPaceHistoryTests {
 
         // Stored behind the week view's back: only a re-read would find it.
         try await store.upsert([easyRun(on: day(4))])
-        viewModel.goToPreviousWeek()
+        viewModel.goToPreviousPeriod()
         await viewModel.load(asOf: day(10))
 
         #expect(viewModel.paceHistory.activityCount == 1)

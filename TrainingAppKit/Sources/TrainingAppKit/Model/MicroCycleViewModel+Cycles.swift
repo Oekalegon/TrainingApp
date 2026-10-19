@@ -14,7 +14,7 @@ public struct CycleContext: Hashable, Sendable {
     /// How hard the micro is meant to be.
     public let loadRole: MicroLoadRole?
     /// The micro's 1-based position (its "Micro N") among the macro's micro-cycles; `nil` without a macro.
-    public let weekInPlan: Int?
+    public let microIndexInPlan: Int?
     /// The micro's length in days (7, 10, 14, …).
     public let lengthInDays: Int
 
@@ -144,13 +144,13 @@ extension MicroCycleViewModel {
     }
 
     /// Fetches the whole of the displayed micro's macro-cycle from the cycle store and records the
-    /// order of its micro-cycles, for ``CycleContext/weekInPlan``. Only the cycles near the displayed
+    /// order of its micro-cycles, for ``CycleContext/microIndexInPlan``. Only the cycles near the displayed
     /// period are in `model.cycles`, so counting there would number a micro from the edge of the
-    /// loaded window. Run from ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)``, so a change to
+    /// loaded window. Run from ``refreshPeriodCachesIfNeeded(asOf:activitiesChanged:)``, so a change to
     /// the plan renumbers too.
     func refreshMicroOrder() async {
         let index = planIndex()
-        guard let micro = micro(containing: displayedWeekStart),
+        guard let micro = micro(containing: displayedPeriodStart),
               let meso = micro.parentID.flatMap({ index.byID[$0] }),
               let macro = meso.level == .macro ? meso : meso.parentID.flatMap({ index.byID[$0] }),
               let all = try? await model.stores.activeCycles(in: macro.dateRange)
@@ -165,22 +165,22 @@ extension MicroCycleViewModel {
         if microOrderByMacro[macro.id] != ids { microOrderByMacro[macro.id] = ids }
     }
 
-    /// Where the period starting `weekStart` (default: the displayed one) sits in the plan, or `nil`
+    /// Where the period starting `periodStart` (default: the displayed one) sits in the plan, or `nil`
     /// when it isn't a planned micro-cycle.
-    public func cycleContext(for weekStart: Date? = nil) -> CycleContext? {
+    public func cycleContext(for periodStart: Date? = nil) -> CycleContext? {
         let index = planIndex()
-        guard let entry = planEntry(containing: weekStart ?? displayedWeekStart, in: index) else { return nil }
+        guard let entry = planEntry(containing: periodStart ?? displayedPeriodStart, in: index) else { return nil }
         let micro = entry.cycle
         let parent = micro.parentID.flatMap { index.byID[$0] }
         let macro = parent?.level == .macro ? parent : parent?.parentID.flatMap { index.byID[$0] }
         let meso = parent?.level == .meso ? parent : nil
-        let weekInPlan = macro
+        let microIndexInPlan = macro
             .flatMap { microOrderByMacro[$0.id] }
             .flatMap { $0.firstIndex(of: micro.id) }
             .map { $0 + 1 }
         return CycleContext(
             macroName: macro?.name, mesoName: meso?.name, microName: micro.name, phase: micro.phase,
-            loadRole: micro.loadRole, weekInPlan: weekInPlan, lengthInDays: entry.period.lengthInDays
+            loadRole: micro.loadRole, microIndexInPlan: microIndexInPlan, lengthInDays: entry.period.lengthInDays
         )
     }
 
@@ -189,6 +189,6 @@ extension MicroCycleViewModel {
     /// the year (MVP1-56).
     public var displayedTitle: String {
         guard let context = cycleContext() else { return "Week \(displayedWeekOfYear)" }
-        return context.weekInPlan.map { "Micro \($0)" } ?? "Micro"
+        return context.microIndexInPlan.map { "Micro \($0)" } ?? "Micro"
     }
 }

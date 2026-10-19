@@ -267,7 +267,7 @@ struct EstimatedValuesTests {
     @Test("the stats bar marks an expected total that includes an estimate, and only that total")
     func statsBarExpectedTotals() async throws {
         let (viewModel, _, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         let timed = workout([.time(1200)])
         try await store.upsert([timed])
         try await store.upsert([PlannedActivity(workoutID: timed.id, date: today.addingTimeInterval(86400))])
@@ -284,7 +284,7 @@ struct EstimatedValuesTests {
     @Test("the stats bar's load is marked when an activity was scored from perceived effort; a set plan load isn't")
     func statsBarEffortLoad() async throws {
         let (viewModel, _, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         let distance = workout([.distance(5000)])
         try await store.upsert([effortActivity(on: today)])
         try await store.upsert([distance])
@@ -304,7 +304,7 @@ struct EstimatedValuesTests {
     @Test("a week whose plans all have a set load and nothing scored from effort shows its expected load plainly")
     func statsBarTargetLoad() async throws {
         let (viewModel, _, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         let timed = workout([.time(1200)])
         try await store.upsert([timed])
         try await store.upsert([
@@ -320,13 +320,13 @@ struct EstimatedValuesTests {
     @Test("the stats bar's flags count only activities up to today and plans from today on")
     func statsBarBoundaries() async throws {
         let (viewModel, _, store) = makeViewModel()
-        let weekStart = viewModel.displayedWeekStart
-        let today = weekStart.addingTimeInterval(2 * 86400)
+        let periodStart = viewModel.displayedPeriodStart
+        let today = periodStart.addingTimeInterval(2 * 86400)
         let timed = workout([.time(1200)])
         try await store.upsert([timed])
         try await store.upsert([
             // Before today: no longer counted as planned, so its estimated load doesn't mark anything.
-            PlannedActivity(workoutID: timed.id, date: weekStart),
+            PlannedActivity(workoutID: timed.id, date: periodStart),
             // From today on, with a load the athlete set: counted, but a target.
             PlannedActivity(workoutID: timed.id, date: today.addingTimeInterval(86400), expectedLoadOverride: 60),
         ])
@@ -343,7 +343,7 @@ struct EstimatedValuesTests {
     @Test("editing a plan's override re-marks a cached stats page, though no count changed")
     func statsBarOverrideEditRefreshes() async throws {
         let (viewModel, model, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         let timed = workout([.time(1200)])
         var plan = PlannedActivity(workoutID: timed.id, date: today.addingTimeInterval(86400))
         try await store.upsert([timed])
@@ -364,7 +364,7 @@ struct EstimatedValuesTests {
     @Test("a plan matched to a completed activity adds nothing to the planned totals or estimate flags, and unlinking brings it back")
     func matchedPlanCountsNowhereAsPlanned() async throws {
         let (viewModel, _, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         let timed = workout([.time(1200)])
         var plan = PlannedActivity(workoutID: timed.id, date: today.addingTimeInterval(86400))
         try await store.upsert([timed])
@@ -396,7 +396,7 @@ struct EstimatedValuesTests {
     @Test("dayMetrics(on:) marks a day's Form by the previous day, matching the static rule")
     func dayMetricsFormRule() async throws {
         let (viewModel, _, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         let timed = workout([.time(1200)])
         // An earlier activity anchors the series before today; nothing is done today, so today is
         // projected and tomorrow's Form with it.
@@ -417,7 +417,7 @@ struct EstimatedValuesTests {
     @Test("a day's Load pill is an estimate when an activity that day was scored from perceived effort (MVP2-127)")
     func dayLoadEstimateFollowsEffortScoredActivities() async throws {
         let (viewModel, _, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         let measuredDay = today.addingTimeInterval(-3 * 86400)
         let effortDay = today.addingTimeInterval(-2 * 86400)
         let mixedDay = today.addingTimeInterval(-86400)
@@ -443,7 +443,7 @@ struct EstimatedValuesTests {
     @Test("an activity's scored load is cached, and refreshed when it changes in place or the athlete does (MVP2-128)")
     func scoredLoadCacheFollowsItsInputs() async throws {
         let (viewModel, model, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         var activity = Activity(source: .manual, sport: .running, start: today, duration: 1800, perceivedExertion: 4)
         try await store.upsert([activity])
         await viewModel.load(asOf: today)
@@ -468,7 +468,7 @@ struct EstimatedValuesTests {
     @Test("an activity deleted from the model is dropped from the scored-load cache")
     func scoredLoadCacheForgetsDeletedActivities() async throws {
         let (viewModel, model, store) = makeViewModel()
-        let today = viewModel.displayedWeekStart
+        let today = viewModel.displayedPeriodStart
         let activity = Activity(source: .manual, sport: .running, start: today, duration: 1800, perceivedExertion: 4)
         try await store.upsert([activity])
         await viewModel.load(asOf: today)
@@ -499,7 +499,7 @@ struct EstimatedValuesTests {
         #expect(!MetricDetailSubject.day(day(1)).isProjected(kind: .form, in: all, calendar: calendar))
         #expect(MetricDetailSubject.day(day(2)).isProjected(kind: .form, in: all, calendar: calendar))
         // A week containing any projected day is an estimate.
-        #expect(MetricDetailSubject.week(day(0)...day(3)).isProjected(kind: .load, in: all, calendar: calendar))
+        #expect(MetricDetailSubject.period(day(0)...day(3)).isProjected(kind: .load, in: all, calendar: calendar))
     }
 
     @Test("the activity sheet flags a perceived-effort load as an estimate, a heart-rate one not")

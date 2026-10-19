@@ -206,14 +206,14 @@ struct SearchViewModelTests {
 
     private func makeMicroCycleViewModel() async -> (InMemoryStore, MicroCycleViewModel, SearchViewModel) {
         let (store, model) = await makeModel()
-        let week = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
-        await week.load(asOf: day(0))
-        return (store, week, week.searchViewModel(library: week.workoutLibraryViewModel()))
+        let microCycle = MicroCycleViewModel(model: model, refresher: FakeRefresher(), today: day(0))
+        await microCycle.load(asOf: day(0))
+        return (store, microCycle, microCycle.searchViewModel(library: microCycle.workoutLibraryViewModel()))
     }
 
     @Test("a plan opened from search far from the displayed week follows an edit in its sheet")
     func openPlanOutsideWindow() async throws {
-        let (store, week, search) = await makeMicroCycleViewModel()
+        let (store, microCycle, search) = await makeMicroCycleViewModel()
         let workout = try BuiltInWorkoutTemplates.easyRun.instantiate(name: "Far away run")
         try await store.upsert([workout])
         let plan = PlannedActivity(workoutID: workout.id, date: day(70))
@@ -222,7 +222,7 @@ struct SearchViewModelTests {
         let result = try #require(search.results(for: "far away", asOf: day(0)).plans.first)
 
         let opened = try #require(await search.open(result))
-        let detail = week.plannedWorkoutDetailViewModel(for: opened, asOf: day(0))
+        let detail = microCycle.plannedWorkoutDetailViewModel(for: opened, asOf: day(0))
 
         #expect(!detail.isDeleted)
         #expect(detail.workout?.id == workout.id)
@@ -234,7 +234,7 @@ struct SearchViewModelTests {
 
     @Test("an activity opened from search far from the displayed week shows its plan link")
     func openActivityOutsideWindow() async throws {
-        let (store, week, search) = await makeMicroCycleViewModel()
+        let (store, microCycle, search) = await makeMicroCycleViewModel()
         let workout = try BuiltInWorkoutTemplates.easyRun.instantiate(name: "Linked far run")
         try await store.upsert([workout])
         let activityID = UUID()
@@ -248,7 +248,7 @@ struct SearchViewModelTests {
 
         let opened = try #require(await search.openActivity(id: result.id))
 
-        #expect(week.planLinkContext(for: opened)?.linkedPlan != nil)
+        #expect(microCycle.planLinkContext(for: opened)?.linkedPlan != nil)
     }
 
     @Test("a query matches only when every word matches some field")

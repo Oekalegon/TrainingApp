@@ -67,7 +67,7 @@ public final class MicroCycleViewModel {
     @ObservationIgnored
     var refinedLoadEstimator: LinkedActivityRefinedEstimator?
 
-    /// Sport-stats pages, cached per week (keyed by that week's `weekStart`) — see
+    /// Sport-stats pages, cached per week (keyed by that week's `periodStart`) — see
     /// ``sportStatsPages(for:asOf:)``'s own doc comment. Not `@ObservationIgnored`: `MicroCycleView`
     /// reads this indirectly through that method, and needs the read tracked the same way a plain
     /// stored property's would be.
@@ -85,31 +85,31 @@ public final class MicroCycleViewModel {
     @ObservationIgnored
     private var sportStatsPagesCachesKey: (activityCount: Int, planCount: Int, workoutCount: Int, athlete: AthleteProfile, today: Date, paceHistoryGeneration: Int, plannedLoadGeneration: Int, plans: Int, activities: Int)?
 
-    /// Each week's heart-rate histogram, cached per week (keyed by that week's `weekStart`) — at
-    /// most 3 entries (``displayedWeekStart`` and its immediate neighbors) at any time, refreshed
-    /// by ``refreshWeekCachesIfNeeded()``. Not `@ObservationIgnored`, for the same reason as
+    /// Each week's heart-rate histogram, cached per week (keyed by that week's `periodStart`) — at
+    /// most 3 entries (``displayedPeriodStart`` and its immediate neighbors) at any time, refreshed
+    /// by ``refreshPeriodCachesIfNeeded()``. Not `@ObservationIgnored`, for the same reason as
     /// ``sportStatsPagesCaches``.
-    private(set) var weekGraphCaches: [DisplayPeriod: HeartRateHistogram] = [:]
-    /// ``histogramFingerprint()`` of `model.activities` as of the last time ``weekGraphCaches`` was
+    private(set) var periodGraphCaches: [DisplayPeriod: HeartRateHistogram] = [:]
+    /// ``histogramFingerprint()`` of `model.activities` as of the last time ``periodGraphCaches`` was
     /// populated — see ``sportStatsPagesCachesKey``'s own doc comment for why a mismatch
     /// invalidates the whole cache rather than trying to single out which weeks actually changed.
     /// A fingerprint rather than the count: a resync can change an activity's heart-rate samples
     /// without changing how many activities there are (MVP2-130).
     @ObservationIgnored
-    private var weekGraphCachesFingerprint: Int?
-    /// `model.athlete` as of the last time ``weekGraphCaches`` was populated. A change (e.g. a new
+    private var periodGraphCachesFingerprint: Int?
+    /// `model.athlete` as of the last time ``periodGraphCaches`` was populated. A change (e.g. a new
     /// max heart rate, MVP2-56) moves the zone boundaries the histogram is shaded against, so it
     /// marks every cached week stale the same way a changed activity fingerprint does.
     @ObservationIgnored
-    private var weekGraphCachesAthlete: AthleteProfile?
+    private var periodGraphCachesAthlete: AthleteProfile?
 
-    /// ``dailyLoadSplit(for:)`` results, cached per week (keyed by that week's `weekStart`) — same
-    /// reasoning as ``sportStatsPagesCaches``: `MicroCycleView.graphPanel(weekStart:isCurrentPage:)` calls
+    /// ``dailyLoadSplit(for:)`` results, cached per week (keyed by that week's `periodStart`) — same
+    /// reasoning as ``sportStatsPagesCaches``: `MicroCycleView.graphPanel(periodStart:isCurrentPage:)` calls
     /// this for all three carousel pages (current plus both static previews) on every touch-move
     /// frame of the week-swipe drag, and unlike ``chartMetrics(for:)`` (a cheap filter over
     /// already-computed `model.metrics`), this does real per-activity TRIMP work
     /// (`StatisticsCalculator.summary(for:athlete:)`) — exactly the MVP1-19 freeze class this
-    /// codebase already built ``sportStatsPagesCaches``/``weekGraphCaches`` to keep out of that path.
+    /// codebase already built ``sportStatsPagesCaches``/``periodGraphCaches`` to keep out of that path.
     private var dailyLoadSplitCaches: [DisplayPeriod: DailyLoadSplit] = [:]
     /// `(model.activities.count, model.plans.count, model.workouts.count)` as of the last time
     /// ``dailyLoadSplitCaches`` was populated — three counts, not just `activityCount` the way
@@ -163,7 +163,7 @@ public final class MicroCycleViewModel {
 
     /// The first day (in the athlete's timezone, respecting `weekStartsOn`) of the period currently
     /// on screen: a calendar week, or a planned micro-cycle (MVP5-107).
-    public private(set) var displayedWeekStart: Date
+    public private(set) var displayedPeriodStart: Date
     /// The number of days on screen: 7 for a calendar week, or a micro-cycle's own length (MVP5-106).
     public private(set) var displayedLengthInDays: Int
     /// The date the athlete last asked to see (today, a picked date, or the start of the period they
@@ -181,9 +181,9 @@ public final class MicroCycleViewModel {
     var peekedCycles: [TrainingCycle] = []
     @ObservationIgnored
     var planIndexCache: PlanIndex?
-    /// The period currently on screen: ``displayedWeekStart`` for ``displayedLengthInDays`` days.
+    /// The period currently on screen: ``displayedPeriodStart`` for ``displayedLengthInDays`` days.
     public var displayedPeriod: DisplayPeriod {
-        DisplayPeriod(start: displayedWeekStart, lengthInDays: displayedLengthInDays)
+        DisplayPeriod(start: displayedPeriodStart, lengthInDays: displayedLengthInDays)
     }
     /// The period starting on `start`, resolved from the plan (see ``period(containing:)``): how the
     /// date-keyed APIs (``chartRange(for:)`` and the caches) turn a start date into a period.
@@ -266,7 +266,7 @@ public final class MicroCycleViewModel {
         )
         let calendar = Self.calendar(for: model.athlete)
         self.calendarCache = (model.athlete.timeZone, model.athlete.weekStartsOn, calendar)
-        self.displayedWeekStart = Self.weekStart(containing: today, calendar: calendar)
+        self.displayedPeriodStart = Self.weekStart(containing: today, calendar: calendar)
         self.displayedLengthInDays = DisplayPeriod.calendarWeekLength
         self.anchorDate = today
     }
@@ -276,7 +276,7 @@ public final class MicroCycleViewModel {
     ///
     /// Deliberately keyed on `model.hasEverImportedActivities`, not `model.activities.isEmpty`:
     /// the latter only reflects whatever range was last loaded (``chartRange``, the 3 weeks around
-    /// ``displayedWeekStart``), so an athlete who connected and has real training history outside
+    /// ``displayedPeriodStart``), so an athlete who connected and has real training history outside
     /// that window would otherwise see the "Connect Health Data" prompt again instead of their
     /// (empty-for-this-week) calendar.
     public var hasNoActivities: Bool {
@@ -301,71 +301,71 @@ public final class MicroCycleViewModel {
     }
 
     /// The athlete's timezone — views should format every date they show with this, not the
-    /// device's default, so displayed dates agree with how `displayedWeekStart`/`weekDates` were
+    /// device's default, so displayed dates agree with how `displayedPeriodStart`/`periodDates` were
     /// actually computed.
     public var athleteTimeZone: TimeZone {
         model.athlete.timeZone
     }
 
     /// The athlete's calendar (timezone + `weekStartsOn` applied) — used to keep the "Select Date"
-    /// picker's own week-row layout consistent with how `displayedWeekStart`/`weekDates` are
+    /// picker's own week-row layout consistent with how `displayedPeriodStart`/`periodDates` are
     /// actually computed, not the device's locale default.
     public var athleteCalendar: Calendar {
         calendar
     }
 
-    /// The days of the displayed period (7 for a calendar week), starting `displayedWeekStart`.
-    public var weekDates: [Date] {
-        weekDates(offsetWeeks: 0)
+    /// The days of the displayed period (7 for a calendar week), starting `displayedPeriodStart`.
+    public var periodDates: [Date] {
+        periodDates(offsetPeriods: 0)
     }
 
-    /// The days of the period `weeks` periods away from ``displayedWeekStart`` (negative for
-    /// earlier, positive for later), without changing ``displayedWeekStart`` itself.
+    /// The days of the period `periods` periods away from ``displayedPeriodStart`` (negative for
+    /// earlier, positive for later), without changing ``displayedPeriodStart`` itself.
     ///
     /// Lets a view render the neighboring weeks (e.g. to peek during a swipe) purely from data
     /// already covered by ``chartRange`` — no navigation state changes, no separate load.
-    public func weekDates(offsetWeeks weeks: Int) -> [Date] {
-        period(offset: weeks).days(calendar: calendar)
+    public func periodDates(offsetPeriods periods: Int) -> [Date] {
+        period(offset: periods).days(calendar: calendar)
     }
 
-    /// ``displayedWeekStart`` and its immediate neighbors — the window ``sportStatsPagesCaches``/
-    /// ``weekGraphCaches`` keep cached, and the only weeks `MicroCycleView`'s carousel ever shows at once.
+    /// ``displayedPeriodStart`` and its immediate neighbors — the window ``sportStatsPagesCaches``/
+    /// ``periodGraphCaches`` keep cached, and the only weeks `MicroCycleView`'s carousel ever shows at once.
     var cachedPeriods: [DisplayPeriod] {
         [period(offset: -1), displayedPeriod, period(offset: 1)]
     }
 
-    /// Completed activities in the period starting `weekStart` (which need not be
-    /// ``displayedWeekStart``), in the same terms ``activities(on:)`` filters a single day by —
+    /// Completed activities in the period starting `periodStart` (which need not be
+    /// ``displayedPeriodStart``), in the same terms ``activities(on:)`` filters a single day by —
     /// used to compute an arbitrary cached week's own graph data.
-    private func activities(forWeekStarting weekStart: Date) -> [Activity] {
-        period(startingAt: weekStart).days(calendar: calendar)
+    private func activities(forPeriodStarting periodStart: Date) -> [Activity] {
+        period(startingAt: periodStart).days(calendar: calendar)
             .flatMap { activities(on: $0) }
     }
 
     /// The range of three periods (the one before, the displayed one, the one after; 3 weeks for a
     /// calendar week, otherwise as long as the plan's neighbors are) the chart covers.
     public var chartRange: ClosedRange<Date> {
-        chartRange(for: displayedWeekStart)
+        chartRange(for: displayedPeriodStart)
     }
 
-    /// The 3-week range `chartRange` would be if ``displayedWeekStart`` were `weekStart` instead —
+    /// The 3-week range `chartRange` would be if ``displayedPeriodStart`` were `periodStart` instead —
     /// used by `MicroCycleView`'s carousel so each page renders its own week's chart rather than
-    /// whichever week happens to be ``displayedWeekStart`` (MVP1-32).
-    public func chartRange(for weekStart: Date) -> ClosedRange<Date> {
-        let period = period(startingAt: weekStart)
+    /// whichever week happens to be ``displayedPeriodStart`` (MVP1-32).
+    public func chartRange(for periodStart: Date) -> ClosedRange<Date> {
+        let period = period(startingAt: periodStart)
         return previousPeriod(of: period).start...nextPeriod(of: period).lastDay(calendar: calendar)
     }
 
     /// The range ``load(asOf:)`` actually fetches from the stores: wide enough to cover not just
-    /// `weekStart`'s own ``chartRange(for:)``, but its immediate neighbors' as well (MVP1-32) — so
+    /// `periodStart`'s own ``chartRange(for:)``, but its immediate neighbors' as well (MVP1-32) — so
     /// `MicroCycleView`'s carousel can render each neighbor page's own complete, correct 3-week chart
     /// continuously (not just after actually navigating there), and a swipe or button navigation
-    /// never finds anything left to load once it flips ``displayedWeekStart``. Deliberately wider
+    /// never finds anything left to load once it flips ``displayedPeriodStart``. Deliberately wider
     /// than ``chartRange(for:)`` itself, which stays exactly 3 weeks — that's still the range each
     /// page's own chart *displays*, just now backed by a `model.metrics` that already reaches far
     /// enough to cover its neighbors' displays too.
-    private func loadRange(for weekStart: Date) -> ClosedRange<Date> {
-        let period = period(startingAt: weekStart)
+    private func loadRange(for periodStart: Date) -> ClosedRange<Date> {
+        let period = period(startingAt: periodStart)
         let previous = previousPeriod(of: period)
         let next = nextPeriod(of: period)
         return previousPeriod(of: previous).start...nextPeriod(of: next).lastDay(calendar: calendar)
@@ -373,24 +373,24 @@ public final class MicroCycleViewModel {
 
     /// `model.metrics` restricted to ``chartRange``, in day order.
     public var chartMetrics: [FitnessMetrics] {
-        chartMetrics(for: displayedWeekStart)
+        chartMetrics(for: displayedPeriodStart)
     }
 
-    /// `model.metrics` restricted to ``chartRange(for:)``'s own range for `weekStart`, in day
+    /// `model.metrics` restricted to ``chartRange(for:)``'s own range for `periodStart`, in day
     /// order — `MicroCycleView`'s carousel uses this (rather than the unparameterized ``chartMetrics``)
     /// so each page renders *that page's own* 3-week window instead of whichever week happens to
-    /// be ``displayedWeekStart`` (MVP1-32).
-    public func chartMetrics(for weekStart: Date) -> [FitnessMetrics] {
-        let range = chartRange(for: weekStart)
+    /// be ``displayedPeriodStart`` (MVP1-32).
+    public func chartMetrics(for periodStart: Date) -> [FitnessMetrics] {
+        let range = chartRange(for: periodStart)
         return model.metrics
             .filter { range.contains($0.day) }
             .sorted { $0.day < $1.day }
     }
 
-    /// The races inside ``chartRange(for:)`` for `weekStart` (see ``chartRaces(in:)``), for the
+    /// The races inside ``chartRange(for:)`` for `periodStart` (see ``chartRaces(in:)``), for the
     /// graph panel's race markers (MVP2-104).
-    public func chartRaces(for weekStart: Date) -> [Race] {
-        chartRaces(in: chartRange(for: weekStart))
+    public func chartRaces(for periodStart: Date) -> [Race] {
+        chartRaces(in: chartRange(for: periodStart))
     }
 
     /// The loaded races inside `range`, in date order, one per day: the most important (primary,
@@ -413,7 +413,7 @@ public final class MicroCycleViewModel {
         return byDay.values.sorted { $0.date < $1.date }
     }
 
-    /// ``chartRange(for:)``'s own range for `weekStart`'s daily load, split into what was actually
+    /// ``chartRange(for:)``'s own range for `periodStart`'s daily load, split into what was actually
     /// performed vs. what's planned (MVP2-30) — for `DailyLoadChartView`'s bars.
     ///
     /// Deliberately *not* `chartMetrics(for:)`'s merged `FitnessMetrics.load`: that figure follows
@@ -431,11 +431,11 @@ public final class MicroCycleViewModel {
     ///
     /// Cached per week: unlike `chartMetrics(for:)` (a cheap filter over already-computed
     /// `model.metrics`), this does real per-activity TRIMP work
-    /// (`StatisticsCalculator.summary(for:athlete:)`), and `MicroCycleView.graphPanel(weekStart:isCurrentPage:)`
+    /// (`StatisticsCalculator.summary(for:athlete:)`), and `MicroCycleView.graphPanel(periodStart:isCurrentPage:)`
     /// calls it for all three carousel pages on every touch-move frame of the week-swipe drag — see
     /// ``dailyLoadSplitCaches``'s own doc comment for why this needs the same per-week caching
     /// ``sportStatsPages(for:asOf:)``/``heartRateHistogram(for:)`` already have.
-    func dailyLoadSplit(for weekStart: Date, asOf today: Date = .now) -> DailyLoadSplit {
+    func dailyLoadSplit(for periodStart: Date, asOf today: Date = .now) -> DailyLoadSplit {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
         let plans = plansFingerprint()
         let activities = activitiesFingerprint()
@@ -449,11 +449,11 @@ public final class MicroCycleViewModel {
             dailyLoadSplitCaches.removeAll()
             dailyLoadSplitCachesKey = (key.0, key.1, key.2, model.athlete, today, plans, activities, plannedLoadGeneration)
         }
-        if let cached = dailyLoadSplitCaches[period(startingAt: weekStart)] {
+        if let cached = dailyLoadSplitCaches[period(startingAt: periodStart)] {
             return cached
         }
-        let split = computeDailyLoadSplit(in: chartRange(for: weekStart), asOf: today)
-        dailyLoadSplitCaches[period(startingAt: weekStart)] = split
+        let split = computeDailyLoadSplit(in: chartRange(for: periodStart), asOf: today)
+        dailyLoadSplitCaches[period(startingAt: periodStart)] = split
         return split
     }
 
@@ -506,38 +506,38 @@ public final class MicroCycleViewModel {
         )
     }
 
-    /// The date range of ``displayedWeekStart`` — the week currently visible in the day list, not
+    /// The date range of ``displayedPeriodStart`` — the week currently visible in the day list, not
     /// necessarily today's. Used to highlight that week's background on the fitness chart, so the
     /// 3-week trend stays visually anchored to whichever week the athlete has scrolled to.
-    public var displayedWeekRange: ClosedRange<Date> {
-        displayedWeekRange(for: displayedWeekStart)
+    public var displayedPeriodRange: ClosedRange<Date> {
+        displayedPeriodRange(for: displayedPeriodStart)
     }
 
-    /// The date range of `weekStart` — used by `MicroCycleView`'s carousel (MVP1-32) so a
+    /// The date range of `periodStart` — used by `MicroCycleView`'s carousel (MVP1-32) so a
     /// previous/next page highlights *its own* week's background rather than
-    /// ``displayedWeekStart``'s.
-    public func displayedWeekRange(for weekStart: Date) -> ClosedRange<Date> {
-        period(startingAt: weekStart).highlightRange(calendar: calendar)
+    /// ``displayedPeriodStart``'s.
+    public func displayedPeriodRange(for periodStart: Date) -> ClosedRange<Date> {
+        period(startingAt: periodStart).highlightRange(calendar: calendar)
     }
 
-    /// The calendar week number of ``displayedWeekStart``, for the week view's title (MVP1-56).
+    /// The calendar week number of ``displayedPeriodStart``, for the week view's title (MVP1-56).
     public var displayedWeekOfYear: Int {
-        calendar.component(.weekOfYear, from: displayedWeekStart)
+        calendar.component(.weekOfYear, from: displayedPeriodStart)
     }
 
     /// A short "Sep 8 – Sep 14, 2026" description of the displayed week, for the subtitle under
     /// ``displayedWeekOfYear`` (MVP1-56) — the year sits on the end date only, unless the week
     /// crosses a year boundary (e.g. "Dec 29, 2026 – Jan 4, 2027"), in which case both ends show
     /// their own year so the range doesn't read as if it were entirely in the later one.
-    public var displayedWeekDateRangeDescription: String {
-        let weekEnd = displayedPeriod.lastDay(calendar: calendar)
+    public var displayedPeriodDateRangeDescription: String {
+        let periodEnd = displayedPeriod.lastDay(calendar: calendar)
         let bareFormat = Date.FormatStyle(calendar: calendar, timeZone: athleteTimeZone)
             .day().month(.abbreviated)
         let withYearFormat = bareFormat.year()
-        let crossesYearBoundary = calendar.component(.year, from: displayedWeekStart)
-            != calendar.component(.year, from: weekEnd)
+        let crossesYearBoundary = calendar.component(.year, from: displayedPeriodStart)
+            != calendar.component(.year, from: periodEnd)
         let startFormat = crossesYearBoundary ? withYearFormat : bareFormat
-        return "\(displayedWeekStart.formatted(startFormat)) – \(weekEnd.formatted(withYearFormat))"
+        return "\(displayedPeriodStart.formatted(startFormat)) – \(periodEnd.formatted(withYearFormat))"
     }
 
     /// Completed activities on `day`, in start-time order.
@@ -745,10 +745,10 @@ public final class MicroCycleViewModel {
     /// main sport's, zero-filled if it had no activity this week), so the pager never has nothing
     /// to show.
     ///
-    /// Convenience for ``displayedWeekStart``'s own pages — see ``sportStatsPages(for:asOf:)``'s
+    /// Convenience for ``displayedPeriodStart``'s own pages — see ``sportStatsPages(for:asOf:)``'s
     /// own doc comment.
     public func sportStatsPages(asOf today: Date = .now) -> [SportStatsPage] {
-        sportStatsPages(for: displayedWeekStart, asOf: today)
+        sportStatsPages(for: displayedPeriodStart, asOf: today)
     }
 
     /// One page per sport for the given week's stats pager (MVP1-52; design doc: "a weekly overview
@@ -758,7 +758,7 @@ public final class MicroCycleViewModel {
     /// sport's, zero-filled if it had no activity that week), so the pager never has nothing to
     /// show.
     ///
-    /// Cached per week (`weekStart`, not just ``displayedWeekStart``): `MicroCycleView` calls this from
+    /// Cached per week (`periodStart`, not just ``displayedPeriodStart``): `MicroCycleView` calls this from
     /// each of its 3 carousel pages' own pinned stats bar, including the previous/next week's,
     /// which re-evaluate on every touch-move frame of the day list's own swipe gesture just like
     /// the current page does. Without a cache keyed per week, each of those frames on each page
@@ -772,7 +772,7 @@ public final class MicroCycleViewModel {
     /// `PlannedWorkoutSheet`). A new ``paceHistory`` invalidates it too: the planned distance and
     /// time are forecast from it. So does a new ``plannedLoadGeneration``: the planned load is refined
     /// from completed plans.
-    public func sportStatsPages(for weekStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
+    public func sportStatsPages(for periodStart: Date, asOf today: Date = .now) -> [SportStatsPage] {
         let key = (model.activities.count, model.plans.count, model.workouts.count)
         let plans = plansFingerprint()
         let activities = activitiesFingerprint()
@@ -789,11 +789,11 @@ public final class MicroCycleViewModel {
                 key.0, key.1, key.2, model.athlete, today, paceHistoryGeneration, plannedLoadGeneration, plans, activities
             )
         }
-        if let cached = sportStatsPagesCaches[period(startingAt: weekStart)] {
+        if let cached = sportStatsPagesCaches[period(startingAt: periodStart)] {
             return cached
         }
-        let pages = computeSportStatsPages(weekStart: weekStart, asOf: today)
-        sportStatsPagesCaches[period(startingAt: weekStart)] = pages
+        let pages = computeSportStatsPages(periodStart: periodStart, asOf: today)
+        sportStatsPagesCaches[period(startingAt: periodStart)] = pages
         return pages
     }
 
@@ -834,10 +834,10 @@ public final class MicroCycleViewModel {
         return hasher.finalize()
     }
 
-    private func computeSportStatsPages(weekStart: Date, asOf today: Date) -> [SportStatsPage] {
-        let current = periodStatsSplit(weekStart: weekStart, asOf: today)
-        let previousWeekStart = previousPeriod(of: period(startingAt: weekStart)).start
-        let previous = periodStatsSplit(weekStart: previousWeekStart, asOf: today)
+    private func computeSportStatsPages(periodStart: Date, asOf today: Date) -> [SportStatsPage] {
+        let current = periodStatsSplit(periodStart: periodStart, asOf: today)
+        let previousPeriodStart = previousPeriod(of: period(startingAt: periodStart)).start
+        let previous = periodStatsSplit(periodStart: previousPeriodStart, asOf: today)
 
         let mainSport = model.athlete.mainSport
         let otherSports = Set(current.actual.keys).union(current.planned.keys)
@@ -861,7 +861,7 @@ public final class MicroCycleViewModel {
         // performed-so-far-plus-still-planned total, and a week further out compares against the
         // week before it's own still-fully-planned total.
         let previousExpectedTotalLoad = previousTotalLoad + previousPlannedTotalLoad
-        let estimates = weekEstimates(weekStart: weekStart, asOf: today)
+        let estimates = periodEstimates(periodStart: periodStart, asOf: today)
         let loadChangeFraction = Self.changeFraction(currentTotalLoad - previousExpectedTotalLoad, of: previousExpectedTotalLoad)
         let expectedLoadChangeFraction = Self.changeFraction(
             (currentTotalLoad + plannedTotalLoad) - previousExpectedTotalLoad, of: previousExpectedTotalLoad
@@ -911,7 +911,7 @@ public final class MicroCycleViewModel {
     /// plans `StatisticsCalculator.periodStatsSplit` counts: activities up to and including today,
     /// plans from today on that aren't yet matched to a completed activity and whose workout is
     /// still in the library.
-    private struct WeekEstimates {
+    private struct PeriodEstimates {
         /// An activity's load was scored from perceived effort rather than heart rate.
         var performedLoad = false
         /// A plan's load is the estimator's figure rather than one the athlete set.
@@ -922,11 +922,11 @@ public final class MicroCycleViewModel {
         var plannedTimeSports: Set<Sport> = []
     }
 
-    private func weekEstimates(weekStart: Date, asOf today: Date) -> WeekEstimates {
+    private func periodEstimates(periodStart: Date, asOf today: Date) -> PeriodEstimates {
         let todayStart = calendar.startOfDay(for: today)
-        let rangeStart = calendar.startOfDay(for: weekStart)
+        let rangeStart = calendar.startOfDay(for: periodStart)
         let rangeEnd = period(startingAt: rangeStart).lastDay(calendar: calendar)
-        var estimates = WeekEstimates()
+        var estimates = PeriodEstimates()
 
         estimates.performedLoad = model.activities.contains { activity in
             let day = calendar.startOfDay(for: activity.start)
@@ -955,16 +955,16 @@ public final class MicroCycleViewModel {
     }
 
     /// Descriptive totals (every sport, not just one), performed and planned independently, for
-    /// the period starting `weekStart` — shared by ``sportStatsPages(asOf:)`` for both the
+    /// the period starting `periodStart` — shared by ``sportStatsPages(asOf:)`` for both the
     /// displayed week and the previous one.
-    private func periodStatsSplit(weekStart: Date, asOf today: Date) -> PeriodStatsSplit {
-        let weekEnd = period(startingAt: weekStart).lastDay(calendar: calendar)
+    private func periodStatsSplit(periodStart: Date, asOf today: Date) -> PeriodStatsSplit {
+        let periodEnd = period(startingAt: periodStart).lastDay(calendar: calendar)
         return statisticsCalculator.periodStatsSplit(
             activities: model.activities,
             plans: model.plans,
             workouts: model.workouts,
             athlete: model.athlete,
-            range: weekStart...weekEnd,
+            range: periodStart...periodEnd,
             asOf: today,
             paceHistory: paceHistory
         )
@@ -1013,43 +1013,43 @@ public final class MicroCycleViewModel {
         }
     }
 
-    /// `weekStart`'s heart-rate histogram, for the graph panel's "Heart Rate Histogram" page
+    /// `periodStart`'s heart-rate histogram, for the graph panel's "Heart Rate Histogram" page
     /// (MVP1-55) —
     /// every completed activity in that week's raw heart-rate samples, binned by
-    /// `HeartRateHistogram.aggregating(_:athlete:)`. Empty until ``refreshWeekCachesIfNeeded()``
-    /// has cached `weekStart` — in practice near-instant for ``displayedWeekStart`` and its
+    /// `HeartRateHistogram.aggregating(_:athlete:)`. Empty until ``refreshPeriodCachesIfNeeded()``
+    /// has cached `periodStart` — in practice near-instant for ``displayedPeriodStart`` and its
     /// immediate neighbors, which are the only weeks ever prefetched (see that method's own doc
     /// comment) and so the only ones `MicroCycleView`'s carousel ever asks for.
-    public func heartRateHistogram(for weekStart: Date) -> HeartRateHistogram {
-        weekGraphCaches[period(startingAt: weekStart)] ?? .empty
+    public func heartRateHistogram(for periodStart: Date) -> HeartRateHistogram {
+        periodGraphCaches[period(startingAt: periodStart)] ?? .empty
     }
 
-    /// Prefetches (and evicts stale entries from) ``weekGraphCaches`` for ``displayedWeekStart``
+    /// Prefetches (and evicts stale entries from) ``periodGraphCaches`` for ``displayedPeriodStart``
     /// and its immediate neighbors, so paging to a neighboring week almost always finds its graph
     /// data already cached — computed while the athlete was still looking at a different week —
     /// instead of needing a fresh async computation on every swipe. Called after every
     /// load/import/dedup that could change the underlying activities, and by `MicroCycleView` whenever
-    /// ``displayedWeekStart`` changes.
+    /// ``displayedPeriodStart`` changes.
     ///
     /// The displayed week itself is computed first, at `.userInitiated` priority, so the graph
     /// panel actually on screen updates as promptly as possible; its neighbors follow at the
     /// lower `.utility` priority, so the scheduler still favors the visible week's own work over
     /// prefetching ones the athlete isn't looking at yet. All still awaited here (structured
     /// concurrency, not a detached fire-and-forget `Task`) — by the time `MicroCycleView`'s own
-    /// `.task(id: displayedWeekStart)` next has anything else to do, the whole 3-week window is
+    /// `.task(id: displayedPeriodStart)` next has anything else to do, the whole 3-week window is
     /// settled, and a caller that only cares about the displayed week's own data (already updated
     /// first) isn't kept waiting by anything else, since `MicroCycleView` never awaits this call itself.
     ///
     /// A changed activity fingerprint or athlete (MVP2-56) marks every currently cached week stale and due for
-    /// recomputation, but deliberately doesn't clear ``weekGraphCaches`` up front to do that —
-    /// `weekGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
+    /// recomputation, but deliberately doesn't clear ``periodGraphCaches`` up front to do that —
+    /// `periodGraphCaches` is an observed, not `@ObservationIgnored`, property, so clearing it here
     /// (synchronously, before this method's first `await`) was visible to
     /// `HeartRateHistogramChartView` as a real, if momentary, "no data" state — the displayed
     /// week's own chart flashing to its empty-state view and back on every week-navigation
     /// `.task(id:)` firing that happened to load a not-yet-seen neighboring week's activities
     /// (changing `activityCount`), even though the
     /// same chart was on screen, correct, immediately before and after. Leaving the stale entry in
-    /// place until ``cacheWeekGraph(weekStart:priority:)`` overwrites it with a fresh one instead
+    /// place until ``cachePeriodGraph(periodStart:priority:)`` overwrites it with a fresh one instead
     /// shows one (very briefly) outdated frame rather than a spurious empty one — never a
     /// user-visible difference in practice, since the underlying activities rarely change whichever
     /// week's own histogram they'd affect this dramatically between one frame and the next.
@@ -1059,26 +1059,26 @@ public final class MicroCycleViewModel {
     ///   - activitiesChanged: `true` after an import, resync, dedup, link, join or delete, which can
     ///     change the stored activities the pace history and the refined planned load are built from
     ///     without anything the week view itself keys on changing; forces a refresh of both.
-    public func refreshWeekCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
+    public func refreshPeriodCachesIfNeeded(asOf today: Date = .now, activitiesChanged: Bool = false) async {
         if activitiesChanged { fieldTestFailures.removeAll() }
         let fingerprint = histogramFingerprint()
-        let inputsChanged = weekGraphCachesFingerprint != fingerprint
-            || weekGraphCachesAthlete != model.athlete
+        let inputsChanged = periodGraphCachesFingerprint != fingerprint
+            || periodGraphCachesAthlete != model.athlete
         if inputsChanged {
-            weekGraphCachesFingerprint = fingerprint
-            weekGraphCachesAthlete = model.athlete
+            periodGraphCachesFingerprint = fingerprint
+            periodGraphCachesAthlete = model.athlete
         }
         let window = cachedPeriods.map(\.start)
         let windowSet = Set(cachedPeriods)
-        weekGraphCaches = weekGraphCaches.filter { windowSet.contains($0.key) }
+        periodGraphCaches = periodGraphCaches.filter { windowSet.contains($0.key) }
 
-        let displayedWeekStart = self.displayedWeekStart
-        if inputsChanged || weekGraphCaches[displayedPeriod] == nil {
-            await cacheWeekGraph(weekStart: displayedWeekStart, priority: .userInitiated)
+        let displayedPeriodStart = self.displayedPeriodStart
+        if inputsChanged || periodGraphCaches[displayedPeriod] == nil {
+            await cachePeriodGraph(periodStart: displayedPeriodStart, priority: .userInitiated)
         }
-        for weekStart in window where weekStart != displayedWeekStart
-            && (inputsChanged || weekGraphCaches[period(startingAt: weekStart)] == nil) {
-            await cacheWeekGraph(weekStart: weekStart, priority: .utility)
+        for periodStart in window where periodStart != displayedPeriodStart
+            && (inputsChanged || periodGraphCaches[period(startingAt: periodStart)] == nil) {
+            await cachePeriodGraph(periodStart: periodStart, priority: .utility)
         }
         await refreshMicroOrder()
         await refreshPaceHistoryIfNeeded(asOf: today, force: activitiesChanged)
@@ -1086,45 +1086,45 @@ public final class MicroCycleViewModel {
     }
 
     /// Computes one week's heart-rate histogram off the main actor and stores it in
-    /// ``weekGraphCaches``, unless the cache window has moved on again by the time it lands (a
-    /// stale result for a week no longer near ``displayedWeekStart`` is simply dropped, not
+    /// ``periodGraphCaches``, unless the cache window has moved on again by the time it lands (a
+    /// stale result for a week no longer near ``displayedPeriodStart`` is simply dropped, not
     /// cached).
-    private func cacheWeekGraph(weekStart: Date, priority: TaskPriority) async {
-        let fingerprint = weekGraphCachesFingerprint
-        let weekActivities = activities(forWeekStarting: weekStart)
+    private func cachePeriodGraph(periodStart: Date, priority: TaskPriority) async {
+        let fingerprint = periodGraphCachesFingerprint
+        let periodActivities = activities(forPeriodStarting: periodStart)
         let athlete = model.athlete
         let statisticsCalculator = self.statisticsCalculator
         // The week's own end (not `.now`/today), so `HeartRateHistogram.aggregating`'s zone
         // boundaries reflect the zones actually in effect that week -- a week long in the past must
         // not shade against the athlete's *current* zones, which could be way off by then
         // (MVP1-78 follow-up).
-        let asOf = displayedWeekRange(for: weekStart).upperBound
+        let asOf = displayedPeriodRange(for: periodStart).upperBound
 
         let histogram = await Task.detached(priority: priority) {
             HeartRateHistogram.aggregating(
-                weekActivities, athlete: athlete, asOf: asOf, statisticsCalculator: statisticsCalculator
+                periodActivities, athlete: athlete, asOf: asOf, statisticsCalculator: statisticsCalculator
             )
         }.value
-        guard isStillCacheable(weekStart, fingerprint: fingerprint), athlete == model.athlete else { return }
-        weekGraphCaches[period(startingAt: weekStart)] = histogram
+        guard isStillCacheable(periodStart, fingerprint: fingerprint), athlete == model.athlete else { return }
+        periodGraphCaches[period(startingAt: periodStart)] = histogram
     }
 
-    /// Whether a background computation for `weekStart` (started under `fingerprint`, the one
-    /// ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`` had just stored) is still worth
+    /// Whether a background computation for `periodStart` (started under `fingerprint`, the one
+    /// ``refreshPeriodCachesIfNeeded(asOf:activitiesChanged:)`` had just stored) is still worth
     /// storing — `false` once either has moved on, since the result is now either stale (a
     /// subsequent import changed the underlying activities) or for a week that's fallen outside the
     /// 3-week window this cache keeps.
     ///
-    /// Compares against the stored ``weekGraphCachesFingerprint`` rather than re-hashing every
+    /// Compares against the stored ``periodGraphCachesFingerprint`` rather than re-hashing every
     /// sample: a refresh that sees changed data stores its new fingerprint first, so an older
     /// result is dropped here, and data that changed before any refresh is caught by the next one.
-    private func isStillCacheable(_ weekStart: Date, fingerprint: Int?) -> Bool {
-        cachedPeriods.contains(period(startingAt: weekStart)) && fingerprint == weekGraphCachesFingerprint
+    private func isStillCacheable(_ periodStart: Date, fingerprint: Int?) -> Bool {
+        cachedPeriods.contains(period(startingAt: periodStart)) && fingerprint == periodGraphCachesFingerprint
     }
 
     /// A hash of what the heart-rate histogram reads from each activity — id, start, duration and
     /// every heart-rate sample — so activities changed in place (same count) still invalidate
-    /// ``weekGraphCaches`` (MVP2-130). Unlike ``activitiesFingerprint()`` it hashes the samples
+    /// ``periodGraphCaches`` (MVP2-130). Unlike ``activitiesFingerprint()`` it hashes the samples
     /// themselves: it only runs when the week caches refresh, not on the week-swipe path, and the
     /// histogram is exactly what those samples feed.
     private func histogramFingerprint() -> Int {
@@ -1276,23 +1276,23 @@ public final class MicroCycleViewModel {
     }
 
     /// Moves the displayed week forward by one week.
-    public func goToNextWeek() {
+    public func goToNextPeriod() {
         show(nextPeriod(of: displayedPeriod))
     }
 
     /// Moves the displayed week back by one week.
-    public func goToPreviousWeek() {
+    public func goToPreviousPeriod() {
         show(previousPeriod(of: displayedPeriod))
     }
 
     /// Jumps back to the week containing `today`.
     public func goToToday(asOf today: Date = .now) {
-        goToWeek(containing: today)
+        goToPeriod(containing: today)
     }
 
     /// Jumps to the week containing `date` — the "Select Date" toolbar action's destination,
     /// for an arbitrary date rather than today's.
-    public func goToWeek(containing date: Date) {
+    public func goToPeriod(containing date: Date) {
         show(period(containing: date), anchor: date)
     }
 
@@ -1300,7 +1300,7 @@ public final class MicroCycleViewModel {
     /// date for a jump, the period's start when paging.
     func show(_ period: DisplayPeriod, anchor: Date? = nil) {
         anchorDate = anchor ?? period.start
-        displayedWeekStart = period.start
+        displayedPeriodStart = period.start
         displayedLengthInDays = period.lengthInDays
     }
 
@@ -1309,7 +1309,7 @@ public final class MicroCycleViewModel {
     func refreshDisplayedPeriod() {
         let resolved = period(containing: anchorDate)
         guard resolved != displayedPeriod else { return }
-        displayedWeekStart = resolved.start
+        displayedPeriodStart = resolved.start
         displayedLengthInDays = resolved.lengthInDays
     }
 
@@ -1320,14 +1320,14 @@ public final class MicroCycleViewModel {
     /// A failed load leaves `model` as it was, and the sheet opens anyway.
     public func ensureLoaded(around date: Date, asOf today: Date = .now) async {
         let range = loadRange(for: period(containing: date).start)
-        let currentLoadRange = loadRange(for: displayedWeekStart)
+        let currentLoadRange = loadRange(for: displayedPeriodStart)
         if currentLoadRange.contains(range.lowerBound), currentLoadRange.contains(range.upperBound) { return }
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
         try? await model.load(in: unionRange, asOf: today)
-        await refreshWeekCachesIfNeeded(asOf: today)
+        await refreshPeriodCachesIfNeeded(asOf: today)
     }
 
-    /// Loads ``loadRange(for:)`` for ``displayedWeekStart`` from the stores into `model`
+    /// Loads ``loadRange(for:)`` for ``displayedPeriodStart`` from the stores into `model`
     /// — wider than ``chartRange`` itself, so `MicroCycleView`'s neighbor carousel pages already have
     /// their own complete chart data before the athlete ever swipes to them (MVP1-32). Errors are
     /// swallowed — a failed load leaves `model` exactly as it was (`TrainingModel.load(in:)`'s own
@@ -1337,12 +1337,12 @@ public final class MicroCycleViewModel {
         await peekCycles()
         refreshDisplayedPeriod()
         do {
-            try await model.load(in: loadRange(for: displayedWeekStart), asOf: today)
+            try await model.load(in: loadRange(for: displayedPeriodStart), asOf: today)
             refreshDisplayedPeriod()
             // Only a load that worked says whether Health was ever imported (MVP2-147).
             onboarding.markLoaded()
         } catch {}
-        await refreshWeekCachesIfNeeded(asOf: today)
+        await refreshPeriodCachesIfNeeded(asOf: today)
     }
 
     /// Looks up whether the athlete was never asked to allow distance (MVP2-146), for the "Allow
@@ -1424,10 +1424,10 @@ public final class MicroCycleViewModel {
     /// week caches (see ``metrics(in:asOf:)`` for why the union): the single load every `…(in:)`
     /// chart-range read goes through.
     private func loadWindow(covering range: ClosedRange<Date>, asOf today: Date) async {
-        let currentLoadRange = loadRange(for: displayedWeekStart)
+        let currentLoadRange = loadRange(for: displayedPeriodStart)
         let unionRange = min(range.lowerBound, currentLoadRange.lowerBound)...max(range.upperBound, currentLoadRange.upperBound)
         try? await model.load(in: unionRange, asOf: today)
-        await refreshWeekCachesIfNeeded(asOf: today)
+        await refreshPeriodCachesIfNeeded(asOf: today)
     }
 
     /// `model.metrics` inside `range`, in day order, without loading anything.
@@ -1462,7 +1462,7 @@ public final class MicroCycleViewModel {
         isRefreshing = true
         defer { isRefreshing = false }
         try? await refresher.refreshActivities(asOf: today)
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
@@ -1474,7 +1474,7 @@ public final class MicroCycleViewModel {
     ///
     /// - Parameter today: Passed through to the cache refresh and the suggestion check.
     public func activitiesImportedElsewhere(asOf today: Date = .now) async {
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
 
@@ -1492,7 +1492,7 @@ public final class MicroCycleViewModel {
         } catch {
             return
         }
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
@@ -1510,7 +1510,7 @@ public final class MicroCycleViewModel {
         isResyncing = true
         defer { isResyncing = false }
         try? await refresher.resyncActivities(asOf: today)
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
         await checkForMaxHeartRateSuggestion(asOf: today)
     }
@@ -1528,7 +1528,7 @@ public final class MicroCycleViewModel {
         isDeduplicating = true
         defer { isDeduplicating = false }
         try? await model.deduplicateActivities(asOf: today)
-        await refreshWeekCachesIfNeeded(asOf: today, activitiesChanged: true)
+        await refreshPeriodCachesIfNeeded(asOf: today, activitiesChanged: true)
         requestWatchSync(asOf: today)
     }
 

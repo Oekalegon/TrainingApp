@@ -13,7 +13,7 @@ extension MicroCycleViewModel {
     /// the athlete (the zones that score each completed run) and the library's workouts (the
     /// references hold copies of them, so an edit that keeps the count must count too). Changes to the
     /// activities and plans themselves arrive through
-    /// `refreshWeekCachesIfNeeded(asOf:activitiesChanged:)`, which forces a refresh.
+    /// `refreshPeriodCachesIfNeeded(asOf:activitiesChanged:)`, which forces a refresh.
     struct PlannedLoadKey: Equatable {
         let athlete: AthleteProfile
         let workouts: Int
@@ -27,7 +27,7 @@ extension MicroCycleViewModel {
     /// no recomputation. Building the estimator reads the whole plan history and scores every completed
     /// activity (see below for how the model avoids doing that more than once per change), which is why
     /// this runs after imports, links and library or athlete changes, not on every week swipe, and why
-    /// it runs last in ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)``: the graphs and the pace
+    /// it runs last in ``refreshPeriodCachesIfNeeded(asOf:activitiesChanged:)``: the graphs and the pace
     /// history don't wait for it.
     ///
     /// Overlapping refreshes (a pull-to-refresh during a link, say) each take a token, and only the

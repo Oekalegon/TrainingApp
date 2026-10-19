@@ -104,12 +104,12 @@ struct MicroCycleViewModelAthleteEditingTests {
     }
 
     @Test("changing the week start moves the week grouping and keeps the displayed day in view")
-    func weekStartChange() async {
+    func periodStartChange() async {
         let (viewModel, model, _) = makeViewModel(
             athlete: AthleteProfile.fixture(timeZoneIdentifier: "UTC")
         )
         await viewModel.load(asOf: now)
-        let before = viewModel.displayedWeekStart
+        let before = viewModel.displayedPeriodStart
         let calendarBefore = viewModel.athleteCalendar
         #expect(calendarBefore.component(.weekday, from: before) == Weekday.monday.rawValue)
 
@@ -117,9 +117,9 @@ struct MicroCycleViewModelAthleteEditingTests {
 
         #expect(model.athlete.weekStartsOn == .sunday)
         #expect(viewModel.athleteCalendar.firstWeekday == Weekday.sunday.rawValue)
-        #expect(viewModel.athleteCalendar.component(.weekday, from: viewModel.displayedWeekStart) == Weekday.sunday.rawValue)
+        #expect(viewModel.athleteCalendar.component(.weekday, from: viewModel.displayedPeriodStart) == Weekday.sunday.rawValue)
         // The new week still contains the day the old one started on.
-        #expect(viewModel.weekDates.contains { viewModel.athleteCalendar.isDate($0, inSameDayAs: before) })
+        #expect(viewModel.periodDates.contains { viewModel.athleteCalendar.isDate($0, inSameDayAs: before) })
     }
 
     @Test("changing the time zone regroups the days: the calendar, the week start and the athlete's zone all follow")
@@ -133,7 +133,7 @@ struct MicroCycleViewModelAthleteEditingTests {
         #expect(model.athlete.timeZone == auckland)
         #expect(viewModel.athleteTimeZone == auckland)
         #expect(viewModel.athleteCalendar.timeZone == auckland)
-        #expect(viewModel.athleteCalendar.startOfDay(for: viewModel.displayedWeekStart) == viewModel.displayedWeekStart)
+        #expect(viewModel.athleteCalendar.startOfDay(for: viewModel.displayedPeriodStart) == viewModel.displayedPeriodStart)
         #expect(try await store.athleteProfile()?.timeZone == auckland)
     }
 

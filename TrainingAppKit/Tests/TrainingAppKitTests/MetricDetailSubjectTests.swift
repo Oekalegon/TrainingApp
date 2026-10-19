@@ -36,24 +36,24 @@ struct MetricDetailSubjectTests {
         #expect(result.map(\.load) == [20])
     }
 
-    @Test(".week subject's metrics(in:calendar:) includes every day from the start up to (not including) the end")
-    func weekIncludesSevenDaysHalfOpen() {
-        let weekStart = day(0)
-        let weekRange = weekStart...day(7)
+    @Test(".period subject's metrics(in:calendar:) includes every day from the start up to (not including) the end")
+    func periodIncludesSevenDaysHalfOpen() {
+        let periodStart = day(0)
+        let periodRange = periodStart...day(7)
         let all = (0...7).map { metrics(day: day($0), load: Double($0)) }
 
-        let result = MetricDetailSubject.week(weekRange).metrics(in: all, calendar: calendar)
+        let result = MetricDetailSubject.period(periodRange).metrics(in: all, calendar: calendar)
 
         // day(7) is the *next* week's own start (range.upperBound), not part of this week.
         #expect(result.map(\.load) == [0, 1, 2, 3, 4, 5, 6])
     }
 
-    @Test(".week subject's metrics(in:calendar:) excludes a point exactly on range.upperBound")
-    func weekExcludesUpperBoundExactly() {
-        let weekRange = day(0)...day(7)
+    @Test(".period subject's metrics(in:calendar:) excludes a point exactly on range.upperBound")
+    func periodExcludesUpperBoundExactly() {
+        let periodRange = day(0)...day(7)
         let all = [metrics(day: day(7), load: 999)]
 
-        let result = MetricDetailSubject.week(weekRange).metrics(in: all, calendar: calendar)
+        let result = MetricDetailSubject.period(periodRange).metrics(in: all, calendar: calendar)
 
         #expect(result.isEmpty)
     }
@@ -80,16 +80,16 @@ struct MetricDetailSubjectTests {
         #expect(text.contains("2026"))
     }
 
-    @Test(".week subject's dateText(calendar:) shows the range's own last actual day, not range.upperBound")
-    func weekDateTextUsesLastActualDay() {
+    @Test(".period subject's dateText(calendar:) shows the range's own last actual day, not range.upperBound")
+    func periodDateTextUsesLastActualDay() {
         var start = DateComponents()
         start.year = 2026
         start.month = 9
         start.day = 14
-        let weekStart = calendar.date(from: start)!
-        let weekRange = weekStart...calendar.date(byAdding: .day, value: 7, to: weekStart)!
+        let periodStart = calendar.date(from: start)!
+        let periodRange = periodStart...calendar.date(byAdding: .day, value: 7, to: periodStart)!
 
-        let text = MetricDetailSubject.week(weekRange).dateText(calendar: calendar)
+        let text = MetricDetailSubject.period(periodRange).dateText(calendar: calendar)
 
         #expect(text.contains("Sep"))
         #expect(text.contains("14"))

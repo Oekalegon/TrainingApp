@@ -6,7 +6,7 @@ import TrainingCore
 /// planned-vs-performed bars `DailyLoadChartView` plots (MVP2-31, so paging between the two
 /// agrees), but with `subject` highlighted at full opacity against every other day dimmed, rather
 /// than only distinguishing planned from performed. A still-planned day still renders from its own
-/// estimated TRIMP rather than a blank bar, so a `.day` subject falling on one (or a `.week`
+/// estimated TRIMP rather than a blank bar, so a `.day` subject falling on one (or a `.period`
 /// subject spanning one) isn't left looking empty.
 struct LoadDetailChartView: View {
     let actualLoads: [DailyLoad]
@@ -39,7 +39,7 @@ struct LoadDetailChartView: View {
     private func isHighlighted(_ day: Date) -> Bool {
         switch subject {
         case .day(let touchedDay): return calendar.isDate(day, inSameDayAs: touchedDay)
-        case .week(let range): return day >= range.lowerBound && day < range.upperBound
+        case .period(let range): return day >= range.lowerBound && day < range.upperBound
         }
     }
 
@@ -190,7 +190,7 @@ struct FitnessTrendDetailChartView: View {
     /// The x-axis span `highlightMark` shades — a single day's own point ± 12 hours for a `.day`
     /// subject (a one-day-wide band centered on the day's own plotted point, rather than sitting at
     /// the left edge of a `day...(day + 1 day)` span), or the whole week's own range as-is for a
-    /// `.week` subject. For `.day`, snaps to the real data point's own `day` value if `metrics` has
+    /// `.period` subject. For `.day`, snaps to the real data point's own `day` value if `metrics` has
     /// one, rather than the tapped `Date` as-is -- keeping the mark pixel-aligned with that day's
     /// line points even if the tapped `Date` (built from `MicroCycleViewModel`'s own day list) and
     /// `FitnessMetrics.day` (built inside TrainingKit) aren't bit-identical for the same calendar
@@ -201,13 +201,13 @@ struct FitnessTrendDetailChartView: View {
             let markedDay = metrics.first { calendar.isDate($0.day, inSameDayAs: touchedDay) }?.day ?? touchedDay
             let halfDay: TimeInterval = 12 * 60 * 60
             return markedDay.addingTimeInterval(-halfDay)...markedDay.addingTimeInterval(halfDay)
-        case .week(let range):
+        case .period(let range):
             return range
         }
     }
 
     /// A background band marking the subject — one day wide for a `.day` subject, the whole week
-    /// wide for a `.week` one — the same treatment (`Color.primary.opacity(0.1)`)
+    /// wide for a `.period` one — the same treatment (`Color.primary.opacity(0.1)`)
     /// `FitnessChartView`'s own week-highlight band uses, rather than a thin rule line.
     @ChartContentBuilder
     private var dayHighlightMark: some ChartContent {

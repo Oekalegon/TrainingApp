@@ -151,8 +151,8 @@ struct WorkoutLibraryViewModelTests {
         let (_, model) = await makeModel()
         let scheduler = FakeScheduler()
         let sync = WatchScheduleSync(model: model, scheduler: scheduler, defaults: scratch.defaults)
-        let week = MicroCycleViewModel(model: model, refresher: FakeRefresher(), watchSync: sync, today: day(0))
-        let library = week.workoutLibraryViewModel()
+        let microCycle = MicroCycleViewModel(model: model, refresher: FakeRefresher(), watchSync: sync, today: day(0))
+        let library = microCycle.workoutLibraryViewModel()
 
         await sync.setEnabled(false, asOf: day(0)).value
         let off = library.makePlanner(for: BuiltInWorkoutTemplates.easyRun, date: day(0))

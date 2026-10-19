@@ -144,7 +144,7 @@ One of: **Merge** / **Merge with fixes** (list them) / **Needs rework** (explain
   with a test, not a private computed property in a view.
 - **Injectable today.** Logic takes `asOf:` (cf. `isPast(_:asOf:)`, `minimumDate(asOf:)`) and
   never reads `.now` directly, so behavior is deterministic and testable.
-- **Caches** (`InputKeyedCache`, `weekGraphCaches`, `sportStatsPagesCaches`, the card caches in
+- **Caches** (`InputKeyedCache`, `periodGraphCaches`, `sportStatsPagesCaches`, the card caches in
   `MicroCycleViewModel+CardCaches.swift`) must be keyed on *every* input the value depends on. For
   example, `dailyLoadSplit` depends on activity count, plan count, workout count **and** today;
   a plan or workout can change without any activity changing.

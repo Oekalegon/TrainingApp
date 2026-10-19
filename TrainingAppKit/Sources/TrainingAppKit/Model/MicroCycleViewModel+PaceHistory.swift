@@ -18,7 +18,7 @@ extension MicroCycleViewModel {
     /// athlete (zones, pace model), the library (linked activities' steps) and the day (the range's
     /// end). Deliberately nothing about the loaded weeks: those change on every week swipe while
     /// the 180-day history doesn't. Changes to the stored activities themselves arrive through
-    /// `refreshWeekCachesIfNeeded(asOf:activitiesChanged:)` instead.
+    /// `refreshPeriodCachesIfNeeded(asOf:activitiesChanged:)` instead.
     struct PaceHistoryKey: Equatable {
         let athlete: AthleteProfile
         let workoutCount: Int
@@ -26,7 +26,7 @@ extension MicroCycleViewModel {
     }
 
     /// Has the model re-read the last ``paceHistoryDays`` days of activities into ``paceHistory``
-    /// when the key changed or `force` is set. Called from ``refreshWeekCachesIfNeeded(asOf:activitiesChanged:)``,
+    /// when the key changed or `force` is set. Called from ``refreshPeriodCachesIfNeeded(asOf:activitiesChanged:)``,
     /// which forces it after an import, resync, dedup, link, join or delete.
     ///
     /// ``paceHistoryGeneration`` (and with it every cached card and stats page that forecasts from

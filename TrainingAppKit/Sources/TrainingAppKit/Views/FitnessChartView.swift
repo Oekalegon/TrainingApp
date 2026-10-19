@@ -9,10 +9,10 @@ import TrainingCore
 /// `DailyLoadChartView`.
 struct FitnessChartView: View {
     let metrics: [FitnessMetrics]
-    /// Date range of the week currently visible in the day list (`MicroCycleViewModel.displayedWeekRange`),
+    /// Date range of the week currently visible in the day list (`MicroCycleViewModel.displayedPeriodRange`),
     /// shaded behind the trend line so the 3-week chart stays visually anchored to whichever week
     /// the athlete has scrolled to.
-    let displayedWeekRange: ClosedRange<Date>
+    let displayedPeriodRange: ClosedRange<Date>
     /// The races in the chart's window (one per day, see `MicroCycleViewModel.chartRaces(for:)`), each
     /// marked with a solid vertical rule and an outlined A/B/C circle at the top of the plot
     /// (MVP2-104).
@@ -55,10 +55,10 @@ struct FitnessChartView: View {
     }
 
     @ChartContentBuilder
-    private var weekHighlightMark: some ChartContent {
+    private var periodHighlightMark: some ChartContent {
         RectangleMark(
-            xStart: .value("Week start", displayedWeekRange.lowerBound),
-            xEnd: .value("Week end", displayedWeekRange.upperBound)
+            xStart: .value("Week start", displayedPeriodRange.lowerBound),
+            xEnd: .value("Week end", displayedPeriodRange.upperBound)
         )
         .foregroundStyle(Color.primary.opacity(0.1))
     }
@@ -112,7 +112,7 @@ struct FitnessChartView: View {
     private var chart: some View {
         Chart {
             zoneBandMarks
-            weekHighlightMark
+            periodHighlightMark
             rawLineMarks
             smoothedLineMarks
         }

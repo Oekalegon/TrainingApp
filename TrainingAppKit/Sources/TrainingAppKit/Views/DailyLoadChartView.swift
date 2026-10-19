@@ -22,8 +22,8 @@ struct DailyLoadChartView: View {
     /// reliably provide the window's true first/last day from.
     let metrics: [FitnessMetrics]
     /// Date range of the week currently visible in the day list, shaded behind the bars — same
-    /// role as `FitnessChartView.displayedWeekRange`.
-    let displayedWeekRange: ClosedRange<Date>
+    /// role as `FitnessChartView.displayedPeriodRange`.
+    let displayedPeriodRange: ClosedRange<Date>
     /// The races in the chart's window (one per day, see `MicroCycleViewModel.chartRaces(for:)`), marked
     /// like `FitnessChartView` marks them (MVP2-104).
     let races: [Race]
@@ -57,8 +57,8 @@ struct DailyLoadChartView: View {
 
             Chart {
                 RectangleMark(
-                    xStart: .value("Week start", displayedWeekRange.lowerBound),
-                    xEnd: .value("Week end", displayedWeekRange.upperBound)
+                    xStart: .value("Week start", displayedPeriodRange.lowerBound),
+                    xEnd: .value("Week end", displayedPeriodRange.upperBound)
                 )
                 .foregroundStyle(Color.primary.opacity(0.1))
 

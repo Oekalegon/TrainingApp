@@ -318,13 +318,13 @@ struct HeartRateHistogramTests {
             ]
         )
 
-        let pastWeekHistogram = HeartRateHistogram.aggregating([], athlete: athlete, asOf: date(86400))
-        let currentWeekHistogram = HeartRateHistogram.aggregating(
+        let pastPeriodHistogram = HeartRateHistogram.aggregating([], athlete: athlete, asOf: date(86400))
+        let currentPeriodHistogram = HeartRateHistogram.aggregating(
             [], athlete: athlete, asOf: date(31 * 86400)
         )
 
-        let pastBoundaries = try #require(pastWeekHistogram.zoneBoundariesBPM)
-        let currentBoundaries = try #require(currentWeekHistogram.zoneBoundariesBPM)
+        let pastBoundaries = try #require(pastPeriodHistogram.zoneBoundariesBPM)
+        let currentBoundaries = try #require(currentPeriodHistogram.zoneBoundariesBPM)
         // Karvonen 50% HRR point for the older settings: 50 + 0.5*(200-50).
         #expect(pastBoundaries.first == 125)
         // ...vs. 55 + 0.5*(210-55) for the newer ones -- proving `asOf`, not "always the athlete's
