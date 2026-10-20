@@ -87,7 +87,7 @@ struct RunAvailabilityDayView: View {
                 } header: {
                     Text("Track")
                 } footer: {
-                    Text("Switch on if you can get to a track on this day. The plan will then put track sessions on days with a track. Today's plans don't need one yet, since interval sessions can be run anywhere.")
+                    Text("Switch on if you can get to a track on this day. The plan will then put track sessions on days with a track.")
                 }
                 Section {
                     ForEach(RunType.allCases, id: \.self) { type in
