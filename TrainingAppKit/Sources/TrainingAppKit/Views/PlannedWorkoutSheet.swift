@@ -13,7 +13,7 @@ extension PlanRule {
         case .longestRun: "Longest run"
         case .intensityDistribution: "Intensity distribution"
         case .hardSessionSpacing: "Hard session spacing"
-        case .hardSessionsPerMicro: "Hard sessions per week"
+        case .hardSessionsPerMicro: "Hard sessions per micro"
         }
     }
 }

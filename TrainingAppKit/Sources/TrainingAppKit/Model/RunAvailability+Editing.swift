@@ -11,12 +11,14 @@ extension RunAvailability {
 
     /// The availability with `weekday` selected or cleared. Selecting a day allows all three parts
     /// of the day (the athlete may switch some off); clearing it removes the day. Either way the
-    /// maximum number of runs goes back to the default of 1 (MVP5-132), so a day switched on again
-    /// never comes back with an earlier choice.
+    /// maximum number of runs goes back to the default of 1 (MVP5-132) and the track to unavailable (MVP5-128), so a day
+    /// switched on again never comes back with an earlier choice.
     func togglingDay(_ weekday: Weekday) -> RunAvailability {
         var copy = self
         copy[weekday] = isAvailable(on: weekday) ? [] : Set(DaySlot.allCases)
         copy.setRuns(1, on: weekday)
+        // Track goes back to the default too (MVP5-128), so a day switched on again starts clean.
+        copy = copy.settingTrack(false, on: weekday)
         return copy
     }
 
@@ -30,7 +32,10 @@ extension RunAvailability {
         if slots.contains(slot) { slots.remove(slot) } else { slots.insert(slot) }
         copy[weekday] = slots
         // A cleared day starts again from the default of one run, like `togglingDay`.
-        if slots.isEmpty { copy.setRuns(1, on: weekday) }
+        if slots.isEmpty {
+            copy.setRuns(1, on: weekday)
+            copy = copy.settingTrack(false, on: weekday)
+        }
         return copy
     }
 

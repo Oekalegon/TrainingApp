@@ -59,6 +59,14 @@ struct RunAvailabilitySlotOptionsTests {
         // The last part off clears the day, which then has no track to show.
         let cleared = availability.togglingSlot(.morning, on: .monday).togglingSlot(.evening, on: .monday)
         #expect(!cleared.hasTrack(on: .monday))
+        #expect(cleared == RunAvailability())
+    }
+
+    @Test("switching a day off and on again starts without a track")
+    func dayOffAndOn() {
+        let availability = RunAvailability().togglingDay(.monday).settingTrack(true, on: .monday)
+        #expect(availability.togglingDay(.monday).togglingDay(.monday).hasTrack(on: .monday) == false)
+        #expect(availability.togglingDay(.monday) == RunAvailability())
     }
 
     @Test("availability stored without slot options has no track")
