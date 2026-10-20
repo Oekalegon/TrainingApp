@@ -2,15 +2,14 @@ import SwiftUI
 import TrainingCore
 
 /// One weekday of Running Availability (MVP5-105, MVP5-112, MVP5-128), opened from the list of weekdays. Four sections, the choices
-/// being selectable list rows except the number of runs and the slot options:
+/// being selectable list rows except the number of runs and the track switch:
 ///
 /// 1. The weekday (large) with a short explanation, the switch "Can run on <weekday>" and, for an available day with
 ///    more than one part, the maximum number of runs: a compact segmented control (1 up to the selected parts) at
 ///    the trailing edge of the title's row, with its explanation below.
 /// 2. The parts of the day (morning, afternoon, evening), any combination. Switching the last one off switches
 ///    the day off; switching the day on selects all three.
-/// 3. For each selected part, the switches "Long run possible" and "Track available" (MVP5-128, `SlotOptions`), with a
-///    footnote on how the plan uses them. Parts that are off show none; their options are kept for when they return.
+/// 3. The switch "Track available" for the day (MVP5-128), with a footnote on how the plan uses it.
 /// 4. The run types wanted that day, several allowed, each with a short description. A type picked for some days stays off the
 ///    others; types no day picks can go on any running day.
 ///
@@ -79,24 +78,16 @@ struct RunAvailabilityDayView: View {
                 } footer: {
                     Text("The parts of the day you could run in, any combination. Switching off the last one switches the day off.")
                 }
-                // One section per selected part, so each switch is its own row; the footnote closes the last one.
-                let selectedSlots = DaySlot.allCases.filter { shown[weekday].contains($0) }
-                ForEach(selectedSlots, id: \.self) { slot in
-                    Section {
-                        ForEach(SlotOption.allCases, id: \.self) { option in
-                            Toggle(option.title, isOn: Binding(
-                                get: { shown.isOn(option, for: slot, on: weekday) },
-                                set: { isOn in Task { await editor.set(option, to: isOn, for: slot, on: weekday) } }
-                            ))
-                            .accessibilityLabel("\(option.title), \(weekday.displayName) \(slot.displayName)")
-                        }
-                    } header: {
-                        Text("\(slot.displayName) options")
-                    } footer: {
-                        if slot == selectedSlots.last {
-                            Text("Long run possible: the plan puts a long run only in a part of the day that leaves enough time. Track available: you can get to a track then, which the plan will use for track sessions; today's plans don't need a track yet, since interval sessions can be run anywhere.")
-                        }
-                    }
+                Section {
+                    Toggle("Track available", isOn: Binding(
+                        get: { shown.hasTrack(on: weekday) },
+                        set: { isOn in Task { await editor.setTrack(isOn, on: weekday) } }
+                    ))
+                    .accessibilityLabel("Track available, \(weekday.displayName)")
+                } header: {
+                    Text("Track")
+                } footer: {
+                    Text("Switch on if you can get to a track on this day. The plan will then put track sessions on days with a track. Today's plans don't need one yet, since interval sessions can be run anywhere.")
                 }
                 Section {
                     ForEach(RunType.allCases, id: \.self) { type in
