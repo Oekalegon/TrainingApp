@@ -11,12 +11,14 @@ extension RunAvailability {
 
     /// The availability with `weekday` selected or cleared. Selecting a day allows all three parts
     /// of the day (the athlete may switch some off); clearing it removes the day. Either way the
-    /// maximum number of runs goes back to the default of 1 (MVP5-132), so a day switched on again
-    /// never comes back with an earlier choice.
+    /// maximum number of runs goes back to the default of 1 (MVP5-132) and the track to unavailable (MVP5-128), so a day
+    /// switched on again never comes back with an earlier choice.
     func togglingDay(_ weekday: Weekday) -> RunAvailability {
         var copy = self
         copy[weekday] = isAvailable(on: weekday) ? [] : Set(DaySlot.allCases)
         copy.setRuns(1, on: weekday)
+        // Track goes back to the default too (MVP5-128), so a day switched on again starts clean.
+        copy = copy.settingTrack(false, on: weekday)
         return copy
     }
 
@@ -30,7 +32,10 @@ extension RunAvailability {
         if slots.contains(slot) { slots.remove(slot) } else { slots.insert(slot) }
         copy[weekday] = slots
         // A cleared day starts again from the default of one run, like `togglingDay`.
-        if slots.isEmpty { copy.setRuns(1, on: weekday) }
+        if slots.isEmpty {
+            copy.setRuns(1, on: weekday)
+            copy = copy.settingTrack(false, on: weekday)
+        }
         return copy
     }
 
@@ -92,6 +97,29 @@ extension RunAvailability {
     func clearingRunTypes(on weekday: Weekday) -> RunAvailability {
         var copy = self
         copy.setRunTypes([], on: weekday)
+        return copy
+    }
+}
+
+extension RunAvailability {
+    /// Whether a track is available on `weekday` (MVP5-128). TrainingKit stores it per part of the day
+    /// (``SlotOptions/trackAvailable``) but the screen asks it per day, so the day counts as having a track
+    /// when any of its selected parts has one. Parts that are off are ignored.
+    func hasTrack(on weekday: Weekday) -> Bool {
+        self[weekday].contains { self[weekday, $0].trackAvailable }
+    }
+
+    /// The availability with a track available or not on `weekday` (MVP5-128): sets ``SlotOptions/trackAvailable``
+    /// on all three parts of the day, also the ones that are off, so the choice holds when parts are switched on
+    /// later. The other slot options (``SlotOptions/longRunPossible``) are left as they are; the screen does not
+    /// offer them, since the "Long" run type already says which days take a long run.
+    func settingTrack(_ isOn: Bool, on weekday: Weekday) -> RunAvailability {
+        var copy = self
+        for slot in DaySlot.allCases {
+            var options = copy[weekday, slot]
+            options.trackAvailable = isOn
+            copy[weekday, slot] = options
+        }
         return copy
     }
 }

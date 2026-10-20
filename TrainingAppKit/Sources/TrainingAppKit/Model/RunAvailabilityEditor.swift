@@ -45,6 +45,11 @@ final class RunAvailabilityEditor {
         await apply { $0.togglingSlot(slot, on: weekday) }
     }
 
+    /// Says whether a track is available on `weekday` and saves (MVP5-128).
+    func setTrack(_ isOn: Bool, on weekday: Weekday) async {
+        await apply { $0.settingTrack(isOn, on: weekday) }
+    }
+
     /// Sets the number of runs on `weekday` and saves (MVP5-132).
     func setRuns(_ count: Int, on weekday: Weekday) async {
         await apply { $0.settingRuns(count, on: weekday) }

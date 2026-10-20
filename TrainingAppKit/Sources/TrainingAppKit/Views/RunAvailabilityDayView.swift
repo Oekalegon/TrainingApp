@@ -1,15 +1,16 @@
 import SwiftUI
 import TrainingCore
 
-/// One weekday of Running Availability (MVP5-105, MVP5-112), opened from the list of weekdays. Three sections, the choices
-/// being selectable list rows except the number of runs:
+/// One weekday of Running Availability (MVP5-105, MVP5-112, MVP5-128), opened from the list of weekdays. Four sections, the choices
+/// being selectable list rows except the number of runs and the track switch:
 ///
 /// 1. The weekday (large) with a short explanation, the switch "Can run on <weekday>" and, for an available day with
 ///    more than one part, the maximum number of runs: a compact segmented control (1 up to the selected parts) at
 ///    the trailing edge of the title's row, with its explanation below.
 /// 2. The parts of the day (morning, afternoon, evening), any combination. Switching the last one off switches
 ///    the day off; switching the day on selects all three.
-/// 3. The run types wanted that day, several allowed, each with a short description. A type picked for some days stays off the
+/// 3. The switch "Track available" for the day (MVP5-128), with a footnote on how the plan uses it.
+/// 4. The run types wanted that day, several allowed, each with a short description. A type picked for some days stays off the
 ///    others; types no day picks can go on any running day.
 ///
 /// A change shows at once and saves in the background; when the save fails it is taken back and an alert says so
@@ -76,6 +77,17 @@ struct RunAvailabilityDayView: View {
                     Text("Time of day")
                 } footer: {
                     Text("The parts of the day you could run in, any combination. Switching off the last one switches the day off.")
+                }
+                Section {
+                    Toggle("Track available", isOn: Binding(
+                        get: { shown.hasTrack(on: weekday) },
+                        set: { isOn in Task { await editor.setTrack(isOn, on: weekday) } }
+                    ))
+                    .accessibilityLabel("Track available, \(weekday.displayName)")
+                } header: {
+                    Text("Track")
+                } footer: {
+                    Text("Switch on if you can get to a track on this day. The plan will then put track sessions on days with a track.")
                 }
                 Section {
                     ForEach(RunType.allCases, id: \.self) { type in
