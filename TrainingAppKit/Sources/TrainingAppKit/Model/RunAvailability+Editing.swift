@@ -96,6 +96,52 @@ extension RunAvailability {
     }
 }
 
+/// The two per-slot options the day screen offers (MVP5-128), which TrainingKit stores as ``SlotOptions``.
+enum SlotOption: CaseIterable {
+    /// The slot leaves enough time for a long run (``SlotOptions/longRunPossible``).
+    case longRunPossible
+    /// The athlete can get to a track in the slot (``SlotOptions/trackAvailable``).
+    case trackAvailable
+
+    /// The label of the toggle.
+    var title: String {
+        switch self {
+        case .longRunPossible: "Long run possible"
+        case .trackAvailable: "Track available"
+        }
+    }
+
+    /// Reads the option from a slot's options.
+    func value(in options: SlotOptions) -> Bool {
+        switch self {
+        case .longRunPossible: options.longRunPossible
+        case .trackAvailable: options.trackAvailable
+        }
+    }
+}
+
+extension RunAvailability {
+    /// The availability with `option` of `slot` on `weekday` set to `isOn` (MVP5-128). TrainingKit drops an entry that
+    /// equals ``SlotOptions/default``, so switching back to the defaults leaves no stored options. The options are
+    /// kept when the slot is switched off, so they return when it is switched on again (TrainingKit), and are only
+    /// shown, and read by the generator, for slots that are free.
+    func setting(_ option: SlotOption, to isOn: Bool, for slot: DaySlot, on weekday: Weekday) -> RunAvailability {
+        var copy = self
+        var options = copy[weekday, slot]
+        switch option {
+        case .longRunPossible: options.longRunPossible = isOn
+        case .trackAvailable: options.trackAvailable = isOn
+        }
+        copy[weekday, slot] = options
+        return copy
+    }
+
+    /// Whether `option` is on for `slot` on `weekday`; the default when nothing is stored.
+    func isOn(_ option: SlotOption, for slot: DaySlot, on weekday: Weekday) -> Bool {
+        option.value(in: self[weekday, slot])
+    }
+}
+
 extension RunAvailability {
     /// The line under a weekday in the Running Availability list: "Off", or the parts of the day, the number
     /// of runs when above one and the run types named, e.g. "Morning, Evening · 2 runs · Interval, Threshold".

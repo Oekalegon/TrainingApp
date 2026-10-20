@@ -45,6 +45,11 @@ final class RunAvailabilityEditor {
         await apply { $0.togglingSlot(slot, on: weekday) }
     }
 
+    /// Switches `option` of `slot` on `weekday` on or off and saves (MVP5-128).
+    func set(_ option: SlotOption, to isOn: Bool, for slot: DaySlot, on weekday: Weekday) async {
+        await apply { $0.setting(option, to: isOn, for: slot, on: weekday) }
+    }
+
     /// Sets the number of runs on `weekday` and saves (MVP5-132).
     func setRuns(_ count: Int, on weekday: Weekday) async {
         await apply { $0.settingRuns(count, on: weekday) }

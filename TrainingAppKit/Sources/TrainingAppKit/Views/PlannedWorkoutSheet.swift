@@ -10,7 +10,10 @@ extension PlanRule {
         case .monotony: "Monotony"
         case .strain: "Strain"
         case .raceDayTSB: "Form on race day"
-        case .buildProgression: "Build week progression"
+        case .longestRun: "Longest run"
+        case .intensityDistribution: "Intensity distribution"
+        case .hardSessionSpacing: "Hard session spacing"
+        case .hardSessionsPerMicro: "Hard sessions per week"
         }
     }
 }
