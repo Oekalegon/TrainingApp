@@ -51,7 +51,7 @@ public struct PlanProposalSummary: Equatable, Sendable {
         microLengthDays = micros.first.map { (calendar.dateComponents([.day], from: $0.dateRange.lowerBound, to: $0.dateRange.upperBound).day ?? 0) + 1 } ?? 0
         workoutCount = proposal.candidate.plannedActivities.count
         dates = micros.first.flatMap { first in micros.last.map { first.dateRange.lowerBound...$0.dateRange.upperBound } }
-        compromises = proposal.compromises.map(Self.describe)
+        compromises = Self.describe(proposal.compromises)
         func line(_ finding: PlanFinding) -> String {
             let day = finding.day.formatted(.dateTime.day().month(.abbreviated))
             return "\(day): \(finding.rule.displayName)" + (finding.subject.map { " (\($0))" } ?? "")
@@ -67,6 +67,43 @@ public struct PlanProposalSummary: Equatable, Sendable {
     private static func kilometres(_ meters: Double) -> String {
         let value = meters / 1000
         return (value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)) + " km"
+    }
+
+    /// One line per compromise, except sessions that found no place and workouts without a template, which are
+    /// counted per reason: a plan with one running day would otherwise list the same line for every micro-cycle.
+    private static func describe(_ compromises: [PlanCompromise]) -> [String] {
+        struct Unplaced: Hashable { let kind: DroppedSession.Kind; let reason: DropReason }
+        var unplaced: [Unplaced: [Date]] = [:]
+        var unplacedOrder: [Unplaced] = []
+        var missing: [Date] = []
+        var lines: [String] = []
+        for compromise in compromises {
+            switch compromise {
+            case .unplacedSession(let start, let session):
+                let key = Unplaced(kind: session.kind, reason: session.reason)
+                if unplaced[key] == nil { unplacedOrder.append(key) }
+                unplaced[key, default: []].append(start)
+            case .missingTemplate(let start, _):
+                missing.append(start)
+            default:
+                lines.append(describe(compromise))
+            }
+        }
+        for key in unplacedOrder {
+            let starts = unplaced[key] ?? []
+            let kind = key.kind == .long ? "long run" : "hard session"
+            let first = (starts.min() ?? .now).formatted(.dateTime.day().month(.abbreviated))
+            lines.append(starts.count == 1
+                ? "A \(kind) in the micro-cycle of \(first) found no place (\(describe(key.reason)))."
+                : "\(starts.count) \(kind)s found no place (\(describe(key.reason))), the first in the micro-cycle of \(first).")
+        }
+        if let first = missing.min() {
+            let day = first.formatted(.dateTime.day().month(.abbreviated))
+            lines.append(missing.count == 1
+                ? "No workout in the library fits one session in the micro-cycle of \(day); an easy run replaces it."
+                : "No workout in the library fits \(missing.count) sessions, the first in the micro-cycle of \(day); easy runs replace them.")
+        }
+        return lines
     }
 
     private static func describe(_ compromise: PlanCompromise) -> String {

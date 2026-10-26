@@ -147,7 +147,8 @@ public final class CreatePlanViewModel {
         calendar.timeZone = model.athlete.timeZone
         start = calendar.startOfDay(for: now())
         preferences = PlanPreferences(runAvailability: model.athlete.runAvailability)
-        peak = PeakVolumeDraft()
+        // Time, not the draft's default TRIMP: the generator plans by time, so only a peak in hours is used.
+        peak = PeakVolumeDraft(measure: .duration)
     }
 
     private var calendar: Calendar {

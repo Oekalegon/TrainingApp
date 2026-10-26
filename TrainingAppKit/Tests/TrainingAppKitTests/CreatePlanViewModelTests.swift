@@ -86,6 +86,23 @@ struct CreatePlanViewModelTests {
         #expect(!viewModel.hasAvailabilityOverride)
     }
 
+    @Test("the day-screen editor, wired the way the wizard wires it, edits the plan's availability only")
+    func editorEditsPlanOnly() async throws {
+        let (_, model) = try await makeModel()
+        let viewModel = makeViewModel(model)
+        let editor = RunAvailabilityEditor(
+            saved: { viewModel.preferences.runAvailability },
+            save: { viewModel.setAvailability($0); return true }
+        )
+
+        await editor.toggleDay(.monday)
+
+        #expect(viewModel.preferences.runAvailability.isAvailable(on: .monday))
+        #expect(editor.shown.isAvailable(on: .monday))
+        #expect(!model.athlete.runAvailability.isAvailable(on: .monday))
+        #expect(viewModel.hasAvailabilityOverride)
+    }
+
     @Test("an empty availability blocks the preferences step")
     func emptyAvailabilityBlocks() async throws {
         let (_, model) = try await makeModel()
@@ -276,6 +293,13 @@ struct CreatePlanViewModelTests {
         #expect(viewModel.peakVolumeNote == nil)
     }
 
+    @Test("the peak field starts in time, the one measure the generator uses")
+    func peakStartsInTime() async throws {
+        let (_, model) = try await makeModel()
+
+        #expect(makeViewModel(model).peak.measure == .duration)
+    }
+
     @Test("an invalid peak blocks its step")
     func invalidPeak() async throws {
         let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
@@ -358,6 +382,21 @@ struct CreatePlanViewModelTests {
         #expect(!summary.phases.isEmpty)
         viewModel.paradigm = .triphasic
         #expect(viewModel.proposal == nil)
+    }
+
+    @Test("sessions that found no place are counted per reason, not listed for every micro-cycle")
+    func compromisesAreGrouped() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        var oneDay = RunAvailability()
+        oneDay[.monday] = [.morning]
+        viewModel.setAvailability(oneDay)
+
+        await viewModel.generate()
+
+        let summary = try #require(viewModel.summary)
+        let unplaced = summary.compromises.filter { $0.contains("found no place") }
+        #expect(unplaced.count <= 2)
+        #expect(summary.compromises.count < summary.microCount)
     }
 
     @Test("a generator failure is reported inline and leaves no proposal")

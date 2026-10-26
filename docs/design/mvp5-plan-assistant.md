@@ -121,7 +121,7 @@ Like availability this is athlete-level and independent of the paradigm and micr
 
 `SessionType` from TrainingKit design §8.1 is not in the code yet; `RunType` is its first cut (tempo, hills etc. can be added later). It maps onto the existing `IntensityCategory`: recovery = `veryLow`, easy and long = `low`, threshold and interval = `high`. The generator fills a day from library workouts of that type (MVP5-5 picks by category) and falls back to the closest match. Preferences are soft: a paradigm's hard-session rules (spacing, count per micro) can override them, and the wizard says so when it does. With two slots on a day, the type applies to the main run; the second defaults to easy or recovery.
 
-**Peak volume.** (Not in TrainingKit yet: MVP5-110 added run types only, so the app's `PeakVolumeDraft` holds the value in meters, seconds or TRIMP until a type exists.) `maxWeeklyVolume: VolumeTarget` (distance or duration) is the ceiling the ramp climbs to and stops at, per 7 days so it means the same for 10- and 14-day micros (a 14-day micro may hold twice it). The ramp from `startingWeeklyVolume` is sized so the peak lands in the last build micro before the taper. If the guardrails stop the plan reaching it, the preview says so and shows the volume it did reach.
+**Peak volume.** (`PlanPreferences.maxWeeklyVolume: [Sport: VolumeTarget]`, MVP5-133. The app's `PeakVolumeDraft` holds the typed value in meters, seconds or TRIMP; the generator plans by time, so only a peak in hours reaches it — see §9.) `maxWeeklyVolume: VolumeTarget` (distance or duration) is the ceiling the ramp climbs to and stops at, per 7 days so it means the same for 10- and 14-day micros (a 14-day micro may hold twice it). The ramp from `startingWeeklyVolume` is sized so the peak lands in the last build micro before the taper. If the guardrails stop the plan reaching it, the preview says so and shows the volume it did reach.
 
 **Key races.** Plans link to races through `Race` and `RacePriority`:
 - The macrocycle's `targetRaceID` is the **primary** race; the layout is built backwards from it (already how `CycleLayoutBuilder` works), so one plan has one primary race.
@@ -215,13 +215,32 @@ Mid-plan changes (injury, travel, missed weeks) regenerate **from today**: same 
 1. **Foundations (TrainingKit):** guardrail 7-day audit and fixes; `TrainingParadigm`; `PlanPreferences` with `runAvailability`; new paradigm rules.
 2. **View:** period-aware view model, micro resolution, then the rename.
 3. **Availability UI** in Athlete settings.
-4. **Generator**, then the **wizard**.
+4. **Generator**, then the **wizard** (§9).
 5. **Goal management UI**, standard plans.
 
 Steps 1 and 2 are independent and can run in parallel.
 
 ## 8. Open questions
 None blocking. Still to confirm from the book when encoding the triphasic phases (MVP5-100): the exact session profiles (interval work lengths and race-target fractions) per phase.
+
+## 9. Create Plan wizard (MVP5-146)
+
+The entry point for making a plan: a sheet from the Plans tab's **New Plan** action (`CreatePlanView`, driven by the tested `CreatePlanViewModel`; it replaces the old name prompt). Six steps with Back and Next in the bottom bar; Next is enabled only while the step is complete.
+
+1. **Start date**: defaults to today, not in the past.
+2. **Races** (MVP5-135): the athlete's upcoming races (read from the race store, two years ahead), each ticked or not, with the **window** shown per race: in the plan, before the start date, or after the target race (those two can't be ticked). The nearest primary race is ticked by default. A priority (primary, secondary, tertiary) can be chosen per race **for this plan only**; the stored race is never changed. Exactly one primary is required; the others are the generator's `otherRaces`. **Add a New Race…** opens the existing race sheet (which now asks for the distance, since TrainingKit's `Race` needs one) and ticks the new race.
+3. **Training approach**: 80/20 polarized (default) or triphasic, and the micro length 7, 10 or 14. Triphasic with a target that is not a marathon shows the calibration warning (MVP5-143, `TrainingParadigm.calibrationWarning(for:)`).
+4. **Availability**: starts as the athlete's Running Availability (day parts, runs per day, run types, track) and is edited with the same day screens, **for this plan only**; nothing is written back, and a button restores the athlete's. A toggle offers the triphasic conditioning phase.
+5. **Peak volume** (MVP5-134): `PeakVolumeSection`. A peak in hours becomes `PlanPreferences.maxWeeklyVolume[.running]` and the generator's peak. `PlanGenerator` supports only `durationSeconds` volumes (it throws `mismatchedMeasure` otherwise), so a peak in distance or TRIMP is validated and kept but **not passed**, and the step says so. Empty means the peak is 1.5 times the starting volume.
+6. **Review**: a name (default "<target race> plan"), the choices, **Generate Plan**, and then a plain-list preview of the proposal: layout (dates, micro count, phases), planned workout count, compromises, risks and warnings, and the calibration note.
+
+**What it produces.** The wizard calls the generator and **commits a draft**: `TrainingModel.commit(_:named:activate: false)`. It does not activate, so no replace confirmation is needed here; activating (and the check against the active plan) stays in the Plans tab. The review is deliberately minimal; the full preview and commit screen is MVP5-121.
+
+**What it builds the request from.** The macro is the paradigm's full-length one (`PlanMacro`): fixed phases (triphasic structural and specific 42 days, rounded to whole micros; polarized build 35 and peak 21 days, one taper micro, optional conditioning) with base taking what the lead time leaves; the generator's lead-time compromiser cuts it and the review lists the cuts. The meso is 3:1 with the chosen micro length. The starting volume is the last four weeks of running averaged to 7 days (3 hours when there is none). Hard sessions per micro come from the paradigm's `maxHardSessionsPerMicro`, one long run per micro. Templates are the built-in library plus the athlete's unarchived templates.
+
+**Seam.** The generator is a closure, `PlanGenerating = (PlanRequest) async throws -> PlanProposal`, defaulting to `PlanGenerator.generate`, so an LLM-assisted generator can replace it without touching the wizard.
+
+**Async rules.** The deciding state (the request and the inputs it came from) is read before the first `await`; a second Generate or Create tap while one runs is ignored; a proposal is shown only while the choices still equal those it was generated from (changing anything hides it); failures show inline on the review step; the sheet closes only when the draft is stored.
 
 ## Plans screen (MVP5-125)
 
