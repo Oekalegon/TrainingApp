@@ -125,6 +125,9 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     public var venue: Venue?
     /// What workouts made from the template are for: ordinary training, or a field test (MVP2-156).
     public var purpose: WorkoutPurpose
+    /// The kind of session the template makes (MVP5-139). The editor doesn't offer it; it is kept so editing a
+    /// template doesn't untag it for the plan generator.
+    public var sessionType: SessionType?
     /// The template's parameters.
     public var parameters: [Parameter]
     /// The template's blocks.
@@ -134,7 +137,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     public init(
         id: UUID = UUID(), name: String = "", titleName: String? = nil, titleNameAppliesTo: String? = nil,
         sport: Sport = .running, venue: Venue? = nil, purpose: WorkoutPurpose = .general,
-        parameters: [Parameter] = [], blocks: [Block] = []
+        sessionType: SessionType? = nil, parameters: [Parameter] = [], blocks: [Block] = []
     ) {
         self.titleNameAppliesTo = titleNameAppliesTo
         self.id = id
@@ -143,6 +146,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         self.sport = sport
         self.venue = venue
         self.purpose = purpose
+        self.sessionType = sessionType
         self.parameters = parameters
         self.blocks = blocks
     }
@@ -293,7 +297,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
             titleName: duplicating ? (template.titleName ?? template.name) : template.titleName,
             titleNameAppliesTo: duplicating ? "\(template.name) Copy" : nil,
             sport: template.sport, venue: template.venue, purpose: template.purpose,
-            parameters: parameters, blocks: blocks
+            sessionType: template.sessionType, parameters: parameters, blocks: blocks
         )
     }
 
@@ -442,7 +446,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         return WorkoutTemplate(
             id: id, name: trimmedName, titleName: keepsTitleName ? titleName : nil,
             sport: sport, venue: venue, parameters: templateParameters, blocks: templateBlocks,
-            purpose: purpose
+            purpose: purpose, sessionType: sessionType
         )
     }
 }

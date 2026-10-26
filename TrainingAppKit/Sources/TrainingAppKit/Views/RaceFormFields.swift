@@ -19,6 +19,20 @@ struct RaceFormFields: View {
             // workouts — see `PlannedWorkoutSheetViewModel.minimumDate(asOf:)`'s own doc
             // comment.
             DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate()..., displayedComponents: .date)
+            Picker("Distance", selection: $viewModel.distancePreset) {
+                ForEach(RaceDistancePreset.allCases) { Text($0.title).tag($0) }
+            }
+            if viewModel.distancePreset == .custom {
+                HStack {
+                    TextField("Distance", text: $viewModel.customDistanceText)
+                        #if os(iOS)
+                        .keyboardType(.decimalPad)
+                        #endif
+                        .accessibilityLabel("Custom race distance")
+                    Text(viewModel.distanceSystem == .metric ? "km" : "mi").foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
             Picker("Priority", selection: $viewModel.priority) {
                 ForEach(RacePriority.allCases, id: \.self) { priority in
                     Text(priority.label).tag(priority)
