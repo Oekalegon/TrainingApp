@@ -51,9 +51,19 @@ struct CreatePlanView: View {
             .navigationTitle(viewModel.step.title)
             #if os(iOS)
             .contentMargins(.bottom, 72, for: .scrollContent)
+            .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
+                #if os(iOS)
+                // The decimal pad has no return key and covers the bottom bar, so give it a way out.
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
+                #endif
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
