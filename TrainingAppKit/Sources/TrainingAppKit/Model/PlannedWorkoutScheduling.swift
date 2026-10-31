@@ -22,7 +22,10 @@ public protocol PlannedWorkoutScheduling: Sendable {
     /// Puts `workout` on the Watch on `plan`'s day, replacing whatever was scheduled for `plan`
     /// before — so a moved plan or an edited workout needs just this call. Calling it again for an
     /// unchanged plan is a no-op.
-    func schedule(_ plan: PlannedActivity, workout: StructuredWorkout, calendar: Calendar) async throws
+    ///
+    /// The plan keeps heart-rate targets as zone positions (MVP5-148); `athlete` turns them into the bpm sent,
+    /// with the zone settings in effect on the plan's day.
+    func schedule(_ plan: PlannedActivity, workout: StructuredWorkout, athlete: AthleteProfile, calendar: Calendar) async throws
 
     /// Removes `plan`'s entry from the Watch, for when the plan is deleted.
     func unschedule(_ plan: PlannedActivity) async

@@ -233,14 +233,23 @@ struct CreatePlanViewModelTests {
 
     // MARK: Paradigm
 
-    @Test("triphasic warns for a race that is not a marathon; 80/20 does not")
+    @Test("triphasic warns for a race with no profiles of its own, such as 35 km; 80/20 does not")
     func calibrationWarning() async throws {
-        let (_, _, viewModel) = try await loaded([race("5K", in: 90, meters: 5000)])
+        let (_, _, viewModel) = try await loaded([race("35K", in: 90, meters: 35_000)])
 
         viewModel.paradigm = .triphasic
         #expect(viewModel.calibrationWarning != nil)
         viewModel.paradigm = .polarized8020
         #expect(viewModel.calibrationWarning == nil)
+    }
+
+    @Test("triphasic does not warn for a 5K, a 10K or a half marathon: they have their own session profiles (MVP5-154)")
+    func noCalibrationWarningForShortRaces() async throws {
+        for meters in [5_000.0, 10_000, 21_097.5] {
+            let (_, _, viewModel) = try await loaded([race("Race", in: 90, meters: meters)])
+            viewModel.paradigm = .triphasic
+            #expect(viewModel.calibrationWarning == nil, "\(meters)")
+        }
     }
 
     @Test("the macro fills the lead time with base and keeps the paradigm's fixed phases")
@@ -279,21 +288,36 @@ struct CreatePlanViewModelTests {
         #expect(viewModel.preferences.maxWeeklyVolume.isEmpty)
     }
 
-    @Test("a peak in distance or TRIMP is kept but not used, with a note, and an empty one gets the default")
-    func peakInOtherMeasures() async throws {
+    @Test("a peak in distance plans in distance: the weekly maximum, the peak and the starting volume are meters")
+    func peakInDistance() async throws {
         let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
         viewModel.peak = PeakVolumeDraft(measure: .distance, text: "60", distanceSystem: .metric)
 
         let request = try #require(viewModel.makeRequest())
 
+        #expect(request.preferences.maxWeeklyVolume[.running] == VolumeTarget(measure: .distanceMeters, amount: 60_000))
+        #expect(request.peakVolume == VolumeTarget(measure: .distanceMeters, amount: 60_000))
+        #expect(request.startingVolume.measure == .distanceMeters)
+        #expect(request.startingVolume.amount <= 60_000)
+        #expect(viewModel.peakVolumeNote == nil)
+    }
+
+    @Test("a peak in TRIMP is kept but not used, with a note, and an empty one gets the default")
+    func peakInTRIMP() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        viewModel.peak = PeakVolumeDraft(measure: .trimp, text: "400")
+
+        let request = try #require(viewModel.makeRequest())
+
         #expect(request.preferences.maxWeeklyVolume.isEmpty)
         #expect(viewModel.peakVolumeNote != nil)
+        #expect(request.peakVolume.measure == .durationSeconds)
         #expect(request.peakVolume.amount == request.startingVolume.amount * CreatePlanViewModel.defaultPeakFactor)
         viewModel.peak = PeakVolumeDraft(measure: .duration, text: "")
         #expect(viewModel.peakVolumeNote == nil)
     }
 
-    @Test("the peak field starts in time, the one measure the generator uses")
+    @Test("the peak field starts in time, not the draft's default TRIMP that the generator does not plan by")
     func peakStartsInTime() async throws {
         let (_, model) = try await makeModel()
 
@@ -397,6 +421,33 @@ struct CreatePlanViewModelTests {
         let unplaced = summary.compromises.filter { $0.contains("found no place") }
         #expect(unplaced.count <= 2)
         #expect(summary.compromises.count < summary.microCount)
+    }
+
+    @Test("recovery days, sizing and unresolved steps are counted per kind, not listed for every micro-cycle")
+    func newCompromisesAreGrouped() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        await viewModel.generate()
+        var proposal = try #require(viewModel.proposal)
+        let d1 = Date(timeIntervalSince1970: 1_800_000_000), d2 = d1.addingTimeInterval(10 * 86400)
+        proposal.compromises = [
+            .recoveryDaysShort(day: d1, template: "Mixed Interval Runs", neededDays: 2, availableDays: 1),
+            .recoveryDaysShort(day: d2, template: "Mixed Interval Runs", neededDays: 2, availableDays: 0),
+            .sizingMissedZone(microStart: d1, aimed: .training, reached: .recovery),
+            .sizingMissedZone(microStart: d2, aimed: .training, reached: .recovery),
+            .sizingMissedZone(microStart: d2, aimed: .race, reached: .training),
+            .unresolvedStep(microStart: d1, template: "A", reason: .paceOutsideZone(zone: 4, paceZone: 5)),
+            .unresolvedStep(microStart: d2, template: "B", reason: .paceOutsideZone(zone: 4, paceZone: 5)),
+            .unresolvedPlanTarget(reason: .noRaceTarget),
+        ]
+
+        let lines = PlanProposalSummary(proposal, calendar: Calendar(identifier: .gregorian)).compromises
+
+        #expect(lines.count == 5)
+        #expect(lines.contains { $0.hasPrefix("2 workouts have fewer recovery days") })
+        #expect(lines.contains { $0.hasPrefix("2 micro-cycles end fresher than aimed") })
+        #expect(lines.contains { $0.contains("more tired than aimed") })
+        #expect(lines.contains { $0.contains("2 micro-cycles, the first of") && $0.contains("no workout in the library has a zone") })
+        #expect(lines.contains { $0.contains("the race has no target pace") })
     }
 
     @Test("a generator failure is reported inline and leaves no proposal")

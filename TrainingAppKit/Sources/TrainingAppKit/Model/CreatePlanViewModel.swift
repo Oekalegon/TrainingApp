@@ -147,7 +147,7 @@ public final class CreatePlanViewModel {
         calendar.timeZone = model.athlete.timeZone
         start = calendar.startOfDay(for: now())
         preferences = PlanPreferences(runAvailability: model.athlete.runAvailability)
-        // Time, not the draft's default TRIMP: the generator plans by time, so only a peak in hours is used.
+        // Time, not the draft's default TRIMP: the generator does not plan by TRIMP.
         peak = PeakVolumeDraft(measure: .duration)
     }
 
@@ -309,10 +309,10 @@ public final class CreatePlanViewModel {
         }
     }
 
-    /// A note that is not a problem: the peak is kept but the generator can't use it.
+    /// A note that is not a problem: the peak is kept but the generator can't use it (a peak in TRIMP).
     public var peakVolumeNote: String? {
-        guard peak.validation == .valid, peak.measure != .duration else { return nil }
-        return "The plan generator plans by time, so a peak in \(peak.measure == .distance ? "distance" : "TRIMP") is not used yet. Enter it in hours to apply it."
+        guard peak.validation == .valid, peak.measure == .trimp else { return nil }
+        return "The plan generator does not plan by TRIMP, so this peak is not used. Enter it in hours or distance to apply it."
     }
 
     /// Whether the steps before the review are all complete.
@@ -379,17 +379,27 @@ public final class CreatePlanViewModel {
         let leadDays = (calendar.dateComponents([.day], from: startDate, to: target.date).day ?? 0) + 1
         let starting = startingVolume(asOf: today)
         var preferences = preferences
-        var peakSeconds = starting * Self.defaultPeakFactor
-        if peak.validation == .valid, peak.measure == .duration, let seconds = peak.value, let limit = VolumeTarget(measure: .durationSeconds, amount: seconds) {
-            peakSeconds = seconds
-            preferences.maxWeeklyVolume[.running] = limit
-        } else {
-            preferences.maxWeeklyVolume[.running] = nil
+        // The plan is in the measure of the peak: time, or distance (the generator plans it as the same time at the
+        // easy pace). The starting volume is the athlete's running time, turned into distance the same way. TRIMP is
+        // not used: the generator does not plan by it.
+        var measure = VolumeMeasure.durationSeconds
+        var startAmount = starting
+        var peakAmount = starting * Self.defaultPeakFactor
+        preferences.maxWeeklyVolume[.running] = nil
+        if peak.validation == .valid, let value = peak.value, peak.measure != .trimp {
+            if peak.measure == .distance {
+                let easySecondsPerMeter = model.athlete.paceModel.secondsPerMeter(atZone: 2)
+                guard easySecondsPerMeter.isFinite, easySecondsPerMeter > 0 else { return nil }
+                measure = .distanceMeters
+                startAmount = starting / easySecondsPerMeter
+            }
+            peakAmount = value
+            preferences.maxWeeklyVolume[.running] = VolumeTarget(measure: measure, amount: value)
         }
         let hard = paradigm.maxHardSessionsPerMicro[microLength] ?? 2
         guard
-            let startTarget = VolumeTarget(measure: .durationSeconds, amount: min(starting, peakSeconds)),
-            let peakTarget = VolumeTarget(measure: .durationSeconds, amount: peakSeconds)
+            let startTarget = VolumeTarget(measure: measure, amount: min(startAmount, peakAmount)),
+            let peakTarget = VolumeTarget(measure: measure, amount: peakAmount)
         else { return nil }
         return PlanRequest(
             targetRace: target, otherRaces: others, paradigm: paradigm,

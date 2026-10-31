@@ -129,7 +129,7 @@ struct WorkoutLibraryCustomTemplatesTests {
         #expect(try await store.template(id: template.id)?.isArchived == true)
         #expect(!library.templates.contains { $0.id == template.id })
         #expect(!library.entries().contains { $0.id == template.id })
-        #expect(library.entries(matching: "Steady").isEmpty)
+        #expect(library.entries(matching: "Steady").filter(\.isCustom).isEmpty)
         #expect(!PlannedWorkoutSheetViewModel(model: model, scheduler: nil).templates.contains { $0.id == template.id })
         #expect(model.knownTemplates.contains { $0.id == template.id })
         // The plan still edits its parameters.

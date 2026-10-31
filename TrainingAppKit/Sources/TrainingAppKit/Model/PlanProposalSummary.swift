@@ -76,6 +76,10 @@ public struct PlanProposalSummary: Equatable, Sendable {
         var unplaced: [Unplaced: [Date]] = [:]
         var unplacedOrder: [Unplaced] = []
         var missing: [Date] = []
+        var recoveryShort: [(day: Date, template: String)] = []
+        var missedZone: [(fresher: Bool, start: Date)] = []
+        var stepReasons: [UnresolvedReason: [Date]] = [:]
+        var stepReasonOrder: [UnresolvedReason] = []
         var lines: [String] = []
         for compromise in compromises {
             switch compromise {
@@ -85,6 +89,13 @@ public struct PlanProposalSummary: Equatable, Sendable {
                 unplaced[key, default: []].append(start)
             case .missingTemplate(let start, _):
                 missing.append(start)
+            case .recoveryDaysShort(let day, let template, _, _):
+                recoveryShort.append((day, template))
+            case .sizingMissedZone(let start, let aimed, let reached):
+                missedZone.append((Self.rank(reached) > Self.rank(aimed), start))
+            case .unresolvedStep(let start, _, let reason):
+                if stepReasons[reason] == nil { stepReasonOrder.append(reason) }
+                stepReasons[reason, default: []].append(start)
             default:
                 lines.append(describe(compromise))
             }
@@ -103,7 +114,45 @@ public struct PlanProposalSummary: Equatable, Sendable {
                 ? "No workout in the library fits one session in the micro-cycle of \(day); an easy run replaces it."
                 : "No workout in the library fits \(missing.count) sessions, the first in the micro-cycle of \(day); easy runs replace them.")
         }
+        if let first = recoveryShort.min(by: { $0.day < $1.day }) {
+            let day = first.day.formatted(.dateTime.day().month(.abbreviated))
+            lines.append(recoveryShort.count == 1
+                ? "\(first.template) on \(day) has fewer recovery days around it than its template asks for."
+                : "\(recoveryShort.count) workouts have fewer recovery days around them than their templates ask for, the first \(first.template) on \(day).")
+        }
+        for (fresher, singular, plural) in [
+            (true, "ends fresher than aimed: a higher starting or peak volume would be needed", "end fresher than aimed: a higher starting or peak volume would be needed"),
+            (false, "ends more tired than aimed: even the lightest volume tried leaves you tired", "end more tired than aimed: even the lightest volume tried leaves you tired"),
+        ] {
+            let starts = missedZone.filter { $0.fresher == fresher }.map(\.start)
+            guard let first = starts.min() else { continue }
+            let day = first.formatted(.dateTime.day().month(.abbreviated))
+            lines.append(starts.count == 1
+                ? "The micro-cycle of \(day) \(singular)."
+                : "\(starts.count) micro-cycles \(plural), the first on \(day).")
+        }
+        for reason in stepReasonOrder {
+            let starts = stepReasons[reason] ?? []
+            let day = (starts.min() ?? .now).formatted(.dateTime.day().month(.abbreviated))
+            lines.append("Hard work in \(starts.count == 1 ? "the micro-cycle" : "\(starts.count) micro-cycles, the first") of \(day) is not at the pace of its phase: \(describe(reason)).")
+        }
         return lines
+    }
+
+    /// How fresh a TSB zone is, from the most tired (0) up.
+    private static func rank(_ zone: TSBZone) -> Int {
+        TSBZone.allCases.firstIndex(of: zone) ?? 0
+    }
+
+    private static func describe(_ reason: UnresolvedReason) -> String {
+        switch reason {
+        case .noHeartRateZones: "you have no heart-rate zone settings"
+        case .zoneUnavailable(let zone): "zone \(zone) has no heart-rate range with your zone settings"
+        case .noRaceTarget: "the race has no target pace"
+        case .noPhaseFraction: "the workout does not suit this phase"
+        case .unsupportedRaceTarget: "the race target is not a pace"
+        case .paceOutsideZone: "no workout in the library has a zone that holds it"
+        }
     }
 
     private static func describe(_ compromise: PlanCompromise) -> String {
@@ -124,6 +173,11 @@ public struct PlanProposalSummary: Equatable, Sendable {
             return "A \(kind) in the micro-cycle of \(microStart.formatted(.dateTime.day().month(.abbreviated))) found no place (\(describe(session.reason)))."
         case .missingTemplate(let microStart, _):
             return "No workout in the library fits one session in the micro-cycle of \(microStart.formatted(.dateTime.day().month(.abbreviated))); an easy run replaces it."
+        case .sizingMissedZone, .unresolvedStep, .recoveryDaysShort:
+            // Counted per kind in describe(_:) above.
+            return ""
+        case .unresolvedPlanTarget(let reason):
+            return "The hard sessions could not be given their target pace: \(describe(reason))."
         case .overriddenPreference(let preference):
             switch preference {
             case .includeConditioning: return "The conditioning phase you asked for was left out."
