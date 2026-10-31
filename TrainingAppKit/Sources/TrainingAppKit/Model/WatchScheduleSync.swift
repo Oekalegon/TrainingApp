@@ -260,7 +260,7 @@ public final class WatchScheduleSync {
             guard isEnabled else { return }
             guard let workout = workoutsByID[plan.workoutID] else { continue }
             do {
-                try await scheduler.schedule(plan, workout: workout, calendar: calendar)
+                try await scheduler.schedule(plan, workout: workout, athlete: model.athlete, calendar: calendar)
                 sent.insert(plan.id)
             } catch {
                 // Tried again on the next run; no mark meanwhile.
