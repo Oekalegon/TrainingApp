@@ -1,22 +1,13 @@
 {
-  "originHash" : "801cef6a67377c96e42e064b2de4c62a0ac84b0ac9c1358b8c5eb7b58dccf0be",
+  "originHash" : "00e7b8337c16a6ea796f69cd5b8e329eaa2bdaec91ec0db09e38ab497a1c427f",
   "pins" : [
     {
-      "identity" : "swift-docc-plugin",
+      "identity" : "trainingkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-docc-plugin",
+      "location" : "https://github.com/Oekalegon/TrainingKit.git",
       "state" : {
-        "revision" : "647c708be89f834fa6a6d4945442793a77ddf5b6",
-        "version" : "1.5.0"
-      }
-    },
-    {
-      "identity" : "swift-docc-symbolkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-docc-symbolkit",
-      "state" : {
-        "revision" : "b45d1f2ed151d057b54504d653e0da5552844e34",
-        "version" : "1.0.0"
+        "branch" : "develop",
+        "revision" : "59e67c5d22a28717db5ff719d5b136cf3ae65e0e"
       }
     }
   ],
