@@ -19,7 +19,7 @@ public enum CreatePlanStep: Int, CaseIterable, Identifiable, Sendable {
         case .races: "Races"
         case .paradigm: "Training Approach"
         case .preferences: "Availability"
-        case .peakVolume: "Peak Volume"
+        case .peakVolume: "Weekly Volume"
         case .review: "Review"
         }
     }
@@ -59,8 +59,6 @@ public enum RaceWindowState: Equatable, Sendable {
 public final class CreatePlanViewModel {
     /// The micro lengths a plan can have, in days.
     public static let microLengths = [7, 10, 14]
-    /// When no peak is entered, the peak is this many times the starting volume.
-    public static let defaultPeakFactor = 1.5
     /// The weekly volume to start from when the athlete has no recent running, in seconds (3 hours).
     public static let fallbackStartingVolume: TimeInterval = 3 * 3600
     /// How far ahead the races offered are read, in days.
@@ -79,6 +77,7 @@ public final class CreatePlanViewModel {
         var microLength: Int
         var preferences: PlanPreferences
         var peak: PeakVolumeDraft
+        var startVolume: PeakVolumeDraft
     }
 
     private let model: TrainingModel
@@ -107,8 +106,23 @@ public final class CreatePlanViewModel {
     public var microLength = 7
     /// The plan's preferences, started from the athlete's and changed for this plan only.
     public var preferences: PlanPreferences
-    /// The peak weekly volume field (MVP5-134).
-    var peak: PeakVolumeDraft
+    /// The peak weekly volume field (MVP5-134), required (MVP5-162). Changing its measure puts the starting volume
+    /// back to the athlete's running in that measure.
+    var peak: PeakVolumeDraft {
+        didSet {
+            if oldValue.measure != peak.measure || oldValue.distanceSystem != peak.distanceSystem {
+                startEdited = false
+                prefillStart()
+            }
+        }
+    }
+    /// The starting weekly volume field (MVP5-162), required: in the measure of the peak (time, or distance), pre-filled
+    /// from the last four weeks of running until the athlete types their own.
+    var startVolume: PeakVolumeDraft {
+        didSet { if !isPrefilling { startEdited = true } }
+    }
+    @ObservationIgnored private var startEdited = false
+    @ObservationIgnored private var isPrefilling = false
     /// The plan's name; ``reviewName`` offers one while this is empty.
     public var name = ""
 
@@ -151,6 +165,29 @@ public final class CreatePlanViewModel {
         preferences = PlanPreferences(runAvailability: model.athlete.runAvailability)
         // Time, not the draft's default TRIMP: the generator does not plan by TRIMP.
         peak = PeakVolumeDraft(measure: .duration)
+        startVolume = PeakVolumeDraft(measure: .duration)
+        prefillStart()
+    }
+
+    /// Fills the starting volume from the last four weeks of running, in the measure of the peak (a distance at the
+    /// easy pace), unless the athlete has typed their own. Called when the athlete's runs are read, so a plan opened
+    /// before they were loaded still gets them (MVP5-162).
+    private func prefillStart() {
+        guard !startEdited else { return }
+        let seconds = startingVolume(asOf: calendar.startOfDay(for: now()))
+        isPrefilling = true
+        defer { isPrefilling = false }
+        if peak.measure == .distance {
+            let easySecondsPerMeter = model.athlete.paceModel.secondsPerMeter(atZone: 2)
+            guard easySecondsPerMeter.isFinite, easySecondsPerMeter > 0 else {
+                // No pace to turn the running into a distance: leave the field empty, in the peak's measure, for the athlete to fill in.
+                startVolume = PeakVolumeDraft(measure: .distance, distanceSystem: peak.distanceSystem)
+                return
+            }
+            startVolume = PeakVolumeDraft(measure: .distance, baseValue: seconds / easySecondsPerMeter, distanceSystem: peak.distanceSystem)
+        } else {
+            startVolume = PeakVolumeDraft(measure: .duration, baseValue: seconds, distanceSystem: peak.distanceSystem)
+        }
     }
 
     private var calendar: Calendar {
@@ -188,6 +225,8 @@ public final class CreatePlanViewModel {
         } catch {
             loadError = "Couldn't read your races: \(error.localizedDescription)"
         }
+        // The athlete's runs do not depend on the races: a failed races read still fills the starting volume.
+        prefillStart()
     }
 
     /// Re-reads the races after the new-race sheet saved `race`, and selects it.
@@ -331,19 +370,31 @@ public final class CreatePlanViewModel {
             let available = Weekday.allCases.contains { preferences.runAvailability.isAvailable(on: $0) }
             return available ? nil : "Choose at least one day you could run."
         case .peakVolume:
-            switch peak.validation {
-            case .invalid, .tooLarge: return peak.message
-            case .empty, .valid: return nil
+            switch startVolume.validation {
+            case .empty: return "Enter the weekly volume to start from."
+            case .invalid, .tooLarge: return startVolume.message
+            case .valid: break
             }
+            switch peak.validation {
+            case .empty: return "Enter the most you want to run in a week."
+            case .invalid, .tooLarge: return peak.message
+            case .valid: break
+            }
+            if peak.measure == .trimp { return "The plan generator doesn't plan by TRIMP. Enter the peak in hours or distance." }
+            if startVolume.measure != peak.measure { return "Enter the starting volume in \(peak.unitLabel)." }
+            if let starting = startVolume.value, let top = peak.value, starting > top { return "The starting volume is above your peak." }
+            return nil
         case .review:
             return effectiveName.isEmpty ? "A plan needs a name." : nil
         }
     }
 
-    /// A note that is not a problem: the peak is kept but the generator can't use it (a peak in TRIMP).
-    public var peakVolumeNote: String? {
-        guard peak.validation == .valid, peak.measure == .trimp else { return nil }
-        return "The plan generator does not plan by TRIMP, so this peak is not used. Enter it in hours or distance to apply it."
+    /// The volume step's problem when neither field is showing it already: an empty field, a start in another measure or a
+    /// start above the peak. A field that is invalid shows its own message under it, so the step shows this only otherwise
+    /// (MVP5-162).
+    public var volumeStepProblem: String? {
+        guard startVolume.message == nil, peak.message == nil else { return nil }
+        return problem(in: .peakVolume)
     }
 
     /// Whether the steps before the review are all complete.
@@ -383,7 +434,7 @@ public final class CreatePlanViewModel {
     // MARK: Generate
 
     var currentInputs: Inputs {
-        Inputs(start: startDate, races: includedRaces, paradigm: paradigm, microLength: microLength, preferences: preferences, peak: peak)
+        Inputs(start: startDate, races: includedRaces, paradigm: paradigm, microLength: microLength, preferences: preferences, peak: peak, startVolume: startVolume)
     }
 
     /// The generated proposal, while it still matches the choices it was made from.
@@ -408,30 +459,18 @@ public final class CreatePlanViewModel {
         let others = includedRaces.filter { $0.id != target.id }
         let today = calendar.startOfDay(for: now())
         let leadDays = (calendar.dateComponents([.day], from: startDate, to: target.date).day ?? 0) + 1
-        let starting = startingVolume(asOf: today)
         var preferences = preferences
         preferences.runsPerWeek = runsPerWeek
         preferences.specialBlocks = specialBlocks
         // The plan is in the measure of the peak: time, or distance (the generator plans it as the same time at the
-        // easy pace). The starting volume is the athlete's running time, turned into distance the same way. TRIMP is
-        // not used: the generator does not plan by it.
-        var measure = VolumeMeasure.durationSeconds
-        var startAmount = starting
-        var peakAmount = starting * Self.defaultPeakFactor
-        preferences.maxWeeklyVolume[.running] = nil
-        if peak.validation == .valid, let value = peak.value, peak.measure != .trimp {
-            if peak.measure == .distance {
-                let easySecondsPerMeter = model.athlete.paceModel.secondsPerMeter(atZone: 2)
-                guard easySecondsPerMeter.isFinite, easySecondsPerMeter > 0 else { return nil }
-                measure = .distanceMeters
-                startAmount = starting / easySecondsPerMeter
-            }
-            peakAmount = value
-            preferences.maxWeeklyVolume[.running] = VolumeTarget(measure: measure, amount: value)
-        }
+        // easy pace). Both volumes are the athlete's own entries (MVP5-162); TRIMP is not used, the generator does
+        // not plan by it, so a TRIMP peak makes no request.
+        guard peak.measure != .trimp, startVolume.measure == peak.measure, let startAmount = startVolume.value, let peakAmount = peak.value, startAmount <= peakAmount else { return nil }
+        let measure: VolumeMeasure = peak.measure == .distance ? .distanceMeters : .durationSeconds
+        preferences.maxWeeklyVolume[.running] = VolumeTarget(measure: measure, amount: peakAmount)
         let hard = paradigm.maxHardSessionsPerMicro[microLength] ?? 2
         guard
-            let startTarget = VolumeTarget(measure: measure, amount: min(startAmount, peakAmount)),
+            let startTarget = VolumeTarget(measure: measure, amount: startAmount),
             let peakTarget = VolumeTarget(measure: measure, amount: peakAmount)
         else { return nil }
         // A conditioning phase builds up from what the athlete runs now to the starting volume of base (MVP5-160);

@@ -24,10 +24,9 @@ enum PeakVolumeMeasure: String, CaseIterable, Identifiable {
 /// The peak is per 7 days, so it means the same for micros of 7, 10 and 14 days; the generator scales it for the micro length.
 /// The text is in the athlete's display unit (kilometres or miles, hours, TRIMP points), and ``value``
 /// converts it to the base unit the rest of the app holds: meters, seconds, TRIMP. An empty field is
-/// valid and means no peak is set, so the generator chooses.
+/// ``Validation/empty``; the Create Plan wizard requires a value (MVP5-162), other hosts may leave it empty for no peak.
 ///
-/// - Note: TrainingKit has no peak volume type yet (`PlanPreferences` has no `maxWeeklyVolume`, despite MVP5-110), so this
-///   only holds and validates the value until it does (see ``value``).
+/// The Create Plan wizard uses it for two fields, the peak and the starting volume (MVP5-162).
 struct PeakVolumeDraft: Equatable {
     /// The state of the text.
     enum Validation: Equatable {
@@ -53,6 +52,21 @@ struct PeakVolumeDraft: Equatable {
         self.measure = measure
         self.text = text
         self.distanceSystem = distanceSystem
+    }
+
+    /// Creates a draft holding `baseValue` (meters or seconds, by `measure`) as text in the display unit, rounded to a
+    /// tenth of a kilometre, mile or hour (MVP5-162): a starting volume pre-filled from the athlete's running.
+    init(measure: PeakVolumeMeasure, baseValue: Double, distanceSystem: DistanceSystem = .deviceDefault) {
+        self.measure = measure
+        self.distanceSystem = distanceSystem
+        let shown: Double
+        switch measure {
+        case .distance: shown = baseValue / (distanceSystem == .metric ? 1000 : 1609.344)
+        case .duration: shown = baseValue / 3600
+        case .trimp: shown = baseValue
+        }
+        let rounded = (shown * 10).rounded() / 10
+        text = baseValue.isFinite && rounded > 0 ? String(format: "%.1f", rounded) : ""
     }
 
     /// The unit written after the field: "km", "mi", "h" or "TRIMP".

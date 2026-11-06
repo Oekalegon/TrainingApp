@@ -25,14 +25,17 @@ struct CreatePlanViewModelTests {
         return availability
     }
 
-    private func makeModel(trainingPlans: Bool = true) async throws -> (InMemoryStore, TrainingModel) {
+    private func makeModel(
+        trainingPlans: Bool = true, thresholdPace: Double? = nil, raceStore: (any RaceStore)? = nil
+    ) async throws -> (InMemoryStore, TrainingModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
-            activityStore: store, planStore: store, workoutStore: store, cycleStore: store, raceStore: store,
+            activityStore: store, planStore: store, workoutStore: store, cycleStore: store, raceStore: raceStore ?? store,
             athleteStore: store, trainingPlanStore: trainingPlans ? store : nil
         )
         var athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         athlete.runAvailability = athleteAvailability
+        if let thresholdPace { athlete.paceModel.thresholdPaceSecondsPerKilometer = thresholdPace }
         try await store.save(athlete)
         let model = TrainingModel(stores: stores, athlete: athlete)
         try await model.load(in: day(-30)...day(200), asOf: now)
@@ -55,6 +58,8 @@ struct CreatePlanViewModelTests {
         let (store, model) = try await makeModel()
         try await store.upsert(races)
         let viewModel = makeViewModel(model, generator: generator)
+        // The peak is required (MVP5-162); the starting volume is pre-filled.
+        viewModel.peak = PeakVolumeDraft(measure: .duration, text: "10")
         await viewModel.load()
         return (store, model, viewModel)
     }
@@ -275,16 +280,17 @@ struct CreatePlanViewModelTests {
 
     // MARK: Peak volume
 
-    @Test("a peak in hours becomes the plan's weekly maximum and the generator's peak")
+    @Test("a peak in hours becomes the plan's weekly maximum and the generator's peak, from the starting volume entered")
     func peakInHours() async throws {
         let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
         viewModel.peak = PeakVolumeDraft(measure: .duration, text: "6")
+        viewModel.startVolume = PeakVolumeDraft(measure: .duration, text: "2.5")
 
         let request = try #require(viewModel.makeRequest())
 
         #expect(request.preferences.maxWeeklyVolume[.running] == VolumeTarget(measure: .durationSeconds, amount: 6 * 3600))
         #expect(request.peakVolume.amount == 6 * 3600)
-        #expect(viewModel.peakVolumeNote == nil)
+        #expect(request.startingVolume == VolumeTarget(measure: .durationSeconds, amount: 2.5 * 3600))
         #expect(viewModel.preferences.maxWeeklyVolume.isEmpty)
     }
 
@@ -299,22 +305,21 @@ struct CreatePlanViewModelTests {
         #expect(request.peakVolume == VolumeTarget(measure: .distanceMeters, amount: 60_000))
         #expect(request.startingVolume.measure == .distanceMeters)
         #expect(request.startingVolume.amount <= 60_000)
-        #expect(viewModel.peakVolumeNote == nil)
     }
 
-    @Test("a peak in TRIMP is kept but not used, with a note, and an empty one gets the default")
-    func peakInTRIMP() async throws {
+    @Test("the peak is required: empty blocks the step, and a TRIMP peak, which the generator can't use, does too")
+    func peakRequired() async throws {
         let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
-        viewModel.peak = PeakVolumeDraft(measure: .trimp, text: "400")
-
-        let request = try #require(viewModel.makeRequest())
-
-        #expect(request.preferences.maxWeeklyVolume.isEmpty)
-        #expect(viewModel.peakVolumeNote != nil)
-        #expect(request.peakVolume.measure == .durationSeconds)
-        #expect(request.peakVolume.amount == request.startingVolume.amount * CreatePlanViewModel.defaultPeakFactor)
         viewModel.peak = PeakVolumeDraft(measure: .duration, text: "")
-        #expect(viewModel.peakVolumeNote == nil)
+        #expect(viewModel.problem(in: .peakVolume) == "Enter the most you want to run in a week.")
+        #expect(viewModel.makeRequest() == nil)
+
+        viewModel.peak = PeakVolumeDraft(measure: .trimp, text: "400")
+        #expect(viewModel.problem(in: .peakVolume) != nil)
+        #expect(viewModel.makeRequest() == nil)
+
+        viewModel.peak = PeakVolumeDraft(measure: .duration, text: "6")
+        #expect(viewModel.problem(in: .peakVolume) == nil)
     }
 
     @Test("the peak field starts in time, not the draft's default TRIMP that the generator does not plan by")
@@ -331,6 +336,134 @@ struct CreatePlanViewModelTests {
         #expect(viewModel.problem(in: .peakVolume) != nil)
         viewModel.peak = PeakVolumeDraft(measure: .duration, text: "99")
         #expect(viewModel.problem(in: .peakVolume) != nil)
+    }
+
+    @Test("the starting volume is pre-filled from the last four weeks, in the measure of the peak, until the athlete types their own")
+    func startingVolumePrefill() async throws {
+        let (store, model, viewModel) = try await loaded([race("Target", in: 120)])
+        #expect(viewModel.startVolume.text == "3.0")   // no running: the three-hour fallback
+        try await store.upsert([Activity(source: .manual, sport: .running, start: day(-5), duration: 8 * 3600)])
+        try await model.load(in: day(-30)...day(200), asOf: now)
+
+        await viewModel.load()
+        #expect(viewModel.startVolume.text == "2.0")   // 8 h over 4 weeks
+
+        viewModel.peak = PeakVolumeDraft(measure: .distance, text: "60", distanceSystem: .metric)
+        #expect(viewModel.startVolume.measure == .distance)
+        let km = try #require(Double(viewModel.startVolume.text))
+        #expect(km > 0)
+
+        viewModel.startVolume.text = "5"
+        await viewModel.load()
+        #expect(viewModel.startVolume.text == "5")     // typed: not overwritten by a later read
+
+        viewModel.peak = PeakVolumeDraft(measure: .duration, text: "6")
+        #expect(viewModel.startVolume.measure == .duration)
+        #expect(viewModel.startVolume.text == "2.0")   // a new measure starts again from the running
+    }
+
+    @Test("without a usable easy pace a distance start is left empty in the peak's measure, never a time read as meters")
+    func startingVolumeWithoutPace() async throws {
+        let (store, model) = try await makeModel(thresholdPace: 0)
+        try await store.upsert([race("Target", in: 120)])
+        try await store.upsert([Activity(source: .manual, sport: .running, start: day(-5), duration: 8 * 3600)])
+        try await model.load(in: day(-30)...day(200), asOf: now)
+        let viewModel = makeViewModel(model)
+        viewModel.peak = PeakVolumeDraft(measure: .duration, text: "10")
+        await viewModel.load()
+        #expect(viewModel.startVolume.text == "2.0")
+
+        viewModel.peak = PeakVolumeDraft(measure: .distance, text: "60", distanceSystem: .metric)
+
+        #expect(viewModel.startVolume.measure == .distance)
+        #expect(viewModel.startVolume.text.isEmpty)
+        #expect(viewModel.makeRequest() == nil)
+        #expect(viewModel.problem(in: .peakVolume) == "Enter the weekly volume to start from.")
+        viewModel.startVolume.text = "20"
+        #expect(try #require(viewModel.makeRequest()).startingVolume == VolumeTarget(measure: .distanceMeters, amount: 20_000))
+    }
+
+    @Test("a start in another measure than the peak is a problem and makes no request")
+    func startingVolumeMeasureMismatch() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        viewModel.peak = PeakVolumeDraft(measure: .distance, text: "60", distanceSystem: .metric)
+        viewModel.startVolume = PeakVolumeDraft(measure: .duration, text: "3")
+
+        #expect(viewModel.problem(in: .peakVolume) == "Enter the starting volume in km.")
+        #expect(viewModel.makeRequest() == nil)
+    }
+
+    @Test("changing the distance unit fills the start again in the new unit")
+    func startingVolumeFollowsDistanceUnit() async throws {
+        let (store, model, viewModel) = try await loaded([race("Target", in: 120)])
+        try await store.upsert([Activity(source: .manual, sport: .running, start: day(-5), duration: 8 * 3600)])
+        try await model.load(in: day(-30)...day(200), asOf: now)
+        viewModel.peak = PeakVolumeDraft(measure: .distance, text: "60", distanceSystem: .metric)
+        await viewModel.load()
+        let km = try #require(Double(viewModel.startVolume.text))
+
+        viewModel.peak = PeakVolumeDraft(measure: .distance, text: "40", distanceSystem: .imperial)
+
+        let miles = try #require(Double(viewModel.startVolume.text))
+        #expect(viewModel.startVolume.distanceSystem == .imperial)
+        #expect(abs(miles - km / 1.609344) < 0.1)
+    }
+
+    @Test("a failed races read is reported and still fills the starting volume from the runs")
+    func startingVolumeWhenRacesFail() async throws {
+        let base = InMemoryStore()
+        let races = FailingRaceReadStore(base: base)
+        let (store, model) = try await makeModel(raceStore: races)
+        try await store.upsert([Activity(source: .manual, sport: .running, start: day(-5), duration: 8 * 3600)])
+        try await model.load(in: day(-30)...day(200), asOf: now)
+        let viewModel = makeViewModel(model)
+        await races.setFailsReads(true)
+
+        await viewModel.load()
+
+        #expect(viewModel.loadError != nil)
+        #expect(viewModel.startVolume.text == "2.0")
+    }
+
+    @Test("a start equal to the peak is allowed, only a start above it is not")
+    func startingVolumeEqualToPeak() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        viewModel.startVolume.text = "10"
+        #expect(viewModel.problem(in: .peakVolume) == nil)
+        #expect(viewModel.makeRequest() != nil)
+    }
+
+    @Test("the volume step shows its own problem only when no field already shows one")
+    func volumeStepProblem() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        viewModel.startVolume.text = "abc"
+        #expect(viewModel.problem(in: .peakVolume) != nil)
+        #expect(viewModel.volumeStepProblem == nil)   // the field's own message shows it
+
+        viewModel.startVolume.text = ""
+        #expect(viewModel.volumeStepProblem == "Enter the weekly volume to start from.")
+        viewModel.startVolume.text = "11"
+        #expect(viewModel.volumeStepProblem == "The starting volume is above your peak.")
+    }
+
+    @Test("the starting volume is required and may not be above the peak; changing it hides a proposal")
+    func startingVolumeRules() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        await viewModel.generate()
+        #expect(viewModel.proposal != nil)
+
+        viewModel.startVolume.text = "4"
+        #expect(viewModel.proposal == nil)
+
+        viewModel.startVolume.text = ""
+        #expect(viewModel.problem(in: .peakVolume) == "Enter the weekly volume to start from.")
+        viewModel.startVolume.text = "abc"
+        #expect(viewModel.problem(in: .peakVolume) != nil)
+        viewModel.startVolume.text = "11"
+        #expect(viewModel.problem(in: .peakVolume) == "The starting volume is above your peak.")
+        #expect(viewModel.makeRequest() == nil)
+        viewModel.startVolume.text = "10"
+        #expect(viewModel.problem(in: .peakVolume) == nil)
     }
 
     @Test("the starting volume is the last four weeks of running averaged, else three hours")
@@ -453,17 +586,19 @@ struct CreatePlanViewModelTests {
             Activity(source: .manual, sport: .running, start: day(-5), duration: 3600),
         ])
         try await model.load(in: day(-30)...day(200), asOf: now)
+        await viewModel.load()   // the pre-filled starting volume reads the runs: 1.75 h, shown as 1.8
 
         #expect(try #require(viewModel.makeRequest()).currentVolume == nil)
 
         viewModel.preferences.includeConditioning = true
         let request = try #require(viewModel.makeRequest())
         #expect(request.currentVolume == VolumeTarget(measure: .durationSeconds, amount: 1800))
-        #expect(request.startingVolume.amount == 7 * 3600 / 4)
+        #expect(request.startingVolume.amount == 1.8 * 3600)
 
         // Running as much now as before: nothing to build up.
         try await store.upsert([Activity(source: .manual, sport: .running, start: day(-6), duration: 20 * 3600)])
         try await model.load(in: day(-30)...day(200), asOf: now)
+        await viewModel.load()
         #expect(try #require(viewModel.makeRequest()).currentVolume == nil)
     }
 
@@ -682,6 +817,7 @@ struct CreatePlanViewModelTests {
     func commitFailure() async throws {
         let (_, model) = try await makeModel(trainingPlans: false)
         let seed = makeViewModel(model)
+        seed.peak = PeakVolumeDraft(measure: .duration, text: "10")
         try await model.stores.raceStore.upsert([race("Target", in: 120)])
         await seed.load()
         await seed.generate()

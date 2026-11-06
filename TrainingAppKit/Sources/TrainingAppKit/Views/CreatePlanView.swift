@@ -349,10 +349,12 @@ private struct PeakVolumeStep: View {
 
     var body: some View {
         Form {
-            PeakVolumeSection(draft: $viewModel.peak)
-            if let note = viewModel.peakVolumeNote {
-                Section { Label(note, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary) }
-            }
+            PeakVolumeSection(
+                draft: $viewModel.peak, measures: [.duration, .distance],
+                footer: "The most you want to reach in one week of 7 days. A 10- or 14-day micro-cycle is scaled to it."
+            )
+            StartingVolumeSection(draft: $viewModel.startVolume)
+            ProblemRow(text: viewModel.volumeStepProblem)
         }
     }
 }
