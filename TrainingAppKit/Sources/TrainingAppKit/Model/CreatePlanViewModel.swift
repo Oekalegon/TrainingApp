@@ -67,6 +67,8 @@ public final class CreatePlanViewModel {
     private static let raceHorizonDays = 730
     /// The weeks of recent running averaged into the starting volume.
     private static let startingVolumeWeeks = 4
+    /// The weeks of recent running averaged into the current volume a conditioning phase builds up from (MVP5-160).
+    private static let currentVolumeWeeks = 2
 
     /// Everything the generated plan depends on; a proposal is shown only while this still equals the
     /// value it was generated for.
@@ -281,6 +283,21 @@ public final class CreatePlanViewModel {
     /// Whether the paradigm has a conditioning phase to ask about.
     public var offersConditioning: Bool { paradigm.phases.contains(.conditioning) }
 
+    /// Whether the target race is an ultra, where a special block is a long run on two consecutive days
+    /// and not two sessions in one day (MVP5-161).
+    public var targetIsUltra: Bool { targetRace?.isUltra ?? false }
+
+    /// How many runs a week the athlete wants, or `nil` for a run on every day available (MVP5-159).
+    public var runsPerWeek: Int? {
+        get { preferences.runsPerWeek }
+        set { preferences.runsPerWeek = newValue }
+    }
+
+    /// The most runs a week the availability allows: one per available day, at least 1.
+    public var maxRunsPerWeek: Int {
+        max(Weekday.allCases.filter { preferences.runAvailability.isAvailable(on: $0) }.count, 1)
+    }
+
     // MARK: Validation
 
     /// Why `step` is not complete, or `nil` when it is.
@@ -401,6 +418,13 @@ public final class CreatePlanViewModel {
             let startTarget = VolumeTarget(measure: measure, amount: min(startAmount, peakAmount)),
             let peakTarget = VolumeTarget(measure: measure, amount: peakAmount)
         else { return nil }
+        // A conditioning phase builds up from what the athlete runs now to the starting volume of base (MVP5-160);
+        // the last two weeks stand for "now", the last four for the base.
+        var currentTarget: VolumeTarget?
+        if preferences.includeConditioning, let current = currentVolume(asOf: today) {
+            let amount = measure == .distanceMeters ? current / model.athlete.paceModel.secondsPerMeter(atZone: 2) : current
+            if amount.isFinite, amount < startTarget.amount { currentTarget = VolumeTarget(measure: measure, amount: amount) }
+        }
         return PlanRequest(
             targetRace: target, otherRaces: others, paradigm: paradigm,
             macro: PlanMacro.template(
@@ -410,7 +434,7 @@ public final class CreatePlanViewModel {
             meso: MesocycleTemplate(name: MesocycleTemplate.threeToOne.name, microRoles: MesocycleTemplate.threeToOne.microRoles, microLengthDays: microLength),
             preferences: preferences, athlete: model.athlete, today: today, start: startDate,
             templates: BuiltInWorkoutTemplates.all + model.templates.filter { !$0.isArchived },
-            startingVolume: startTarget, peakVolume: peakTarget,
+            startingVolume: startTarget, peakVolume: peakTarget, currentVolume: currentTarget,
             hardSessionsPerMicro: hard, longRunsPerMicro: 1, activities: model.activities
         )
     }
@@ -426,6 +450,16 @@ public final class CreatePlanViewModel {
             .reduce(0) { $0 + $1.duration }
         let weekly = total / Double(Self.startingVolumeWeeks)
         return weekly > 0 ? weekly : Self.fallbackStartingVolume
+    }
+
+    /// The weekly running time the athlete does now: the last two weeks averaged to 7 days, or `nil` when
+    /// there is none. A conditioning phase builds up from it (MVP5-160).
+    func currentVolume(asOf today: Date) -> TimeInterval? {
+        guard let from = calendar.date(byAdding: .day, value: -7 * Self.currentVolumeWeeks, to: today) else { return nil }
+        let total = model.activities
+            .filter { $0.sport == .running && $0.start >= from && $0.start < today }
+            .reduce(0) { $0 + $1.duration }
+        return total > 0 ? total / Double(Self.currentVolumeWeeks) : nil
     }
 
     /// Asks the generator for a proposal from the current choices. Ignored while a generate or commit

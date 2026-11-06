@@ -347,6 +347,57 @@ struct CreatePlanViewModelTests {
         #expect(viewModel.startingVolume(asOf: day(0)) == 3600)
     }
 
+    @Test("runs per week and special blocks go into the request, and changing them hides a proposal")
+    func runsPerWeekAndSpecialBlocks() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        #expect(try #require(viewModel.makeRequest()).preferences.runsPerWeek == nil)
+        #expect(try #require(viewModel.makeRequest()).preferences.specialBlocks == 0)
+        await viewModel.generate()
+        #expect(viewModel.proposal != nil)
+
+        viewModel.runsPerWeek = 3
+        #expect(viewModel.proposal == nil)
+        viewModel.preferences.specialBlocks = 2
+
+        let request = try #require(viewModel.makeRequest())
+        #expect(request.preferences.runsPerWeek == 3)
+        #expect(request.preferences.specialBlocks == 2)
+        #expect(viewModel.maxRunsPerWeek >= 1)
+    }
+
+    @Test("the special block copy follows the target: an ultra gets back-to-back long runs")
+    func ultraTarget() async throws {
+        let (_, _, marathon) = try await loaded([race("Marathon", in: 120)])
+        let (_, _, ultra) = try await loaded([race("Ultra", in: 120, meters: 50_000)])
+
+        #expect(!marathon.targetIsUltra)
+        #expect(ultra.targetIsUltra)
+    }
+
+    @Test("a conditioning phase builds up from the last two weeks of running, only when that is below the starting volume")
+    func currentVolumeForConditioning() async throws {
+        let (store, model, viewModel) = try await loaded([race("Target", in: 120)])
+        // 6 h in the weeks 3 and 4 back, 1 h in the last two: the base starts at 7 h / 4 weeks, the athlete runs 30 min a week now.
+        try await store.upsert([
+            Activity(source: .manual, sport: .running, start: day(-25), duration: 3 * 3600),
+            Activity(source: .manual, sport: .running, start: day(-18), duration: 3 * 3600),
+            Activity(source: .manual, sport: .running, start: day(-5), duration: 3600),
+        ])
+        try await model.load(in: day(-30)...day(200), asOf: now)
+
+        #expect(try #require(viewModel.makeRequest()).currentVolume == nil)
+
+        viewModel.preferences.includeConditioning = true
+        let request = try #require(viewModel.makeRequest())
+        #expect(request.currentVolume == VolumeTarget(measure: .durationSeconds, amount: 1800))
+        #expect(request.startingVolume.amount == 7 * 3600 / 4)
+
+        // Running as much now as before: nothing to build up.
+        try await store.upsert([Activity(source: .manual, sport: .running, start: day(-6), duration: 20 * 3600)])
+        try await model.load(in: day(-30)...day(200), asOf: now)
+        #expect(try #require(viewModel.makeRequest()).currentVolume == nil)
+    }
+
     // MARK: Steps
 
     @Test("the wizard moves forward only past complete steps and back at any time")
