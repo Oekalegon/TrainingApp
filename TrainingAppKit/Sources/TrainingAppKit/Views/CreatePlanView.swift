@@ -3,8 +3,8 @@ import TrainingCore
 
 /// The Create Plan wizard (MVP5-146), a sheet opened from the Plans tab's New Plan action. Six steps
 /// (start date, races, training approach, availability, peak volume, review) driven by
-/// ``CreatePlanViewModel``; Back and Next sit in the bottom bar and the sheet closes only when the draft
-/// plan has been stored, handing it to `onCreated`.
+/// ``CreatePlanViewModel``; Back and Next sit in the bottom bar and the sheet closes only when the plan has been
+/// stored, as a draft or, from the review step, as the active plan, handing it to `onCreated`.
 struct CreatePlanView: View {
     @State private var viewModel: CreatePlanViewModel
     /// Called with the stored draft just before the sheet closes.
@@ -45,7 +45,7 @@ struct CreatePlanView: View {
                 case .paradigm: ParadigmStep(viewModel: viewModel)
                 case .preferences: PreferencesStep(viewModel: viewModel, editor: availabilityEditor)
                 case .peakVolume: PeakVolumeStep(viewModel: viewModel)
-                case .review: ReviewStep(viewModel: viewModel)
+                case .review: ReviewStep(viewModel: viewModel) { plan in onCreated(plan); dismiss() }
                 }
             }
             .navigationTitle(viewModel.step.title)
@@ -361,6 +361,8 @@ private struct PeakVolumeStep: View {
 
 private struct ReviewStep: View {
     @Bindable var viewModel: CreatePlanViewModel
+    /// Called with the plan once it is stored as the active plan.
+    let onActivated: (TrainingPlan) -> Void
 
     var body: some View {
         Form {
@@ -400,9 +402,10 @@ private struct ReviewStep: View {
                         .accessibilityLabel("Error. \(failure)")
                 }
             } footer: {
-                Text("The plan is saved as a draft in the Plans tab. Nothing changes in your calendar until you activate it.")
+                Text("Create Draft saves the plan in the Plans tab and changes nothing in your calendar. Below the preview you can activate it instead.")
             }
             if let summary = viewModel.summary { SummarySections(summary: summary) }
+            PlanPreviewSections(viewModel: viewModel, onActivated: onActivated)
             ProblemRow(text: viewModel.problem(in: .review))
         }
     }

@@ -189,6 +189,16 @@ public final class PlansViewModel {
         }
     }
 
+    /// Takes in a plan the Create Plan wizard stored (MVP5-121): reloads the list and, when the plan was stored as the active one,
+    /// does what every other change of the active plan does and tells ``onPlansChanged``'s owner, so the calendar, the
+    /// statistics and the Watch follow it. A draft feeds nothing, so only the list reloads.
+    ///
+    /// - Parameter plan: The plan the wizard stored.
+    public func planWasCreated(_ plan: TrainingPlan) async {
+        await reload()
+        if plan.status == .active { await onPlansChanged?() }
+    }
+
     /// Archives `entry`'s plan: it stays stored but feeds nothing. Archiving the active plan leaves
     /// none active.
     public func archive(_ entry: Entry) async {
