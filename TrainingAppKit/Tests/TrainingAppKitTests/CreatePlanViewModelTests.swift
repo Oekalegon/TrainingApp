@@ -26,12 +26,13 @@ struct CreatePlanViewModelTests {
     }
 
     private func makeModel(
-        trainingPlans: Bool = true, thresholdPace: Double? = nil, raceStore: (any RaceStore)? = nil
+        trainingPlans: Bool = true, thresholdPace: Double? = nil, raceStore: (any RaceStore)? = nil,
+        planStore: (any TrainingPlanStore)? = nil
     ) async throws -> (InMemoryStore, TrainingModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
             activityStore: store, planStore: store, workoutStore: store, cycleStore: store, raceStore: raceStore ?? store,
-            athleteStore: store, trainingPlanStore: trainingPlans ? store : nil
+            athleteStore: store, trainingPlanStore: trainingPlans ? (planStore ?? store) : nil
         )
         var athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC", restingHeartRateBPM: 50, maxHeartRateBPM: 190)
         athlete.runAvailability = athleteAvailability
@@ -600,6 +601,194 @@ struct CreatePlanViewModelTests {
         try await model.load(in: day(-30)...day(200), asOf: now)
         await viewModel.load()
         #expect(try #require(viewModel.makeRequest()).currentVolume == nil)
+    }
+
+    // MARK: Preview and activation (MVP5-121)
+
+    /// An active plan "Live" with `count` daily "Steady run" workouts from tomorrow.
+    private func addActivePlan(count: Int, to model: TrainingModel, store: InMemoryStore) async throws -> TrainingPlan {
+        let plan = try await model.createTrainingPlan(named: "Live", status: .active, asOf: now)
+        let steady = StructuredWorkout(
+            name: "Steady run", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(3600), target: .heartRateZone(2))])]
+        )
+        try await store.upsert([steady])
+        try await store.upsert((0..<count).map { PlannedActivity(workoutID: steady.id, date: day(1 + $0), planID: plan.id) })
+        try await model.load(in: day(-30)...day(200), asOf: now)
+        return plan
+    }
+
+    @Test("the preview has the micro-cycles with all the workouts, the projected form, and no replacement without an active plan")
+    func previewDetails() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        #expect(viewModel.details == nil)
+        await viewModel.generate()
+
+        let details = try #require(viewModel.details)
+        let proposal = try #require(viewModel.proposal)
+        #expect(!details.micros.isEmpty)
+        #expect(details.micros.reduce(0) { $0 + $1.items.count } == proposal.candidate.plannedActivities.count)
+        #expect(details.micros.allSatisfy { micro in micro.items.allSatisfy { micro.dates.lowerBound <= $0.day && $0.day <= micro.dates.upperBound } })
+        #expect(zip(details.micros, details.micros.dropFirst()).allSatisfy { $0.dates.lowerBound < $1.dates.lowerBound })
+        #expect(details.micros.map(\.name) == (1...details.micros.count).map { "Micro-cycle \($0)" })
+        #expect(details.form.count > 1)
+        #expect(details.peakCTL != nil)
+        #expect(details.replacement == nil)
+        #expect(viewModel.previewNote == nil)
+
+        viewModel.microLength = 14
+        #expect(viewModel.details == nil)   // like the proposal, hidden when a choice changes
+    }
+
+    @Test("the preview names the active plan's upcoming workouts that activating would replace")
+    func previewReplacement() async throws {
+        let (store, model, viewModel) = try await loaded([race("Target", in: 120)])
+        _ = try await addActivePlan(count: 3, to: model, store: store)
+
+        await viewModel.generate()
+
+        let replacement = try #require(viewModel.details?.replacement)
+        #expect(replacement.planName == "Live")
+        #expect(replacement.items.map(\.title) == ["Steady run", "Steady run", "Steady run"])
+        #expect(replacement.items.map(\.day) == [day(1), day(2), day(3)])
+        #expect(!replacement.isFollowed)
+        #expect(PlanPreviewSections.replacementText(replacement).contains("becomes a draft"))
+    }
+
+    @Test("activating stores the plan as the active one, the old active plan becomes a draft, and the model is changed once")
+    func activate() async throws {
+        let (_, _, seed) = try await loaded([race("Target", in: 120)])
+        await seed.generate()
+        var made = try #require(seed.proposal)
+        made.evaluation = PlanEvaluation(findings: [])
+        let clean = made
+        let (store, model, viewModel) = try await loaded([race("Target", in: 120)], generator: { _ in clean })
+        let old = try await addActivePlan(count: 2, to: model, store: store)
+        await viewModel.generate()
+        #expect(viewModel.isAcceptable)
+        #expect(viewModel.canActivate)
+
+        let plan = try #require(await viewModel.commit(activate: true))
+
+        #expect(plan.status == .active)
+        #expect(viewModel.committedPlan?.id == plan.id)
+        #expect(model.activeTrainingPlan?.id == plan.id)
+        #expect(model.trainingPlans.first { $0.id == old.id }?.status == .draft)
+        #expect(await viewModel.commit(activate: true) == nil)   // a second call does nothing
+    }
+
+    @Test("a plan with risks can be saved as a draft but activated only when the risks are accepted, and the acceptance does not carry over")
+    func activateWithRisks() async throws {
+        let (_, _, seed) = try await loaded([race("Target", in: 120)])
+        await seed.generate()
+        var made = try #require(seed.proposal)
+        made.evaluation = PlanEvaluation(findings: [PlanFinding(day: day(10), rule: .monotony, severity: .risk, value: 9, threshold: 7)])
+        let risky = made
+        let generator: PlanGenerating = { _ in risky }
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)], generator: generator)
+        await viewModel.generate()
+
+        #expect(!viewModel.isAcceptable)
+        #expect(!viewModel.canActivate)
+        #expect(await viewModel.commit(activate: true) == nil)
+        #expect(viewModel.failure == "Accept the risks to activate this plan.")
+
+        viewModel.acceptsRisks = true
+        #expect(viewModel.canActivate)
+        await viewModel.generate()
+        #expect(!viewModel.acceptsRisks)   // a new proposal asks again
+        #expect(!viewModel.canActivate)
+
+        viewModel.acceptsRisks = true
+        let plan = try #require(await viewModel.commit(activate: true))
+        #expect(plan.status == .active)
+    }
+
+    @Test("when the preview can't be read, the note says so, activation is off, a draft still works, and the note goes with the proposal")
+    func previewNoteWhenReadFails() async throws {
+        let base = InMemoryStore()
+        let plans = FailingTrainingPlanStore(base: base)
+        let (store, model) = try await makeModel(planStore: plans)
+        try await store.upsert([race("Target", in: 120)])
+        let viewModel = makeViewModel(model)
+        viewModel.peak = PeakVolumeDraft(measure: .duration, text: "10")
+        await viewModel.load()
+        await plans.setFailsReads(true)
+
+        await viewModel.generate()
+
+        #expect(viewModel.proposal != nil)
+        #expect(viewModel.details == nil)
+        #expect(viewModel.previewNote?.hasPrefix("Couldn't check what the plan would replace") == true)
+        #expect(!viewModel.canActivate)
+        viewModel.acceptsRisks = true
+        #expect(!viewModel.canActivate)
+        #expect(await viewModel.commit(activate: true) == nil)
+
+        viewModel.microLength = 14
+        #expect(viewModel.previewNote == nil)   // the note belongs to the choices it was made for
+
+        viewModel.microLength = 7
+        await plans.setFailsReads(false)
+        await viewModel.generate()
+        #expect(viewModel.previewNote == nil)
+        #expect(viewModel.details != nil)
+    }
+
+    @Test("an activation that fails to store is reported, leaves no plan, and can be tried again")
+    func activateFailure() async throws {
+        let base = InMemoryStore()
+        let plans = FailingTrainingPlanStore(base: base)
+        let (_, _, seed) = try await loaded([race("Target", in: 120)])
+        await seed.generate()
+        var made = try #require(seed.proposal)
+        made.evaluation = PlanEvaluation(findings: [])
+        let clean = made
+        let (store, model) = try await makeModel(planStore: plans)
+        try await store.upsert([race("Target", in: 120)])
+        let viewModel = CreatePlanViewModel(model: model, generator: { _ in clean }, now: { [now] in now })
+        viewModel.peak = PeakVolumeDraft(measure: .duration, text: "10")
+        await viewModel.load()
+        await viewModel.generate()
+        await plans.setFailsInserts(true)
+
+        #expect(await viewModel.commit(activate: true) == nil)
+
+        #expect(viewModel.failure?.hasPrefix("Couldn't save the plan") == true)
+        #expect(viewModel.committedPlan == nil)
+        #expect(!viewModel.isCommitting)
+        await plans.setFailsInserts(false)
+        let plan = try #require(await viewModel.commit(activate: true))
+        #expect(plan.status == .active)
+    }
+
+    @Test("what happens to the replaced plan is said for a followed plan, a plan with one workout and one with none")
+    func replacementTexts() {
+        func replacement(_ count: Int, followed: Bool) -> PlanPreviewDetails.Replacement {
+            let items = (0..<count).map { PlanPreviewDetails.Item(id: UUID(), day: Date(timeIntervalSince1970: Double($0) * 86_400), title: "Run") }
+            return PlanPreviewDetails.Replacement(planName: "Live", items: items, isFollowed: followed)
+        }
+        #expect(PlanPreviewSections.replacementText(replacement(1, followed: false)) == "\"Live\" is active now and has 1 upcoming workout that stops counting. It becomes a draft. Nothing is deleted.")
+        #expect(PlanPreviewSections.replacementText(replacement(0, followed: false)).contains("has no upcoming workouts"))
+        #expect(PlanPreviewSections.replacementText(replacement(4, followed: true)).contains("4 upcoming workouts that stop counting"))
+        #expect(PlanPreviewSections.replacementText(replacement(4, followed: true)).contains("cancelled and kept as history"))
+        #expect(PlanPreviewSections.consequenceText(replacement(4, followed: true)) == "\"Live\" is cancelled and kept as history.")
+        #expect(PlanPreviewSections.consequenceText(replacement(0, followed: false)) == "\"Live\" becomes a draft. Nothing is deleted.")
+    }
+
+    @Test("a draft can be created from a plan with risks without accepting them")
+    func draftWithRisks() async throws {
+        let (_, _, seed) = try await loaded([race("Target", in: 120)])
+        await seed.generate()
+        var made = try #require(seed.proposal)
+        made.evaluation = PlanEvaluation(findings: [PlanFinding(day: day(10), rule: .monotony, severity: .risk, value: 9, threshold: 7)])
+        let risky = made
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)], generator: { _ in risky })
+        await viewModel.generate()
+
+        let plan = try #require(await viewModel.commit())
+
+        #expect(plan.status == .draft)
     }
 
     // MARK: Steps

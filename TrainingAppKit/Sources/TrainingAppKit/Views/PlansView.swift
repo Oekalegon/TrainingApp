@@ -199,7 +199,7 @@ struct PlansView: View {
         .sheet(item: $creatingPlan) { creating in
             CreatePlanView(viewModel: creating.viewModel) { plan in
                 Task {
-                    await viewModel.reload()
+                    await viewModel.planWasCreated(plan)
                     path.append(.plan(plan.id))
                 }
             }

@@ -2,8 +2,8 @@ import Foundation
 import TrainingCore
 
 /// A plain-language reading of a ``PlanProposal`` for the Create Plan review step (MVP5-146): the
-/// layout, what was given up and what the guardrails found. The full preview and commit screen
-/// (MVP5-121) is separate.
+/// layout, what was given up and what the guardrails found. The rest of the preview (the projected form, the
+/// workouts and what activating would replace) is ``PlanPreviewDetails`` (MVP5-121).
 public struct PlanProposalSummary: Equatable, Sendable {
     /// One phase of the layout.
     public struct Phase: Equatable, Sendable, Identifiable {

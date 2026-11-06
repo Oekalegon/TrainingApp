@@ -89,6 +89,24 @@ struct PlansViewModelTests {
         #expect(viewModel.actionError == nil)
     }
 
+    @Test("a plan the wizard stored as the active one tells the owner, so the calendar and the Watch follow; a draft only reloads")
+    func planWasCreated() async throws {
+        let (store, model) = try await makeModel()
+        let draft = try await addPlan("Draft", status: .draft, workouts: 2, to: model, store: store)
+        let viewModel = makeViewModel(model)
+        var notified = 0
+        viewModel.onPlansChanged = { notified += 1 }
+
+        await viewModel.planWasCreated(draft)
+        #expect(notified == 0)
+        #expect(viewModel.entries.map(\.plan.name) == ["Draft"])
+
+        let live = try await addPlan("Live", status: .active, workouts: 1, to: model, store: store)
+        await viewModel.planWasCreated(live)
+        #expect(notified == 1)
+        #expect(viewModel.entries.first?.plan.name == "Live")
+    }
+
     @Test("archiving the active plan leaves none active and nothing in the model")
     func archiveActive() async throws {
         let (store, model) = try await makeModel()

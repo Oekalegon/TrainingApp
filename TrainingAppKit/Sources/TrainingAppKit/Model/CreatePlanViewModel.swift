@@ -40,11 +40,12 @@ public enum RaceWindowState: Equatable, Sendable {
 /// Drives the Create Plan wizard (MVP5-146): the choices that become a ``PlanRequest``, what each step
 /// needs to be complete, and the generate and commit actions of the review step.
 ///
-/// What it makes is a **draft** plan: ``generate()`` asks the generator (``PlanGenerating``, the plan
-/// generator by default) for a proposal from the start date, the races, the paradigm, the micro length
-/// and the plan's preferences, and ``commit()`` stores it with ``TrainingModel/commit(_:named:activate:acceptingRisks:asOf:)``
-/// without activating it. Replacing the active plan stays in the Plans tab, which previews a draft
-/// against the active plan first.
+/// ``generate()`` asks the generator (``PlanGenerating``, the plan generator by default) for a proposal from
+/// the start date, the races, the paradigm, the micro length and the plan's preferences, and reads what activating it
+/// would replace (``details``, MVP5-121). ``commit(activate:)`` then stores it with
+/// ``TrainingModel/commit(_:named:activate:acceptingRisks:asOf:)``: as a **draft** by default, which changes nothing in
+/// the calendar, or as the active plan once the athlete has seen what it replaces and, for a plan with risks, accepted
+/// them (``acceptsRisks``). The Plans tab compares a draft's form against the active plan's.
 ///
 /// The plan's preferences start as the athlete's Running Availability and can be changed for this
 /// plan only; nothing is written back to the athlete. A proposal belongs to the exact choices it was
@@ -140,7 +141,7 @@ public final class CreatePlanViewModel {
     public private(set) var failure: String?
     /// The plan made by ``commit()``, once it has.
     public private(set) var committedPlan: TrainingPlan?
-    private var generated: (inputs: Inputs, proposal: PlanProposal)?
+    private var generated: (inputs: Inputs, proposal: PlanProposal, details: PlanPreviewDetails?, note: String?)?
 
     /// Creates the wizard's view model.
     ///
@@ -443,6 +444,34 @@ public final class CreatePlanViewModel {
         return generated.proposal
     }
 
+    /// The micro-cycles with their workouts, the projected form and what activating would replace, for the proposal
+    /// shown; `nil` with no proposal or when the preview could not be made (see ``previewNote``) (MVP5-121).
+    public var details: PlanPreviewDetails? {
+        guard let generated, generated.inputs == currentInputs else { return nil }
+        return generated.details
+    }
+
+    /// Whether the proposal has no risk findings, so it can be activated without accepting any.
+    public var isAcceptable: Bool { proposal?.isAcceptable ?? true }
+
+    /// Set when the proposal was made but its preview was not, so what activating would replace is unknown;
+    /// the plan can still be stored as a draft. Like the proposal, it belongs to the choices it was made from.
+    public var previewNote: String? {
+        guard let generated, generated.inputs == currentInputs else { return nil }
+        return generated.note
+    }
+
+    /// Whether the athlete accepted the risks of the proposal shown; put back to `false` for every new proposal, so
+    /// accepting the risks of one plan never carries over to the next.
+    public var acceptsRisks = false
+
+    /// Whether the plan can be activated now: there is a proposal, what it would replace is known, and its risks are
+    /// accepted if it has any.
+    public var canActivate: Bool {
+        guard let proposal, details != nil else { return false }
+        return proposal.isAcceptable || acceptsRisks
+    }
+
     /// A readable form of ``proposal`` for the review step.
     public var summary: PlanProposalSummary? {
         proposal.map { PlanProposalSummary($0, calendar: calendar) }
@@ -532,7 +561,20 @@ public final class CreatePlanViewModel {
         defer { isGenerating = false }
         do {
             let made = try await generator(request)
-            generated = (inputs, made)
+            acceptsRisks = false
+            // What activating would replace is read with the proposal, as of the same day. A failed read leaves the
+            // proposal usable as a draft, but it can't be activated without knowing what it replaces.
+            let today = calendar.startOfDay(for: now())
+            var details: PlanPreviewDetails?
+            var note: String?
+            do {
+                let preview = try await model.preview(made, asOf: today)
+                let library = try await model.stores.workoutStore.workouts()
+                details = PlanPreviewDetails(preview, library: library, calendar: calendar)
+            } catch {
+                note = "Couldn't check what the plan would replace: \(error.localizedDescription). You can still save it as a draft."
+            }
+            generated = (inputs, made, details, note)
         } catch is CancellationError {
             return
         } catch {
@@ -543,11 +585,22 @@ public final class CreatePlanViewModel {
 
     // MARK: Commit
 
-    /// Stores the proposal as a draft plan. `true` once it is stored; the wizard then closes. A second
-    /// call while one runs, or after the plan exists, does nothing.
+    /// Stores the proposal as a plan: a draft, or with `activate` the active one (MVP5-121). Returns the stored plan once
+    /// it is, and the wizard then closes. A second call while one runs, or after the plan exists, does nothing.
+    ///
+    /// Activating replaces the active plan as ``TrainingModel/commit(_:named:activate:acceptingRisks:asOf:)`` does (a followed
+    /// plan is cancelled and kept, otherwise it becomes a draft; nothing is deleted) and is refused unless
+    /// ``canActivate`` says it can be.
+    ///
+    /// - Parameters:
+    ///   - activate: Whether to make the plan the active one; defaults to a draft. The risks are accepted as ``acceptsRisks`` says.
     @discardableResult
-    public func commit() async -> TrainingPlan? {
+    public func commit(activate: Bool = false) async -> TrainingPlan? {
         guard !isBusy, committedPlan == nil, let proposal else { return nil }
+        if activate, !canActivate {
+            failure = proposal.isAcceptable ? "Couldn't check what the plan would replace, so it can't be activated." : "Accept the risks to activate this plan."
+            return nil
+        }
         let planName = effectiveName
         guard !planName.isEmpty else {
             failure = "A plan needs a name."
@@ -558,7 +611,7 @@ public final class CreatePlanViewModel {
         isCommitting = true
         defer { isCommitting = false }
         do {
-            let plan = try await model.commit(proposal, named: planName, activate: false, asOf: today)
+            let plan = try await model.commit(proposal, named: planName, activate: activate, acceptingRisks: acceptsRisks, asOf: today)
             committedPlan = plan
             return plan
         } catch {
