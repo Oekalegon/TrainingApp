@@ -105,6 +105,23 @@ Scoping and design: `docs/design/mvp5-plan-assistant.md`.
 - [ ] **MVP5-151** (TrainingKit) Faster TSB-zone sizing: `PlanGenerator` sizes each micro by bisection and every probe refits the micro and rebuilds the whole series from the history, so a plan takes 3 to 5 times longer than before (TrainingKit#141; the suite goes from 4 s to 30 s in debug). Seed each probe's series with the committed micros' CTL/ATL instead of rebuilding from the history, and cache the fit of unchanged runs. Also report a micro that ends far from its zone aim (too fresh at the ceiling, or too tired at the lightest volume) in the plan preview
 - [ ] Marathon pace workout (from *Run Elite*): a run with a block at marathon pace. Needs a pace target, which the built-in templates can't express yet. Structure still to be specified
 
+## MVP9: Apple Watch app
+
+Design: `docs/design/watch-app.md` (draft, 2026-11-06). A watchOS app that records workouts with `HKWorkoutSession` using the athlete's own heart-rate (later pace) zones, so the Watch and TrainingApp agree, with data views built for training and a live map. WorkoutKit scheduling stays alongside it (decided 2026-11-06).
+
+- [ ] **MVP9-100** (Spike) Record a run on a real Watch with a minimal watchOS target: `HKWorkoutSession` + `HKLiveWorkoutBuilder`, fixed zone bounds, one `HKWorkoutActivity` per step with the `WOIntervalStepKeyPath` metadata, saved to Health. Check with Athlete ▸ Developer ▸ Inspect Recent Workouts that the import links to the plan and the steps match, including a plan without a warm-up or cool-down (the numbering question MVP2-146 left open). Decides whether the rest is feasible as drawn (design §6, §9 Q2)
+- [ ] **MVP9-101** (TrainingKit, App) Check that `TrainingCore`, `TrainingPersistence` and `TrainingAppKit` build for watchOS: add `.watchOS(.v26)` to `TrainingAppKit/Package.swift`, build for a watchOS destination and list what needs `#if` or moving (design §9 Q5)
+- [ ] **MVP9-102** (App) Add the watchOS app target to `project.yml`, embedded in the iOS app (bundle id `org.oekalegon.trainingapp.watchkitapp`), and a testable library target for the session logic; HealthKit write and location permissions and usage strings (the app writes workouts now, MVP9-100 first)
+- [ ] **MVP9-103** (TrainingKit, App) `WatchSnapshot`: a small versioned `Codable` with the zone model, the resolved bpm bounds and the next days' resolved workouts, sent over WatchConnectivity (`updateApplicationContext`) on the same triggers as `WatchScheduleSync`; a test that iPhone and Watch agree on every zone bound (design §5)
+- [ ] **MVP9-104** (App) Watch step engine and targets: runs a resolved workout step by step against a `WorkoutSessionProviding` protocol (a fake with scripted heart rate, pace and location in tests), step changes, heart-rate and pace range checks, haptics with debounce and a grace period at the start of a step (design §7, §11)
+- [ ] **MVP9-105** (App) Watch workout pages: start screen (planned workout or free run, venue), zone page (heart rate, zone, position in the zone, time in zone), step page, metrics page, controls page, summary (design §7)
+- [ ] **MVP9-106** (App) Route and live map: `HKWorkoutRouteBuilder` from `CLLocation` updates, a MapKit page on the Watch with the trail and the planned route, drawn only while visible to save battery. Shares route import with MVP4-100 (design §6, §7)
+- [ ] **MVP9-107** (TrainingKit, App) Importer: accept the Watch app's own plan-id and source marker in the workout metadata, link ahead of the same-day heuristic, and when Apple's app and the Watch app both recorded the planned run keep the marked workout and treat the other as a duplicate through the existing deduplicate/join flow (decision §9a)
+- [ ] **MVP9-108** (TrainingKit, App) Store the zone bounds in effect in the workout's metadata and have the importer show time in zone as recorded (or decide to recompute from the dated settings, design §9 Q3)
+- [ ] **MVP9-109** (App) Athlete ▸ Apple Watch settings: which app uses which zones, the snapshot's last-sent status, the Watch app's installed state
+- [ ] **MVP9-110** (App) Watch polish: always-on display, water lock and Action button, accessibility, battery and GPS check on a long run, a TestFlight path for watchOS
+- [ ] **MVP9-111** (TrainingKit, App) Pace zones on the Watch once MVP8 has them; until then the Watch runs heart-rate zones and a step's pace range target (MVP5-141)
+
 ## FIT: Garmin/COROS import
 
 - [ ] **FIT-1** FIT/TCX activity import
@@ -126,7 +143,7 @@ Scoping and design: `docs/design/mvp5-plan-assistant.md`.
 - [ ] Cycle/plan viewing screen
 - [ ] Edit the athlete account (needs a write path through `TrainingModel`)
 - [ ] iPad layout
-- [ ] watchOS companion
+- [ ] watchOS companion: moved to MVP9 (Apple Watch app)
 
 ## Docs & tooling
 
