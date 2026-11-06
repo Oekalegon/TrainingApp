@@ -707,6 +707,112 @@ struct PlannedWorkoutSheetViewModelTests {
         return (plan, workout)
     }
 
+    // MARK: Picking from the ranked list (MVP5-156)
+
+    /// A ranked workout from `template` with `values` over its defaults.
+    private func ranked(_ template: WorkoutTemplate, _ values: [String: Double] = [:]) throws -> RankedWorkout {
+        var all = Dictionary(uniqueKeysWithValues: template.parameters.map { ($0.key, $0.defaultValue) })
+        all.merge(values) { _, new in new }
+        let workout = try template.instantiate(name: template.name, venue: nil, values: all)
+        return RankedWorkout(
+            template: template, values: all, workout: workout, seconds: 1_800, load: 30, endOfMicroTSB: nil, microSeconds: nil, reasons: []
+        )
+    }
+
+    @Test("picking a ranked workout when creating selects its template and sets its parameters")
+    func choosingWhenCreating() async throws {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: nil)
+        viewModel.distanceSystem = .metric
+
+        viewModel.choose(try ranked(BuiltInWorkoutTemplates.easyRun, ["duration": 45 * 60]))
+
+        #expect(viewModel.selectedTemplate?.id == BuiltInWorkoutTemplates.easyRun.id)
+        #expect(viewModel.parameterValues["duration"] == 2_700.0)
+        #expect(viewModel.workoutName == "55min Easy Run")
+        #expect(viewModel.canSave)
+        #expect(await viewModel.save(asOf: day(0)))
+        #expect(model.workouts.first?.templateID == BuiltInWorkoutTemplates.easyRun.id)
+    }
+
+    @Test("a ranked workout's values are kept as ranked, also between the slider's notches")
+    func choosingKeepsRankedValues() async throws {
+        let (_, model) = await makeModel()
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, date: day(1), scheduler: nil)
+        let duration = try #require(BuiltInWorkoutTemplates.easyRun.parameters.first { $0.key == "duration" })
+        let between = duration.sliderRange.lowerBound + duration.sliderStep / 3
+
+        viewModel.choose(try ranked(BuiltInWorkoutTemplates.easyRun, ["duration": between]))
+
+        #expect(viewModel.parameterValues["duration"] == between)
+        #expect(duration.snapped(between) != between)
+    }
+
+    @Test("picking a ranked workout when editing replaces the plan's workout in place and drops its load override")
+    func choosingWhenEditing() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+        viewModel.loadOverride = 99
+        #expect(viewModel.canReplaceWorkout)
+
+        viewModel.choose(try ranked(BuiltInWorkoutTemplates.easyRun, ["duration": 45 * 60]))
+
+        #expect(viewModel.loadOverride == nil)
+        #expect(viewModel.editableParameters.map(\.key) == BuiltInWorkoutTemplates.easyRun.parameters.map(\.key))
+        #expect(viewModel.parameterValues["duration"] == 2_700.0)
+        #expect(await viewModel.save(asOf: day(0)))
+
+        let saved = try #require(model.plans.first { $0.id == plan.id })
+        #expect(saved.workoutID != oldWorkout.id)
+        #expect(saved.date == plan.date)
+        #expect(saved.expectedLoadOverride == nil)
+        let workout = try #require(model.workouts.first { $0.id == saved.workoutID })
+        #expect(workout.templateID == BuiltInWorkoutTemplates.easyRun.id)
+        #expect(workout.parameterValues?["duration"] == 2_700.0)
+        #expect(!model.workouts.contains { $0.id == oldWorkout.id })   // nothing else used the old workout
+    }
+
+    @Test("replacing keeps a workout that other plans share, and a failed schedule leaves the plan untouched")
+    func choosingKeepsSharedWorkoutAndSurvivesFailure() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let (plan, oldWorkout) = try await makeTemplatePlan(model: model, on: day(3))
+        try await model.add(PlannedActivity(workoutID: oldWorkout.id, date: day(6)))
+        let failing = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: FakeScheduler(scheduleShouldFail: true))
+        failing.choose(try ranked(BuiltInWorkoutTemplates.longRun))
+        #expect(!(await failing.save(asOf: day(0))))
+        #expect(model.plans.first { $0.id == plan.id }?.workoutID == oldWorkout.id)
+
+        let viewModel = PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil)
+        viewModel.choose(try ranked(BuiltInWorkoutTemplates.longRun))
+        #expect(await viewModel.save(asOf: day(0)))
+
+        #expect(model.workouts.contains { $0.id == oldWorkout.id })
+        #expect(model.plans.first { $0.id == plan.id }?.workoutID != oldWorkout.id)
+    }
+
+    @Test("a plan whose workout is gone can't be replaced from the list, and the list is made for the sheet's day and plan")
+    func replaceAvailabilityAndSuggestions() async throws {
+        let (_, model) = await makeModel()
+        try await model.load(in: day(-7)...day(14))
+        let creating = PlannedWorkoutSheetViewModel(model: model, date: day(2), scheduler: nil)
+        #expect(!creating.canReplaceWorkout)
+        #expect(creating.makeSuggestions().day == day(2))
+        #expect(creating.makeSuggestions().replacing == nil)
+
+        let orphan = PlannedActivity(workoutID: UUID(), date: day(3))
+        try await model.add(orphan)
+        let editing = PlannedWorkoutSheetViewModel(model: model, editing: orphan, scheduler: nil)
+        #expect(!editing.canReplaceWorkout)
+        editing.choose(try ranked(BuiltInWorkoutTemplates.easyRun))   // ignored
+        #expect(editing.parameterValues.isEmpty)
+
+        let (plan, _) = try await makeTemplatePlan(model: model, on: day(4))
+        #expect(PlannedWorkoutSheetViewModel(model: model, editing: plan, scheduler: nil).makeSuggestions().replacing?.id == plan.id)
+    }
+
     @Test("canSave: a new plan needs a template, an edit can always save (regression: edit mode's save button was disabled)")
     func canSaveInEditAndCreate() async throws {
         let (_, model) = await makeModel()
