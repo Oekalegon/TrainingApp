@@ -350,6 +350,7 @@ struct CreatePlanViewModelTests {
     @Test("runs per week and special blocks go into the request, and changing them hides a proposal")
     func runsPerWeekAndSpecialBlocks() async throws {
         let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        viewModel.paradigm = .triphasic
         #expect(try #require(viewModel.makeRequest()).preferences.runsPerWeek == nil)
         #expect(try #require(viewModel.makeRequest()).preferences.specialBlocks == 0)
         await viewModel.generate()
@@ -363,6 +364,74 @@ struct CreatePlanViewModelTests {
         #expect(request.preferences.runsPerWeek == 3)
         #expect(request.preferences.specialBlocks == 2)
         #expect(viewModel.maxRunsPerWeek >= 1)
+    }
+
+    @Test("runs per week may exceed the days: two runs a day count, and a value above the new maximum reads as the maximum")
+    func runsPerWeekCap() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        var availability = RunAvailability().togglingDay(.monday).togglingDay(.wednesday)
+        availability = availability.settingRuns(2, on: .monday)
+        viewModel.setAvailability(availability)
+        #expect(viewModel.maxRunsPerWeek == 3)
+
+        viewModel.runsPerWeek = 3
+        #expect(viewModel.runsPerWeek == 3)
+        #expect(try #require(viewModel.makeRequest()).preferences.runsPerWeek == 3)
+
+        // A day switched off lowers the maximum; the kept 3 reads as 2 and is sent as 2.
+        viewModel.setAvailability(availability.togglingDay(.wednesday))
+        #expect(viewModel.maxRunsPerWeek == 2)
+        #expect(viewModel.runsPerWeek == 2)
+        #expect(try #require(viewModel.makeRequest()).preferences.runsPerWeek == 2)
+    }
+
+    @Test("special blocks are offered only where the approach has a specific phase, and a kept count is not sent for 80/20")
+    func specialBlocksNeedSpecificPhase() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        viewModel.paradigm = .triphasic
+        #expect(viewModel.offersSpecialBlocks)
+        await viewModel.generate()
+        #expect(viewModel.proposal != nil)
+        viewModel.specialBlocks = 2
+        #expect(viewModel.proposal == nil)
+        #expect(try #require(viewModel.makeRequest()).preferences.specialBlocks == 2)
+
+        viewModel.paradigm = .polarized8020
+        #expect(!viewModel.offersSpecialBlocks)
+        #expect(viewModel.specialBlocks == 0)
+        #expect(try #require(viewModel.makeRequest()).preferences.specialBlocks == 0)
+
+        viewModel.specialBlocks = 7
+        #expect(viewModel.preferences.specialBlocks == 2)
+    }
+
+    @Test("a day kept free in this plan's availability reaches the request")
+    func keepFreeReachesRequest() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        viewModel.setAvailability(RunAvailability().togglingDay(.monday).togglingDay(.tuesday).settingPreferablyFree(true, on: .monday))
+
+        let availability = try #require(viewModel.makeRequest()).preferences.runAvailability
+        #expect(availability.isPreferablyFree(.monday))
+        #expect(!availability.isPreferablyFree(.tuesday))
+    }
+
+    @Test("the current volume of a conditioning phase is in meters when the peak is in distance")
+    func currentVolumeInDistance() async throws {
+        let (store, model, viewModel) = try await loaded([race("Target", in: 120)])
+        try await store.upsert([
+            Activity(source: .manual, sport: .running, start: day(-25), duration: 3 * 3600),
+            Activity(source: .manual, sport: .running, start: day(-18), duration: 3 * 3600),
+            Activity(source: .manual, sport: .running, start: day(-5), duration: 3600),
+        ])
+        try await model.load(in: day(-30)...day(200), asOf: now)
+        viewModel.preferences.includeConditioning = true
+        viewModel.peak = PeakVolumeDraft(measure: .distance, text: "60", distanceSystem: .metric)
+
+        let request = try #require(viewModel.makeRequest())
+        let current = try #require(request.currentVolume)
+        #expect(current.measure == .distanceMeters)
+        #expect(current.amount > 0)
+        #expect(current.amount < request.startingVolume.amount)
     }
 
     @Test("the special block copy follows the target: an ultra gets back-to-back long runs")

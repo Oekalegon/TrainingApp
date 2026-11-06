@@ -283,19 +283,33 @@ public final class CreatePlanViewModel {
     /// Whether the paradigm has a conditioning phase to ask about.
     public var offersConditioning: Bool { paradigm.phases.contains(.conditioning) }
 
+    /// Whether the paradigm has a specific phase, the only one where TrainingKit places a special block (MVP5-161);
+    /// 80/20 has none, so asking for blocks there could only end in a compromise.
+    public var offersSpecialBlocks: Bool { paradigm.phases.contains(.specific) }
+
+    /// How many special blocks the athlete wants, 0 to 2, and 0 when the approach has no specific phase: a count kept
+    /// from before the approach changed is not sent (MVP5-161).
+    public var specialBlocks: Int {
+        get { offersSpecialBlocks ? preferences.specialBlocks : 0 }
+        set { preferences.specialBlocks = min(max(newValue, 0), 2) }
+    }
+
     /// Whether the target race is an ultra, where a special block is a long run on two consecutive days
     /// and not two sessions in one day (MVP5-161).
     public var targetIsUltra: Bool { targetRace?.isUltra ?? false }
 
-    /// How many runs a week the athlete wants, or `nil` for a run on every day available (MVP5-159).
+    /// How many runs a week the athlete wants, or `nil` for a run on every day available (MVP5-159), never
+    /// more than ``maxRunsPerWeek``: a value kept from before days were switched off, or their runs lowered,
+    /// reads as the new maximum.
     public var runsPerWeek: Int? {
-        get { preferences.runsPerWeek }
+        get { preferences.runsPerWeek.map { min($0, maxRunsPerWeek) } }
         set { preferences.runsPerWeek = newValue }
     }
 
-    /// The most runs a week the availability allows: one per available day, at least 1.
+    /// The most runs a week the availability allows: the runs of each available day (more than one when the athlete
+    /// allows two runs in a day, MVP5-132), at least 1.
     public var maxRunsPerWeek: Int {
-        max(Weekday.allCases.filter { preferences.runAvailability.isAvailable(on: $0) }.count, 1)
+        max(Weekday.allCases.reduce(0) { $0 + (preferences.runAvailability.isAvailable(on: $1) ? preferences.runAvailability.runs(on: $1) : 0) }, 1)
     }
 
     // MARK: Validation
@@ -396,6 +410,8 @@ public final class CreatePlanViewModel {
         let leadDays = (calendar.dateComponents([.day], from: startDate, to: target.date).day ?? 0) + 1
         let starting = startingVolume(asOf: today)
         var preferences = preferences
+        preferences.runsPerWeek = runsPerWeek
+        preferences.specialBlocks = specialBlocks
         // The plan is in the measure of the peak: time, or distance (the generator plans it as the same time at the
         // easy pace). The starting volume is the athlete's running time, turned into distance the same way. TRIMP is
         // not used: the generator does not plan by it.

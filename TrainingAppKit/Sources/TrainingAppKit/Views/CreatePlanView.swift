@@ -309,7 +309,7 @@ private struct PreferencesStep: View {
             Section {
                 Toggle("Limit runs per week", isOn: Binding(
                     get: { viewModel.runsPerWeek != nil },
-                    set: { viewModel.runsPerWeek = $0 ? viewModel.maxRunsPerWeek : nil }
+                    set: { viewModel.runsPerWeek = $0 ? min(4, viewModel.maxRunsPerWeek) : nil }
                 ))
                 if let runs = viewModel.runsPerWeek {
                     Stepper(
@@ -321,21 +321,23 @@ private struct PreferencesStep: View {
             } footer: {
                 Text("The plan picks the days of the easy runs that are spaced best. Hard sessions and long runs are never dropped for it.")
             }
-            Section {
-                Stepper(
-                    viewModel.preferences.specialBlocks == 0
-                        ? "No special blocks"
-                        : "\(viewModel.preferences.specialBlocks) special \(viewModel.preferences.specialBlocks == 1 ? "block" : "blocks")",
-                    value: Binding(
-                        get: { viewModel.preferences.specialBlocks },
-                        set: { viewModel.preferences.specialBlocks = min(max($0, 0), 2) }
-                    ),
-                    in: 0...2
-                )
-            } footer: {
-                Text(viewModel.targetIsUltra
-                    ? "A special block is a long run on two consecutive days, late in the specific phase. Fewer are placed when they don't fit."
-                    : "A special block is a micro-cycle with two sessions in one day, late in the specific phase. Fewer are placed when they don't fit.")
+            if viewModel.offersSpecialBlocks {
+                Section {
+                    Stepper(
+                        viewModel.specialBlocks == 0
+                            ? "No special blocks"
+                            : "\(viewModel.specialBlocks) special \(viewModel.specialBlocks == 1 ? "block" : "blocks")",
+                        value: Binding(
+                            get: { viewModel.specialBlocks },
+                            set: { viewModel.specialBlocks = $0 }
+                        ),
+                        in: 0...2
+                    )
+                } footer: {
+                    Text(viewModel.targetIsUltra
+                        ? "A special block is a long run on two consecutive days, late in the specific phase. Fewer are placed when they don't fit."
+                        : "A special block is a micro-cycle with two sessions in one day, late in the specific phase. Fewer are placed when they don't fit.")
+                }
             }
             ProblemRow(text: viewModel.problem(in: .preferences))
         }
@@ -378,7 +380,7 @@ private struct ReviewStep: View {
                 LabeledContent("Approach", value: viewModel.paradigm.name)
                 LabeledContent("Micro-cycle", value: "\(viewModel.microLength) days")
                 if let runs = viewModel.runsPerWeek { LabeledContent("Runs a week", value: "\(runs)") }
-                if viewModel.preferences.specialBlocks > 0 { LabeledContent("Special blocks", value: "\(viewModel.preferences.specialBlocks)") }
+                if viewModel.specialBlocks > 0 { LabeledContent("Special blocks", value: "\(viewModel.specialBlocks)") }
             }
             Section {
                 Button {
