@@ -61,4 +61,13 @@ struct PeakVolumeDraftTests {
         #expect(PeakVolumeDraft(measure: .duration, text: ".5").value == 1800)
         #expect(PeakVolumeDraft(measure: .duration, text: "7.").value == 25_200)
     }
+
+    @Test("a draft made from a base value shows it in the display unit, to a tenth")
+    func fromBaseValue() {
+        #expect(PeakVolumeDraft(measure: .duration, baseValue: 9000).text == "2.5")
+        #expect(PeakVolumeDraft(measure: .distance, baseValue: 42_195, distanceSystem: .metric).text == "42.2")
+        #expect(PeakVolumeDraft(measure: .distance, baseValue: 16_093.44, distanceSystem: .imperial).text == "10.0")
+        #expect(PeakVolumeDraft(measure: .duration, baseValue: 0).text == "")
+        #expect(PeakVolumeDraft(measure: .duration, baseValue: .nan).text == "")
+    }
 }
