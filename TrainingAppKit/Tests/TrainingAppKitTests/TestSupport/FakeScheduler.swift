@@ -45,7 +45,7 @@ final actor FakeScheduler: PlannedWorkoutScheduling {
     }
 
     /// Logs every attempt, failed or not; only a successful one lands in ``scheduledPlans``.
-    func schedule(_ plan: PlannedActivity, workout: StructuredWorkout, calendar: Calendar) async throws {
+    func schedule(_ plan: PlannedActivity, workout: StructuredWorkout, athlete: AthleteProfile, calendar: Calendar) async throws {
         callLog.append("schedule")
         if scheduleShouldFail {
             struct SchedulingFailed: Error {}

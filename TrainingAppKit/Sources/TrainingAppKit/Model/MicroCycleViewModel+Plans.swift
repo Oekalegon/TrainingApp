@@ -13,6 +13,11 @@ extension MicroCycleViewModel {
         return viewModel
     }
 
+    /// The view model for the Create Plan wizard (MVP5-146), which stores a draft plan from the Plans tab's New Plan action.
+    public func createPlanViewModel() -> CreatePlanViewModel {
+        CreatePlanViewModel(model: model)
+    }
+
     /// Catches up with a change of the active plan, or of its workouts, made outside this view model
     /// (MVP5-125): `TrainingModel` has already swapped `plans` and `cycles` for the new active plan's,
     /// so what is left is what this view model keeps beside them. Drops the cycles peeked from the

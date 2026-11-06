@@ -80,6 +80,22 @@ struct RunAvailabilityEditorTests {
         #expect(editor.shown.runs(on: .saturday) == 2)
     }
 
+    @Test("keeping a day free is saved, and a failed save reverts it")
+    func preferablyFree() async {
+        let profile = Profile()
+        let editor = makeEditor(profile)
+        await editor.toggleDay(.sunday)
+
+        await editor.setPreferablyFree(true, on: .sunday)
+        #expect(editor.shown.isPreferablyFree(.sunday))
+        #expect(profile.availability.isPreferablyFree(.sunday))
+
+        profile.failing = [3]
+        await editor.setPreferablyFree(false, on: .sunday)
+        #expect(editor.didFail)
+        #expect(editor.shown.isPreferablyFree(.sunday))
+    }
+
     @Test("a failed part toggle reverts to the saved parts")
     func failedSlotToggle() async {
         let profile = Profile()

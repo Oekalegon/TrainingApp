@@ -134,8 +134,8 @@ struct PlansView: View {
     @State private var addingEntryDate: DayAddDate?
     /// Bumped when a race is added, so an open plan's projection reads it.
     @State private var previewRefresh = 0
-    @State private var isCreating = false
-    @State private var newPlanName = ""
+    /// The Create Plan wizard (MVP5-146), while it is shown.
+    @State private var creatingPlan: CreatingPlan?
 
     init(microCycleViewModel: MicroCycleViewModel) {
         self.microCycleViewModel = microCycleViewModel
@@ -172,8 +172,7 @@ struct PlansView: View {
                         Button("All Plans", systemImage: "list.bullet") { path.append(.list) }
                         Menu("Add", systemImage: "plus") {
                             Button("New Plan…", systemImage: "list.bullet.rectangle") {
-                                newPlanName = ""
-                                isCreating = true
+                                creatingPlan = CreatingPlan(viewModel: microCycleViewModel.createPlanViewModel())
                             }
                             .disabled(viewModel.isWorking)
                             Button("Add Race…", systemImage: "flag.checkered") {
@@ -197,12 +196,11 @@ struct PlansView: View {
         }) { entryDate in
             AddRaceSheet(viewModel: microCycleViewModel.raceSheetViewModel(date: entryDate.date))
         }
-        .alert("New Plan", isPresented: $isCreating) {
-            TextField("Name", text: $newPlanName)
-            Button("Cancel", role: .cancel) {}
-            Button("Create") {
+        .sheet(item: $creatingPlan) { creating in
+            CreatePlanView(viewModel: creating.viewModel) { plan in
                 Task {
-                    if let plan = await viewModel.create(named: newPlanName) { path.append(.plan(plan.id)) }
+                    await viewModel.reload()
+                    path.append(.plan(plan.id))
                 }
             }
         }
@@ -214,6 +212,12 @@ struct PlansView: View {
             Text(message)
         }
     }
+}
+
+/// A Create Plan wizard being shown; identifiable so the sheet can be presented by item.
+private struct CreatingPlan: Identifiable {
+    let id = UUID()
+    let viewModel: CreatePlanViewModel
 }
 
 /// The groups the plans are listed in.

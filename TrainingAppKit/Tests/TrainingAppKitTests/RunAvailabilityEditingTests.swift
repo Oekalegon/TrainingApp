@@ -220,6 +220,33 @@ struct RunAvailabilitySummaryTests {
     }
 }
 
+/// MVP5-159: a day kept free where possible.
+@Suite("RunAvailability keep free")
+struct RunAvailabilityKeepFreeTests {
+    @Test("a day is kept free or not, and the others are left alone")
+    func setting() {
+        let week = RunAvailability().togglingDay(.monday).togglingDay(.tuesday)
+        let kept = week.settingPreferablyFree(true, on: .monday)
+        #expect(kept.isPreferablyFree(.monday))
+        #expect(!kept.isPreferablyFree(.tuesday))
+        #expect(!kept.settingPreferablyFree(false, on: .monday).isPreferablyFree(.monday))
+    }
+
+    @Test("a day that is off is not kept free, but the choice returns when it is switched on")
+    func offDay() {
+        let kept = RunAvailability().togglingDay(.monday).settingPreferablyFree(true, on: .monday)
+        let off = kept.togglingDay(.monday)
+        #expect(!off.isPreferablyFree(.monday))
+        #expect(off.togglingDay(.monday).isPreferablyFree(.monday))
+    }
+
+    @Test("the summary says a day is kept free")
+    func summary() {
+        let kept = RunAvailability().togglingDay(.monday).settingPreferablyFree(true, on: .monday)
+        #expect(kept.summary(on: .monday) == "Morning, Afternoon, Evening · Keep free")
+    }
+}
+
 /// MVP5-112: summary and display strings.
 @Suite("RunAvailability summary details")
 struct RunAvailabilitySummaryDetailTests {

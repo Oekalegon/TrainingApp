@@ -50,6 +50,11 @@ final class RunAvailabilityEditor {
         await apply { $0.settingTrack(isOn, on: weekday) }
     }
 
+    /// Says whether `weekday` is kept free where possible and saves (MVP5-159).
+    func setPreferablyFree(_ isOn: Bool, on weekday: Weekday) async {
+        await apply { $0.settingPreferablyFree(isOn, on: weekday) }
+    }
+
     /// Sets the number of runs on `weekday` and saves (MVP5-132).
     func setRuns(_ count: Int, on weekday: Weekday) async {
         await apply { $0.settingRuns(count, on: weekday) }

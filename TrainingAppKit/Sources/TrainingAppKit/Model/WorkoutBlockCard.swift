@@ -299,7 +299,8 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
     /// perceived effort and a horizontal bolt for power.
     static func targetSymbol(_ target: IntensityTarget) -> String {
         switch target {
-        case .heartRateZone, .heartRateRange: "heart.fill"
+        case .heartRateZone, .heartRateZoneRange, .heartRateRange: "heart.fill"
+        case .phaseIntensity: "gauge.with.needle.fill"
         case .pace: paceSymbol
         case .power: "bolt.horizontal.fill"
         case .rpe: "bolt.fill"
@@ -312,10 +313,17 @@ public struct WorkoutBlockCard: Identifiable, Equatable, Sendable {
         if #available(iOS 27, macOS 27, *) { "shoe.running.and.shadow.fill" } else { "shoe.fill" }
     }
 
+    /// A zone position as written on a card: `3.4`, and `3.0` for the bottom of zone 3 (MVP5-148).
+    private static func positionText(_ position: Double) -> String {
+        position.formatted(.number.precision(.fractionLength(1)).locale(Locale(identifier: "en_GB")))
+    }
+
     /// The intensity a step aims for, as the cards write it.
     static func targetText(_ target: IntensityTarget) -> String {
         switch target {
         case .heartRateZone(let zone): "HR Zone \(zone)"
+        case .heartRateZoneRange(let positions): "HR Z\(positionText(positions.lowerBound))–Z\(positionText(positions.upperBound))"
+        case .phaseIntensity: "Phase intensity"
         case .heartRateRange(let low, let high): "\(Int(low))–\(Int(high)) bpm"
         case .pace: "Pace target"
         case .power(let range): "\(Int(range.lowerBound))–\(Int(range.upperBound)) W"

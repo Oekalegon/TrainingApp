@@ -625,7 +625,7 @@ public final class PlannedWorkoutSheetViewModel {
             if let scheduler {
                 try scheduler.validate(workout)
                 if WatchSchedulePlanner.isInWindow(plan.date, asOf: now, calendar: athleteCalendar) {
-                    try await scheduler.schedule(plan, workout: workout, calendar: athleteCalendar)
+                    try await scheduler.schedule(plan, workout: workout, athlete: model.athlete, calendar: athleteCalendar)
                 }
             }
             try await model.add(workout)
@@ -676,7 +676,7 @@ public final class PlannedWorkoutSheetViewModel {
             if needsScheduling, let scheduler, let workout {
                 try scheduler.validate(workout)
                 if inWindow {
-                    try await scheduler.schedule(updated, workout: workout, calendar: calendar)
+                    try await scheduler.schedule(updated, workout: workout, athlete: model.athlete, calendar: calendar)
                 }
             }
             if replacesWorkout, let workout {
