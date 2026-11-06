@@ -183,6 +183,7 @@ public struct PlanProposalSummary: Equatable, Sendable {
             case .includeConditioning: return "The conditioning phase you asked for was left out."
             case .maxWeeklyVolume: return "Your peak weekly volume was not enough for the plan's sessions, so it was exceeded."
             case .maxLongRun: return "Your longest run limit was exceeded."
+            case .specialBlocks: return "Fewer special blocks fit in the plan than you asked for."
             @unknown default: return "A preference was overridden."
             }
         case .adjusted(let adjustment, let rule):

@@ -450,6 +450,25 @@ struct CreatePlanViewModelTests {
         #expect(lines.contains { $0.contains("the race has no target pace") })
     }
 
+    @Test("each overridden preference has its own message, including fewer special blocks than asked")
+    func overriddenPreferencesHaveOwnMessages() async throws {
+        let (_, _, viewModel) = try await loaded([race("Target", in: 120)])
+        await viewModel.generate()
+        var proposal = try #require(viewModel.proposal)
+        proposal.compromises = [
+            .overriddenPreference(.includeConditioning),
+            .overriddenPreference(.maxWeeklyVolume),
+            .overriddenPreference(.maxLongRun),
+            .overriddenPreference(.specialBlocks),
+        ]
+
+        let lines = PlanProposalSummary(proposal, calendar: Calendar(identifier: .gregorian)).compromises
+
+        #expect(lines.count == 4)
+        #expect(lines.contains("Fewer special blocks fit in the plan than you asked for."))
+        #expect(!lines.contains("A preference was overridden."))
+    }
+
     @Test("a generator failure is reported inline and leaves no proposal")
     func generatorFailure() async throws {
         let failing: PlanGenerating = { _ in throw PlanGeneratorError.leadTime(.leadTimeTooShort(availableMicros: 2, requiredMicros: 8)) }
