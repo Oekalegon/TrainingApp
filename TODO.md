@@ -119,6 +119,25 @@ Scoping and design: `docs/design/mvp5-plan-assistant.md`.
 - [x] **MVP5-151** (TrainingKit) Faster TSB-zone sizing: `PlanGenerator` sizes each micro by bisection and every probe refits the micro and rebuilds the whole series from the history, so a plan takes 3 to 5 times longer than before (TrainingKit#141; the suite goes from 4 s to 30 s in debug). Seed each probe's series with the committed micros' CTL/ATL instead of rebuilding from the history, and cache the fit of unchanged runs. Also report a micro that ends far from its zone aim (too fresh at the ceiling, or too tired at the lightest volume) in the plan preview (done 2026-10-30, TrainingKit#144, #145)
 - [ ] Marathon pace workout (from *Run Elite*): a run with a block at marathon pace. Needs a pace target, which the built-in templates can't express yet. Structure still to be specified
 
+## WATCH: Watch app
+
+Requirements: `docs/design/watch-app.md`. A small watchOS 26 app that records with `HKWorkoutSession` and the athlete's own HR zones.
+
+- [x] **WATCH-100** Resolve the open questions in the design doc: both WatchConnectivity and CloudKit, plan ID tagged on the `HKWorkout`, a new `TrainingWatchKit` package, companion bundle ID, units follow the athlete, auto-pause off, standard always-on, GPS with low-power mode later (done 2026-11-20)
+- [ ] **WATCH-101** watchOS target in `project.yml`, HealthKit entitlement and a minimal `HKWorkoutSession` + `HKLiveWorkoutBuilder` run that saves an `HKWorkout` (outdoor run, live bpm) Built 2026-11-20 (target `TrainingWatch`, sources in `watchOS/`, both schemes build; the route is recorded; simulator runs play a GPX from `~/Documents/TrainingWatchGPX/`) Done in the simulator (PR #184); the real-watch check (heart rate, GPS, the workout and route in Health, TrainingApp's import) is deferred until a watch is available
+- [ ] **WATCH-102** Sync the athlete's HR zones from TrainingApp to the watch and show the current zone
+- [ ] **WATCH-103** Sync today's planned workout to the watch (zone-number step targets), cached for standalone use
+- [ ] **WATCH-104** Step engine: auto-advance on time or distance, manual lap button, `HKWorkoutEvent` per step
+- [ ] **WATCH-105** v1 workout screen: total time, step time or distance remaining, step target, pause and resume
+- [ ] **WATCH-106** Zone alerts: smoothed HR, hysteresis, step-start alert, slope rule for big gaps, escalation, haptic patterns
+- [ ] **WATCH-107** Earbud audio: speech or tones (setting), step announcements, pause podcasts and duck music
+- [ ] **WATCH-108** Free recording without a plan
+- [ ] **WATCH-109** Configurable pages and metrics (set in the iOS app) and a map page
+- [ ] **WATCH-110** Battery monitoring: warn when the watch battery runs low during a run
+- [ ] **WATCH-111** Spike: hand a run off to the iPhone when the battery is too low, including an external HR monitor (mirrored session or a new phone session, one or two `HKWorkout`s)
+- [ ] **WATCH-112** Low-power GPS mode for long runs
+- [ ] **WATCH-113** A test seam for the watch recorder: put the session, builder and location source behind protocols in the planned `TrainingWatchKit` package, then test the phase state machine (double start, failure teardown, pause and resume, end while paused, a failed save and its retry), the distance sums and the denied-permission paths. From the WATCH-101 review (PR #184); the End confirmation, VoiceOver labels, locale units, retrying a failed save and the missing-route note were done in that PR
+
 ## FIT: Garmin/COROS import
 
 - [ ] **FIT-1** FIT/TCX activity import
