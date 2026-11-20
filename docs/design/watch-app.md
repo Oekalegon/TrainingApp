@@ -111,7 +111,7 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 
 The simulator records no heart rate, distance or route, so debug builds for the simulator fake them (`#if targetEnvironment(simulator)` in `watchOS/Sources`):
 
-- **Heart rate:** a synthetic ramp from 90 to 170 bpm and back, written to the workout builder once a second.
+- **Heart rate:** the GPX's own heart rate when a GPX is being played and has one, written to the workout builder at each fix; otherwise a made-up ramp from 90 to 170 bpm and back, once a second.
 - **Distance:** summed from the location fixes the simulator plays back and added to the builder as one sample per batch. Each sample must stay inside the collection window (from the previous sample's end to now): a sample stamped with a fix's own timestamp can predate the builder's start, and HealthKit then puts the builder into an error state ("Unable to transition … from the Error(7) state") and the run can't be saved. The builder's own distance statistic stays near zero in the simulator even then, so simulator builds show the replayed sum instead and the distance of the saved workout in Health can't be trusted there. The screen also shows the number of fixes received.
 - **Route:** the fixes go to an `HKWorkoutRouteBuilder` as on a real watch.
 - **`-autostart` and `-autoend <seconds>` launch arguments:** start a run without tapping Start, and end it after that many seconds (the Health permission sheet still needs one tap the first time).

@@ -14,6 +14,15 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
     private(set) var droppedCount = 0
     private(set) var lastError: String?
 
+    #if targetEnvironment(simulator)
+    /// Simulator only: called once the GPX being played is read, with whether it has heart rate.
+    var onTrackLoaded: ((Bool) -> Void)?
+    /// Simulator only: called with the GPX's heart rate at each fix that has one.
+    var onSimulatedHeartRate: ((Double) -> Void)?
+    /// Whether a GPX file is being played instead of CoreLocation.
+    var isReplayingGPX: Bool { GPXReplay.fileToPlay != nil }
+    #endif
+
     private let manager = CLLocationManager()
     private var authorizationContinuation: CheckedContinuation<Void, Never>?
     #if targetEnvironment(simulator)
@@ -69,9 +78,11 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
         if let path = GPXReplay.fileToPlay {
             replay.start(
                 path: path,
-                onFix: { [weak self] fix in
+                onLoaded: { [weak self] hasHeartRate in self?.onTrackLoaded?(hasHeartRate) },
+                onFix: { [weak self] fix, heartRate in
                     self?.receivedCount += 1
                     self?.onUpdate?([fix])
+                    if let heartRate { self?.onSimulatedHeartRate?(heartRate) }
                 },
                 onError: { [weak self] message in self?.lastError = message })
             return

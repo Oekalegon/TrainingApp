@@ -96,10 +96,18 @@ final class RunRecorder: NSObject {
             locationFeed.onUpdate = { [weak self] locations in
                 Task { await self?.handle(locations) }
             }
-            locationFeed.start()
             #if targetEnvironment(simulator)
-            startSimulatedHeartRate()
+            // The heart rate comes from the GPX being played when it has one; the made-up ramp is
+            // only for a run with no GPX or a GPX without heart rate.
+            locationFeed.onSimulatedHeartRate = { [weak self] bpm in
+                Task { await self?.recordSimulatedHeartRate(bpm) }
+            }
+            locationFeed.onTrackLoaded = { [weak self] hasHeartRate in
+                if !hasHeartRate { self?.startSimulatedHeartRate() }
+            }
+            if !locationFeed.isReplayingGPX { startSimulatedHeartRate() }
             #endif
+            locationFeed.start()
         } catch {
             teardown()
             phase = .failed(error.localizedDescription)
@@ -223,28 +231,33 @@ final class RunRecorder: NSObject {
     #if targetEnvironment(simulator)
     private var simulatedHeartRateTask: Task<Void, Never>?
 
-    /// The simulator records no heart rate, so feed the builder a slow ramp from 90 to 170 bpm
-    /// (60 s up, then back down) once a second. Only compiled for the simulator.
+    /// Gives the builder a heart rate reading and shows it, as a real watch's sensor would. Only
+    /// while running, and only compiled for the simulator, which records none.
+    private func recordSimulatedHeartRate(_ bpm: Double) async {
+        guard phase == .running, let builder else { return }
+        let sample = HKQuantitySample(
+            type: HKQuantityType(.heartRate),
+            quantity: HKQuantity(unit: HKUnit.count().unitDivided(by: .minute()), doubleValue: bpm),
+            start: .now, end: .now)
+        do {
+            try await builder.addSamples([sample])
+        } catch {
+            log.error("heart-rate sample rejected: \(error.localizedDescription, privacy: .public)")
+        }
+        heartRate = bpm
+    }
+
+    /// A slow ramp from 90 to 170 bpm (60 s up, then back down) once a second, for a simulator run
+    /// with no GPX heart rate to play. Made up, and not meant to look like a run.
     private func startSimulatedHeartRate() {
         simulatedHeartRateTask?.cancel()
         simulatedHeartRateTask = Task { [weak self] in
             var tick = 0
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                guard let self, let builder = self.builder, self.phase == .running else { continue }
+                guard let self else { return }
                 let position = Double(abs((tick % 120) - 60)) / 60
-                let bpm = 170 - 80 * position
-                let unit = HKUnit.count().unitDivided(by: .minute())
-                let sample = HKQuantitySample(
-                    type: HKQuantityType(.heartRate),
-                    quantity: HKQuantity(unit: unit, doubleValue: bpm),
-                    start: .now, end: .now)
-                do {
-                    try await builder.addSamples([sample])
-                } catch {
-                    self.log.error("heart-rate sample rejected: \(error.localizedDescription, privacy: .public)")
-                }
-                self.heartRate = bpm
+                await self.recordSimulatedHeartRate(170 - 80 * position)
                 tick += 1
             }
         }
