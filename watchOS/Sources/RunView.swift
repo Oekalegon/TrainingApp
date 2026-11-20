@@ -29,6 +29,8 @@ struct RunView: View {
         case .idle:
             Button("Start run") { Task { await recorder.start() } }
                 .buttonStyle(.borderedProminent)
+        case .starting:
+            ProgressView()
         case .running, .paused:
             RunPages(recorder: recorder)
         case .saved:

@@ -124,7 +124,7 @@ Scoping and design: `docs/design/mvp5-plan-assistant.md`.
 Requirements: `docs/design/watch-app.md`. A small watchOS 26 app that records with `HKWorkoutSession` and the athlete's own HR zones.
 
 - [x] **WATCH-100** Resolve the open questions in the design doc: both WatchConnectivity and CloudKit, plan ID tagged on the `HKWorkout`, a new `TrainingWatchKit` package, companion bundle ID, units follow the athlete, auto-pause off, standard always-on, GPS with low-power mode later (done 2026-11-20)
-- [ ] **WATCH-101** watchOS target in `project.yml`, HealthKit entitlement and a minimal `HKWorkoutSession` + `HKLiveWorkoutBuilder` run that saves an `HKWorkout` (outdoor run, live bpm) Built 2026-11-20 (target `TrainingWatch`, sources in `watchOS/`, both schemes build); still open: run it on a real watch and check that the workout reaches Health and TrainingApp's import, and add the route builder
+- [ ] **WATCH-101** watchOS target in `project.yml`, HealthKit entitlement and a minimal `HKWorkoutSession` + `HKLiveWorkoutBuilder` run that saves an `HKWorkout` (outdoor run, live bpm) Built 2026-11-20 (target `TrainingWatch`, sources in `watchOS/`, both schemes build; the route is recorded; simulator runs play a GPX from `~/Documents/TrainingWatchGPX/`); still open: run it on a real watch and check that the workout reaches Health and TrainingApp's import
 - [ ] **WATCH-102** Sync the athlete's HR zones from TrainingApp to the watch and show the current zone
 - [ ] **WATCH-103** Sync today's planned workout to the watch (zone-number step targets), cached for standalone use
 - [ ] **WATCH-104** Step engine: auto-advance on time or distance, manual lap button, `HKWorkoutEvent` per step
@@ -132,10 +132,11 @@ Requirements: `docs/design/watch-app.md`. A small watchOS 26 app that records wi
 - [ ] **WATCH-106** Zone alerts: smoothed HR, hysteresis, step-start alert, slope rule for big gaps, escalation, haptic patterns
 - [ ] **WATCH-107** Earbud audio: speech or tones (setting), step announcements, pause podcasts and duck music
 - [ ] **WATCH-108** Free recording without a plan
+- [ ] **WATCH-109** Configurable pages and metrics (set in the iOS app) and a map page
 - [ ] **WATCH-110** Battery monitoring: warn when the watch battery runs low during a run
 - [ ] **WATCH-111** Spike: hand a run off to the iPhone when the battery is too low, including an external HR monitor (mirrored session or a new phone session, one or two `HKWorkout`s)
 - [ ] **WATCH-112** Low-power GPS mode for long runs
-- [ ] **WATCH-109** Configurable pages and metrics (set in the iOS app) and a map page
+- [ ] **WATCH-113** A test seam for the watch recorder: put the session, builder and location source behind protocols in the planned `TrainingWatchKit` package, then test the phase state machine (double start, failure teardown, pause and resume, end while paused), the distance sums and the denied-permission paths. Also from the WATCH-101 review: ask for confirmation before End, add VoiceOver labels and locale-aware units to the run screen, keep a failed save so it can be retried, and tell the user when the route is missing
 
 ## FIT: Garmin/COROS import
 

@@ -12,6 +12,8 @@ import Observation
 final class RunRecorder: NSObject {
     enum Phase: Equatable {
         case idle
+        /// Asking for permissions and starting the session; a second Start is ignored.
+        case starting
         case running
         case paused
         case saved
@@ -22,8 +24,6 @@ final class RunRecorder: NSObject {
     /// The latest heart rate in beats per minute.
     private(set) var heartRate: Double?
     private(set) var distanceMeters: Double = 0
-    private(set) var startDate: Date?
-    private(set) var elapsedOffset: TimeInterval = 0
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -46,7 +46,14 @@ final class RunRecorder: NSObject {
         HKQuantityType(.activeEnergyBurned)
     ]
 
+    /// Set while a failed start or run is being torn down, so the session's `.ended` callback
+    /// doesn't try to finish a workout that is being thrown away.
+    private var abandoned = false
+
     func start() async {
+        guard phase == .idle else { return }
+        phase = .starting
+        abandoned = false
         do {
             // A no-op once the user has answered. HealthKit never shows the sheet a second time,
             // so a denied answer has to be fixed in the Health settings.
@@ -71,7 +78,6 @@ final class RunRecorder: NSObject {
             let start = Date()
             session.startActivity(with: start)
             try await builder.beginCollection(at: start)
-            startDate = start
             lastDistanceSampleEnd = start
             phase = .running
             routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: nil)
@@ -84,8 +90,27 @@ final class RunRecorder: NSObject {
             startSimulatedHeartRate()
             #endif
         } catch {
+            teardown()
             phase = .failed(error.localizedDescription)
         }
+    }
+
+    /// Stops everything a run started and throws the unsaved workout away: the session, the
+    /// builder, the route, the location updates and the simulator's heart-rate feed. Used when a
+    /// start or the session fails, so nothing keeps recording or draining the battery.
+    private func teardown() {
+        abandoned = true
+        #if targetEnvironment(simulator)
+        simulatedHeartRateTask?.cancel()
+        #endif
+        locationFeed.stop()
+        session?.end()
+        builder?.discardWorkout()
+        routeBuilder?.discard()
+        session = nil
+        builder = nil
+        routeBuilder = nil
+        lastLocation = nil
     }
 
     /// Returns to the start screen after a finished or failed run.
@@ -111,10 +136,11 @@ final class RunRecorder: NSObject {
         return false
     }
 
-    func pause() { session?.pause() }
-    func resume() { session?.resume() }
+    func pause() { if phase == .running { session?.pause() } }
+    func resume() { if phase == .paused { session?.resume() } }
 
     func end() {
+        guard phase == .running || phase == .paused else { return }
         session?.end()
     }
 
@@ -126,6 +152,8 @@ final class RunRecorder: NSObject {
     private var lastLocation: CLLocation?
     private var lastDistanceSampleEnd = Date.now
 
+    /// Sends a batch of GPS fixes to the route builder and, in simulator builds, turns them into
+    /// distance. Ignored while paused, so the route has no points from the pause.
     private func handle(_ locations: [CLLocation]) async {
         guard phase == .running else { return }
         do { try await routeBuilder?.insertRouteData(locations) } catch { log.error("route insert failed: \(error.localizedDescription, privacy: .public)") }
@@ -214,7 +242,7 @@ extension RunRecorder: HKWorkoutSessionDelegate {
             switch toState {
             case .running: phase = .running
             case .paused: phase = .paused
-            case .ended: await finish()
+            case .ended where !abandoned: await finish()
             default: break
             }
         }
@@ -222,7 +250,10 @@ extension RunRecorder: HKWorkoutSessionDelegate {
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         let message = error.localizedDescription
-        Task { @MainActor in phase = .failed(message) }
+        Task { @MainActor in
+            teardown()
+            phase = .failed(message)
+        }
     }
 }
 

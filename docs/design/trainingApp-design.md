@@ -14,7 +14,7 @@ Scope of MVP 1:
 
 Explicitly **not** MVP 1: manual activity entry (still open, MVP 4), planning workouts by hand (shipped
 in MVP 2) and plan generation (MVP 5), a dedicated onboarding flow (shipped in MVP 2), multi-athlete switching UI (the data layer supports it per
-`AthleteProfile`, but nothing in this app builds a roster), iPad/watchOS layouts.
+`AthleteProfile`, but nothing in this app builds a roster), iPad layouts and a watch UI inside this app (the Apple Watch recording app is its own target, `TrainingWatch`: `docs/design/watch-app.md`).
 
 ---
 

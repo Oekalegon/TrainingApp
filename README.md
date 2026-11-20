@@ -18,6 +18,8 @@ See [`docs/design/trainingApp-design.md`](docs/design/trainingApp-design.md) for
 | Path | Purpose |
 |---|---|
 | `iOS/` | The iOS app target: `@main` App struct, entitlements, asset catalog. Thin glue only. A macOS companion app will get its own `macOS/` sibling folder later. |
+| `watchOS/` | The Apple Watch companion app (target `TrainingWatch`, bundle ID `org.oekalegon.trainingapp.watchkitapp`): records a run with `HKWorkoutSession`. See [`docs/design/watch-app.md`](docs/design/watch-app.md). |
+| `Tools/` | Developer scripts, e.g. `replay-gpx.py` for playing a GPX track into a simulator. |
 | `TrainingAppKit/` | Local Swift package with the app's views and view models, shared across platforms. Depends on `TrainingKit` as a remote SPM dependency (overridden to the local sibling checkout automatically when you open `TrainingApp.xcworkspace` — see below), so it's `swift test`-able independent of Xcode. |
 | `project.yml` | [xcodegen](https://github.com/yonaskolb/XcodeGen) spec for `TrainingApp.xcodeproj`, which is generated, not committed. |
 | `TrainingApp.xcworkspace` | Combined workspace: `TrainingApp.xcodeproj` plus a sibling reference to the `../TrainingKit` checkout, so you can edit the package and the app together. Committed — this is authored, not generated. |
