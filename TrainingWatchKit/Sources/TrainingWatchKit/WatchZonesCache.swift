@@ -1,25 +1,16 @@
 import Foundation
 
-/// Keeps the last zones the watch received, so a run can start with the phone out of reach
-/// (the watch app has to work on its own during a run).
+/// Keeps the last zones the watch received, so a run can start with the phone out of reach.
 public struct WatchZonesCache: Sendable {
-    private static let key = "watchZones.v1"
-
-    // `UserDefaults` is thread-safe but not `Sendable`; the cache only reads and writes one key.
-    private nonisolated(unsafe) let defaults: UserDefaults
+    private let cache: JSONDefaultsCache<WatchZones>
 
     public init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+        cache = JSONDefaultsCache(key: "watchZones.v1", defaults: defaults)
     }
 
     /// The cached zones, or `nil` when none were received yet or the cache can't be read.
-    public func load() -> WatchZones? {
-        defaults.data(forKey: Self.key).flatMap { WatchZones(data: $0) }
-    }
+    public func load() -> WatchZones? { cache.load() }
 
     /// Replaces the cached zones.
-    public func save(_ zones: WatchZones) {
-        guard let data = try? JSONEncoder().encode(zones) else { return }
-        defaults.set(data, forKey: Self.key)
-    }
+    public func save(_ zones: WatchZones) { cache.save(zones) }
 }

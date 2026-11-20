@@ -5,16 +5,18 @@ import TrainingWatchKit
 @testable import TrainingAppKit
 
 @MainActor
-private final class FakeSender: WatchZoneSending {
+private final class FakeSender: WatchSyncSending {
     struct Failure: Error {}
     var sent: [WatchZones] = []
     var failing = false
     var lastSendError: String?
 
-    func send(_ zones: WatchZones) throws {
+    func send(zones: WatchZones) throws {
         if failing { throw Failure() }
         sent.append(zones)
     }
+
+    func send(plan: WatchPlan) throws {}
 }
 
 @MainActor

@@ -6,6 +6,7 @@ import TrainingWatchKit
 struct RunView: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
+    let planStore: WatchPlanStore
 
     var body: some View {
         content
@@ -30,8 +31,13 @@ struct RunView: View {
     private var content: some View {
         switch recorder.phase {
         case .idle:
-            Button("Start run") { Task { await recorder.start() } }
-                .buttonStyle(.borderedProminent)
+            ScrollView {
+                VStack(spacing: 8) {
+                    Button("Start run") { Task { await recorder.start() } }
+                        .buttonStyle(.borderedProminent)
+                    TodayWorkouts(planStore: planStore)
+                }
+            }
         case .starting, .saving:
             ProgressView()
         case .running, .paused:
@@ -197,5 +203,50 @@ private struct ZoneBadge: View {
         guard zone > 0 else { return "Below zone 1" }
         guard let range else { return "Zone \(zone)" }
         return "Zone \(zone), \(Int(range.lowerBound.rounded())) to \(Int(range.upperBound.rounded())) beats per minute"
+    }
+}
+
+/// Today's planned workouts, from the plan the iPhone sent (WATCH-103): each one's name and its
+/// steps as short lines, and a note when the plan is old, so "no run planned" isn't mistaken for
+/// "the phone hasn't said". Starting one with its steps comes with the step engine (WATCH-104), so
+/// for now it shows what is planned while "Start run" records a free run. The minute-by-minute
+/// timeline moves "today" on at midnight if the app stays open.
+private struct TodayWorkouts: View {
+    let planStore: WatchPlanStore
+
+    var body: some View {
+        // The timeline only makes the view redraw each minute; its own date is the schedule's, which
+        // can lag, so the time shown against is read fresh.
+        TimelineView(.periodic(from: .now, by: 60)) { _ in
+            let now = Date.now
+            let workouts = planStore.today(asOf: now)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Today")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
+                if planStore.plan == nil {
+                    Text("No plan yet: open TrainingApp on your iPhone")
+                        .font(.footnote).foregroundStyle(.secondary)
+                } else {
+                    if workouts.isEmpty {
+                        Text("No run planned today").font(.footnote)
+                    }
+                    ForEach(workouts) { planned in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(planned.name).font(.headline)
+                            ForEach(Array(WatchWorkoutSummary.lines(for: planned.blocks).enumerated()), id: \.offset) { _, line in
+                                Text(line).font(.system(size: 12))
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    if let note = planStore.staleNote(asOf: now) {
+                        Text(note).font(.system(size: 11)).foregroundStyle(.orange)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }

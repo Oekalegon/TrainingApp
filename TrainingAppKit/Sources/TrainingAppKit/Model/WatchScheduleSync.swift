@@ -30,6 +30,7 @@ public final class WatchScheduleSync {
     private let model: TrainingModel
     private let scheduler: any PlannedWorkoutScheduling
     private let defaults: UserDefaults
+    private let planSync: WatchPlanSync?
     @ObservationIgnored private var isSyncing = false
     /// Set when a sync is requested while one runs; that run then goes round once more, so a plan
     /// saved after it read the store still ends up on the Watch.
@@ -91,8 +92,14 @@ public final class WatchScheduleSync {
     ///   - scheduler: The Watch; `WorkoutKitBridge` in the app, a fake in tests.
     ///   - defaults: Where the banner's dismissal and ``isEnabled`` are kept; tests pass their own
     ///     suite.
-    public init(model: TrainingModel, scheduler: any PlannedWorkoutScheduling, defaults: UserDefaults = .standard) {
+    ///   - planSync: Sends the upcoming planned runs to the Watch app (WATCH-103); run at the start of every sync, so
+    ///     it follows the same moments. `nil` skips it.
+    public init(
+        model: TrainingModel, scheduler: any PlannedWorkoutScheduling, defaults: UserDefaults = .standard,
+        planSync: WatchPlanSync? = nil
+    ) {
         self.model = model
+        self.planSync = planSync
         self.scheduler = scheduler
         self.defaults = defaults
         self.isBannerDismissed = defaults.bool(forKey: Self.bannerDismissedKey)
@@ -155,8 +162,10 @@ public final class WatchScheduleSync {
     }
 
     /// The live sync, or `nil` where WorkoutKit isn't available.
-    public static func live(model: TrainingModel) -> WatchScheduleSync? {
-        PlannedWorkoutSchedulers.live.map { WatchScheduleSync(model: model, scheduler: $0) }
+    ///
+    /// - Parameter planSync: Sends the upcoming planned runs to the Watch app (WATCH-103).
+    public static func live(model: TrainingModel, planSync: WatchPlanSync? = nil) -> WatchScheduleSync? {
+        PlannedWorkoutSchedulers.live.map { WatchScheduleSync(model: model, scheduler: $0, planSync: planSync) }
     }
 
     /// Starts ``sync(asOf:)`` without waiting for it, for callers that aren't `async`.
@@ -200,6 +209,8 @@ public final class WatchScheduleSync {
     }
 
     private func syncOnce(asOf now: Date) async {
+        // The watch app's plan doesn't depend on the Workout app's schedule or its permission.
+        await planSync?.sync(asOf: now)
         guard isEnabled else {
             await removeAllEntries()
             return

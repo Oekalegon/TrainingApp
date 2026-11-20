@@ -3,16 +3,16 @@ import Foundation
 import WatchConnectivity
 
 /// `WCSession` behind ``WatchSessionControlling``: starts the session and passes its callbacks on
-/// to the ``WatchZoneChannel``.
+/// to the ``WatchSyncChannel``.
 @MainActor
 final class WCSessionAdapter: NSObject {
-    weak var channel: WatchZoneChannel?
+    weak var channel: WatchSyncChannel?
 
     /// A channel on the default session, or `nil` where WatchConnectivity isn't supported.
-    static func makeChannel() -> WatchZoneChannel? {
+    static func makeChannel() -> WatchSyncChannel? {
         guard WCSession.isSupported() else { return nil }
         let adapter = WCSessionAdapter()
-        let channel = WatchZoneChannel(session: adapter)
+        let channel = WatchSyncChannel(session: adapter)
         adapter.channel = channel
         return channel
     }
@@ -45,12 +45,12 @@ extension WCSessionAdapter: WCSessionDelegate {
     ) {
         guard activationState == .activated else { return }
         // The latest context may have arrived while the app wasn't running.
-        let data = session.receivedApplicationContext[WatchZones.contextKey] as? Data
+        let data = session.receivedApplicationContext[WatchContext.contextKey] as? Data
         Task { @MainActor in self.channel?.sessionActivated(receivedData: data) }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        guard let data = applicationContext[WatchZones.contextKey] as? Data else { return }
+        guard let data = applicationContext[WatchContext.contextKey] as? Data else { return }
         Task { @MainActor in self.channel?.received(data: data) }
     }
 
