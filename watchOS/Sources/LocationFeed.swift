@@ -1,8 +1,7 @@
 import CoreLocation
 
 /// Streams GPS fixes for an outdoor run. `RunRecorder` forwards them to an `HKWorkoutRouteBuilder`
-/// so the route is saved with the workout (WATCH-101). Simulator builds can play a GPX file
-/// instead (see `GPXReplay`).
+/// so the route is saved with the workout (WATCH-101).
 @MainActor
 final class LocationFeed: NSObject, CLLocationManagerDelegate {
     /// Called with each batch of usable fixes (valid and no coarser than 50 m).
@@ -16,9 +15,6 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
 
     private let manager = CLLocationManager()
     private var authorizationContinuation: CheckedContinuation<Void, Never>?
-    #if targetEnvironment(simulator)
-    private let replay = GPXReplay()
-    #endif
 
     override init() {
         super.init()
@@ -27,22 +23,15 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
         manager.activityType = .fitness
     }
 
-    /// Whether fixes can arrive: the location permission is granted, or (simulator) a GPX file
-    /// is being played, which needs no permission.
+    /// Whether fixes can arrive: the location permission is granted.
     var isAuthorized: Bool {
-        #if targetEnvironment(simulator)
-        if GPXReplay.fileToPlay != nil { return true }
-        #endif
-        return manager.authorizationStatus == .authorizedWhenInUse
+        manager.authorizationStatus == .authorizedWhenInUse
             || manager.authorizationStatus == .authorizedAlways
     }
 
     /// A short description of the permission, for the simulator's debug line.
     var authorizationDescription: String {
-        #if targetEnvironment(simulator)
-        if GPXReplay.fileToPlay != nil { return "GPX replay" }
-        #endif
-        return switch manager.authorizationStatus {
+        switch manager.authorizationStatus {
         case .notDetermined: "not asked"
         case .restricted: "restricted"
         case .denied: "denied"
@@ -54,9 +43,6 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
     /// Asks for location access and returns once the user has answered, so the prompt comes before
     /// the run and not over it. Returns at once when it has already been answered.
     func requestAuthorization() async {
-        #if targetEnvironment(simulator)
-        if GPXReplay.fileToPlay != nil { return }
-        #endif
         guard manager.authorizationStatus == .notDetermined else { return }
         await withCheckedContinuation { continuation in
             authorizationContinuation = continuation
@@ -65,26 +51,11 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
     }
 
     func start() {
-        #if targetEnvironment(simulator)
-        if let path = GPXReplay.fileToPlay {
-            replay.start(
-                path: path,
-                onFix: { [weak self] fix in
-                    self?.receivedCount += 1
-                    self?.onUpdate?([fix])
-                },
-                onError: { [weak self] message in self?.lastError = message })
-            return
-        }
-        #endif
         manager.startUpdatingLocation()
     }
 
     func stop() {
         manager.stopUpdatingLocation()
-        #if targetEnvironment(simulator)
-        replay.stop()
-        #endif
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

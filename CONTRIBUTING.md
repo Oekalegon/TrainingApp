@@ -35,7 +35,7 @@ picked up automatically instead of Xcode fetching the remote dependency.
 ## Watch app
 
 The `TrainingWatch` target (`watchOS/`) is embedded in the iOS app. In the simulator it fakes what a
-simulator can't record: a synthetic heart rate, and distance and route from a GPX file. Put a
+simulator can't record: heart rate, distance and route from a GPX file (a made-up heart rate when the file has none). Put a
 `.gpx` file in `~/Documents/TrainingWatchGPX/` and it is played when you start a run; see
 [`docs/design/watch-app.md`](docs/design/watch-app.md) for the details. Never commit a GPX file:
 it holds real locations. When building the watch target from the command line for a simulator,
