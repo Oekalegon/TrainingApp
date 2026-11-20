@@ -56,7 +56,7 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
 
     func start() {
         #if targetEnvironment(simulator)
-        if let path = UserDefaults.standard.string(forKey: "gpxPath") {
+        if let path = Self.gpxPath {
             startReplay(of: path)
             return
         }
@@ -75,13 +75,23 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
     private var replayTask: Task<Void, Never>?
 
     /// True when simulator builds play a GPX file instead of using CoreLocation.
-    var isReplayingGPX: Bool { UserDefaults.standard.string(forKey: "gpxPath") != nil }
+    var isReplayingGPX: Bool { Self.gpxPath != nil }
+
+    /// The GPX file to play: the `gpxPath` default if set (launch argument `-gpxPath`), otherwise
+    /// the first `.gpx` file in `~/Documents/TrainingWatchGPX/` on the Mac. The simulator's home
+    /// directory is its own, so the Mac's comes from `SIMULATOR_HOST_HOME`.
+    private static var gpxPath: String? {
+        if let path = UserDefaults.standard.string(forKey: "gpxPath") { return path }
+        guard let home = ProcessInfo.processInfo.environment["SIMULATOR_HOST_HOME"] else { return nil }
+        let folder = home + "/Documents/TrainingWatchGPX"
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? []
+        return files.sorted().first { $0.lowercased().hasSuffix(".gpx") }.map { folder + "/" + $0 }
+    }
 
     /// Plays a GPX track into `onUpdate` as if the watch were running it (simulator only).
     ///
-    /// Set the file once with `xcrun simctl spawn <UDID> defaults write
-    /// org.oekalegon.trainingapp.watchkitapp gpxPath /path/to/track.gpx`, or pass
-    /// `-gpxPath /path/to/track.gpx` as a launch argument in the scheme. `gpxSpeed` (default 10)
+    /// Put a GPX file in `~/Documents/TrainingWatchGPX/`, or name one with the `gpxPath` default
+    /// (`-gpxPath /path/to/track.gpx` as a launch argument). `gpxSpeed` (default 10)
     /// speeds the track up and `gpxStartMinute` (default 0) skips the first part of it. The
     /// simulator shares the Mac's file system, so the app can read the file directly; this needs
     /// neither location permission nor `simctl location`.
