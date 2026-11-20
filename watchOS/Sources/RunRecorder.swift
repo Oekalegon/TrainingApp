@@ -63,6 +63,7 @@ final class RunRecorder: NSObject {
             session.startActivity(with: start)
             try await builder.beginCollection(at: start)
             startDate = start
+            lastDistanceSampleEnd = start
             phase = .running
             routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: nil)
             routePointCount = 0
@@ -91,27 +92,31 @@ final class RunRecorder: NSObject {
     }
 
     private var lastLocation: CLLocation?
+    private var lastDistanceSampleEnd = Date.now
 
     private func handle(_ locations: [CLLocation]) async {
         guard phase == .running else { return }
-        try? await routeBuilder?.insertRouteData(locations)
+        do { try await routeBuilder?.insertRouteData(locations) } catch { log.error("route insert failed: \(error.localizedDescription, privacy: .public)") }
         routePointCount += locations.count
         #if targetEnvironment(simulator)
         // The simulator records no distance from GPS, so derive it from the playback locations.
+        // One sample per batch, stamped from the previous sample's end to now: a fix's own
+        // timestamp can predate the builder's start, and HealthKit then puts the builder into an
+        // error state that refuses to end collection or save the workout.
+        var batchMeters = 0.0
         for location in locations {
-            if let previous = lastLocation {
-                let delta = location.distance(from: previous)
-                if delta > 0 {
-                    distanceMeters += delta
-                    let sample = HKQuantitySample(
-                        type: HKQuantityType(.distanceWalkingRunning),
-                        quantity: HKQuantity(unit: .meter(), doubleValue: delta),
-                        start: previous.timestamp, end: max(location.timestamp, previous.timestamp))
-                    try? await builder?.addSamples([sample])
-                }
-            }
+            if let previous = lastLocation { batchMeters += location.distance(from: previous) }
             lastLocation = location
         }
+        guard batchMeters > 0, let builder else { return }
+        distanceMeters += batchMeters
+        let end = max(Date.now, lastDistanceSampleEnd.addingTimeInterval(0.001))
+        let sample = HKQuantitySample(
+            type: HKQuantityType(.distanceWalkingRunning),
+            quantity: HKQuantity(unit: .meter(), doubleValue: batchMeters),
+            start: lastDistanceSampleEnd, end: end)
+        lastDistanceSampleEnd = end
+        do { try await builder.addSamples([sample]) } catch { log.error("distance sample rejected: \(error.localizedDescription, privacy: .public)") }
         #endif
     }
 
@@ -134,7 +139,7 @@ final class RunRecorder: NSObject {
                     type: HKQuantityType(.heartRate),
                     quantity: HKQuantity(unit: unit, doubleValue: bpm),
                     start: .now, end: .now)
-                try? await builder.addSamples([sample])
+                do { try await builder.addSamples([sample]) } catch { self.log.error("heart-rate sample rejected: \(error.localizedDescription, privacy: .public)") }
                 self.heartRate = bpm
                 tick += 1
             }
@@ -201,6 +206,8 @@ extension RunRecorder: HKLiveWorkoutBuilderDelegate {
         Task { @MainActor in
             if let bpm { heartRate = bpm }
             #if !targetEnvironment(simulator)
+            // In the simulator the builder's own distance statistic stays near zero, so the screen
+            // shows the sum of the replayed fixes instead (see `handle(_:)`).
             if let distance { distanceMeters = distance }
             #endif
         }

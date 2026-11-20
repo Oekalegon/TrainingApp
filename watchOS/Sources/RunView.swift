@@ -12,6 +12,13 @@ struct RunView: View {
                 if CommandLine.arguments.contains("-autostart"), recorder.phase == .idle {
                     await recorder.start()
                 }
+                // `-autoend <seconds>` ends the run after that long, for headless testing.
+                if let index = CommandLine.arguments.firstIndex(of: "-autoend"),
+                   index + 1 < CommandLine.arguments.count,
+                   let seconds = Double(CommandLine.arguments[index + 1]) {
+                    try? await Task.sleep(for: .seconds(seconds))
+                    recorder.end()
+                }
             }
             #endif
     }
