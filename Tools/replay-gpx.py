@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Replay a GPX track into a booted simulator as GPS fixes, optionally sped up.
 
-    Tools/replay-gpx.py track.gpx [--device UDID] [--speed 10] [--start-min 0] [--minutes 5] [--prime]
+    Tools/replay-gpx.py track.gpx [--device UDID] [--speed 1] [--start-min 0] [--minutes 5] [--prime]
 
 Uses `xcrun simctl location <device> set lat,lon`, honouring the track's own timestamps divided
 by --speed. Keep GPX files out of the repo: they hold real locations.
@@ -15,7 +15,7 @@ from datetime import datetime
 parser = argparse.ArgumentParser()
 parser.add_argument("gpx")
 parser.add_argument("--device", default=None, help="simulator UDID; optional when exactly one is booted")
-parser.add_argument("--speed", type=float, default=10.0, help="playback speed multiplier")
+parser.add_argument("--speed", type=float, default=1.0, help="playback speed multiplier (1 is the track's real speed)")
 parser.add_argument("--start-min", type=float, default=0.0, help="start this many track minutes in")
 parser.add_argument("--minutes", type=float, default=None, help="track minutes to play")
 parser.add_argument("--prime", action="store_true", help="only move the simulator to the track's start, then exit")

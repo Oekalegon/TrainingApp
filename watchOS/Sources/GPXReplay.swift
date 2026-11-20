@@ -6,9 +6,9 @@ import CoreLocation
 /// The simulator shares the Mac's file system, so the app reads the file directly, with no
 /// location permission and no `simctl location`. The file is the `gpxPath` default (launch
 /// argument `-gpxPath /path/track.gpx`) or else the first `.gpx` file in
-/// `~/Documents/TrainingWatchGPX/`. `gpxSpeed` (default 10) speeds the track up and
-/// `gpxStartMinute` (default 0) skips the first part of it. Never commit a GPX file: it holds
-/// real locations.
+/// `~/Documents/TrainingWatchGPX/`. The track plays at its real speed; `gpxSpeed`
+/// (default 1) speeds it up when asked, and `gpxStartMinute` (default 0) skips the first part of
+/// it. Never commit a GPX file: it holds real locations.
 @MainActor
 final class GPXReplay {
     private var task: Task<Void, Never>?
@@ -27,7 +27,7 @@ final class GPXReplay {
     /// real fix would be) and `onError` when the file has no usable points.
     func start(path: String, onFix: @escaping (CLLocation) -> Void, onError: @escaping (String) -> Void) {
         let defaults = UserDefaults.standard
-        let speed = defaults.double(forKey: "gpxSpeed") > 0 ? defaults.double(forKey: "gpxSpeed") : 10
+        let speed = defaults.double(forKey: "gpxSpeed") > 0 ? defaults.double(forKey: "gpxSpeed") : 1
         let startMinute = defaults.double(forKey: "gpxStartMinute")
         task?.cancel()
         task = Task {
