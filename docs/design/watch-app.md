@@ -97,4 +97,12 @@ The simulator records no heart rate, distance or route, so debug builds for the 
 - **Route:** the fixes go to an `HKWorkoutRouteBuilder` as on a real watch.
 - **`-autostart` and `-autoend <seconds>` launch arguments:** start a run without tapping Start, and end it after that many seconds (the Health permission sheet still needs one tap the first time).
 
-To drive GPS from a recorded track, boot the watch simulator, start a run and run `Tools/replay-gpx.py track.gpx --speed 10`. It plays the track's fixes through `xcrun simctl location`, sped up. Run it once with `--prime` before starting the run, so the first fix doesn't jump from wherever the simulator was and count as distance. Pass `--device <watch UDID>`. Keep GPX files out of the repo: they hold real locations. Build for the simulator with ad-hoc signing (`CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO`), not `CODE_SIGNING_ALLOWED=NO`, or the HealthKit entitlement is missing and the app shows "Missing com.apple.developer.healthkit entitlement".
+To drive GPS from a recorded track, simulator builds can play a GPX file themselves, with no `simctl location` and no location permission. The simulator shares the Mac's file system, so the app reads the file directly. Set the path once per simulator (or pass `-gpxPath /path/track.gpx` as a launch argument in the Xcode scheme):
+
+```
+xcrun simctl spawn <UDID> defaults write org.oekalegon.trainingapp.watchkitapp gpxPath /path/to/track.gpx
+xcrun simctl spawn <UDID> defaults write org.oekalegon.trainingapp.watchkitapp gpxSpeed 10        # optional, default 10
+xcrun simctl spawn <UDID> defaults write org.oekalegon.trainingapp.watchkitapp gpxStartMinute 30   # optional
+```
+
+Remove it with `defaults delete … gpxPath` to use CoreLocation again. The debug line on the metrics page then reads `location GPX replay`. The older `Tools/replay-gpx.py` still works for driving CoreLocation through `simctl location`; run it once with `--prime` before starting the run and pass `--device <UDID>`. Keep GPX files out of the repo: they hold real locations. Build for the simulator with ad-hoc signing (`CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO`), not `CODE_SIGNING_ALLOWED=NO`, or the HealthKit entitlement is missing and the app shows "Missing com.apple.developer.healthkit entitlement".
