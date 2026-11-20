@@ -11,6 +11,8 @@ configFiles:
 packages:
   TrainingAppKit:
     path: TrainingAppKit
+  TrainingWatchKit:
+    path: TrainingWatchKit
 
 targets:
   TrainingApp:
@@ -55,6 +57,8 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: watchOS/Sources
+    dependencies:
+      - package: TrainingWatchKit
     info:
       path: Generated/WatchInfo.plist
       properties:

@@ -1210,6 +1210,15 @@ imported and linked without a pull-to-refresh (MVP2-121).
 
 ---
 
+**Heart-rate zones on the Watch app** (WATCH-102). The Apple Watch recording app (`docs/design/watch-app.md`) uses
+the athlete's own zones. `WatchZoneSync` sends the athlete's current `HeartRateZoneSettings` to it with
+WatchConnectivity (`TrainingWatchKit`'s `WatchZoneChannel`): when `AppTabView` sees `scenePhase == .active`, and whenever
+`MicroCycleViewModel.currentHeartRateZoneSettings` changes, but only when they differ from what was last sent in this run
+of the app. The settings are sent as they are, not as bpm ranges, so the Watch works out zones with the same
+`HeartRateZoneModel` as the phone. The channel holds them until a Watch with the app installed is paired and sends them
+again when one is added later. Nothing is shown on the phone yet: `WatchZoneSync.lastError` is there for a Watch screen
+on the Athlete tab.
+
 ## 4. Testing & previews
 
 Reuse `TrainingCore`'s `InMemoryStore` (already built for `MVP1-1`) seeded with fixture

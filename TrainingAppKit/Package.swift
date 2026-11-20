@@ -10,7 +10,8 @@ let package = Package(
         .library(name: "TrainingAppKit", targets: ["TrainingAppKit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/Oekalegon/TrainingKit.git", branch: "develop")
+        .package(url: "https://github.com/Oekalegon/TrainingKit.git", branch: "develop"),
+        .package(path: "../TrainingWatchKit")
     ],
     targets: [
         .target(
@@ -19,7 +20,8 @@ let package = Package(
                 .product(name: "TrainingCore", package: "TrainingKit"),
                 .product(name: "TrainingHealthKit", package: "TrainingKit"),
                 .product(name: "TrainingPersistence", package: "TrainingKit"),
-                .product(name: "TrainingWorkoutKit", package: "TrainingKit")
+                .product(name: "TrainingWorkoutKit", package: "TrainingKit"),
+                .product(name: "TrainingWatchKit", package: "TrainingWatchKit")
             ]
         ),
         .testTarget(

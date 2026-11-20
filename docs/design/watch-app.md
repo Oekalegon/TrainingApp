@@ -1,6 +1,6 @@
 # Watch app: requirements
 
-Status: WATCH-101 is built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-102 onwards are open: see `TODO.md`.
+Status: WATCH-101 and WATCH-102 are built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-103 onwards are open: see `TODO.md`.
 
 ## Why
 
@@ -80,6 +80,15 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 - **Auto-pause:** off in v1 (manual pause only).
 - **Display:** the standard always-on behaviour with no custom dimmed layout. Alerts rely on haptics and audio.
 - **GPS:** outdoor running configuration with an `HKWorkoutRouteBuilder`, so the route is saved. A low-power mode (reduced GPS sampling for long runs) is wanted but comes after v1.
+
+## Zones on the watch (WATCH-102)
+
+- The phone sends the athlete's current `HeartRateZoneSettings` (not precomputed bpm ranges), so the watch uses the same `HeartRateZoneModel` and can't disagree about a boundary, whichever zone method is set. `AppTabView` sends them through `WatchZoneSync` when the app becomes active and whenever the settings change, only when they differ from what was last sent.
+- Transport is a WatchConnectivity application context (`WatchZoneChannel`): only the newest zones matter, and the system delivers the latest one when the watch app next runs. The phone holds the zones until the session is active and a watch with the app installed is paired.
+- The watch keeps the last zones in `UserDefaults` (`WatchZoneStore`), so a run can start with the phone out of reach.
+- The metrics page shows the current zone as a coloured "Z3" with its bpm range, "<Z1" below zone 1, and "No zones yet" until some arrive. The colours come from one definition in `TrainingWatchKit` that the phone's charts use too. This is the current heart rate; smoothing comes with the alerts (WATCH-106).
+- The CloudKit fallback for a phone that isn't reachable is WATCH-114.
+- Simulator: `-fakeZones` gives the watch zones (resting 55, maximum 190) when no phone has sent any.
 
 ## Battery monitoring and hand-off to the iPhone (wanted, needs a spike)
 

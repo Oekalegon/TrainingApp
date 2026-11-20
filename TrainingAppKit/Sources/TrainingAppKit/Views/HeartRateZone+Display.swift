@@ -1,5 +1,6 @@
 import SwiftUI
 import TrainingCore
+import TrainingWatchKit
 
 extension HeartRateZone {
     /// A short, human-readable label — `TrainingCore` has no opinion on display strings.
@@ -21,15 +22,8 @@ extension HeartRateZone {
 
     /// A cool-to-hot ramp from easy (blue) to maximal (red) effort, for shading this zone's band
     /// in charts (e.g. `HeartRateHistogramChartView`) — `TrainingCore` has no opinion on colors either.
-    var color: Color {
-        switch self {
-        case .recovery: .blue
-        case .aerobic: .green
-        case .tempo: .yellow
-        case .threshold: .orange
-        case .anaerobic: .red
-        }
-    }
+    /// Defined once in `TrainingWatchKit` (``zoneColor``), so the Watch app shows the same colours.
+    var color: Color { zoneColor }
 
     /// Plain-language description of this zone (MVP1-60), condensed from this case's own doc
     /// comment in `TrainingCore` — explains what training in this zone actually feels like/is for.
