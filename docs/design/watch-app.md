@@ -1,6 +1,6 @@
 # Watch app: requirements
 
-Status: WATCH-101, WATCH-102 and WATCH-103 are built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-104 onwards are open: see `TODO.md`.
+Status: WATCH-101 to WATCH-104 are built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-105 onwards are open: see `TODO.md`.
 
 ## Why
 
@@ -100,6 +100,23 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 - Starting a workout with its steps, auto-advance and the live step display come with the step engine (WATCH-104, WATCH-105); until then "Start run" records a free run. Pace and power targets aren't shown (a step with a pace target shows its heart-rate companion's zone), and the run isn't tagged with the planned activity's ID yet (WATCH-104).
 - Simulator: `-fakePlan` gives the watch an interval workout planned for today, `-fakeStalePlan` the same sent 3 days ago; neither is cached.
 
+## Steps on the watch (WATCH-104)
+
+Decisions from the scoping Q&A of 2026-11-20:
+
+- **Starting:** each of today's workouts on the start screen is a button; tapping it starts a run with that workout's steps. "Start run" stays a free run with no steps.
+- **Advancing:** `WorkoutStepEngine` (in `TrainingWatchKit`, pure logic, tested) lays the workout's blocks out as steps, each repetition of a repeated block its own step. A step with a time or distance goal ends when it is reached (time from workout time, so paused time doesn't count; distance from the run's distance); an open step waits for the lap button. The next step starts where the last goal ended, so time goals don't drift by the update interval. The recorder checks twice a second.
+- **Lap button** (on the controls page, "Next step" during a workout, "Lap" otherwise): ends the current step and moves on, and the saved workout records a lap event at that moment, so a step cut short can be told from one that ended by itself. In a free run, or after the last step, it only records a lap event.
+- **After the last step** the run keeps recording as a free run until End. The step line says "Workout done" in green.
+- **One haptic** at each step change, whether it came from a goal or the lap button, and a different one when the last step ends. The zone alerts, patterns and audio are WATCH-106 and WATCH-107.
+- **Saved workout:**
+  - A segment `HKWorkoutEvent` per step, from when the step started to when it ended, with the step's index, kind, repetition, goal and how it ended ("goal", "lap" or "workoutEnded") in the event's metadata. A step still going when the run ends gets its segment too.
+  - A lap event for each lap-button press.
+  - The `HKWorkout` is tagged with the planned activity's ID and the workout's name, so a run can be matched to its plan exactly. The keys are in `WorkoutMetadata`; they are custom, since HealthKit reserves the ones that start with "HK".
+  - TrainingApp doesn't read these yet (WATCH-116): its import matches by time and type as before, and shows the events as it did for the Workout app's.
+- **Screen:** the metrics page shows a basic step line: the step's place ("3/6"), its text ("Recovery 4 s Z2") and what is left ("0:04 left", "9 m left", or "Press Lap to move on" for an open step). The full run screen is WATCH-105.
+- Simulator: `-fakeShortPlan` gives the watch a workout of steps a few seconds long (and a 15 m cool-down), `-autostartPlan` starts today's first workout, `-autolap <after>` presses the lap button, and the simulator's debug line shows how many events were written.
+
 ## Battery monitoring and hand-off to the iPhone (wanted, needs a spike)
 
 - Monitor the watch battery during a run and warn when it runs low.
@@ -114,7 +131,7 @@ The simulator records no heart rate, distance or route, so debug builds for the 
 - **Heart rate:** the GPX's own heart rate when a GPX is being played and has one, written to the workout builder at each fix; otherwise a made-up ramp from 90 to 170 bpm and back, once a second.
 - **Distance:** summed from the location fixes the simulator plays back and added to the builder as one sample per batch. Each sample must stay inside the collection window (from the previous sample's end to now): a sample stamped with a fix's own timestamp can predate the builder's start, and HealthKit then puts the builder into an error state ("Unable to transition … from the Error(7) state") and the run can't be saved. The builder's own distance statistic stays near zero in the simulator even then, so simulator builds show the replayed sum instead and the distance of the saved workout in Health can't be trusted there. The screen also shows the number of fixes received.
 - **Route:** the fixes go to an `HKWorkoutRouteBuilder` as on a real watch.
-- **`-autostart` and `-autoend <seconds>` and `-autopause <after>,<for>` launch arguments:** start a run without tapping Start, end it after that many seconds, and pause it after `<after>` seconds for `<for>` seconds (the Health permission sheet still needs one tap the first time).
+- **`-autostart` and `-autostartPlan`, `-autoend <seconds>`, `-autopause <after>,<for>` and `-autolap <after>` launch arguments:** start a run without tapping Start (or start today's first planned workout), end it after that many seconds, pause it after `<after>` seconds for `<for>` seconds, and press the lap button after `<after>` seconds (the Health permission sheet still needs one tap the first time).
 
 To drive GPS from a recorded track, simulator builds play a GPX file themselves, with no `simctl location` and no location permission. The simulator shares the Mac's file system, so the app reads the file directly. Put a `.gpx` file in `~/Documents/TrainingWatchGPX/` (the first one by name is played). Nothing else to set up. (The file is read by `GPXTrack` in `TrainingWatchKit`, which has tests.) To use another file or tune the playback, set the `gpxPath`, `gpxSpeed` (default 1, the track's real speed) and `gpxStartMinute` defaults, for example as launch arguments (`-gpxPath /path/track.gpx`) or with `xcrun simctl spawn <UDID> defaults write org.oekalegon.trainingapp.watchkitapp gpxSpeed 30`.
 
