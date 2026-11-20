@@ -74,8 +74,14 @@ final class RunRecorder: NSObject {
             }
             // Ask for location now, before the run, so its prompt isn't shown over the workout. A
             // "no" still records the run, just without a route and (on a real watch) less distance.
+            #if targetEnvironment(simulator)
+            // A GPX replay needs no location permission.
+            if !isReplayingGPX { await locationFeed.requestAuthorization() }
+            locationAllowedAtStart = locationFeed.isAuthorized || isReplayingGPX
+            #else
             await locationFeed.requestAuthorization()
             locationAllowedAtStart = locationFeed.isAuthorized
+            #endif
             let configuration = HKWorkoutConfiguration()
             configuration.activityType = .running
             configuration.locationType = .outdoor
@@ -97,17 +103,10 @@ final class RunRecorder: NSObject {
                 Task { await self?.handle(locations) }
             }
             #if targetEnvironment(simulator)
-            // The heart rate comes from the GPX being played when it has one; the made-up ramp is
-            // only for a run with no GPX or a GPX without heart rate.
-            locationFeed.onSimulatedHeartRate = { [weak self] bpm in
-                Task { await self?.recordSimulatedHeartRate(bpm) }
-            }
-            locationFeed.onTrackLoaded = { [weak self] hasHeartRate in
-                if !hasHeartRate { self?.startSimulatedHeartRate() }
-            }
-            if !locationFeed.isReplayingGPX { startSimulatedHeartRate() }
-            #endif
+            startSimulatedSensors()
+            #else
             locationFeed.start()
+            #endif
         } catch {
             teardown()
             phase = .failed(error.localizedDescription)
@@ -119,14 +118,20 @@ final class RunRecorder: NSObject {
     /// start or the session fails, so nothing keeps recording or draining the battery.
     private func teardown() {
         abandoned = true
-        #if targetEnvironment(simulator)
-        simulatedHeartRateTask?.cancel()
-        #endif
-        locationFeed.stop()
+        stopLocation()
         session?.end()
         builder?.discardWorkout()
         routeBuilder?.discard()
         releaseRun()
+    }
+
+    /// Stops the GPS (and, in the simulator, the replay and its heart rate).
+    private func stopLocation() {
+        locationFeed.stop()
+        #if targetEnvironment(simulator)
+        replay.stop()
+        simulatedHeartRateTask?.cancel()
+        #endif
     }
 
     private func releaseRun() {
@@ -157,11 +162,19 @@ final class RunRecorder: NSObject {
     }
 
     /// The location permission, for the simulator's debug line.
-    var locationDescription: String { locationFeed.authorizationDescription }
+    var locationDescription: String {
+        #if targetEnvironment(simulator)
+        if isReplayingGPX { return "GPX replay" }
+        #endif
+        return locationFeed.authorizationDescription
+    }
 
     /// Location counters and the last error, for the simulator's debug line.
     var locationDiagnostics: String {
-        "received \(locationFeed.receivedCount), dropped \(locationFeed.droppedCount)"
+        #if targetEnvironment(simulator)
+        if isReplayingGPX { return "received \(replayFixCount)" + (replayError.map { ", error \($0)" } ?? "") }
+        #endif
+        return "received \(locationFeed.receivedCount), dropped \(locationFeed.droppedCount)"
             + (locationFeed.lastError.map { ", error \($0)" } ?? "")
     }
 
@@ -230,11 +243,47 @@ final class RunRecorder: NSObject {
 
     #if targetEnvironment(simulator)
     private var simulatedHeartRateTask: Task<Void, Never>?
+    private let replay = GPXReplay()
+    /// How many fixes the GPX replay has played, for the simulator's debug line.
+    private(set) var replayFixCount = 0
+    private var replayError: String?
+
+    /// Whether the simulator is playing a GPX file instead of using CoreLocation.
+    private var isReplayingGPX: Bool { GPXReplay.fileToPlay != nil }
+
+    /// Starts what a simulator can't record: the GPX's location and heart rate when a file is set
+    /// up (`GPXReplay`), otherwise the simulator's own location and a made-up heart rate. A GPX
+    /// without heart rate, or one that can't be read, also gets the made-up one.
+    private func startSimulatedSensors() {
+        guard let path = GPXReplay.fileToPlay else {
+            locationFeed.start()
+            startSimulatedHeartRate()
+            return
+        }
+        replayFixCount = 0
+        replayError = nil
+        replay.start(
+            path: path,
+            onLoaded: { [weak self] hasHeartRate in
+                // The file is read in the background; a run that has ended meanwhile needs nothing.
+                guard let self, phase == .running || phase == .paused, !hasHeartRate else { return }
+                startSimulatedHeartRate()
+            },
+            onFix: { [weak self] fix, heartRate in
+                self?.replayFixCount += 1
+                Task { await self?.handle([fix]) }
+                if let heartRate { Task { await self?.recordSimulatedHeartRate(heartRate) } }
+            },
+            onError: { [weak self] message in self?.replayError = message })
+    }
 
     /// Gives the builder a heart rate reading and shows it, as a real watch's sensor would. Only
     /// while running, and only compiled for the simulator, which records none.
     private func recordSimulatedHeartRate(_ bpm: Double) async {
         guard phase == .running, let builder else { return }
+        // Shown before the await, so readings land in the order they were taken and one still in
+        // flight when the run ends can't show up on the next run.
+        heartRate = bpm
         let sample = HKQuantitySample(
             type: HKQuantityType(.heartRate),
             quantity: HKQuantity(unit: HKUnit.count().unitDivided(by: .minute()), doubleValue: bpm),
@@ -244,7 +293,6 @@ final class RunRecorder: NSObject {
         } catch {
             log.error("heart-rate sample rejected: \(error.localizedDescription, privacy: .public)")
         }
-        heartRate = bpm
     }
 
     /// A slow ramp from 90 to 170 bpm (60 s up, then back down) once a second, for a simulator run
@@ -267,10 +315,7 @@ final class RunRecorder: NSObject {
     /// Ends the workout and saves it, then the route. A failed save keeps the recorded run so it
     /// can be tried again (`retrySave()`); a failed route doesn't make the saved run a failure.
     private func finish() async {
-        #if targetEnvironment(simulator)
-        simulatedHeartRateTask?.cancel()
-        #endif
-        locationFeed.stop()
+        stopLocation()
         guard let builder else { return }
         phase = .saving
         let workout: HKWorkout?
@@ -317,8 +362,16 @@ extension RunRecorder: HKWorkoutSessionDelegate {
     ) {
         Task { @MainActor in
             switch toState {
-            case .running: phase = .running
-            case .paused: phase = .paused
+            case .running:
+                phase = .running
+                #if targetEnvironment(simulator)
+                replay.resume()
+                #endif
+            case .paused:
+                phase = .paused
+                #if targetEnvironment(simulator)
+                replay.pause()
+                #endif
             case .ended where !abandoned: await finish()
             default: break
             }
@@ -341,16 +394,17 @@ extension RunRecorder: HKLiveWorkoutBuilderDelegate {
         _ workoutBuilder: HKLiveWorkoutBuilder,
         didCollectDataOf collectedTypes: Set<HKSampleType>
     ) {
+        #if !targetEnvironment(simulator)
+        // In the simulator the builder's own readings aren't the replay's (a 134 bpm appeared that
+        // is nowhere in the GPX) and its distance statistic stays near zero, so the screen shows
+        // only what the replay supplies (see `recordSimulatedHeartRate(_:)` and `handle(_:)`).
         let bpm = Self.mostRecentHeartRate(in: workoutBuilder, collectedTypes: collectedTypes)
         let distance = Self.totalDistance(in: workoutBuilder, collectedTypes: collectedTypes)
         Task { @MainActor in
             if let bpm { heartRate = bpm }
-            #if !targetEnvironment(simulator)
-            // In the simulator the builder's own distance statistic stays near zero, so the screen
-            // shows the sum of the replayed fixes instead (see `handle(_:)`).
             if let distance { distanceMeters = distance }
-            #endif
         }
+        #endif
     }
 
     private nonisolated static func mostRecentHeartRate(

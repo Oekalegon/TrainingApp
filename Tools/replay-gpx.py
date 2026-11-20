@@ -4,7 +4,9 @@
     Tools/replay-gpx.py track.gpx [--device UDID] [--speed 1] [--start-min 0] [--minutes 5] [--prime]
 
 Uses `xcrun simctl location <device> set lat,lon`, honouring the track's own timestamps divided
-by --speed. Keep GPX files out of the repo: they hold real locations.
+by --speed. It carries only location: the simulator has no heart rate to give, so the watch app shows
+its made-up ramp. The app's own GPX replay (a .gpx in ~/Documents/TrainingWatchGPX/) plays the file's
+heart rate too. Keep GPX files out of the repo: they hold real locations.
 """
 import argparse
 import subprocess

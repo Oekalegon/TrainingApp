@@ -16,6 +16,20 @@ struct RunView: View {
                 if CommandLine.arguments.contains("-autostart"), recorder.phase == .idle {
                     await recorder.start()
                 }
+                // `-autopause <after>,<for>` pauses the run after that many seconds for that many
+                // seconds, for headless testing of pause and resume.
+                if let index = CommandLine.arguments.firstIndex(of: "-autopause"),
+                   index + 1 < CommandLine.arguments.count {
+                    let parts = CommandLine.arguments[index + 1].split(separator: ",").compactMap { Double($0) }
+                    if parts.count == 2 {
+                        Task {
+                            try? await Task.sleep(for: .seconds(parts[0]))
+                            recorder.pause()
+                            try? await Task.sleep(for: .seconds(parts[1]))
+                            recorder.resume()
+                        }
+                    }
+                }
                 // `-autoend <seconds>` ends the run after that long, for headless testing.
                 if let index = CommandLine.arguments.firstIndex(of: "-autoend"),
                    index + 1 < CommandLine.arguments.count,
