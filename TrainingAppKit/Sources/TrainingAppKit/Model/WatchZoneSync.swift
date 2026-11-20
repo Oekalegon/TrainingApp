@@ -8,10 +8,10 @@ import TrainingWatchKit
 /// current heart-rate settings change. Zones are sent only when they differ from the last ones
 /// sent in this run of the app, so calling it often is cheap; the first call after launch always
 /// sends. The transport holds the latest zones until a watch with the app installed can take them,
-/// and sends them again when a watch is paired or the app installed later (see ``WatchZoneChannel``).
+/// and sends them again when a watch is paired or the app installed later (see ``WatchSyncChannel``).
 @MainActor
 public final class WatchZoneSync {
-    private let sender: any WatchZoneSending
+    private let sender: any WatchSyncSending
     private var lastSent: WatchZones?
 
     private var rejectedError: String?
@@ -23,15 +23,8 @@ public final class WatchZoneSync {
     public var lastError: String? { rejectedError ?? sender.lastSendError }
 
     /// - Parameter sender: What puts the zones on the watch.
-    public init(sender: any WatchZoneSending) {
+    public init(sender: any WatchSyncSending) {
         self.sender = sender
-    }
-
-    /// A sync on WatchConnectivity, started now; `nil` on a device that doesn't support it.
-    public static func live() -> WatchZoneSync? {
-        guard let channel = WatchZoneChannel.live() else { return nil }
-        channel.activate()
-        return WatchZoneSync(sender: channel)
     }
 
     /// Sends the athlete's current zones to the watch if they changed since the last send.
@@ -43,7 +36,7 @@ public final class WatchZoneSync {
         let zones = WatchZones(settings: settings)
         guard zones != lastSent else { return }
         do {
-            try sender.send(zones)
+            try sender.send(zones: zones)
             lastSent = zones
             rejectedError = nil
         } catch {

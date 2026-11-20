@@ -14,7 +14,7 @@ public struct WatchZonesCache: Sendable {
 
     /// The cached zones, or `nil` when none were received yet or the cache can't be read.
     public func load() -> WatchZones? {
-        defaults.data(forKey: Self.key).flatMap { WatchZones(data: $0) }
+        defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode(WatchZones.self, from: $0) }
     }
 
     /// Replaces the cached zones.

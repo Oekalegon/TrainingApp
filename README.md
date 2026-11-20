@@ -19,7 +19,7 @@ See [`docs/design/trainingApp-design.md`](docs/design/trainingApp-design.md) for
 |---|---|
 | `iOS/` | The iOS app target: `@main` App struct, entitlements, asset catalog. Thin glue only. A macOS companion app will get its own `macOS/` sibling folder later. |
 | `watchOS/` | The Apple Watch companion app (target `TrainingWatch`, bundle ID `org.oekalegon.trainingapp.watchkitapp`): records a run with `HKWorkoutSession`. See [`docs/design/watch-app.md`](docs/design/watch-app.md). |
-| `TrainingWatchKit/` | Local Swift package shared by the iOS and watchOS apps: the athlete's heart-rate zones as the watch needs them, their transport over WatchConnectivity, the watch's cache and the zone colours. `swift test`-able on its own. |
+| `TrainingWatchKit/` | Local Swift package shared by the iOS and watchOS apps: the athlete's heart-rate zones and upcoming planned workouts as the watch needs them, their transport over WatchConnectivity, the watch's caches, short text for a workout's steps and the zone colours. `swift test`-able on its own. |
 | `Tools/` | Developer scripts, e.g. `replay-gpx.py` for playing a GPX track into a simulator. |
 | `TrainingAppKit/` | Local Swift package with the app's views and view models, shared across platforms. Depends on `TrainingKit` as a remote SPM dependency (overridden to the local sibling checkout automatically when you open `TrainingApp.xcworkspace` — see below), so it's `swift test`-able independent of Xcode. |
 | `project.yml` | [xcodegen](https://github.com/yonaskolb/XcodeGen) spec for `TrainingApp.xcodeproj`, which is generated, not committed. |

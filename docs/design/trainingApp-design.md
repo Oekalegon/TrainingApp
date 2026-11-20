@@ -1212,12 +1212,19 @@ imported and linked without a pull-to-refresh (MVP2-121).
 
 **Heart-rate zones on the Watch app** (WATCH-102). The Apple Watch recording app (`docs/design/watch-app.md`) uses
 the athlete's own zones. `WatchZoneSync` sends the athlete's current `HeartRateZoneSettings` to it with
-WatchConnectivity (`TrainingWatchKit`'s `WatchZoneChannel`): when `AppTabView` sees `scenePhase == .active`, and whenever
+WatchConnectivity (`TrainingWatchKit`'s `WatchSyncChannel`): when `AppTabView` sees `scenePhase == .active`, and whenever
 `MicroCycleViewModel.currentHeartRateZoneSettings` changes, but only when they differ from what was last sent in this run
 of the app. The settings are sent as they are, not as bpm ranges, so the Watch works out zones with the same
 `HeartRateZoneModel` as the phone. The channel holds them until a Watch with the app installed is paired and sends them
 again when one is added later. Nothing is shown on the phone yet: `WatchZoneSync.lastError` is there for a Watch screen
 on the Athlete tab.
+
+**Planned runs on the Watch app** (WATCH-103). `WatchPlanSync` sends the active plan's planned runs of the next 7 days that
+aren't completed, with their workouts, in the same WatchConnectivity context as the zones. `WatchScheduleSync` runs it at the
+start of every sync, so it follows the same moments (the app becoming active, a plan saved, deleted or imported, a link or
+unlink), and it doesn't follow the Athlete tab's "Send Planned Workouts to Apple Watch" switch or need WorkoutKit permission.
+A plan is sent only when it differs from the last one sent in this run of the app; an empty plan is sent too, so the Watch
+clears what it had.
 
 ## 4. Testing & previews
 

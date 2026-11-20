@@ -73,20 +73,6 @@ struct WatchZonesTests {
         let zone3 = model.zoneBPMRange(3)!
         #expect(zones.zone(forHeartRate: (zone3.lowerBound + zone3.upperBound) / 2) == 3)
     }
-
-    @Test("zones survive the trip through an application context")
-    func contextRoundTrip() throws {
-        let zones = zones()
-        let context = try zones.applicationContext()
-        #expect(WatchZones(applicationContext: context) == zones)
-    }
-
-    @Test("a context without zones, or with unreadable ones, gives none")
-    func contextWithoutZones() {
-        #expect(WatchZones(applicationContext: [:]) == nil)
-        #expect(WatchZones(applicationContext: ["heartRateZones": Data("not json".utf8)]) == nil)
-        #expect(WatchZones(applicationContext: ["heartRateZones": "text"]) == nil)
-    }
 }
 
 @MainActor

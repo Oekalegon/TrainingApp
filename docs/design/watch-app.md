@@ -1,6 +1,6 @@
 # Watch app: requirements
 
-Status: WATCH-101 and WATCH-102 are built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-103 onwards are open: see `TODO.md`.
+Status: WATCH-101, WATCH-102 and WATCH-103 are built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-104 onwards are open: see `TODO.md`.
 
 ## Why
 
@@ -84,11 +84,20 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 ## Zones on the watch (WATCH-102)
 
 - The phone sends the athlete's current `HeartRateZoneSettings` (not precomputed bpm ranges), so the watch uses the same `HeartRateZoneModel` and can't disagree about a boundary, whichever zone method is set. `AppTabView` sends them through `WatchZoneSync` when the app becomes active and whenever the settings change, only when they differ from what was last sent.
-- Transport is a WatchConnectivity application context (`WatchZoneChannel`): only the newest zones matter, and the system delivers the latest one when the watch app next runs. The phone holds the zones until the session is active and a watch with the app installed is paired.
+- Transport is a WatchConnectivity application context (`WatchSyncChannel`): only the newest zones matter, and the system delivers the latest one when the watch app next runs. The phone holds the zones until the session is active and a watch with the app installed is paired.
 - The watch keeps the last zones in `UserDefaults` (`WatchZoneStore`), so a run can start with the phone out of reach.
 - The metrics page shows the current zone as a coloured "Z3" with its bpm range, "<Z1" below zone 1, and "No zones yet" until some arrive. The colours come from one definition in `TrainingWatchKit` that the phone's charts use too. This is the current heart rate; smoothing comes with the alerts (WATCH-106).
 - The CloudKit fallback for a phone that isn't reachable is WATCH-114.
 - Simulator: `-fakeZones` gives the watch zones (resting 55, maximum 190) when no phone has sent any.
+
+## Plan on the watch (WATCH-103)
+
+- The phone sends the planned runs of the next 7 days (today included) that have a workout and aren't completed, earliest first (`WatchPlanSync`). Only runs, because the watch app records runs; other sports stay on the Workout app's schedule. Each entry is the planned activity's ID, its date and TrainingKit's own `StructuredWorkout`, so the watch reads step goals (time, distance, open) and targets exactly as the phone does.
+- The zones and the plan are one WatchConnectivity context (`WatchContext`): an application context replaces the one before as a whole, so sending them separately would let each wipe the other out. A part the phone hasn't sent yet is `nil` and the watch keeps what it has; an empty plan is "nothing planned" and clears the old one.
+- `WatchScheduleSync` runs the plan sync at the start of each of its runs, so it follows the moments the Workout app's schedule does (the app becoming active, a plan saved, deleted or imported, a link or unlink). It doesn't follow the Athlete tab's "Send Planned Workouts to Apple Watch" switch, which is about the Workout app's schedule, and it doesn't need WorkoutKit permission.
+- The watch caches the plan (`WatchPlanStore`), so a run can start with the phone out of reach. "Today" is the watch's own calendar day, so it is where the athlete is. The start screen lists today's workouts with their steps as short lines (`WatchWorkoutSummary`, for example "4 × (3 min Z4, Recovery 2 min Z2)"), or says no plan has arrived or no run is planned.
+- Starting a workout with its steps, auto-advance and the live step display come with the step engine (WATCH-104, WATCH-105); until then "Start run" records a free run. Pace and power targets aren't shown (a step with a pace target shows its heart-rate companion's zone), and the run isn't tagged with the planned activity's ID yet (WATCH-104).
+- Simulator: `-fakePlan` gives the watch an interval workout planned for today, not cached.
 
 ## Battery monitoring and hand-off to the iPhone (wanted, needs a spike)
 

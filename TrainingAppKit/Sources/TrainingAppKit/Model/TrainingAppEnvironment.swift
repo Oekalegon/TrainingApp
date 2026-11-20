@@ -1,5 +1,6 @@
 import Foundation
 import TrainingCore
+import TrainingWatchKit
 import TrainingHealthKit
 import TrainingPersistence
 import HealthKit
@@ -39,8 +40,12 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         healthStore: HKHealthStore
     ) {
         self.model = model
-        self.watchSync = WatchScheduleSync.live(model: model)
-        self.watchZoneSync = WatchZoneSync.live()
+        // One channel carries both the zones and the plan to the Watch app (WATCH-102, WATCH-103).
+        let watchChannel = WatchSyncChannel.live()
+        watchChannel?.activate()
+        self.watchSync = WatchScheduleSync.live(
+            model: model, planSync: watchChannel.map { WatchPlanSync(model: model, sender: $0) })
+        self.watchZoneSync = watchChannel.map { WatchZoneSync(sender: $0) }
         self.importer = importer
         self.healthStore = healthStore
         self.athleteReader = HealthKitAthleteReader(healthStore: healthStore)
