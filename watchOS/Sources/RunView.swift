@@ -5,6 +5,19 @@ struct RunView: View {
     let recorder: RunRecorder
 
     var body: some View {
+        content
+            #if targetEnvironment(simulator)
+            // `-autostart` lets a script start a run without tapping (simulator only).
+            .task {
+                if CommandLine.arguments.contains("-autostart"), recorder.phase == .idle {
+                    await recorder.start()
+                }
+            }
+            #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch recorder.phase {
         case .idle:
             Button("Start run") { Task { await recorder.start() } }

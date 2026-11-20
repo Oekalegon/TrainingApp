@@ -87,3 +87,14 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 - When it gets too low and the iPhone is near, hand the recording off to the iPhone, which records the rest. That includes heart rate when an external monitor is connected.
 - Open feasibility questions: how the iPhone continues the same workout (a mirrored `HKWorkoutSession` versus a new session on the phone and stitching the two), whether the phone can read a Bluetooth HR strap itself, and what the saved `HKWorkout` looks like afterwards (one workout or two). Without the watch's wrist HR the phone only has the external monitor, so a run with no strap would lose HR.
 
+
+## Testing in the simulator
+
+The simulator records no heart rate, distance or route, so debug builds for the simulator fake them (`#if targetEnvironment(simulator)` in `watchOS/Sources`):
+
+- **Heart rate:** a synthetic ramp from 90 to 170 bpm and back, written to the workout builder once a second.
+- **Distance:** summed from the location fixes the simulator plays back.
+- **Route:** the fixes go to an `HKWorkoutRouteBuilder` as on a real watch.
+- **`-autostart` launch argument:** starts a run without tapping Start (the Health permission sheet still needs one tap the first time).
+
+To drive GPS from a recorded track, boot the watch simulator, start a run and run `Tools/replay-gpx.py track.gpx --speed 10`. It plays the track's fixes through `xcrun simctl location`, sped up. Keep GPX files out of the repo: they hold real locations. Build for the simulator with ad-hoc signing (`CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO`), not `CODE_SIGNING_ALLOWED=NO`, or the HealthKit entitlement is missing and the app shows "Missing com.apple.developer.healthkit entitlement".

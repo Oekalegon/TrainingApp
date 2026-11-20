@@ -1,5 +1,7 @@
 import Foundation
+import CoreLocation
 import HealthKit
+import OSLog
 import Observation
 
 /// Records an outdoor run with an `HKWorkoutSession` and an `HKLiveWorkoutBuilder`, so the run is
@@ -26,6 +28,10 @@ final class RunRecorder: NSObject {
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    private var routeBuilder: HKWorkoutRouteBuilder?
+    private let locationFeed = LocationFeed()
+    private var routePointCount = 0
+    private let log = Logger(subsystem: "org.oekalegon.trainingapp.watchkitapp", category: "RunRecorder")
 
     private static let readTypes: Set<HKObjectType> = [
         HKQuantityType(.heartRate),
@@ -34,6 +40,7 @@ final class RunRecorder: NSObject {
     ]
     private static let shareTypes: Set<HKSampleType> = [
         HKObjectType.workoutType(),
+        HKSeriesType.workoutRoute(),
         HKQuantityType(.heartRate),
         HKQuantityType(.distanceWalkingRunning),
         HKQuantityType(.activeEnergyBurned)
@@ -57,6 +64,12 @@ final class RunRecorder: NSObject {
             try await builder.beginCollection(at: start)
             startDate = start
             phase = .running
+            routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: nil)
+            routePointCount = 0
+            locationFeed.onUpdate = { [weak self] locations in
+                Task { await self?.handle(locations) }
+            }
+            locationFeed.start()
             #if targetEnvironment(simulator)
             startSimulatedHeartRate()
             #endif
@@ -75,6 +88,31 @@ final class RunRecorder: NSObject {
     /// Elapsed workout time at `date`, from the builder so paused time is excluded.
     func elapsed(at date: Date = .now) -> TimeInterval {
         builder?.elapsedTime(at: date) ?? 0
+    }
+
+    private var lastLocation: CLLocation?
+
+    private func handle(_ locations: [CLLocation]) async {
+        guard phase == .running else { return }
+        try? await routeBuilder?.insertRouteData(locations)
+        routePointCount += locations.count
+        #if targetEnvironment(simulator)
+        // The simulator records no distance from GPS, so derive it from the playback locations.
+        for location in locations {
+            if let previous = lastLocation {
+                let delta = location.distance(from: previous)
+                if delta > 0 {
+                    distanceMeters += delta
+                    let sample = HKQuantitySample(
+                        type: HKQuantityType(.distanceWalkingRunning),
+                        quantity: HKQuantity(unit: .meter(), doubleValue: delta),
+                        start: previous.timestamp, end: max(location.timestamp, previous.timestamp))
+                    try? await builder?.addSamples([sample])
+                }
+            }
+            lastLocation = location
+        }
+        #endif
     }
 
     #if targetEnvironment(simulator)
@@ -108,16 +146,23 @@ final class RunRecorder: NSObject {
         #if targetEnvironment(simulator)
         simulatedHeartRateTask?.cancel()
         #endif
+        locationFeed.stop()
         guard let builder else { return }
         do {
             try await builder.endCollection(at: .now)
-            _ = try await builder.finishWorkout()
+            let workout = try await builder.finishWorkout()
+            if let workout, let routeBuilder, routePointCount > 0 {
+                try await routeBuilder.finishRoute(with: workout, metadata: nil)
+            }
+            log.info("saved workout: \(self.distanceMeters, privacy: .public) m, \(self.routePointCount, privacy: .public) route points")
             phase = .saved
         } catch {
             phase = .failed(error.localizedDescription)
         }
         session = nil
         self.builder = nil
+        routeBuilder = nil
+        lastLocation = nil
     }
 }
 

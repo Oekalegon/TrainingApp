@@ -62,6 +62,9 @@ targets:
         WKCompanionAppBundleIdentifier: org.oekalegon.trainingapp
         NSHealthShareUsageDescription: "TrainingApp reads your heart rate during a run to show your zone."
         NSHealthUpdateUsageDescription: "TrainingApp saves your runs to Health."
+        NSLocationWhenInUseUsageDescription: "TrainingApp records the route of your run."
+        WKBackgroundModes:
+          - workout-processing
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.oekalegon.trainingapp.watchkitapp
