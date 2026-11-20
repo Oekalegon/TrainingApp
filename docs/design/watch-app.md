@@ -1,6 +1,6 @@
 # Watch app: requirements
 
-Status: requirements from the scoping Q&A of 2026-11-20. Nothing is built yet.
+Status: WATCH-101 is built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-102 onwards are open: see `TODO.md`.
 
 ## Why
 

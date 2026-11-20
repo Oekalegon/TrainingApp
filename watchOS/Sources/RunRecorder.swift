@@ -1,5 +1,5 @@
-import Foundation
 import CoreLocation
+import Foundation
 import HealthKit
 import OSLog
 import Observation
@@ -16,6 +16,9 @@ final class RunRecorder: NSObject {
         case starting
         case running
         case paused
+        /// Ending the session and saving the workout; if it fails, `canRetrySave` says whether the
+        /// recorded data is still there to save again.
+        case saving
         case saved
         case failed(String)
     }
@@ -24,6 +27,11 @@ final class RunRecorder: NSObject {
     /// The latest heart rate in beats per minute.
     private(set) var heartRate: Double?
     private(set) var distanceMeters: Double = 0
+    /// After a failed save: the recorded run is still held, so it can be saved again or discarded.
+    private(set) var canRetrySave = false
+    /// Set when a run was saved without its route (no location permission, or the route failed),
+    /// so the end screen can say so.
+    private(set) var routeNote: String?
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -54,6 +62,8 @@ final class RunRecorder: NSObject {
         guard phase == .idle else { return }
         phase = .starting
         abandoned = false
+        routeNote = nil
+        locationAllowedAtStart = false
         do {
             // A no-op once the user has answered. HealthKit never shows the sheet a second time,
             // so a denied answer has to be fixed in the Health settings.
@@ -65,6 +75,7 @@ final class RunRecorder: NSObject {
             // Ask for location now, before the run, so its prompt isn't shown over the workout. A
             // "no" still records the run, just without a route and (on a real watch) less distance.
             await locationFeed.requestAuthorization()
+            locationAllowedAtStart = locationFeed.isAuthorized
             let configuration = HKWorkoutConfiguration()
             configuration.activityType = .running
             configuration.locationType = .outdoor
@@ -107,15 +118,30 @@ final class RunRecorder: NSObject {
         session?.end()
         builder?.discardWorkout()
         routeBuilder?.discard()
+        releaseRun()
+    }
+
+    private func releaseRun() {
         session = nil
         builder = nil
         routeBuilder = nil
         lastLocation = nil
+        canRetrySave = false
+        collectionEnded = false
     }
+
+    private var locationAllowedAtStart = false
+    private var collectionEnded = false
 
     /// Returns to the start screen after a finished or failed run.
     func reset() {
         guard phase == .saved || isFailed else { return }
+        if canRetrySave {
+            // Discarding a run that couldn't be saved.
+            builder?.discardWorkout()
+            routeBuilder?.discard()
+            releaseRun()
+        }
         heartRate = nil
         distanceMeters = 0
         routePointCount = 0
@@ -137,7 +163,13 @@ final class RunRecorder: NSObject {
     }
 
     func pause() { if phase == .running { session?.pause() } }
-    func resume() { if phase == .paused { session?.resume() } }
+    func resume() {
+        guard phase == .paused else { return }
+        // Fixes are ignored while paused, so measure the next one from nothing, not from the
+        // position before the pause.
+        lastLocation = nil
+        session?.resume()
+    }
 
     func end() {
         guard phase == .running || phase == .paused else { return }
@@ -156,7 +188,11 @@ final class RunRecorder: NSObject {
     /// distance. Ignored while paused, so the route has no points from the pause.
     private func handle(_ locations: [CLLocation]) async {
         guard phase == .running else { return }
-        do { try await routeBuilder?.insertRouteData(locations) } catch { log.error("route insert failed: \(error.localizedDescription, privacy: .public)") }
+        do {
+            try await routeBuilder?.insertRouteData(locations)
+        } catch {
+            log.error("route insert failed: \(error.localizedDescription, privacy: .public)")
+        }
         routePointCount += locations.count
         #if targetEnvironment(simulator)
         // The simulator records no distance from GPS, so derive it from the playback locations.
@@ -176,7 +212,11 @@ final class RunRecorder: NSObject {
             quantity: HKQuantity(unit: .meter(), doubleValue: batchMeters),
             start: lastDistanceSampleEnd, end: end)
         lastDistanceSampleEnd = end
-        do { try await builder.addSamples([sample]) } catch { log.error("distance sample rejected: \(error.localizedDescription, privacy: .public)") }
+        do {
+            try await builder.addSamples([sample])
+        } catch {
+            log.error("distance sample rejected: \(error.localizedDescription, privacy: .public)")
+        }
         #endif
     }
 
@@ -199,7 +239,11 @@ final class RunRecorder: NSObject {
                     type: HKQuantityType(.heartRate),
                     quantity: HKQuantity(unit: unit, doubleValue: bpm),
                     start: .now, end: .now)
-                do { try await builder.addSamples([sample]) } catch { self.log.error("heart-rate sample rejected: \(error.localizedDescription, privacy: .public)") }
+                do {
+                    try await builder.addSamples([sample])
+                } catch {
+                    self.log.error("heart-rate sample rejected: \(error.localizedDescription, privacy: .public)")
+                }
                 self.heartRate = bpm
                 tick += 1
             }
@@ -207,27 +251,47 @@ final class RunRecorder: NSObject {
     }
     #endif
 
+    /// Ends the workout and saves it, then the route. A failed save keeps the recorded run so it
+    /// can be tried again (`retrySave()`); a failed route doesn't make the saved run a failure.
     private func finish() async {
         #if targetEnvironment(simulator)
         simulatedHeartRateTask?.cancel()
         #endif
         locationFeed.stop()
         guard let builder else { return }
+        phase = .saving
+        let workout: HKWorkout?
         do {
-            try await builder.endCollection(at: .now)
-            let workout = try await builder.finishWorkout()
-            if let workout, let routeBuilder, routePointCount > 0 {
-                try await routeBuilder.finishRoute(with: workout, metadata: nil)
+            if !collectionEnded {
+                try await builder.endCollection(at: .now)
+                collectionEnded = true
             }
-            log.info("saved workout: \(self.distanceMeters, privacy: .public) m, \(self.routePointCount, privacy: .public) route points")
-            phase = .saved
+            workout = try await builder.finishWorkout()
         } catch {
-            phase = .failed(error.localizedDescription)
+            canRetrySave = true
+            phase = .failed("The run couldn't be saved: \(error.localizedDescription)")
+            return
         }
-        session = nil
-        self.builder = nil
-        routeBuilder = nil
-        lastLocation = nil
+        if !locationAllowedAtStart {
+            routeNote = "No route recorded: location is off for TrainingWatch."
+        } else if let workout, let routeBuilder, routePointCount > 0 {
+            do {
+                try await routeBuilder.finishRoute(with: workout, metadata: nil)
+            } catch {
+                log.error("route not saved: \(error.localizedDescription, privacy: .public)")
+                routeNote = "The route couldn't be saved."
+            }
+        }
+        log.info("saved workout: \(self.distanceMeters, privacy: .public) m, \(self.routePointCount, privacy: .public) route points")
+        phase = .saved
+        releaseRun()
+    }
+
+    /// Tries again to save a run whose save failed.
+    func retrySave() async {
+        guard canRetrySave else { return }
+        canRetrySave = false
+        await finish()
     }
 }
 

@@ -29,20 +29,28 @@ struct RunView: View {
         case .idle:
             Button("Start run") { Task { await recorder.start() } }
                 .buttonStyle(.borderedProminent)
-        case .starting:
+        case .starting, .saving:
             ProgressView()
         case .running, .paused:
             RunPages(recorder: recorder)
         case .saved:
             VStack {
                 Text("Saved to Health")
+                if let note = recorder.routeNote {
+                    Text(note).font(.footnote)
+                }
                 Button("Done") { recorder.reset() }
             }
         case .failed(let message):
             ScrollView {
                 VStack {
                     Text(message).font(.footnote)
-                    Button("Try again") { recorder.reset() }
+                    if recorder.canRetrySave {
+                        Button("Try saving again") { Task { await recorder.retrySave() } }
+                        Button("Discard run", role: .destructive) { recorder.reset() }
+                    } else {
+                        Button("Try again") { recorder.reset() }
+                    }
                 }
             }
         }
@@ -68,6 +76,8 @@ private struct RunPages: View {
     }
 }
 
+/// The metrics page: elapsed time, heart rate and distance. Units follow the system's region for
+/// now; the athlete's own setting comes with the zone sync (WATCH-102).
 private struct RunMetricsPage: View {
     let recorder: RunRecorder
 
@@ -77,11 +87,16 @@ private struct RunMetricsPage: View {
                 Text(Duration.seconds(recorder.elapsed(at: context.date)),
                      format: .time(pattern: .hourMinuteSecond))
                     .font(.title2.monospacedDigit())
+                    .accessibilityLabel("Elapsed time")
             }
             Text(recorder.heartRate.map { "\(Int($0.rounded())) bpm" } ?? "-- bpm")
                 .font(.title.monospacedDigit())
-            Text(String(format: "%.2f km", recorder.distanceMeters / 1000))
+                .accessibilityLabel("Heart rate")
+                .accessibilityValue(recorder.heartRate.map { "\(Int($0.rounded())) beats per minute" } ?? "no reading")
+            Text(Measurement(value: recorder.distanceMeters, unit: UnitLength.meters)
+                .formatted(.measurement(width: .abbreviated, usage: .road, numberFormatStyle: .number.precision(.fractionLength(2)))))
                 .font(.footnote.monospacedDigit())
+                .accessibilityLabel("Distance")
             if recorder.phase == .paused {
                 Text("Paused").font(.footnote).foregroundStyle(.yellow)
             }
@@ -93,8 +108,11 @@ private struct RunMetricsPage: View {
     }
 }
 
+/// The controls page, one swipe to the right of the metrics. Ending asks first, since a mis-tap
+/// would end and save the run.
 private struct RunControlsPage: View {
     let recorder: RunRecorder
+    @State private var confirmingEnd = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -109,9 +127,13 @@ private struct RunControlsPage: View {
                 }
                 .tint(.yellow)
             }
-            Button(role: .destructive) { recorder.end() } label: {
+            Button(role: .destructive) { confirmingEnd = true } label: {
                 Label("End", systemImage: "xmark")
             }
+        }
+        .confirmationDialog("End this run?", isPresented: $confirmingEnd) {
+            Button("End run", role: .destructive) { recorder.end() }
+            Button("Keep going", role: .cancel) {}
         }
     }
 }

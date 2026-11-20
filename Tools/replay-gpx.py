@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Replay a GPX track into a booted simulator as GPS fixes, optionally sped up.
 
-    Tools/replay-gpx.py track.gpx [--device UDID|booted] [--speed 10] [--start-min 0] [--minutes 5] [--prime]
+    Tools/replay-gpx.py track.gpx [--device UDID] [--speed 10] [--start-min 0] [--minutes 5] [--prime]
 
 Uses `xcrun simctl location <device> set lat,lon`, honouring the track's own timestamps divided
 by --speed. Keep GPX files out of the repo: they hold real locations.
@@ -14,13 +14,21 @@ from datetime import datetime
 
 parser = argparse.ArgumentParser()
 parser.add_argument("gpx")
-parser.add_argument("--device", default="booted")
+parser.add_argument("--device", default=None, help="simulator UDID; optional when exactly one is booted")
 parser.add_argument("--speed", type=float, default=10.0, help="playback speed multiplier")
 parser.add_argument("--start-min", type=float, default=0.0, help="start this many track minutes in")
 parser.add_argument("--minutes", type=float, default=None, help="track minutes to play")
 parser.add_argument("--prime", action="store_true", help="only move the simulator to the track's start, then exit")
 parser.add_argument("--min-interval", type=float, default=0.5, help="min real seconds between fixes")
 args = parser.parse_args()
+
+if args.device is None:
+    booted = subprocess.run(
+        ["xcrun", "simctl", "list", "devices", "booted"], capture_output=True, text=True, check=True).stdout
+    udids = [line.split("(")[-2].rstrip(") ") for line in booted.splitlines() if "(Booted)" in line]
+    if len(udids) != 1:
+        raise SystemExit(f"{len(udids)} simulators are booted; pass --device <UDID>:\n{booted}")
+    args.device = udids[0]
 
 points = []
 for pt in ET.parse(args.gpx).getroot().iter("{http://www.topografix.com/GPX/1/1}trkpt"):
@@ -46,6 +54,8 @@ for stamp, lat, lon in points:
     delay = due - (time.monotonic() - began)
     if delay > 0:
         time.sleep(delay)
-    subprocess.run(["xcrun", "simctl", "location", args.device, "set", f"{lat},{lon}"], check=True)
+    result = subprocess.run(["xcrun", "simctl", "location", args.device, "set", f"{lat},{lon}"])
+    if result.returncode != 0:
+        print(f"simctl failed ({result.returncode}) at {lat},{lon}; continuing")
     last_sent = due
 print(f"replayed {len(points)} track points")
