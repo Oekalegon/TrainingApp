@@ -33,6 +33,9 @@ struct RunView: View {
                     .font(.title.monospacedDigit())
                 Text(String(format: "%.2f km", recorder.distanceMeters / 1000))
                     .font(.footnote.monospacedDigit())
+                #if targetEnvironment(simulator)
+                Text("fixes \(recorder.routePointCount)").font(.caption2)
+                #endif
                 HStack {
                     if recorder.phase == .paused {
                         Button("Resume") { recorder.resume() }

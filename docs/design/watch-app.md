@@ -93,8 +93,8 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 The simulator records no heart rate, distance or route, so debug builds for the simulator fake them (`#if targetEnvironment(simulator)` in `watchOS/Sources`):
 
 - **Heart rate:** a synthetic ramp from 90 to 170 bpm and back, written to the workout builder once a second.
-- **Distance:** summed from the location fixes the simulator plays back.
+- **Distance:** summed from the location fixes the simulator plays back. The builder's own distance statistic doesn't pick these samples up, so simulator builds show the sum instead and the saved workout's distance in Health may be lower. The screen also shows the number of fixes received.
 - **Route:** the fixes go to an `HKWorkoutRouteBuilder` as on a real watch.
 - **`-autostart` launch argument:** starts a run without tapping Start (the Health permission sheet still needs one tap the first time).
 
-To drive GPS from a recorded track, boot the watch simulator, start a run and run `Tools/replay-gpx.py track.gpx --speed 10`. It plays the track's fixes through `xcrun simctl location`, sped up. Keep GPX files out of the repo: they hold real locations. Build for the simulator with ad-hoc signing (`CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO`), not `CODE_SIGNING_ALLOWED=NO`, or the HealthKit entitlement is missing and the app shows "Missing com.apple.developer.healthkit entitlement".
+To drive GPS from a recorded track, boot the watch simulator, start a run and run `Tools/replay-gpx.py track.gpx --speed 10`. It plays the track's fixes through `xcrun simctl location`, sped up. Run it once with `--prime` before starting the run, so the first fix doesn't jump from wherever the simulator was and count as distance. Pass `--device <watch UDID>`. Keep GPX files out of the repo: they hold real locations. Build for the simulator with ad-hoc signing (`CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO`), not `CODE_SIGNING_ALLOWED=NO`, or the HealthKit entitlement is missing and the app shows "Missing com.apple.developer.healthkit entitlement".

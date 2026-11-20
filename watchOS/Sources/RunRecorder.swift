@@ -30,7 +30,7 @@ final class RunRecorder: NSObject {
     private var builder: HKLiveWorkoutBuilder?
     private var routeBuilder: HKWorkoutRouteBuilder?
     private let locationFeed = LocationFeed()
-    private var routePointCount = 0
+    private(set) var routePointCount = 0
     private let log = Logger(subsystem: "org.oekalegon.trainingapp.watchkitapp", category: "RunRecorder")
 
     private static let readTypes: Set<HKObjectType> = [
@@ -200,7 +200,9 @@ extension RunRecorder: HKLiveWorkoutBuilderDelegate {
         let distance = Self.totalDistance(in: workoutBuilder, collectedTypes: collectedTypes)
         Task { @MainActor in
             if let bpm { heartRate = bpm }
+            #if !targetEnvironment(simulator)
             if let distance { distanceMeters = distance }
+            #endif
         }
     }
 

@@ -17,7 +17,6 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
 
     func start() {
         manager.requestWhenInUseAuthorization()
-        manager.allowsBackgroundLocationUpdates = true
         manager.startUpdatingLocation()
     }
 
