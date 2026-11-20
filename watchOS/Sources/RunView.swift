@@ -1,8 +1,11 @@
 import SwiftUI
+import TrainingCore
+import TrainingWatchKit
 
 /// The recording screen of WATCH-101: start, then pages for the metrics and the controls.
 struct RunView: View {
     let recorder: RunRecorder
+    let zoneStore: WatchZoneStore
 
     var body: some View {
         content
@@ -32,7 +35,7 @@ struct RunView: View {
         case .starting, .saving:
             ProgressView()
         case .running, .paused:
-            RunPages(recorder: recorder)
+            RunPages(recorder: recorder, zoneStore: zoneStore)
         case .saved:
             VStack {
                 Text("Saved to Health")
@@ -61,6 +64,7 @@ struct RunView: View {
 /// controls (pause or resume, end, later next step) sit one swipe to the right.
 private struct RunPages: View {
     let recorder: RunRecorder
+    let zoneStore: WatchZoneStore
     @State private var page = Page.metrics
 
     private enum Page { case controls, metrics }
@@ -69,7 +73,7 @@ private struct RunPages: View {
         TabView(selection: $page) {
             RunControlsPage(recorder: recorder)
                 .tag(Page.controls)
-            RunMetricsPage(recorder: recorder)
+            RunMetricsPage(recorder: recorder, zoneStore: zoneStore)
                 .tag(Page.metrics)
         }
         .tabViewStyle(.page)
@@ -80,6 +84,7 @@ private struct RunPages: View {
 /// now; the athlete's own setting comes with the zone sync (WATCH-102).
 private struct RunMetricsPage: View {
     let recorder: RunRecorder
+    let zoneStore: WatchZoneStore
 
     var body: some View {
         VStack(spacing: 6) {
@@ -89,6 +94,7 @@ private struct RunMetricsPage: View {
                     .font(.title2.monospacedDigit())
                     .accessibilityLabel("Elapsed time")
             }
+            ZoneBadge(zones: zoneStore.zones, heartRate: recorder.heartRate)
             Text(recorder.heartRate.map { "\(Int($0.rounded())) bpm" } ?? "-- bpm")
                 .font(.title.monospacedDigit())
                 .accessibilityLabel("Heart rate")
@@ -134,6 +140,53 @@ private struct RunControlsPage: View {
         .confirmationDialog("End this run?", isPresented: $confirmingEnd) {
             Button("End run", role: .destructive) { recorder.end() }
             Button("Keep going", role: .cancel) {}
+        }
+    }
+}
+
+/// The zone the current heart rate is in, from the athlete's zones sent by the iPhone (WATCH-102):
+/// a coloured "Z3" with its bpm range. Says so when no zones have arrived yet, so a run without
+/// them isn't mistaken for one in no zone.
+private struct ZoneBadge: View {
+    let zones: WatchZones?
+    let heartRate: Double?
+
+    var body: some View {
+        if let zones {
+            content(zones: zones)
+        } else {
+            Text("No zones yet: open TrainingApp on your iPhone")
+                .font(.system(size: 11))
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func content(zones: WatchZones) -> some View {
+        let zone = heartRate.flatMap { zones.zone(forHeartRate: $0) }
+        let named = zone.flatMap { HeartRateZone(rawValue: $0) }
+        VStack(spacing: 0) {
+            Text(label(zone: zone))
+                .font(.headline)
+                .foregroundStyle(named?.zoneColor ?? .secondary)
+            if let range = zone.flatMap({ zones.bpmRange(of: $0) }) {
+                Text("\(Int(range.lowerBound.rounded()))-\(Int(range.upperBound.rounded()))")
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(zone.map { $0 == 0 ? "Below zone 1" : "Zone \($0)" } ?? "No zone")
+    }
+
+    private func label(zone: Int?) -> String {
+        switch zone {
+        case nil: "Z-"
+        case 0: "<Z1"
+        case let zone?: "Z\(zone)"
         }
     }
 }

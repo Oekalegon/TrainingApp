@@ -40,19 +40,22 @@ public struct AppTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     private let watchSync: WatchScheduleSync?
+    private let watchZoneSync: WatchZoneSync?
     private let workoutInspector: (any WorkoutInspecting)?
 
     /// - Parameters:
     ///   - model: The app's training model.
     ///   - refresher: Imports activities from HealthKit.
     ///   - watchSync: Run on launch and every time the app becomes active again; `nil` skips it.
+    ///   - watchZoneSync: Sends the athlete's heart-rate zones to the Watch app when the app becomes
+    ///     active and when they change (WATCH-102); `nil` skips it.
     ///   - iCloud: Looks up the iCloud account, for the first-run introduction and the warning banner
     ///     (MVP2-147); `nil` never warns.
     ///   - workoutInspector: Reads what HealthKit recorded for recent workouts, for the Developer
     ///     screen (MVP2-146 spike); `nil` hides it.
     public init(
         model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil,
-        iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
+        watchZoneSync: WatchZoneSync? = nil, iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
     ) {
         let viewModel = MicroCycleViewModel(model: model, refresher: refresher, watchSync: watchSync, iCloud: iCloud)
         _viewModel = State(initialValue: viewModel)
@@ -60,6 +63,7 @@ public struct AppTabView: View {
         _libraryViewModel = State(initialValue: libraryViewModel)
         _searchViewModel = State(initialValue: viewModel.searchViewModel(library: libraryViewModel))
         self.watchSync = watchSync
+        self.watchZoneSync = watchZoneSync
         self.workoutInspector = workoutInspector
     }
 
@@ -127,9 +131,14 @@ public struct AppTabView: View {
             // extra `nil`-vs-count branch is needed here.
             .badge(overlapReviewItems.count)
         }
+        // The athlete changed their heart-rate settings: the Watch app's zones follow (WATCH-102).
+        .onChange(of: viewModel.athleteViewModel.currentHeartRateZoneSettings) { _, settings in
+            watchZoneSync?.sync(settings: settings)
+        }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             watchSync?.requestSync()
+            watchZoneSync?.sync(settings: viewModel.athleteViewModel.currentHeartRateZoneSettings)
             // The athlete may have signed in to iCloud in Settings meanwhile (MVP2-147).
             Task { await viewModel.onboarding.refreshICloudStatus() }
             // Whether the athlete was never asked to allow distance (MVP2-146).

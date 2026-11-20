@@ -28,6 +28,7 @@ struct TrainingAppApp: App {
             if let environment {
                 AppTabView(
                     model: environment.model, refresher: environment, watchSync: environment.watchSync,
+                    watchZoneSync: environment.watchZoneSync,
                     iCloud: CloudKitAccountChecker(containerIdentifier: TrainingAppEnvironment.cloudKitContainerIdentifier),
                     workoutInspector: environment.workoutInspector
                 )
