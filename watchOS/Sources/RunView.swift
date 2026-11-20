@@ -85,6 +85,7 @@ private struct RunMetricsPage: View {
             }
             #if targetEnvironment(simulator)
             Text("fixes \(recorder.routePointCount), location \(recorder.locationDescription)").font(.caption2)
+            Text(recorder.locationDiagnostics).font(.system(size: 10))
             #endif
         }
     }

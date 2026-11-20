@@ -6,6 +6,12 @@ import CoreLocation
 final class LocationFeed: NSObject, CLLocationManagerDelegate {
     var onUpdate: (([CLLocation]) -> Void)?
 
+    /// Counters for the simulator's debug line: fixes delivered, fixes dropped as too coarse or
+    /// invalid, and the last error CoreLocation reported.
+    private(set) var receivedCount = 0
+    private(set) var droppedCount = 0
+    private(set) var lastError: String?
+
     private let manager = CLLocationManager()
 
     override init() {
@@ -53,8 +59,12 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         // Drop invalid fixes and very coarse ones.
         let usable = locations.filter { $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy <= 50 }
-        guard !usable.isEmpty else { return }
-        Task { @MainActor in self.onUpdate?(usable) }
+        let total = locations.count
+        Task { @MainActor in
+            self.receivedCount += total
+            self.droppedCount += total - usable.count
+            if !usable.isEmpty { self.onUpdate?(usable) }
+        }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -65,5 +75,8 @@ final class LocationFeed: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        let description = "CL \((error as NSError).code)"
+        Task { @MainActor in self.lastError = description }
+    }
 }

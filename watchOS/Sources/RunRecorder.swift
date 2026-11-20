@@ -100,6 +100,12 @@ final class RunRecorder: NSObject {
     /// The location permission, for the simulator's debug line.
     var locationDescription: String { locationFeed.authorizationDescription }
 
+    /// Location counters and the last error, for the simulator's debug line.
+    var locationDiagnostics: String {
+        "received \(locationFeed.receivedCount), dropped \(locationFeed.droppedCount)"
+            + (locationFeed.lastError.map { ", error \($0)" } ?? "")
+    }
+
     private var isFailed: Bool {
         if case .failed = phase { return true }
         return false
