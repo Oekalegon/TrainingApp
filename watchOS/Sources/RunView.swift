@@ -84,7 +84,7 @@ private struct RunMetricsPage: View {
                 Text("Paused").font(.footnote).foregroundStyle(.yellow)
             }
             #if targetEnvironment(simulator)
-            Text("fixes \(recorder.routePointCount)").font(.caption2)
+            Text("fixes \(recorder.routePointCount), location \(recorder.locationDescription)").font(.caption2)
             #endif
         }
     }

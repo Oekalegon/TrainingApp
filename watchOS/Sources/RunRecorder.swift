@@ -55,6 +55,9 @@ final class RunRecorder: NSObject {
                 phase = .failed("Workouts can't be saved to Health. On your iPhone, open Health, tap your profile, Apps, TrainingWatch and turn on Workouts, then try again.")
                 return
             }
+            // Ask for location now, before the run, so its prompt isn't shown over the workout. A
+            // "no" still records the run, just without a route and (on a real watch) less distance.
+            await locationFeed.requestAuthorization()
             let configuration = HKWorkoutConfiguration()
             configuration.activityType = .running
             configuration.locationType = .outdoor
@@ -93,6 +96,9 @@ final class RunRecorder: NSObject {
         routePointCount = 0
         phase = .idle
     }
+
+    /// The location permission, for the simulator's debug line.
+    var locationDescription: String { locationFeed.authorizationDescription }
 
     private var isFailed: Bool {
         if case .failed = phase { return true }
