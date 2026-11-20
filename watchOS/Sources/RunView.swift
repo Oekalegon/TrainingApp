@@ -53,9 +53,17 @@ struct RunView: View {
                 }
             }
         case .saved:
-            Text("Saved to Health")
+            VStack {
+                Text("Saved to Health")
+                Button("Done") { recorder.reset() }
+            }
         case .failed(let message):
-            Text(message).font(.footnote)
+            ScrollView {
+                VStack {
+                    Text(message).font(.footnote)
+                    Button("Try again") { recorder.reset() }
+                }
+            }
         }
     }
 }

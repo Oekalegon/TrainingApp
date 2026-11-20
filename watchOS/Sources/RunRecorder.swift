@@ -48,7 +48,13 @@ final class RunRecorder: NSObject {
 
     func start() async {
         do {
+            // A no-op once the user has answered. HealthKit never shows the sheet a second time,
+            // so a denied answer has to be fixed in the Health settings.
             try await store.requestAuthorization(toShare: Self.shareTypes, read: Self.readTypes)
+            guard store.authorizationStatus(for: HKObjectType.workoutType()) == .sharingAuthorized else {
+                phase = .failed("Workouts can't be saved to Health. On your iPhone, open Health, tap your profile, Apps, TrainingWatch and turn on Workouts, then try again.")
+                return
+            }
             let configuration = HKWorkoutConfiguration()
             configuration.activityType = .running
             configuration.locationType = .outdoor
@@ -77,6 +83,20 @@ final class RunRecorder: NSObject {
         } catch {
             phase = .failed(error.localizedDescription)
         }
+    }
+
+    /// Returns to the start screen after a finished or failed run.
+    func reset() {
+        guard phase == .saved || isFailed else { return }
+        heartRate = nil
+        distanceMeters = 0
+        routePointCount = 0
+        phase = .idle
+    }
+
+    private var isFailed: Bool {
+        if case .failed = phase { return true }
+        return false
     }
 
     func pause() { session?.pause() }
