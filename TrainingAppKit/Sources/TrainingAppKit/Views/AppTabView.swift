@@ -132,13 +132,13 @@ public struct AppTabView: View {
             .badge(overlapReviewItems.count)
         }
         // The athlete changed their heart-rate settings: the Watch app's zones follow (WATCH-102).
-        .onChange(of: viewModel.athleteViewModel.currentHeartRateZoneSettings) { _, settings in
+        .onChange(of: viewModel.currentHeartRateZoneSettings) { _, settings in
             watchZoneSync?.sync(settings: settings)
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             watchSync?.requestSync()
-            watchZoneSync?.sync(settings: viewModel.athleteViewModel.currentHeartRateZoneSettings)
+            watchZoneSync?.sync(settings: viewModel.currentHeartRateZoneSettings)
             // The athlete may have signed in to iCloud in Settings meanwhile (MVP2-147).
             Task { await viewModel.onboarding.refreshICloudStatus() }
             // Whether the athlete was never asked to allow distance (MVP2-146).

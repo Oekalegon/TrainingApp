@@ -40,11 +40,7 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     ) {
         self.model = model
         self.watchSync = WatchScheduleSync.live(model: model)
-        #if os(iOS)
         self.watchZoneSync = WatchZoneSync.live()
-        #else
-        self.watchZoneSync = nil
-        #endif
         self.importer = importer
         self.healthStore = healthStore
         self.athleteReader = HealthKitAthleteReader(healthStore: healthStore)

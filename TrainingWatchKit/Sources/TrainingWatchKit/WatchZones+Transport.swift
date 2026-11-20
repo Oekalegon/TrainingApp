@@ -30,4 +30,7 @@ extension WatchZones {
 public protocol WatchZoneSending {
     /// Sends the zones, replacing any that have not been delivered yet.
     func send(_ zones: WatchZones) throws
+
+    /// Why the last attempt to hand the zones to the transport failed, or `nil` when it worked.
+    var lastSendError: String? { get }
 }

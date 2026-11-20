@@ -136,7 +136,7 @@ Requirements: `docs/design/watch-app.md`. A small watchOS 26 app that records wi
 - [ ] **WATCH-110** Battery monitoring: warn when the watch battery runs low during a run
 - [ ] **WATCH-111** Spike: hand a run off to the iPhone when the battery is too low, including an external HR monitor (mirrored session or a new phone session, one or two `HKWorkout`s)
 - [ ] **WATCH-112** Low-power GPS mode for long runs
-- [ ] **WATCH-113** A test seam for the watch recorder: put the session, builder and location source behind protocols in the planned `TrainingWatchKit` package, then test the phase state machine (double start, failure teardown, pause and resume, end while paused, a failed save and its retry), the distance sums and the denied-permission paths. From the WATCH-101 review (PR #184); the End confirmation, VoiceOver labels, locale units, retrying a failed save and the missing-route note were done in that PR
+- [ ] **WATCH-113** A test seam for the watch recorder: put the session, builder and location source behind protocols in `TrainingWatchKit` (the zone channel already has one, `WatchSessionControlling`), then test the phase state machine (double start, failure teardown, pause and resume, end while paused, a failed save and its retry), the distance sums and the denied-permission paths. From the WATCH-101 review (PR #184); the End confirmation, VoiceOver labels, locale units, retrying a failed save and the missing-route note were done in that PR
 - [ ] **WATCH-114** CloudKit fallback for the zones (and later the plan) when the phone isn't reachable: read them from the shared store with TrainingPersistence, and a manual refresh on the watch
 
 ## FIT: Garmin/COROS import

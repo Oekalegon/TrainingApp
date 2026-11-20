@@ -1270,6 +1270,13 @@ public final class MicroCycleViewModel {
         watchSync?.dismissPermissionDeniedBanner()
     }
 
+    /// The athlete's current heart-rate settings, if any are on record: what the Watch app's zones
+    /// are made from (WATCH-102). Read here, not through ``athleteViewModel``, which builds a new
+    /// view model each time it is read.
+    public var currentHeartRateZoneSettings: HeartRateZoneSettings? {
+        model.athlete.currentHeartRateZoneSettings
+    }
+
     /// The view model for the athlete account screen, presented from the week view's toolbar.
     public var athleteViewModel: AthleteViewModel {
         AthleteViewModel(athlete: model.athlete)

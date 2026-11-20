@@ -9,6 +9,7 @@ private final class FakeSender: WatchZoneSending {
     struct Failure: Error {}
     var sent: [WatchZones] = []
     var failing = false
+    var lastSendError: String?
 
     func send(_ zones: WatchZones) throws {
         if failing { throw Failure() }
@@ -54,6 +55,17 @@ struct WatchZoneSyncTests {
         let sender = FakeSender()
         WatchZoneSync(sender: sender).sync(settings: nil)
         #expect(sender.sent.isEmpty)
+    }
+
+    @Test("a transport that refuses the zones is reported, and clears when it works again")
+    func transportErrorIsReported() {
+        let sender = FakeSender()
+        let sync = WatchZoneSync(sender: sender)
+        sender.lastSendError = "session not reachable"
+        sync.sync(settings: settings())
+        #expect(sync.lastError == "session not reachable")
+        sender.lastSendError = nil
+        #expect(sync.lastError == nil)
     }
 
     @Test("a failed send is reported and tried again on the next sync")

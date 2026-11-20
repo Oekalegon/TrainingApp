@@ -94,7 +94,7 @@ private struct RunMetricsPage: View {
                     .font(.title2.monospacedDigit())
                     .accessibilityLabel("Elapsed time")
             }
-            ZoneBadge(zones: zoneStore.zones, heartRate: recorder.heartRate)
+            ZoneBadge(bands: zoneStore.bands, hasZones: zoneStore.zones != nil, heartRate: recorder.heartRate)
             Text(recorder.heartRate.map { "\(Int($0.rounded())) bpm" } ?? "-- bpm")
                 .font(.title.monospacedDigit())
                 .accessibilityLabel("Heart rate")
@@ -146,16 +146,17 @@ private struct RunControlsPage: View {
 
 /// The zone the current heart rate is in, from the athlete's zones sent by the iPhone (WATCH-102):
 /// a coloured "Z3" with its bpm range. Says so when no zones have arrived yet, so a run without
-/// them isn't mistaken for one in no zone.
+/// them isn't mistaken for one in no zone, and when they can't be worked out.
 private struct ZoneBadge: View {
-    let zones: WatchZones?
+    let bands: ZoneBands?
+    let hasZones: Bool
     let heartRate: Double?
 
     var body: some View {
-        if let zones {
-            content(zones: zones)
+        if let bands {
+            content(bands: bands)
         } else {
-            Text("No zones yet: open TrainingApp on your iPhone")
+            Text(hasZones ? "Zones not set up: check TrainingApp" : "No zones yet: open TrainingApp on your iPhone")
                 .font(.system(size: 11))
                 .multilineTextAlignment(.center)
                 .lineLimit(3)
@@ -165,21 +166,22 @@ private struct ZoneBadge: View {
     }
 
     @ViewBuilder
-    private func content(zones: WatchZones) -> some View {
-        let zone = heartRate.flatMap { zones.zone(forHeartRate: $0) }
+    private func content(bands: ZoneBands) -> some View {
+        let zone = heartRate.map { bands.zone(forHeartRate: $0) }
         let named = zone.flatMap { HeartRateZone(rawValue: $0) }
+        let range = zone.flatMap { bands.range(of: $0) }
         VStack(spacing: 0) {
             Text(label(zone: zone))
                 .font(.headline)
                 .foregroundStyle(named?.zoneColor ?? .secondary)
-            if let range = zone.flatMap({ zones.bpmRange(of: $0) }) {
+            if let range {
                 Text("\(Int(range.lowerBound.rounded()))-\(Int(range.upperBound.rounded()))")
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(zone.map { $0 == 0 ? "Below zone 1" : "Zone \($0)" } ?? "No zone")
+        .accessibilityLabel(accessibilityLabel(zone: zone, range: range))
     }
 
     private func label(zone: Int?) -> String {
@@ -188,5 +190,12 @@ private struct ZoneBadge: View {
         case 0: "<Z1"
         case let zone?: "Z\(zone)"
         }
+    }
+
+    private func accessibilityLabel(zone: Int?, range: ClosedRange<Double>?) -> String {
+        guard let zone else { return "No zone" }
+        guard zone > 0 else { return "Below zone 1" }
+        guard let range else { return "Zone \(zone)" }
+        return "Zone \(zone), \(Int(range.lowerBound.rounded())) to \(Int(range.upperBound.rounded())) beats per minute"
     }
 }

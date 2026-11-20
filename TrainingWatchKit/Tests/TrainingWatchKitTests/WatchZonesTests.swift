@@ -48,6 +48,17 @@ struct WatchZonesTests {
         #expect(zones.bpmRange(of: 6) == nil)
     }
 
+    @Test("the bands agree with the zone lookup and give each zone's range")
+    func bands() throws {
+        let zones = zones()
+        let bands = try #require(ZoneBands(zones: zones))
+        for bpm in stride(from: 40.0, through: 200.0, by: 3.5) { #expect(bands.zone(forHeartRate: bpm) == zones.zone(forHeartRate: bpm)) }
+        for zone in 1...5 { #expect(bands.range(of: zone) == zones.bpmRange(of: zone)) }
+        #expect(bands.range(of: 0) == nil)
+        #expect(bands.range(of: 6) == nil)
+        #expect(ZoneBands(zones: self.zones(method: .lactateThreshold, lthr: nil)) == nil)
+    }
+
     @Test("the lactate threshold method without a threshold has no zones")
     func lactateThresholdWithoutThreshold() {
         let zones = zones(method: .lactateThreshold, lthr: nil)
@@ -105,6 +116,26 @@ struct WatchZoneStoreTests {
         store.update(zones(max: 190))
         #expect(store.zones == zones(max: 190))
         #expect(WatchZoneStore(cache: WatchZonesCache(defaults: defaults)).zones == zones(max: 190))
+    }
+
+    @Test("zones used without persisting are gone at the next launch")
+    func notPersisted() {
+        let defaults = freshDefaults()
+        let store = WatchZoneStore(cache: WatchZonesCache(defaults: defaults))
+        store.update(zones(max: 190), persist: false)
+        #expect(store.zones == zones(max: 190))
+        #expect(store.bands != nil)
+        #expect(WatchZoneStore(cache: WatchZonesCache(defaults: defaults)).zones == nil)
+    }
+
+    @Test("the store's bands follow its zones")
+    func bandsFollowZones() {
+        let store = WatchZoneStore(cache: WatchZonesCache(defaults: freshDefaults()))
+        #expect(store.bands == nil)
+        store.update(zones(max: 190))
+        #expect(store.bands?.zone(forHeartRate: 140) == 2)
+        store.update(zones(max: 160))
+        #expect(store.bands?.zone(forHeartRate: 140) == 4)
     }
 
     @Test("newer zones replace the older ones, in the store and in the cache")
