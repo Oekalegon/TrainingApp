@@ -31,10 +31,11 @@ struct WatchSyncChannelTests {
     }
 
     private func plan(_ name: String = "Steady") -> WatchPlan {
-        WatchPlan(workouts: [WatchPlannedWorkout(
-            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, date: Date(timeIntervalSince1970: 1_700_000_000),
-            workout: StructuredWorkout(
-                id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, name: name, sport: .running, blocks: []))])
+        WatchPlan(
+            workouts: [WatchPlannedWorkout(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, date: Date(timeIntervalSince1970: 1_700_000_000),
+                name: name, blocks: [])],
+            sentAt: Date(timeIntervalSince1970: 1_700_000_000))
     }
 
     private func ready(_ session: FakeSession) {

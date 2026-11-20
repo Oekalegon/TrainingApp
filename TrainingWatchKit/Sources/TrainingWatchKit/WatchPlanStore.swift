@@ -1,34 +1,14 @@
 import Foundation
 import Observation
 
-/// Keeps the last plan the watch received, so a run can start with the phone out of reach
-/// (the watch app has to work on its own during a run).
-public struct WatchPlanCache: Sendable {
-    private static let key = "watchPlan.v1"
-
-    // `UserDefaults` is thread-safe but not `Sendable`; the cache only reads and writes one key.
-    private nonisolated(unsafe) let defaults: UserDefaults
-
-    public init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
-
-    /// The cached plan, or `nil` when none was received yet or the cache can't be read.
-    public func load() -> WatchPlan? {
-        defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode(WatchPlan.self, from: $0) }
-    }
-
-    /// Replaces the cached plan.
-    public func save(_ plan: WatchPlan) {
-        guard let data = try? JSONEncoder().encode(plan) else { return }
-        defaults.set(data, forKey: Self.key)
-    }
-}
-
 /// The plan the watch app shows, from the cache at launch and updated as new ones arrive (WATCH-103).
 @MainActor
 @Observable
 public final class WatchPlanStore {
+    /// How long a plan counts as fresh. The phone sends again whenever its app is active and at
+    /// least every few hours, so a plan older than this means the phone hasn't been opened.
+    public static let freshFor: TimeInterval = 24 * 3600
+
     /// The upcoming planned workouts, or `nil` while none have been received yet. Empty means the
     /// phone said nothing is planned.
     public private(set) var plan: WatchPlan?
@@ -60,5 +40,18 @@ public final class WatchPlanStore {
     ///   - calendar: Decides where the day starts; the watch's own, so "today" is where the athlete is.
     public func today(asOf now: Date = .now, calendar: Calendar = .current) -> [WatchPlannedWorkout] {
         plan?.workouts(on: now, calendar: calendar) ?? []
+    }
+
+    /// A note for the screen when the plan is old, such as "Plan from 3 days ago: open TrainingApp
+    /// to update"; `nil` when there is no plan or it is fresh (see ``freshFor``).
+    ///
+    /// - Parameter now: The current time, injected so tests can pin the age.
+    public func staleNote(asOf now: Date = .now) -> String? {
+        guard let plan else { return nil }
+        let age = now.timeIntervalSince(plan.sentAt)
+        guard age > Self.freshFor else { return nil }
+        let days = Int(age / 86400)
+        return days >= 2 ? "Plan from \(days) days ago: open TrainingApp to update"
+            : "Plan from yesterday: open TrainingApp to update"
     }
 }

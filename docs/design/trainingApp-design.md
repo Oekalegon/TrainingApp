@@ -1223,8 +1223,9 @@ on the Athlete tab.
 aren't completed, with their workouts, in the same WatchConnectivity context as the zones. `WatchScheduleSync` runs it at the
 start of every sync, so it follows the same moments (the app becoming active, a plan saved, deleted or imported, a link or
 unlink), and it doesn't follow the Athlete tab's "Send Planned Workouts to Apple Watch" switch or need WorkoutKit permission.
-A plan is sent only when it differs from the last one sent in this run of the app; an empty plan is sent too, so the Watch
-clears what it had.
+A plan is sent when it differs from the last one sent in this run of the app, and again after 6 hours if it doesn't, because each
+plan carries when it was sent and the Watch says so when its plan is more than a day old; an empty plan is sent too, so the Watch
+clears what it had. Only the next 7 days' plans and the workouts they use are read, not the whole plan and library.
 
 ## 4. Testing & previews
 

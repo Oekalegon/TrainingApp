@@ -13,14 +13,14 @@ private func at(day: Int, hour: Int = 8) -> Date {
     utc.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))!
 }
 
-private func workout(_ name: String = "Steady") -> StructuredWorkout {
-    StructuredWorkout(
-        name: name, sport: .running,
-        blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])])
-}
+private let steadyBlocks = [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])]
 
 private func planned(_ day: Int, hour: Int = 8, name: String = "Steady") -> WatchPlannedWorkout {
-    WatchPlannedWorkout(id: UUID(), date: at(day: day, hour: hour), workout: workout(name))
+    WatchPlannedWorkout(id: UUID(), date: at(day: day, hour: hour), name: name, blocks: steadyBlocks)
+}
+
+private func plan(_ workouts: [WatchPlannedWorkout], sentAt: Date = at(day: 20)) -> WatchPlan {
+    WatchPlan(workouts: workouts, sentAt: sentAt)
 }
 
 @Suite("WatchPlan (WATCH-103)")
@@ -28,35 +28,65 @@ struct WatchPlanTests {
     @Test("workouts are kept earliest first")
     func sorted() {
         let later = planned(22), earlier = planned(20), sameDayLater = planned(20, hour: 17)
-        #expect(WatchPlan(workouts: [later, sameDayLater, earlier]).workouts == [earlier, sameDayLater, later])
+        #expect(plan([later, sameDayLater, earlier]).workouts == [earlier, sameDayLater, later])
     }
 
     @Test("a day's workouts are the ones planned on that calendar day, in the given calendar")
     func workoutsOnDay() {
         let today = planned(20, hour: 7), tonight = planned(20, hour: 23), tomorrow = planned(21, hour: 0)
-        let plan = WatchPlan(workouts: [today, tonight, tomorrow])
-        #expect(plan.workouts(on: at(day: 20, hour: 12), calendar: utc) == [today, tonight])
-        #expect(plan.workouts(on: at(day: 21, hour: 12), calendar: utc) == [tomorrow])
-        #expect(plan.workouts(on: at(day: 25), calendar: utc).isEmpty)
+        let thePlan = plan([today, tonight, tomorrow])
+        #expect(thePlan.workouts(on: at(day: 20, hour: 12), calendar: utc) == [today, tonight])
+        #expect(thePlan.workouts(on: at(day: 21, hour: 12), calendar: utc) == [tomorrow])
+        #expect(thePlan.workouts(on: at(day: 25), calendar: utc).isEmpty)
     }
 
     @Test("a plan with steps survives the trip through an application context, together with the zones")
     func contextRoundTrip() throws {
         let zones = WatchZones(settings: HeartRateZoneSettings(
             effectiveDate: Date(timeIntervalSince1970: 0), restingHeartRateBPM: 50, maxHeartRateBPM: 190))
-        let context = WatchContext(zones: zones, plan: WatchPlan(workouts: [planned(20)]))
+        let context = WatchContext(zones: zones, plan: plan([planned(20)]))
         #expect(WatchContext(applicationContext: try context.applicationContext()) == context)
     }
 
     @Test("a context with only one of the two keeps the other empty, and bad contexts give none")
     func partialAndBadContexts() throws {
-        let onlyPlan = WatchContext(plan: WatchPlan(workouts: []))
+        let onlyPlan = WatchContext(plan: plan([]))
         let decoded = try #require(WatchContext(applicationContext: try onlyPlan.applicationContext()))
         #expect(decoded.zones == nil)
-        #expect(decoded.plan == WatchPlan(workouts: []))
+        #expect(decoded.plan == plan([]))
         #expect(WatchContext(applicationContext: [:]) == nil)
         #expect(WatchContext(applicationContext: ["watchContext.v1": Data("not json".utf8)]) == nil)
         #expect(WatchContext(applicationContext: ["watchContext.v1": "text"]) == nil)
+    }
+
+    @Test("a part the watch can't read is left out and the other part still arrives")
+    func unreadablePartIsDropped() throws {
+        let zones = WatchZones(settings: HeartRateZoneSettings(
+            effectiveDate: Date(timeIntervalSince1970: 0), restingHeartRateBPM: 50, maxHeartRateBPM: 190))
+        let zonesJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(zones))
+        let kept = plan([planned(20)])
+        let planJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(kept))
+
+        // A plan from a newer phone: its first workout has a field of the wrong shape.
+        var brokenPlan = try #require(planJSON as? [String: Any])
+        brokenPlan["workouts"] = [["id": 42]]
+        let withBrokenPlan = try JSONSerialization.data(withJSONObject: ["zones": zonesJSON, "plan": brokenPlan])
+        let first = try #require(WatchContext(data: withBrokenPlan))
+        #expect(first.zones == zones)
+        #expect(first.plan == nil)
+
+        // Zones from a newer phone, with a plan that is fine.
+        let withBrokenZones = try JSONSerialization.data(withJSONObject: ["zones": ["settings": "?"], "plan": planJSON])
+        let second = try #require(WatchContext(data: withBrokenZones))
+        #expect(second.zones == nil)
+        #expect(second.plan == kept)
+    }
+
+    @Test("a workout carries only its name and steps, not the phone's library details")
+    func trimmedWorkout() throws {
+        let data = try JSONEncoder().encode(planned(20))
+        let keys = Set(try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any]).keys)
+        #expect(keys == ["id", "date", "name", "blocks"])
     }
 }
 
@@ -75,18 +105,18 @@ struct WatchPlanStoreTests {
         let store = WatchPlanStore(cache: WatchPlanCache(defaults: freshDefaults()))
         #expect(store.plan == nil)
         #expect(store.today(asOf: at(day: 20), calendar: utc).isEmpty)
-        store.update(WatchPlan(workouts: []))
-        #expect(store.plan == WatchPlan(workouts: []))
+        store.update(plan([]))
+        #expect(store.plan == plan([]))
     }
 
     @Test("a received plan is used, is still there at the next launch, and is replaced by a newer one")
     func keepsAndReplaces() {
         let defaults = freshDefaults()
         let store = WatchPlanStore(cache: WatchPlanCache(defaults: defaults))
-        let first = WatchPlan(workouts: [planned(20)])
+        let first = plan([planned(20)])
         store.update(first)
         #expect(WatchPlanStore(cache: WatchPlanCache(defaults: defaults)).plan == first)
-        let second = WatchPlan(workouts: [planned(21)])
+        let second = plan([planned(21)])
         store.update(second)
         #expect(WatchPlanStore(cache: WatchPlanCache(defaults: defaults)).plan == second)
     }
@@ -94,15 +124,26 @@ struct WatchPlanStoreTests {
     @Test("a plan used without persisting is gone at the next launch")
     func notPersisted() {
         let defaults = freshDefaults()
-        WatchPlanStore(cache: WatchPlanCache(defaults: defaults)).update(WatchPlan(workouts: [planned(20)]), persist: false)
+        WatchPlanStore(cache: WatchPlanCache(defaults: defaults)).update(plan([planned(20)]), persist: false)
         #expect(WatchPlanStore(cache: WatchPlanCache(defaults: defaults)).plan == nil)
+    }
+
+    @Test("a plan sent more than a day ago says how old it is; a fresh one, or none, says nothing")
+    func staleNote() {
+        let store = WatchPlanStore(cache: WatchPlanCache(defaults: freshDefaults()))
+        #expect(store.staleNote(asOf: at(day: 25)) == nil)
+        store.update(plan([], sentAt: at(day: 20, hour: 8)))
+        #expect(store.staleNote(asOf: at(day: 20, hour: 20)) == nil)
+        #expect(store.staleNote(asOf: at(day: 21, hour: 8)) == nil)
+        #expect(store.staleNote(asOf: at(day: 21, hour: 9)) == "Plan from yesterday: open TrainingApp to update")
+        #expect(store.staleNote(asOf: at(day: 23, hour: 9)) == "Plan from 3 days ago: open TrainingApp to update")
     }
 
     @Test("today's workouts come from the plan, for the day given")
     func today() {
         let store = WatchPlanStore(cache: WatchPlanCache(defaults: freshDefaults()))
         let todays = planned(20), other = planned(22)
-        store.update(WatchPlan(workouts: [todays, other]))
+        store.update(plan([todays, other]))
         #expect(store.today(asOf: at(day: 20, hour: 15), calendar: utc) == [todays])
         #expect(store.today(asOf: at(day: 21), calendar: utc).isEmpty)
     }
@@ -113,28 +154,24 @@ struct WatchWorkoutSummaryTests {
     private let metric = Locale(identifier: "en_GB_u_ms_metric")
     private let imperial = Locale(identifier: "en_US")
 
-    private func workout(_ blocks: [WorkoutBlock]) -> StructuredWorkout {
-        StructuredWorkout(name: "Test", sport: .running, blocks: blocks)
-    }
-
     @Test("a steady run reads as its duration and zone")
     func steady() {
-        let lines = WatchWorkoutSummary.lines(for: workout([
+        let lines = WatchWorkoutSummary.lines(for: [
             WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(2700), target: .heartRateZone(2))])
-        ]), locale: metric)
+        ], locale: metric)
         #expect(lines == ["45 min Z2"])
     }
 
     @Test("warm-up and cool-down are named, and a repeated block shows its repetitions")
     func intervals() {
-        let lines = WatchWorkoutSummary.lines(for: workout([
+        let lines = WatchWorkoutSummary.lines(for: [
             WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(600), target: .heartRateZone(1))]),
             WorkoutBlock(steps: [
                 WorkoutStep(kind: .work, goal: .time(180), target: .heartRateZone(4)),
                 WorkoutStep(kind: .recovery, goal: .time(120), target: .heartRateZone(2))
             ], repetitions: 4),
             WorkoutBlock(steps: [WorkoutStep(kind: .cooldown, goal: .time(300), target: .heartRateZone(1))])
-        ]), locale: metric)
+        ], locale: metric)
         #expect(lines == ["Warm-up 10 min Z1", "4 × (3 min Z4, Recovery 2 min Z2)", "Cool-down 5 min Z1"])
     }
 

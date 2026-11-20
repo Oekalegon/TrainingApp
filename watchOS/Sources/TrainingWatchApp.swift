@@ -31,23 +31,30 @@ struct TrainingWatchApp: App {
     /// hide the "nothing received yet" screens on later launches.
     ///
     /// - `-fakeZones`: zones with resting 55 and maximum 190.
-    /// - `-fakePlan`: an interval workout planned for today.
+    /// - `-fakePlan`: an interval workout planned for today, sent just now.
+    /// - `-fakeStalePlan`: the same, sent 3 days ago.
     private func addSimulatorTestData() {
         if zoneStore.zones == nil, CommandLine.arguments.contains("-fakeZones") {
             zoneStore.update(WatchZones(settings: .init(
                 effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190)), persist: false)
         }
-        if planStore.plan == nil, CommandLine.arguments.contains("-fakePlan") {
-            let intervals = StructuredWorkout(name: "4 × 3 min intervals", sport: .running, blocks: [
+        let fresh = CommandLine.arguments.contains("-fakePlan")
+        let stale = CommandLine.arguments.contains("-fakeStalePlan")
+        if planStore.plan == nil, fresh || stale {
+            let blocks = [
                 WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(600), target: .heartRateZone(1))]),
                 WorkoutBlock(steps: [
                     WorkoutStep(kind: .work, goal: .time(180), target: .heartRateZoneRange(4.0...4.5)),
                     WorkoutStep(kind: .recovery, goal: .time(120), target: .heartRateZone(2))
                 ], repetitions: 4),
                 WorkoutBlock(steps: [WorkoutStep(kind: .cooldown, goal: .distance(1000), target: .heartRateZone(1))])
-            ])
+            ]
+            let sentAt = stale ? Date.now.addingTimeInterval(-3 * 86400) : Date.now
             planStore.update(
-                WatchPlan(workouts: [WatchPlannedWorkout(id: UUID(), date: .now, workout: intervals)]), persist: false)
+                WatchPlan(
+                    workouts: [WatchPlannedWorkout(id: UUID(), date: .now, name: "4 × 3 min intervals", blocks: blocks)],
+                    sentAt: sentAt),
+                persist: false)
         }
     }
     #endif

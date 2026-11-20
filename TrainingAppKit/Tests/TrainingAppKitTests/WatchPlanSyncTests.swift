@@ -24,9 +24,32 @@ private struct FailingWorkoutStore: WorkoutLibraryStore {
     struct Failure: Error {}
 
     func workouts() async throws -> [StructuredWorkout] { throw Failure() }
-    func workout(id: UUID) async throws -> StructuredWorkout? { nil }
+    func workout(id: UUID) async throws -> StructuredWorkout? { throw Failure() }
     func upsert(_ workouts: [StructuredWorkout]) async throws {}
     func deleteWorkout(id: UUID) async throws {}
+}
+
+/// A workout library that records which workouts were read, to pin that a sync reads only the
+/// ones the next 7 days use and never the whole library.
+private final class RecordingWorkoutStore: WorkoutLibraryStore, @unchecked Sendable {
+    private let base: InMemoryStore
+    private(set) var readAll = 0
+    private(set) var readIDs: [UUID] = []
+
+    init(_ base: InMemoryStore) { self.base = base }
+
+    func workouts() async throws -> [StructuredWorkout] {
+        readAll += 1
+        return try await base.workouts()
+    }
+
+    func workout(id: UUID) async throws -> StructuredWorkout? {
+        readIDs.append(id)
+        return try await base.workout(id: id)
+    }
+
+    func upsert(_ workouts: [StructuredWorkout]) async throws { try await base.upsert(workouts) }
+    func deleteWorkout(id: UUID) async throws { try await base.deleteWorkout(id: id) }
 }
 
 @MainActor
@@ -39,10 +62,13 @@ struct WatchPlanSyncTests {
         Date(timeIntervalSince1970: 1_700_006_400 + Double(offset) * 86400 + hours * 3600)
     }
 
-    private func makeModel(failingWorkouts: Bool = false) async throws -> (InMemoryStore, TrainingModel) {
+    private func makeModel(
+        failingWorkouts: Bool = false, workoutStore: (any WorkoutLibraryStore)? = nil
+    ) async throws -> (InMemoryStore, TrainingModel) {
         let store = InMemoryStore()
         let stores = StoreSet(
-            activityStore: store, planStore: store, workoutStore: failingWorkouts ? FailingWorkoutStore() : store,
+            activityStore: store, planStore: store,
+            workoutStore: workoutStore ?? (failingWorkouts ? FailingWorkoutStore() : store),
             cycleStore: store, raceStore: store, athleteStore: store
         )
         let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
@@ -72,7 +98,9 @@ struct WatchPlanSyncTests {
         let sent = try #require(sender.plans.first)
         #expect(sender.plans.count == 1)
         #expect(sent.workouts.map(\.id) == [today.id, tomorrow.id, lastDay.id])
-        #expect(sent.workouts.map(\.workout.name) == ["Easy", "Tempo", "Easy"])
+        #expect(sent.workouts.map(\.name) == ["Easy", "Tempo", "Easy"])
+        #expect(sent.workouts.first?.blocks == easy.blocks)
+        #expect(sent.sentAt == day(0, hours: 12))
     }
 
     @Test("leaves out the past, beyond the window, completed plans, other sports and missing workouts")
@@ -114,7 +142,7 @@ struct WatchPlanSyncTests {
         let (_, model) = try await makeModel()
         let sender = FakeSender()
         await WatchPlanSync(model: model, sender: sender).sync(asOf: day(0))
-        #expect(sender.plans == [WatchPlan(workouts: [])])
+        #expect(sender.plans == [WatchPlan(workouts: [], sentAt: day(0))])
     }
 
     @Test("an unchanged plan isn't sent again, and a changed one is")
@@ -127,7 +155,7 @@ struct WatchPlanSyncTests {
         let sync = WatchPlanSync(model: model, sender: sender)
 
         await sync.sync(asOf: day(0))
-        await sync.sync(asOf: day(0))
+        await sync.sync(asOf: day(0, hours: 9))
         #expect(sender.plans.count == 1)
 
         try await store.upsert([PlannedActivity(workoutID: run.id, date: day(2))])
@@ -152,12 +180,53 @@ struct WatchPlanSyncTests {
         try await store.upsert([done])
         await sync.sync(asOf: day(0))
 
-        #expect(sender.plans.last == WatchPlan(workouts: []))
+        #expect(sender.plans.last?.workouts.isEmpty == true)
+    }
+
+    @Test("an unchanged plan is sent again after the refresh interval, so the watch knows it is current")
+    func refreshedWhenUnchanged() async throws {
+        let (store, model) = try await makeModel()
+        let run = workout()
+        try await store.upsert([run])
+        try await store.upsert([PlannedActivity(workoutID: run.id, date: day(1))])
+        let sender = FakeSender()
+        let sync = WatchPlanSync(model: model, sender: sender)
+
+        await sync.sync(asOf: day(0, hours: 8))
+        await sync.sync(asOf: day(0, hours: 8) + WatchPlanSync.refreshInterval - 1)
+        #expect(sender.plans.count == 1)
+        await sync.sync(asOf: day(0, hours: 8) + WatchPlanSync.refreshInterval)
+        #expect(sender.plans.count == 2)
+        #expect(sender.plans.last?.sentAt == day(0, hours: 8) + WatchPlanSync.refreshInterval)
+        #expect(sender.plans.last?.workouts == sender.plans.first?.workouts)
+    }
+
+    @Test("reads only the workouts the next 7 days use, and never the whole library")
+    func readsOnlyTheWindow() async throws {
+        let base = InMemoryStore()
+        let recording = RecordingWorkoutStore(base)
+        let (store, model) = try await makeModel(workoutStore: recording)
+        let soon = workout("Soon"), later = workout("Later"), past = workout("Past")
+        try await recording.upsert([soon, later, past])
+        try await store.upsert([
+            PlannedActivity(workoutID: soon.id, date: day(1)),
+            PlannedActivity(workoutID: soon.id, date: day(2)),
+            PlannedActivity(workoutID: later.id, date: day(30)),
+            PlannedActivity(workoutID: past.id, date: day(-30))
+        ])
+        let sender = FakeSender()
+
+        await WatchPlanSync(model: model, sender: sender).sync(asOf: day(0))
+
+        #expect(recording.readAll == 0)
+        #expect(recording.readIDs == [soon.id])
+        #expect(sender.plans.first?.workouts.map(\.name) == ["Soon", "Soon"])
     }
 
     @Test("a library that can't be read sends nothing")
     func unreadableStore() async throws {
-        let (_, model) = try await makeModel(failingWorkouts: true)
+        let (store, model) = try await makeModel(failingWorkouts: true)
+        try await store.upsert([PlannedActivity(workoutID: UUID(), date: day(1))])
         let sender = FakeSender()
         await WatchPlanSync(model: model, sender: sender).sync(asOf: day(0))
         #expect(sender.plans.isEmpty)

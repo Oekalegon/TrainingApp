@@ -4,13 +4,13 @@ import TrainingCore
 /// A workout as short lines of text for the watch's screen (WATCH-103): one line per step, or one
 /// per repeated block, such as "Warm-up 10 min Z1" or "4 × (3 min Z4, Recovery 2 min Z2)".
 public enum WatchWorkoutSummary {
-    /// The lines describing `workout`.
+    /// The lines describing a workout's steps.
     ///
     /// - Parameters:
-    ///   - workout: The workout to describe.
+    ///   - blocks: The workout's blocks.
     ///   - locale: Decides whether distances are in kilometres or miles.
-    public static func lines(for workout: StructuredWorkout, locale: Locale = .current) -> [String] {
-        workout.blocks.flatMap { block -> [String] in
+    public static func lines(for blocks: [WorkoutBlock], locale: Locale = .current) -> [String] {
+        blocks.flatMap { block -> [String] in
             let steps = block.steps.map { stepText($0, locale: locale) }
             guard block.repetitions > 1 else { return steps }
             return ["\(block.repetitions) × " + (steps.count == 1 ? steps[0] : "(" + steps.joined(separator: ", ") + ")")]
