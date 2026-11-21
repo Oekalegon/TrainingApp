@@ -33,6 +33,8 @@ struct TrainingWatchApp: App {
     /// - `-fakeZones`: zones with resting 55 and maximum 190.
     /// - `-fakePlan`: an interval workout planned for today, sent just now.
     /// - `-fakeShortPlan`: a workout of steps a few seconds long, for testing the steps.
+    /// - `-fakeIntervalPlan`: 60 s warm-up, 6 × (20 s zone 4, 20 s zone 2), 60 s cool-down, which
+    ///   `Tools/TestTracks/short-intervals.gpx` follows step for step.
     /// - `-fakeStalePlan`: the same, sent 3 days ago.
     private func addSimulatorTestData() {
         if zoneStore.zones == nil, CommandLine.arguments.contains("-fakeZones") {
@@ -40,10 +42,18 @@ struct TrainingWatchApp: App {
                 effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190)), persist: false)
         }
         let short = CommandLine.arguments.contains("-fakeShortPlan")
-        let fresh = CommandLine.arguments.contains("-fakePlan") || short
+        let intervals = CommandLine.arguments.contains("-fakeIntervalPlan")
+        let fresh = CommandLine.arguments.contains("-fakePlan") || short || intervals
         let stale = CommandLine.arguments.contains("-fakeStalePlan")
         if planStore.plan == nil, fresh || stale {
-            let blocks = short ? [
+            let blocks = intervals ? [
+                WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(60), target: .heartRateZone(1))]),
+                WorkoutBlock(steps: [
+                    WorkoutStep(kind: .work, goal: .time(20), target: .heartRateZone(4)),
+                    WorkoutStep(kind: .recovery, goal: .time(20), target: .heartRateZone(2))
+                ], repetitions: 6),
+                WorkoutBlock(steps: [WorkoutStep(kind: .cooldown, goal: .time(60), target: .heartRateZone(1))])
+            ] : short ? [
                 // Seconds, not minutes, so a test run goes through every kind of step quickly.
                 WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(8), target: .heartRateZone(1))]),
                 WorkoutBlock(steps: [
@@ -62,7 +72,7 @@ struct TrainingWatchApp: App {
             let sentAt = stale ? Date.now.addingTimeInterval(-3 * 86400) : Date.now
             planStore.update(
                 WatchPlan(
-                    workouts: [WatchPlannedWorkout(id: UUID(), date: .now, name: short ? "Short test" : "4 × 3 min intervals", blocks: blocks)],
+                    workouts: [WatchPlannedWorkout(id: UUID(), date: .now, name: intervals ? "6 × 20 s intervals" : short ? "Short test" : "4 × 3 min intervals", blocks: blocks)],
                     sentAt: sentAt),
                 persist: false)
         }
