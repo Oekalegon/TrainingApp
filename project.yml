@@ -76,3 +76,20 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.2"
         TARGETED_DEVICE_FAMILY: "4"
+
+# The watch scheme carries the simulator's test arguments, all off. Tick them in Xcode under
+# Product > Scheme > Edit Scheme > Run > Arguments (they are ignored on a real watch).
+schemes:
+  TrainingWatch:
+    build:
+      targets:
+        TrainingWatch: all
+    run:
+      config: Debug
+      commandLineArguments:
+        "-fakeZones": false
+        "-fakeIntervalPlan": false
+        "-fakePlan": false
+        "-fakeShortPlan": false
+        "-autostartPlan": false
+        "-gpxPath $(SRCROOT)/Tools/TestTracks/short-intervals.gpx": false
