@@ -76,3 +76,21 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.2"
         TARGETED_DEVICE_FAMILY: "4"
+
+# The watch scheme carries the simulator's test arguments. The ones that start the 6 x 20 s interval
+# test run on the matching GPX track by themselves are on; untick them in Xcode under Product >
+# Scheme > Edit Scheme > Run > Arguments (they are ignored on a real watch).
+schemes:
+  TrainingWatch:
+    build:
+      targets:
+        TrainingWatch: all
+    run:
+      config: Debug
+      commandLineArguments:
+        "-fakeZones": true
+        "-fakeIntervalPlan": true
+        "-fakePlan": false
+        "-fakeShortPlan": false
+        "-autostartPlan": true
+        "-gpxPath $(SRCROOT)/Tools/TestTracks/short-intervals.gpx": true

@@ -133,7 +133,15 @@ Decisions from the scoping Q&A of 2026-11-20:
   - The `HKWorkout` is tagged with the planned activity's ID and the workout's name, so a run can be matched to its plan exactly. The keys are in `WorkoutMetadata`; they are custom, since HealthKit reserves the ones that start with "HK".
   - TrainingApp doesn't read these yet (WATCH-116): its import matches by time and type as before, and shows the events as it did for the Workout app's.
 - **Screen:** the metrics page shows a basic step line: the step's place ("3/6"), its text ("Recovery 4 s Z2") and what is left ("0:04 left", "9 m left", or "Press Lap to move on" for an open step). The full run screen is WATCH-105.
-- Simulator: `-fakeShortPlan` gives the watch a workout of steps a few seconds long (and a 15 m cool-down), `-autostartPlan` starts today's first workout, `-autolap <after>` presses the lap button, and the simulator's debug line shows how many events were written.
+- Simulator launch arguments (all in `SimulatorTestData` and `SimulatorTestHooks`; they do nothing on a real watch):
+  - `-fakeZones`: the athlete's zones (resting 55, maximum 190).
+  - `-fakeShortPlan`: a workout of steps a few seconds long (and a 15 m cool-down).
+  - `-fakeIntervalPlan`: a 6-minute workout: 60 s warm-up, 6 × (20 s zone 4, 20 s zone 2), 60 s cool-down (`TestWorkouts.intervals`).
+  - `-gpxPath <file>`: the GPX to play. `Tools/TestTracks/short-intervals.gpx` is a synthetic track that follows the interval workout step for step, with a heart rate that moves towards each step's level over a few seconds, so the first seconds of each hard step are still below zone 4. `Tools/make-interval-gpx.py` makes it; it is no real place. `TestWorkoutTrackTests` keeps it and the workout in step.
+  - `-autostartPlan` starts today's first workout, `-autolap <after>` presses the lap button, and the simulator's debug line shows how many events were written.
+  - While one of the fake arguments is given, what a paired phone sends is ignored.
+- **From Xcode** the TrainingWatch scheme (in `project.yml`) passes `-fakeZones`, `-fakeIntervalPlan`, `-autostartPlan` and `-gpxPath $(SRCROOT)/Tools/TestTracks/short-intervals.gpx`, so a run on a watch simulator starts the interval workout on that track by itself. Untick them under Product > Scheme > Edit Scheme > Run > Arguments for a normal run. A repo path with spaces breaks the `-gpxPath` one.
+- **From the command line** pass the same arguments to `xcrun simctl launch`, with the GPX's full path.
 
 ## Battery monitoring and hand-off to the iPhone (wanted, needs a spike)
 
