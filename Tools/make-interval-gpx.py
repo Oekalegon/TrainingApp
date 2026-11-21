@@ -4,8 +4,8 @@
 The workout: 60 s warm-up (zone 1), 6 x (20 s zone 4, 20 s zone 2), 60 s cool-down (zone 1), so
 6 minutes in all. The track is a circle run at the pace of each step, with a heart rate that
 moves towards each step's level over a few seconds, as a real one does, so the first seconds of
-every hard step are still below zone 4. Heart rates assume `-fakeZones` (resting 55, maximum 190: zone 2 is
-about 136-150 bpm and zone 4 about 163-177): 126 in the warm-up, 169 in the hard steps, 141 in the easy ones.
+every hard step are still below zone 4. Heart rates assume `-fakeZones` (resting 55, maximum 190): 126 in the warm-up,
+169 in the hard steps, 141 in the easy ones. TestWorkoutTrackTests checks them against the zones.
 
 Nothing here is a real run or a real place, so the file can live in the repo.
 
@@ -13,6 +13,7 @@ Nothing here is a real run or a real place, so the file can live in the repo.
 """
 import math
 import sys
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 # (seconds, speed in m/s, target heart rate)
@@ -55,7 +56,7 @@ for second, travelled, bpm in points:
         "</gpxtpx:TrackPointExtension></extensions></trkpt>")
 lines.append("</trkseg></trk></gpx>")
 
-path = sys.argv[1] if len(sys.argv) > 1 else "Tools/TestTracks/short-intervals.gpx"
+path = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).parent / "TestTracks/short-intervals.gpx")
 with open(path, "w") as f:
     f.write("\n".join(lines) + "\n")
 print(f"{path}: {len(points)} points, {total_distance:.0f} m, {second} s")
