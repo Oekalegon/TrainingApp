@@ -16,8 +16,9 @@ struct TrainingWatchApp: App {
                 .task {
                     syncChannel?.activate { context in
                         // A part the phone hasn't sent yet is `nil`: keep what the watch has.
-                        if let zones = context.zones { zoneStore.update(zones) }
-                        if let plan = context.plan { planStore.update(plan) }
+                        // In the simulator, test data wins over anything a paired phone sends.
+                        if let zones = context.zones, !fakesZones { zoneStore.update(zones) }
+                        if let plan = context.plan, !fakesPlan { planStore.update(plan) }
                     }
                     #if targetEnvironment(simulator)
                     addSimulatorTestData()
@@ -27,8 +28,19 @@ struct TrainingWatchApp: App {
     }
 
     #if targetEnvironment(simulator)
-    /// Test data for the simulator, where no phone sends any. None of it is cached, so it doesn't
-    /// hide the "nothing received yet" screens on later launches.
+    private var fakesZones: Bool { CommandLine.arguments.contains("-fakeZones") }
+    private var fakesPlan: Bool {
+        ["-fakePlan", "-fakeShortPlan", "-fakeIntervalPlan", "-fakeStalePlan"].contains(where: CommandLine.arguments.contains)
+    }
+    #else
+    private var fakesZones: Bool { false }
+    private var fakesPlan: Bool { false }
+    #endif
+
+    #if targetEnvironment(simulator)
+    /// Test data for the simulator. None of it is cached, so it doesn't hide the "nothing
+    /// received yet" screens on later launches, and while an argument asks for it, what a paired
+    /// phone sends is ignored.
     ///
     /// - `-fakeZones`: zones with resting 55 and maximum 190.
     /// - `-fakePlan`: an interval workout planned for today, sent just now.
@@ -37,7 +49,9 @@ struct TrainingWatchApp: App {
     ///   `Tools/TestTracks/short-intervals.gpx` follows step for step.
     /// - `-fakeStalePlan`: the same, sent 3 days ago.
     private func addSimulatorTestData() {
-        if zoneStore.zones == nil, CommandLine.arguments.contains("-fakeZones") {
+        // Replaces whatever is cached or was already received: a paired iPhone simulator sends an
+        // empty plan, which would otherwise hide the test workout ("No run planned today").
+        if fakesZones {
             zoneStore.update(WatchZones(settings: .init(
                 effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190)), persist: false)
         }
@@ -45,7 +59,7 @@ struct TrainingWatchApp: App {
         let intervals = CommandLine.arguments.contains("-fakeIntervalPlan")
         let fresh = CommandLine.arguments.contains("-fakePlan") || short || intervals
         let stale = CommandLine.arguments.contains("-fakeStalePlan")
-        if planStore.plan == nil, fresh || stale {
+        if fresh || stale {
             let blocks = intervals ? [
                 WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(60), target: .heartRateZone(1))]),
                 WorkoutBlock(steps: [
