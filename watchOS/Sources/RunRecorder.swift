@@ -3,6 +3,7 @@ import Foundation
 import HealthKit
 import OSLog
 import Observation
+import TrainingWatchKit
 
 /// Records an outdoor run with an `HKWorkoutSession` and an `HKLiveWorkoutBuilder`, so the run is
 /// saved to Health as a normal `HKWorkout` (WATCH-101). It shows the live heart rate and elapsed
@@ -27,6 +28,17 @@ final class RunRecorder: NSObject {
     /// The latest heart rate in beats per minute.
     private(set) var heartRate: Double?
     private(set) var distanceMeters: Double = 0
+    /// The steps of the planned workout being run, or `nil` in a free run. Set and changed by
+    /// `RunRecorder+Steps.swift`; views only read it.
+    var stepEngine: WorkoutStepEngine?
+    /// How many segment and lap events have been written to the workout, for the simulator's debug line.
+    var eventsWritten = 0
+    /// When the current step began, for its segment event. Set by `RunRecorder+Steps.swift`.
+    var stepStartDate = Date.now
+    /// Watches the clock and the distance for the end of a step. Set by `RunRecorder+Steps.swift`.
+    var stepTicker: Task<Void, Never>?
+    /// Events that couldn't be written yet. Set by `RunRecorder+Steps.swift`.
+    var pendingEvents: [HKWorkoutEvent] = []
     /// After a failed save: the recorded run is still held, so it can be saved again or discarded.
     private(set) var canRetrySave = false
     /// Set when a run was saved without its route (no location permission, or the route failed),
@@ -35,11 +47,12 @@ final class RunRecorder: NSObject {
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
-    private var builder: HKLiveWorkoutBuilder?
+    // Internal, not private, because `RunRecorder+Steps.swift` extends this type.
+    var builder: HKLiveWorkoutBuilder?
     private var routeBuilder: HKWorkoutRouteBuilder?
     private let locationFeed = LocationFeed()
     private(set) var routePointCount = 0
-    private let log = Logger(subsystem: "org.oekalegon.trainingapp.watchkitapp", category: "RunRecorder")
+    let log = Logger(subsystem: "org.oekalegon.trainingapp.watchkitapp", category: "RunRecorder")
 
     private static let readTypes: Set<HKObjectType> = [
         HKQuantityType(.heartRate),
@@ -58,7 +71,11 @@ final class RunRecorder: NSObject {
     /// doesn't try to finish a workout that is being thrown away.
     private var abandoned = false
 
-    func start() async {
+    /// Starts a run.
+    ///
+    /// - Parameter plan: A planned workout to run the steps of and to tag the saved workout with;
+    ///   `nil` for a free run.
+    func start(plan: WatchPlannedWorkout? = nil) async {
         guard phase == .idle else { return }
         phase = .starting
         abandoned = false
@@ -97,6 +114,7 @@ final class RunRecorder: NSObject {
             try await builder.beginCollection(at: start)
             lastDistanceSampleEnd = start
             phase = .running
+            if let plan { await beginSteps(for: plan, at: start) }
             routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: nil)
             routePointCount = 0
             locationFeed.onUpdate = { [weak self] locations in
@@ -125,8 +143,9 @@ final class RunRecorder: NSObject {
         releaseRun()
     }
 
-    /// Stops the GPS (and, in the simulator, the replay and its heart rate).
+    /// Stops the GPS and the step clock (and, in the simulator, the replay and its heart rate).
     private func stopLocation() {
+        stepTicker?.cancel()
         locationFeed.stop()
         #if targetEnvironment(simulator)
         replay.stop()
@@ -135,6 +154,9 @@ final class RunRecorder: NSObject {
     }
 
     private func releaseRun() {
+        stepEngine = nil
+        stepTicker = nil
+        pendingEvents = []
         session = nil
         builder = nil
         routeBuilder = nil
@@ -318,6 +340,8 @@ final class RunRecorder: NSObject {
         stopLocation()
         guard let builder else { return }
         phase = .saving
+        await closeCurrentStep()
+        await flushPendingEvents()
         let workout: HKWorkout?
         do {
             if !collectionEnded {

@@ -30,7 +30,12 @@ public enum WatchWorkoutSummary {
         }
     }
 
-    static func stepText(_ step: WorkoutStep, locale: Locale) -> String {
+    /// One step as a short line, such as "Warm-up 10 min Z1" or "3 min Z4.0-4.5".
+    ///
+    /// - Parameters:
+    ///   - step: The step.
+    ///   - locale: Decides whether distances are in kilometres or miles.
+    public static func stepText(_ step: WorkoutStep, locale: Locale = .current) -> String {
         [kindText(step.kind), goalText(step.goal, locale: locale), targetText(of: step)]
             .compactMap { $0 }
             .joined(separator: " ")
@@ -95,6 +100,23 @@ public enum WatchWorkoutSummary {
             }
         }
         if case .rpe(let rpe) = step.target { return "RPE \(rpe)" }
+        return nil
+    }
+
+    /// What is left of a step, such as "1:23 left" or "0.4 km left"; `nil` for an open step.
+    ///
+    /// - Parameters:
+    ///   - progress: How far into the step the run is.
+    ///   - locale: Decides whether distances are in kilometres or miles.
+    public static func remainingText(_ progress: StepProgress, locale: Locale = .current) -> String? {
+        if let seconds = progress.remainingTime {
+            let total = Int(seconds.rounded(.up))
+            let clock = total >= 3600
+                ? String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
+                : String(format: "%d:%02d", total / 60, total % 60)
+            return clock + " left"
+        }
+        if let metres = progress.remainingDistance { return distanceText(metres, locale: locale) + " left" }
         return nil
     }
 }

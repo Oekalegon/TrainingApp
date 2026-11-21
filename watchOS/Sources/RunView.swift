@@ -2,43 +2,19 @@ import SwiftUI
 import TrainingCore
 import TrainingWatchKit
 
-/// The recording screen of WATCH-101: start, then pages for the metrics and the controls.
+/// The recording screen (WATCH-101): start, then pages for the metrics and the controls. Today's
+/// planned workouts are on the start screen and tapping one runs its steps (WATCH-104).
 struct RunView: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
     let planStore: WatchPlanStore
 
     var body: some View {
+        #if targetEnvironment(simulator)
+        content.simulatorTestHooks(recorder: recorder, planStore: planStore)
+        #else
         content
-            #if targetEnvironment(simulator)
-            // `-autostart` lets a script start a run without tapping (simulator only).
-            .task {
-                if CommandLine.arguments.contains("-autostart"), recorder.phase == .idle {
-                    await recorder.start()
-                }
-                // `-autopause <after>,<for>` pauses the run after that many seconds for that many
-                // seconds, for headless testing of pause and resume.
-                if let index = CommandLine.arguments.firstIndex(of: "-autopause"),
-                   index + 1 < CommandLine.arguments.count {
-                    let parts = CommandLine.arguments[index + 1].split(separator: ",").compactMap { Double($0) }
-                    if parts.count == 2 {
-                        Task {
-                            try? await Task.sleep(for: .seconds(parts[0]))
-                            recorder.pause()
-                            try? await Task.sleep(for: .seconds(parts[1]))
-                            recorder.resume()
-                        }
-                    }
-                }
-                // `-autoend <seconds>` ends the run after that long, for headless testing.
-                if let index = CommandLine.arguments.firstIndex(of: "-autoend"),
-                   index + 1 < CommandLine.arguments.count,
-                   let seconds = Double(CommandLine.arguments[index + 1]) {
-                    try? await Task.sleep(for: .seconds(seconds))
-                    recorder.end()
-                }
-            }
-            #endif
+        #endif
     }
 
     @ViewBuilder
@@ -49,7 +25,7 @@ struct RunView: View {
                 VStack(spacing: 8) {
                     Button("Start run") { Task { await recorder.start() } }
                         .buttonStyle(.borderedProminent)
-                    TodayWorkouts(planStore: planStore)
+                    TodayWorkouts(planStore: planStore, recorder: recorder)
                 }
             }
         case .starting, .saving:
@@ -109,10 +85,13 @@ private struct RunMetricsPage: View {
     var body: some View {
         VStack(spacing: 6) {
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                Text(Duration.seconds(recorder.elapsed(at: context.date)),
-                     format: .time(pattern: .hourMinuteSecond))
-                    .font(.title2.monospacedDigit())
-                    .accessibilityLabel("Elapsed time")
+                VStack(spacing: 2) {
+                    Text(Duration.seconds(recorder.elapsed(at: context.date)),
+                         format: .time(pattern: .hourMinuteSecond))
+                        .font(.title2.monospacedDigit())
+                        .accessibilityLabel("Elapsed time")
+                    StepLine(recorder: recorder, at: context.date)
+                }
             }
             ZoneBadge(bands: zoneStore.bands, hasZones: zoneStore.zones != nil, heartRate: recorder.heartRate)
             Text(recorder.heartRate.map { "\(Int($0.rounded())) bpm" } ?? "-- bpm")
@@ -128,7 +107,7 @@ private struct RunMetricsPage: View {
             }
             #if targetEnvironment(simulator)
             Text("fixes \(recorder.routePointCount), location \(recorder.locationDescription)").font(.caption2)
-            Text(recorder.locationDiagnostics).font(.system(size: 10))
+            Text("\(recorder.locationDiagnostics), events \(recorder.eventsWritten)").font(.system(size: 10))
             #endif
         }
     }
@@ -142,6 +121,10 @@ private struct RunControlsPage: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            Button { Task { await recorder.lap() } } label: {
+                Label(recorder.stepEngine?.isFinished == false ? "Next step" : "Lap", systemImage: "flag.fill")
+            }
+            .disabled(recorder.phase != .running)
             if recorder.phase == .paused {
                 Button { recorder.resume() } label: {
                     Label("Resume", systemImage: "play.fill")
@@ -222,11 +205,11 @@ private struct ZoneBadge: View {
 
 /// Today's planned workouts, from the plan the iPhone sent (WATCH-103): each one's name and its
 /// steps as short lines, and a note when the plan is old, so "no run planned" isn't mistaken for
-/// "the phone hasn't said". Starting one with its steps comes with the step engine (WATCH-104), so
-/// for now it shows what is planned while "Start run" records a free run. The minute-by-minute
-/// timeline moves "today" on at midnight if the app stays open.
+/// "the phone hasn't said". Tapping a workout starts a run with its steps (WATCH-104); "Start run"
+/// records a free run. The minute-by-minute timeline moves "today" on at midnight if the app stays open.
 private struct TodayWorkouts: View {
     let planStore: WatchPlanStore
+    let recorder: RunRecorder
 
     var body: some View {
         // The timeline only makes the view redraw each minute; its own date is the schedule's, which
@@ -247,13 +230,18 @@ private struct TodayWorkouts: View {
                         Text("No run planned today").font(.footnote)
                     }
                     ForEach(workouts) { planned in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(planned.name).font(.headline)
-                            ForEach(Array(WatchWorkoutSummary.lines(for: planned.blocks).enumerated()), id: \.offset) { _, line in
-                                Text(line).font(.system(size: 12))
+                        Button {
+                            Task { await recorder.start(plan: planned) }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(planned.name).font(.headline)
+                                ForEach(Array(WatchWorkoutSummary.lines(for: planned.blocks).enumerated()), id: \.offset) { _, line in
+                                    Text(line).font(.system(size: 12))
+                                }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .accessibilityElement(children: .combine)
+                        .accessibilityHint("Starts this workout")
                     }
                     if let note = planStore.staleNote(asOf: now) {
                         Text(note).font(.system(size: 11)).foregroundStyle(.orange)
@@ -262,5 +250,52 @@ private struct TodayWorkouts: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// Where the run is in a planned workout (WATCH-104): the current step and what is left of it, or
+/// "Workout done" once the last step is over. Nothing in a free run. The full run screen is WATCH-105.
+private struct StepLine: View {
+    let recorder: RunRecorder
+    let at: Date
+
+    var body: some View {
+        if let engine = recorder.stepEngine {
+            VStack(spacing: 0) {
+                if let current = engine.current {
+                    Text("\(current.index + 1)/\(engine.steps.count)  \(WatchWorkoutSummary.stepText(current.step))")
+                        .font(.system(size: 12))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                    if let progress = recorder.stepProgress(at: at),
+                       let left = WatchWorkoutSummary.remainingText(progress) {
+                        Text(left).font(.system(size: 12).monospacedDigit()).foregroundStyle(.secondary)
+                    } else {
+                        Text("Press Lap to move on").font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Workout done").font(.system(size: 12)).foregroundStyle(.green)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityText(engine))
+            .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
+
+    /// "Step 3 of 6, recovery, 4 seconds, zone 2, 4 seconds left" instead of the screen's shorthand.
+    private func accessibilityText(_ engine: WorkoutStepEngine) -> String {
+        guard let current = engine.current else { return "Workout done" }
+        var parts = ["Step \(current.index + 1) of \(engine.steps.count)", WatchWorkoutSummary.stepText(current.step)]
+        if let progress = recorder.stepProgress(at: at) {
+            if let seconds = progress.remainingTime {
+                parts.append(Duration.seconds(seconds.rounded(.up)).formatted(.units(allowed: [.minutes, .seconds], width: .wide)) + " left")
+            } else if let left = WatchWorkoutSummary.remainingText(progress) {
+                parts.append(left)
+            }
+        } else {
+            parts.append("Press Next step to move on")
+        }
+        return parts.joined(separator: ", ")
     }
 }
