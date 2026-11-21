@@ -133,6 +133,7 @@ Requirements: `docs/design/watch-app.md`. A small watchOS 26 app that records wi
 - [ ] **WATCH-107** Earbud audio: speech or tones (setting), step announcements, pause podcasts and duck music
 - [ ] **WATCH-108** Free recording without a plan
 - [ ] **WATCH-109** Configurable pages and metrics (set in the iOS app) and a map page
+- [ ] **WATCH-117** Signal vocabulary: a different haptic and tone for each event, so they can be told apart without looking: step started, below zone, above zone, back in zone, far below and far above zone (a more urgent pattern, such as a short repeated tone) and workout done. One table from event to haptic and tone, shared by the haptics (WATCH-106) and the audio (WATCH-107); replaces the single `.notification` haptic for step changes from WATCH-104. Needs the real watch to tune. See "One signal per meaning" in `docs/design/watch-app.md`
 - [ ] **WATCH-110** Battery monitoring: warn when the watch battery runs low during a run
 - [ ] **WATCH-111** Spike: hand a run off to the iPhone when the battery is too low, including an external HR monitor (mirrored session or a new phone session, one or two `HKWorkout`s)
 - [ ] **WATCH-112** Low-power GPS mode for long runs

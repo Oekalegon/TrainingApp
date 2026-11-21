@@ -56,6 +56,18 @@ Escalating: the longer HR stays outside the target zone, the more often or the m
 - A distinct confirmation cue when back in zone.
 - Spoken cue ("Slow down", "Zone 3") or tones, in earbuds. **Speech or tones is a setting.**
 
+### One signal per meaning (added 2026-11-21)
+
+Every kind of event gets its own haptic pattern and its own tone, so the wrist and the ears tell them apart without looking. Today a step change plays one `.notification` haptic (and `.success` at the end of the workout), made in WATCH-104; WATCH-117 gives each of these its own:
+
+- **Step started** (a new target): its own signal, unlike every zone alert below.
+- **Too low** (below the zone) and **too high** (above it): different from each other.
+- **Back in the zone**: different from both out-of-zone signals and from the step signal.
+- **Far out of the zone** (well beyond the hysteresis margin, or out for long): a third, more urgent pattern, such as a short tone repeated, instead of the ordinary out-of-zone one. Above and below stay distinguishable in it too.
+- The workout's last step ending keeps its own.
+
+The haptic and the tone for an event are chosen together from one table (event to haptic pattern and tone), so they can't drift apart, and speech (the WATCH-107 setting) says the same thing in words. WATCH-106 decides when each event fires; WATCH-117 decides what each sounds and feels like. Haptic patterns can only be judged on a real watch, which is a few months away, so start with `WKHapticType` values that already differ clearly and tune later.
+
 ### Audio
 
 - Announces step changes, such as "Interval 3 of 6, 4 minutes, zone 4".
