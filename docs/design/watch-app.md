@@ -66,6 +66,12 @@ Every kind of event gets its own haptic pattern and its own tone, so the wrist a
 - **Far out of the zone** (well beyond the hysteresis margin, or out for long): a third, more urgent pattern, such as a short tone repeated, instead of the ordinary out-of-zone one. Above and below stay distinguishable in it too.
 - The workout's last step ending keeps its own.
 
+**Which channel (decided 2026-11-21):**
+- **Headphones or earbuds connected:** zone alerts (below, above, back in, far out) are **sound only**, as a tone or speech by the WATCH-107 setting, with no haptic. That also keeps the wrist still for the heart-rate sensor.
+- **No headphones:** zone alerts are **haptic only**. The watch speaker is never used.
+- **Step started** and **workout done** may use the haptic as well as the sound, with or without headphones, since they are rare and the wrist is a good place to feel a step change.
+- Whether headphones are connected is read when an alert fires, not once at the start, so putting them in or taking them out mid-run changes the channel.
+
 The haptic and the tone for an event are chosen together from one table (event to haptic pattern and tone), so they can't drift apart, and speech (the WATCH-107 setting) says the same thing in words. WATCH-106 decides when each event fires; WATCH-117 decides what each sounds and feels like. Haptic patterns can only be judged on a real watch, which is a few months away, so start with `WKHapticType` values that already differ clearly and tune later.
 
 ### Audio
