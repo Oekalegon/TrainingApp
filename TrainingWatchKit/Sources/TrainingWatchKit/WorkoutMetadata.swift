@@ -31,7 +31,7 @@ public enum WorkoutMetadata {
         /// The lap button ended it early.
         case lap
         /// The run ended while the step was still going.
-        case workoutEnded = "workoutEnded"
+        case workoutEnded
 
         /// The end that an engine's transition reason means.
         public init(_ reason: WorkoutStepEngine.Reason) {

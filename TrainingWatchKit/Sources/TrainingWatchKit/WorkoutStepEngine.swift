@@ -53,6 +53,10 @@ public struct WorkoutStepEngine: Sendable {
         public let started: PlannedStep?
         /// Why `ended` ended.
         public let reason: Reason
+        /// The workout time, paused time left out, at which `ended` ended: its goal's boundary for a
+        /// goal reached, or the moment of the lap. Lets the caller date the step's end exactly rather
+        /// than when it noticed.
+        public let endedAt: TimeInterval
     }
 
     /// Every step of the workout, in order.
@@ -158,6 +162,6 @@ public struct WorkoutStepEngine: Sendable {
         currentIndex = startedIndex
         stepStartElapsed = elapsed
         stepStartDistance = distance
-        return Transition(ended: ended, started: startedIndex.map { steps[$0] }, reason: reason)
+        return Transition(ended: ended, started: startedIndex.map { steps[$0] }, reason: reason, endedAt: elapsed)
     }
 }

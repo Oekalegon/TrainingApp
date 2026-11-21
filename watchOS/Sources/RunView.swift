@@ -277,7 +277,25 @@ private struct StepLine: View {
                     Text("Workout done").font(.system(size: 12)).foregroundStyle(.green)
                 }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityText(engine))
+            .accessibilityAddTraits(.updatesFrequently)
         }
+    }
+
+    /// "Step 3 of 6, recovery, 4 seconds, zone 2, 4 seconds left" instead of the screen's shorthand.
+    private func accessibilityText(_ engine: WorkoutStepEngine) -> String {
+        guard let current = engine.current else { return "Workout done" }
+        var parts = ["Step \(current.index + 1) of \(engine.steps.count)", WatchWorkoutSummary.stepText(current.step)]
+        if let progress = recorder.stepProgress(at: at) {
+            if let seconds = progress.remainingTime {
+                parts.append(Duration.seconds(seconds.rounded(.up)).formatted(.units(allowed: [.minutes, .seconds], width: .wide)) + " left")
+            } else if let left = WatchWorkoutSummary.remainingText(progress) {
+                parts.append(left)
+            }
+        } else {
+            parts.append("Press Next step to move on")
+        }
+        return parts.joined(separator: ", ")
     }
 }

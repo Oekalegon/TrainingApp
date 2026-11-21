@@ -69,6 +69,15 @@ struct WorkoutStepEngineTests {
         #expect(engine.update(elapsed: 120, distance: 0).count == 1)
     }
 
+    @Test("a transition says when its step ended: at the goal's boundary, or at the lap")
+    func endedAt() {
+        var engine = WorkoutStepEngine(blocks: [WorkoutBlock(steps: [time(60), time(30), time(100)])])
+        // Noticed late, after two steps are over: they end at 60 and 90, not at 95.
+        let transitions = engine.update(elapsed: 95, distance: 0)
+        #expect(transitions.map(\.endedAt) == [60, 90])
+        #expect(engine.lap(elapsed: 97, distance: 0)?.endedAt == 97)
+    }
+
     @Test("a distance step ends when its distance is covered, measured from where it began")
     func distanceGoal() {
         var engine = WorkoutStepEngine(blocks: [WorkoutBlock(steps: [time(60), distance(400)])])

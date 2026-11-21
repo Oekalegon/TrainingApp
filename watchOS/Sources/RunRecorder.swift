@@ -37,6 +37,8 @@ final class RunRecorder: NSObject {
     var stepStartDate = Date.now
     /// Watches the clock and the distance for the end of a step. Set by `RunRecorder+Steps.swift`.
     var stepTicker: Task<Void, Never>?
+    /// Events that couldn't be written yet. Set by `RunRecorder+Steps.swift`.
+    var pendingEvents: [HKWorkoutEvent] = []
     /// After a failed save: the recorded run is still held, so it can be saved again or discarded.
     private(set) var canRetrySave = false
     /// Set when a run was saved without its route (no location permission, or the route failed),
@@ -154,6 +156,7 @@ final class RunRecorder: NSObject {
     private func releaseRun() {
         stepEngine = nil
         stepTicker = nil
+        pendingEvents = []
         session = nil
         builder = nil
         routeBuilder = nil
@@ -338,6 +341,7 @@ final class RunRecorder: NSObject {
         guard let builder else { return }
         phase = .saving
         await closeCurrentStep()
+        await flushPendingEvents()
         let workout: HKWorkout?
         do {
             if !collectionEnded {

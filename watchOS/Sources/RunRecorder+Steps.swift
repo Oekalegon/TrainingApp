@@ -43,8 +43,10 @@ extension RunRecorder {
     /// lap; in a free run, or after the last step, it only marks a lap.
     func lap() async {
         guard phase == .running else { return }
-        if var engine = stepEngine, !engine.isFinished,
-           let transition = engine.lap(elapsed: elapsed(), distance: distanceMeters) {
+        if var engine = stepEngine, !engine.isFinished {
+            // A second tap, or a brush of the wrist, right after a step began would skip that one too.
+            guard Date.now.timeIntervalSince(stepStartDate) > 1,
+                  let transition = engine.lap(elapsed: elapsed(), distance: distanceMeters) else { return }
             stepEngine = engine
             await record([transition])
         } else {
@@ -64,14 +66,20 @@ extension RunRecorder {
     /// ended, then taps the wrist once for the change.
     private func record(_ transitions: [WorkoutStepEngine.Transition]) async {
         var events: [HKWorkoutEvent] = []
+        let now = Date.now
+        let elapsedNow = elapsed(at: now)
         for transition in transitions {
-            let now = Date.now
+            // Dated by the boundary the engine computed, not by when the tick noticed it, so a step
+            // of 6 s is 6 s and steps passed in one gap don't all end "now". (A pause inside the gap
+            // before the tick would shift this by at most that gap.) Pauses inside a step are part
+            // of its interval, since it is dated on the wall clock.
+            let end = min(now.addingTimeInterval(transition.endedAt - elapsedNow), now)
             events.append(segmentEvent(
-                for: transition.ended, from: stepStartDate, to: now, end: WorkoutMetadata.StepEnd(transition.reason)))
+                for: transition.ended, from: stepStartDate, to: end, end: WorkoutMetadata.StepEnd(transition.reason)))
             if transition.reason == .lap {
-                events.append(HKWorkoutEvent(type: .lap, dateInterval: DateInterval(start: now, duration: 0), metadata: nil))
+                events.append(HKWorkoutEvent(type: .lap, dateInterval: DateInterval(start: end, duration: 0), metadata: nil))
             }
-            stepStartDate = now
+            stepStartDate = max(end, stepStartDate)
             // A different tap when the workout's last step is over.
             WKInterfaceDevice.current().play(transition.started == nil ? .success : .notification)
         }
@@ -95,13 +103,23 @@ extension RunRecorder {
             metadata: WorkoutMetadata.segment(for: step, end: reason))
     }
 
+    /// Writes events to the workout. Ones that fail are kept and tried again with the next batch
+    /// and when the run is saved (`flushPendingEvents()`), so a hiccup doesn't lose a step.
     private func addEvents(_ events: [HKWorkoutEvent]) async {
-        guard !events.isEmpty, let builder else { return }
+        let batch = pendingEvents + events
+        guard !batch.isEmpty, let builder else { return }
+        pendingEvents = []
         do {
-            try await builder.addWorkoutEvents(events)
-            eventsWritten += events.count
+            try await builder.addWorkoutEvents(batch)
+            eventsWritten += batch.count
         } catch {
-            log.error("workout events not written: \(error.localizedDescription, privacy: .public)")
+            pendingEvents = batch
+            log.error("workout events not written, will retry: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Tries once more to write events that failed earlier, before the workout is ended.
+    func flushPendingEvents() async {
+        await addEvents([])
     }
 }
