@@ -103,20 +103,41 @@ public enum WatchWorkoutSummary {
         return nil
     }
 
+    /// The step after the current one as a line for the run screen: "Next: Recovery 20 s Z2", "Last
+    /// step", or `nil` once the workout is done.
+    ///
+    /// - Parameters:
+    ///   - engine: The workout being run.
+    ///   - locale: Decides whether distances are in kilometres or miles.
+    public static func nextText(_ engine: WorkoutStepEngine, locale: Locale = .current) -> String? {
+        guard engine.current != nil else { return nil }
+        guard let next = engine.next else { return "Last step" }
+        return "Next: " + stepText(next.step, locale: locale)
+    }
+
     /// What is left of a step, such as "1:23 left" or "0.4 km left"; `nil` for an open step.
     ///
     /// - Parameters:
     ///   - progress: How far into the step the run is.
     ///   - locale: Decides whether distances are in kilometres or miles.
     public static func remainingText(_ progress: StepProgress, locale: Locale = .current) -> String? {
+        remainingValue(progress, locale: locale).map { $0 + " left" }
+    }
+
+    /// What is left of a step as a bare value for the run screen's big number: "1:23" or "0.4 km";
+    /// `nil` for an open step.
+    ///
+    /// - Parameters:
+    ///   - progress: How far into the step the run is.
+    ///   - locale: Decides whether distances are in kilometres or miles.
+    public static func remainingValue(_ progress: StepProgress, locale: Locale = .current) -> String? {
         if let seconds = progress.remainingTime {
             let total = Int(seconds.rounded(.up))
-            let clock = total >= 3600
+            return total >= 3600
                 ? String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
                 : String(format: "%d:%02d", total / 60, total % 60)
-            return clock + " left"
         }
-        if let metres = progress.remainingDistance { return distanceText(metres, locale: locale) + " left" }
+        if let metres = progress.remainingDistance { return distanceText(metres, locale: locale) }
         return nil
     }
 }
