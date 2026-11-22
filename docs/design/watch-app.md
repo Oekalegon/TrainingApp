@@ -1,6 +1,6 @@
 # Watch app: requirements
 
-Status: WATCH-101 to WATCH-104 are built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-105 onwards are open: see `TODO.md`.
+Status: WATCH-101 to WATCH-105 are built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-106 onwards are open: see `TODO.md`.
 
 ## Why
 
@@ -34,6 +34,14 @@ One fixed page showing:
 - total elapsed time
 - time remaining in the step, or distance remaining, depending on the step's end condition
 - the step's target, shown to suit its type (zone with the current bpm and a colour band)
+
+**As built (WATCH-105)**, on the metrics page (`RunMetricsPage`), which is the default page, with the controls one swipe to the right:
+
+- **In a planned workout**, from the top: the step's place, kind, goal and target ("4/14 20 s Z4"); what is left of the step as the big number (a clock, or the distance left, or "Open" for a step that waits for the lap button); a bar for how far through the step the run is; the step's heart-rate target as a name and bpm range ("Z4 163-177") over a gauge, with the target band in green and a marker for the current heart rate; the heart rate itself, coloured blue below the target, green in it and red above it, with the words next to it ("10 bpm above", "In target") so the colour isn't the only signal; the total time and the distance, small; and the next step ("Next: Recovery 20 s Z2", "Last step"), or "Paused".
+- **Target forms:** a whole zone, a stretch of zones (positions, such as 4.0-4.5) and a bpm range all resolve to bpm on the watch (`StepHeartRateTarget`, tested). A pace, power or RPE step with no heart-rate target, or a zone target with no zones yet, shows the zone the heart rate is in instead.
+- **In a free run**, and after the last step ("Workout done"): the total time as the big number, the zone the heart rate is in, the heart rate and the distance.
+- **Controls page:** next step (or lap), pause and resume, and end with a confirmation. The simulator's debug lines (fixes, location, events) are at the bottom of this page.
+- The gauge and the colours show only where the heart rate is against the target right now. When and how to alert (smoothing, hysteresis, the slope rule) is WATCH-106.
 
 Controls: pause and resume, and a manual lap button. Steps **auto-advance** on their time or distance end condition, and the lap button also moves on manually.
 
@@ -137,7 +145,7 @@ Decisions from the scoping Q&A of 2026-11-20:
   - `-fakeZones`: the athlete's zones (resting 55, maximum 190).
   - `-fakeShortPlan`: a workout of steps a few seconds long (and a 15 m cool-down).
   - `-fakeIntervalPlan`: a 6-minute workout: 60 s warm-up, 6 × (20 s zone 4, 20 s zone 2), 60 s cool-down (`TestWorkouts.intervals`).
-  - `-gpxPath <file>`: the GPX to play. `Tools/TestTracks/short-intervals.gpx` is a synthetic track that follows the interval workout step for step, with a heart rate that moves towards each step's level over a few seconds, so the first seconds of each hard step are still below zone 4. `Tools/make-interval-gpx.py` makes it; it is no real place. `TestWorkoutTrackTests` keeps it and the workout in step.
+  - `-gpxPath <file>`: the GPX to play. `Tools/TestTracks/short-intervals.gpx` is a synthetic track that follows the interval workout step for step, with a heart rate that moves towards each step's level over a few seconds, so the first seconds of each hard step are still below zone 4. Some steps deliberately leave their zone, to test the alerts: the 2nd hard step goes far above zone 4 (about 188 bpm), the 4th far below it (about 140), the 6th a little below (about 158); the 3rd easy step goes below zone 2 (about 129) and the 5th above it (about 155). `Tools/make-interval-gpx.py` makes it; it is no real place. `TestWorkoutTrackTests` keeps it and the workout in step.
   - `-autostartPlan` starts today's first workout, `-autolap <after>` presses the lap button, and the simulator's debug line shows how many events were written.
   - While one of the fake arguments is given, what a paired phone sends is ignored.
 - **From Xcode** the TrainingWatch scheme (in `project.yml`) passes `-fakeZones`, `-fakeIntervalPlan`, `-autostartPlan` and `-gpxPath $(SRCROOT)/Tools/TestTracks/short-intervals.gpx`, so a run on a watch simulator starts the interval workout on that track by itself. Untick them under Product > Scheme > Edit Scheme > Run > Arguments for a normal run. A repo path with spaces breaks the `-gpxPath` one.

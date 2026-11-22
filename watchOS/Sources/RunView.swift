@@ -2,7 +2,7 @@ import SwiftUI
 import TrainingCore
 import TrainingWatchKit
 
-/// The recording screen (WATCH-101): start, then pages for the metrics and the controls. Today's
+/// The recording screen (WATCH-101): start, then pages for the metrics (`RunMetricsPage`, WATCH-105) and the controls. Today's
 /// planned workouts are on the start screen and tapping one runs its steps (WATCH-104).
 struct RunView: View {
     let recorder: RunRecorder
@@ -76,43 +76,6 @@ private struct RunPages: View {
     }
 }
 
-/// The metrics page: elapsed time, heart rate and distance. Units follow the system's region for
-/// now; the athlete's own setting comes with the zone sync (WATCH-102).
-private struct RunMetricsPage: View {
-    let recorder: RunRecorder
-    let zoneStore: WatchZoneStore
-
-    var body: some View {
-        VStack(spacing: 6) {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                VStack(spacing: 2) {
-                    Text(Duration.seconds(recorder.elapsed(at: context.date)),
-                         format: .time(pattern: .hourMinuteSecond))
-                        .font(.title2.monospacedDigit())
-                        .accessibilityLabel("Elapsed time")
-                    StepLine(recorder: recorder, at: context.date)
-                }
-            }
-            ZoneBadge(bands: zoneStore.bands, hasZones: zoneStore.zones != nil, heartRate: recorder.heartRate)
-            Text(recorder.heartRate.map { "\(Int($0.rounded())) bpm" } ?? "-- bpm")
-                .font(.title.monospacedDigit())
-                .accessibilityLabel("Heart rate")
-                .accessibilityValue(recorder.heartRate.map { "\(Int($0.rounded())) beats per minute" } ?? "no reading")
-            Text(Measurement(value: recorder.distanceMeters, unit: UnitLength.meters)
-                .formatted(.measurement(width: .abbreviated, usage: .road, numberFormatStyle: .number.precision(.fractionLength(2)))))
-                .font(.footnote.monospacedDigit())
-                .accessibilityLabel("Distance")
-            if recorder.phase == .paused {
-                Text("Paused").font(.footnote).foregroundStyle(.yellow)
-            }
-            #if targetEnvironment(simulator)
-            Text("fixes \(recorder.routePointCount), location \(recorder.locationDescription)").font(.caption2)
-            Text("\(recorder.locationDiagnostics), events \(recorder.eventsWritten)").font(.system(size: 10))
-            #endif
-        }
-    }
-}
-
 /// The controls page, one swipe to the right of the metrics. Ending asks first, since a mis-tap
 /// would end and save the run.
 private struct RunControlsPage: View {
@@ -120,6 +83,7 @@ private struct RunControlsPage: View {
     @State private var confirmingEnd = false
 
     var body: some View {
+        ScrollView {
         VStack(spacing: 8) {
             Button { Task { await recorder.lap() } } label: {
                 Label(recorder.stepEngine?.isFinished == false ? "Next step" : "Lap", systemImage: "flag.fill")
@@ -139,67 +103,16 @@ private struct RunControlsPage: View {
             Button(role: .destructive) { confirmingEnd = true } label: {
                 Label("End", systemImage: "xmark")
             }
+            #if targetEnvironment(simulator)
+            Text("fixes \(recorder.routePointCount), location \(recorder.locationDescription)").font(.caption2)
+            Text("\(recorder.locationDiagnostics), events \(recorder.eventsWritten)").font(.system(size: 10))
+            #endif
+        }
         }
         .confirmationDialog("End this run?", isPresented: $confirmingEnd) {
             Button("End run", role: .destructive) { recorder.end() }
             Button("Keep going", role: .cancel) {}
         }
-    }
-}
-
-/// The zone the current heart rate is in, from the athlete's zones sent by the iPhone (WATCH-102):
-/// a coloured "Z3" with its bpm range. Says so when no zones have arrived yet, so a run without
-/// them isn't mistaken for one in no zone, and when they can't be worked out.
-private struct ZoneBadge: View {
-    let bands: ZoneBands?
-    let hasZones: Bool
-    let heartRate: Double?
-
-    var body: some View {
-        if let bands {
-            content(bands: bands)
-        } else {
-            Text(hasZones ? "Zones not set up: check TrainingApp" : "No zones yet: open TrainingApp on your iPhone")
-                .font(.system(size: 11))
-                .multilineTextAlignment(.center)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private func content(bands: ZoneBands) -> some View {
-        let zone = heartRate.map { bands.zone(forHeartRate: $0) }
-        let named = zone.flatMap { HeartRateZone(rawValue: $0) }
-        let range = zone.flatMap { bands.range(of: $0) }
-        VStack(spacing: 0) {
-            Text(label(zone: zone))
-                .font(.headline)
-                .foregroundStyle(named?.zoneColor ?? .secondary)
-            if let range {
-                Text("\(Int(range.lowerBound.rounded()))-\(Int(range.upperBound.rounded()))")
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel(zone: zone, range: range))
-    }
-
-    private func label(zone: Int?) -> String {
-        switch zone {
-        case nil: "Z-"
-        case 0: "<Z1"
-        case let zone?: "Z\(zone)"
-        }
-    }
-
-    private func accessibilityLabel(zone: Int?, range: ClosedRange<Double>?) -> String {
-        guard let zone else { return "No zone" }
-        guard zone > 0 else { return "Below zone 1" }
-        guard let range else { return "Zone \(zone)" }
-        return "Zone \(zone), \(Int(range.lowerBound.rounded())) to \(Int(range.upperBound.rounded())) beats per minute"
     }
 }
 
@@ -250,52 +163,5 @@ private struct TodayWorkouts: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-}
-
-/// Where the run is in a planned workout (WATCH-104): the current step and what is left of it, or
-/// "Workout done" once the last step is over. Nothing in a free run. The full run screen is WATCH-105.
-private struct StepLine: View {
-    let recorder: RunRecorder
-    let at: Date
-
-    var body: some View {
-        if let engine = recorder.stepEngine {
-            VStack(spacing: 0) {
-                if let current = engine.current {
-                    Text("\(current.index + 1)/\(engine.steps.count)  \(WatchWorkoutSummary.stepText(current.step))")
-                        .font(.system(size: 12))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                    if let progress = recorder.stepProgress(at: at),
-                       let left = WatchWorkoutSummary.remainingText(progress) {
-                        Text(left).font(.system(size: 12).monospacedDigit()).foregroundStyle(.secondary)
-                    } else {
-                        Text("Press Lap to move on").font(.system(size: 12)).foregroundStyle(.secondary)
-                    }
-                } else {
-                    Text("Workout done").font(.system(size: 12)).foregroundStyle(.green)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accessibilityText(engine))
-            .accessibilityAddTraits(.updatesFrequently)
-        }
-    }
-
-    /// "Step 3 of 6, recovery, 4 seconds, zone 2, 4 seconds left" instead of the screen's shorthand.
-    private func accessibilityText(_ engine: WorkoutStepEngine) -> String {
-        guard let current = engine.current else { return "Workout done" }
-        var parts = ["Step \(current.index + 1) of \(engine.steps.count)", WatchWorkoutSummary.stepText(current.step)]
-        if let progress = recorder.stepProgress(at: at) {
-            if let seconds = progress.remainingTime {
-                parts.append(Duration.seconds(seconds.rounded(.up)).formatted(.units(allowed: [.minutes, .seconds], width: .wide)) + " left")
-            } else if let left = WatchWorkoutSummary.remainingText(progress) {
-                parts.append(left)
-            }
-        } else {
-            parts.append("Press Next step to move on")
-        }
-        return parts.joined(separator: ", ")
     }
 }

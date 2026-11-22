@@ -37,24 +37,36 @@ struct TestWorkoutTrackTests {
         #expect(points.last!.time.timeIntervalSince(points.first!.time) == planned)
     }
 
-    @Test("the pace and heart rate follow each step: fast and in zone 4 late in a hard step, easy and in zone 2 late in a recovery")
+    /// Where the heart rate is late in each step against the step's own zone. Steps are numbered
+    /// from 0: the warm-up, then a hard and an easy step per repetition, then the cool-down. The
+    /// excursions are deliberate, to test the alerts; keep in step with `Tools/make-interval-gpx.py`.
+    private static let expected: [Int: String] = [
+        3: "far above", // rep 2 hard: 190 against zone 4
+        6: "below",     // rep 3 easy: 128 against zone 2
+        7: "far below", // rep 4 hard: 140 against zone 4
+        10: "above",    // rep 5 easy: 156 against zone 2
+        11: "below"     // rep 6 hard: 158 against zone 4
+    ]
+
+    @Test("late in each step the heart rate is in the step's zone, except in the steps made to go out of it")
     func followsSteps() throws {
         let points = try track
-        let zones = WatchZones(settings: .init(effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190))
+        let bands = try #require(ZoneBands(zones: WatchZones(settings: .init(
+            effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190))))
         let origin = points[0].time
         for (step, start) in steps {
             guard case .time(let seconds) = step.step.goal else { continue }
-            // The last 5 seconds of the step, by which the heart rate has caught up.
-            let late = points.filter {
-                let t = $0.time.timeIntervalSince(origin)
-                return t > start + seconds - 5 && t <= start + seconds
+            let target = try #require(StepHeartRateTarget(step: step.step, bands: bands))
+            // The last 2 seconds of the step, by which the heart rate has nearly caught up.
+            let late = points.last { $0.time.timeIntervalSince(origin) <= start + seconds }
+            let bpm = try #require(late?.heartRate)
+            let outcome: String
+            switch target.position(forHeartRate: bpm) {
+            case .inside: outcome = "inside"
+            case .below(let by): outcome = by > 10 ? "far below" : "below"
+            case .above(let by): outcome = by > 10 ? "far above" : "above"
             }
-            let zone = try #require(late.last?.heartRate).map { zones.zone(forHeartRate: $0) }
-            switch step.step.kind {
-            case .work: #expect(zone == 4, "hard step \(step.index)")
-            case .recovery: #expect(zone == 2, "recovery \(step.index)")
-            case .warmup, .cooldown: #expect(zone == 1, "step \(step.index)")
-            }
+            #expect(outcome == Self.expected[step.index] ?? "inside", "step \(step.index) ended at \(bpm) bpm")
         }
     }
 

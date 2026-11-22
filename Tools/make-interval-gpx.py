@@ -4,8 +4,9 @@
 The workout: 60 s warm-up (zone 1), 6 x (20 s zone 4, 20 s zone 2), 60 s cool-down (zone 1), so
 6 minutes in all. The track is a circle run at the pace of each step, with a heart rate that
 moves towards each step's level over a few seconds, as a real one does, so the first seconds of
-every hard step are still below zone 4. Heart rates assume `-fakeZones` (resting 55, maximum 190): 126 in the warm-up,
-169 in the hard steps, 141 in the easy ones. TestWorkoutTrackTests checks them against the zones.
+every hard step are still below zone 4. Heart rates assume `-fakeZones` (resting 55, maximum 190). Most steps end in their zone, but
+some go above or below it, so the zone alerts can be tested; see the table below.
+TestWorkoutTrackTests checks the track against the zones.
 
 Nothing here is a real run or a real place, so the file can live in the repo.
 
@@ -16,8 +17,20 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
+# The heart rate each hard and each easy step moves towards, by repetition. Most are in their zone
+# (zone 4 is about 163-177 and zone 2 about 136-150 with `-fakeZones`); some are not, so the
+# alerts get tested:
+#   rep 2 hard: far above zone 4 (190)        rep 3 easy: below zone 2 (128, down in zone 1)
+#   rep 4 hard: far below zone 4 (140)        rep 5 easy: above zone 2 (156, in zone 3)
+#   rep 6 hard: a little below zone 4 (158)
+HARD_HEART_RATES = [169, 190, 169, 140, 169, 158]
+EASY_HEART_RATES = [141, 141, 128, 141, 156, 141]
+
 # (seconds, speed in m/s, target heart rate)
-STEPS = [(60, 2.8, 126)] + [(20, 4.5, 169), (20, 2.5, 141)] * 6 + [(60, 2.5, 126)]
+STEPS = [(60, 2.8, 126)]
+for hard, easy in zip(HARD_HEART_RATES, EASY_HEART_RATES):
+    STEPS += [(20, 4.5, hard), (20, 2.5, easy)]
+STEPS += [(60, 2.5, 126)]
 HR_TIME_CONSTANT = 6.0  # seconds a heart rate takes to move about two thirds of the way
 START_HR = 100.0
 CENTRE = (52.0, 5.0)  # an arbitrary spot on the map
