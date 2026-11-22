@@ -51,6 +51,21 @@ struct StepHeartRateTargetTests {
         #expect(StepHeartRateTarget(step: step(.pace(300...330)), bands: bands) == nil)
     }
 
+    @Test("zone positions outside 1 to 6 are clamped, and a reversed or zero-width range still works")
+    func edges() throws {
+        let zone1 = try #require(bands.range(of: 1))
+        let zone5 = try #require(bands.range(of: 5))
+        let low = try #require(StepHeartRateTarget(step: step(.heartRateZoneRange(0.5...2.0)), bands: bands))
+        #expect(low.bpm.lowerBound == zone1.lowerBound)
+        let top = try #require(StepHeartRateTarget(step: step(.heartRateZoneRange(5.0...7.0)), bands: bands))
+        #expect(top.bpm.upperBound == zone5.upperBound)
+
+        let reversed = try #require(StepHeartRateTarget(step: step(.heartRateRange(160, 150)), bands: nil))
+        #expect(reversed.bpm == 150...160)
+        let flat = try #require(StepHeartRateTarget(step: step(.heartRateRange(150, 150)), bands: nil))
+        #expect(flat.gaugePosition(forHeartRate: 150) == 0.25)
+    }
+
     @Test("a pace step with a heart-rate companion uses the companion")
     func companion() throws {
         let target = try #require(StepHeartRateTarget(step: step(.pace(300...330), companion: .heartRateZone(3)), bands: bands))

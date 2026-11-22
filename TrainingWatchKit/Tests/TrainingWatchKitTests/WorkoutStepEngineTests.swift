@@ -190,6 +190,17 @@ struct StepTextTests {
         #expect(text(3725) == "1:02:05 left")
     }
 
+    @Test("the bare value has no 'left', and remainingText is that value plus ' left'")
+    func bareValue() {
+        let time = StepProgress(remainingTime: 83, remainingDistance: nil, fraction: 0)
+        #expect(WatchWorkoutSummary.remainingValue(time, locale: metric) == "1:23")
+        #expect(WatchWorkoutSummary.remainingText(time, locale: metric) == "1:23 left")
+        let distance = StepProgress(remainingTime: nil, remainingDistance: 1500, fraction: 0)
+        #expect(WatchWorkoutSummary.remainingValue(distance, locale: metric) == "1.5 km")
+        #expect(WatchWorkoutSummary.remainingValue(
+            StepProgress(remainingTime: nil, remainingDistance: nil, fraction: nil), locale: metric) == nil)
+    }
+
     @Test("distance left follows the locale, and an open step has nothing left")
     func distanceLeft() {
         let distance = StepProgress(remainingTime: nil, remainingDistance: 400, fraction: 0)

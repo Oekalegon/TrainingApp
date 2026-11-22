@@ -26,6 +26,18 @@ struct RunMetricsPage: View {
     }
 }
 
+/// A distance for the run screen, in the system's road units.
+private func runDistanceText(_ meters: Double) -> String {
+    Measurement(value: meters, unit: UnitLength.meters)
+        .formatted(.measurement(width: .abbreviated, usage: .road, numberFormatStyle: .number.precision(.fractionLength(2))))
+}
+
+/// A time as VoiceOver should say it ("1 hour, 2 minutes, 5 seconds"), so a label can name the
+/// value without replacing it.
+private func spokenDuration(_ seconds: TimeInterval) -> String {
+    Duration.seconds(seconds.rounded(.down)).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
+}
+
 /// The page while a step of a planned workout is running.
 private struct StepMetrics: View {
     let recorder: RunRecorder
@@ -65,6 +77,8 @@ private struct StepMetrics: View {
                 .font(.system(size: 38, weight: .semibold).monospacedDigit())
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
+                .accessibilityLabel(progress.remainingTime != nil ? "Time left" : "Distance left")
+                .accessibilityValue(remainingSpoken(progress))
         } else {
             Text("Open").font(.system(size: 30, weight: .semibold))
         }
@@ -75,7 +89,10 @@ private struct StepMetrics: View {
             HStack(spacing: 6) {
                 Text(Duration.seconds(recorder.elapsed(at: at)), format: .time(pattern: .hourMinuteSecond))
                     .accessibilityLabel("Total time")
-                Text(distanceText).accessibilityLabel("Distance")
+                    .accessibilityValue(spokenDuration(recorder.elapsed(at: at)))
+                Text(distanceText)
+                    .accessibilityLabel("Distance")
+                    .accessibilityValue(distanceText)
             }
             .font(.system(size: 13).monospacedDigit())
             if recorder.phase == .paused {
@@ -86,19 +103,21 @@ private struct StepMetrics: View {
         }
     }
 
-    private var distanceText: String {
-        Measurement(value: recorder.distanceMeters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road, numberFormatStyle: .number.precision(.fractionLength(2))))
+    private var distanceText: String { runDistanceText(recorder.distanceMeters) }
+
+    /// What is left of the step, spelled out for VoiceOver: "1 minute, 23 seconds" or "0.4 km".
+    private func remainingSpoken(_ progress: StepProgress) -> String {
+        if let seconds = progress.remainingTime {
+            return Duration.seconds(seconds.rounded(.up)).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
+        }
+        return WatchWorkoutSummary.remainingValue(progress) ?? ""
     }
 
-    /// "Step 3 of 6, recovery, 20 seconds, zone 2, 4 seconds left": the screen's shorthand, spelled out.
+    /// "Step 3 of 6, recovery 20 s Z2": the step's place and goal, spelled out. What is left of it
+    /// is its own element, so this label doesn't go stale as the clock runs.
     private func stepAccessibilityLabel(progress: StepProgress?) -> String {
         var parts = ["Step \(current.index + 1) of \(engine.steps.count)", WatchWorkoutSummary.stepText(current.step)]
-        if let seconds = progress?.remainingTime {
-            parts.append(Duration.seconds(seconds.rounded(.up)).formatted(.units(allowed: [.minutes, .seconds], width: .wide)) + " left")
-        } else if let progress, let left = WatchWorkoutSummary.remainingText(progress) {
-            parts.append(left)
-        } else {
+        if progress == nil || WatchWorkoutSummary.remainingValue(progress!) == nil {
             parts.append("Press Next step to move on")
         }
         return parts.joined(separator: ", ")
@@ -166,12 +185,15 @@ private struct FreeRunMetrics: View {
     let zoneStore: WatchZoneStore
     let at: Date
 
+    private var distanceText: String { runDistanceText(recorder.distanceMeters) }
+
     var body: some View {
         VStack(spacing: 6) {
             VStack(spacing: 2) {
                 Text(Duration.seconds(recorder.elapsed(at: at)), format: .time(pattern: .hourMinuteSecond))
                     .font(.title2.monospacedDigit())
                     .accessibilityLabel("Elapsed time")
+                    .accessibilityValue(spokenDuration(recorder.elapsed(at: at)))
                 if recorder.stepEngine?.isFinished == true {
                     Text("Workout done").font(.system(size: 12)).foregroundStyle(.green)
                 }
@@ -181,10 +203,10 @@ private struct FreeRunMetrics: View {
                 .font(.title.monospacedDigit())
                 .accessibilityLabel("Heart rate")
                 .accessibilityValue(recorder.heartRate.map { "\(Int($0.rounded())) beats per minute" } ?? "no reading")
-            Text(Measurement(value: recorder.distanceMeters, unit: UnitLength.meters)
-                .formatted(.measurement(width: .abbreviated, usage: .road, numberFormatStyle: .number.precision(.fractionLength(2)))))
+            Text(distanceText)
                 .font(.footnote.monospacedDigit())
                 .accessibilityLabel("Distance")
+                .accessibilityValue(distanceText)
             if recorder.phase == .paused {
                 Text("Paused").font(.footnote).foregroundStyle(.yellow)
             }

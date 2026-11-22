@@ -82,7 +82,7 @@ public struct StepHeartRateTarget: Sendable, Hashable {
 }
 
 extension StepHeartRateTarget.Position {
-    /// What a person is told about it: "In zone", "8 below" or "5 above" (bpm).
+    /// What a person is told about it: "In target", "8 bpm below" or "5 bpm above".
     public var text: String {
         switch self {
         case .inside: "In target"
