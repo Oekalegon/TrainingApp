@@ -8,7 +8,7 @@ import WatchKit
 /// - `-fakeBattery`: drains from 100% to 0% every two minutes of the run, through every colour;
 /// - `-batteryLevel 0.15`: holds a level (0 to 1);
 /// - `-batteryDrainPerHour 0.6`: drains steadily from `-batteryLevel` (80% without it) at that share of
-///   the full charge per hour, so the forecast can be tested: a 5 minute run at 0.6 drops 3%.
+///   the full charge per hour, so the forecast can be tested: a 5 minute run at 0.6 drops 5%.
 enum BatteryReader {
     static func current(elapsed: TimeInterval) -> BatteryDisplay {
         #if targetEnvironment(simulator)

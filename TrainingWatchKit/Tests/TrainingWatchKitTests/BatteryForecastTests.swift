@@ -46,9 +46,9 @@ struct BatteryForecastTests {
 
     @Test("a long run with no drop at all is an answer: a small drain")
     func flat() {
+        // The level moves in coarse steps, so no drop is not no drain: it counts as half the typical one.
         let forecast = BatteryForecast(readings: readings([(0, 0.90), (900, 0.90)]))
-        #expect(forecast.drainPerHour < 0.1)
-        #expect(forecast.drainPerHour > 0)
+        #expect(abs(forecast.drainPerHour - BatteryForecast.typicalDrainPerHour / 2) < 0.001)
     }
 
     @Test("a rising level (a charger, or a reset) is not a measurement")
