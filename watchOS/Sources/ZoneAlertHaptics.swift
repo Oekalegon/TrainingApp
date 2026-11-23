@@ -9,6 +9,8 @@ enum ZoneAlertHaptics {
     /// Plays the haptic for `alert`. The far alerts are the ordinary direction twice, so they stay
     /// distinguishable as above or below and feel more urgent.
     static func play(_ alert: ZoneAlert) {
+        // A far alert's second tap must not land after a newer alert or the end of the workout.
+        secondTap?.cancel()
         let device = WKInterfaceDevice.current()
         switch alert {
         case .stepStarted: device.play(.notification)
@@ -20,10 +22,16 @@ enum ZoneAlertHaptics {
         }
     }
 
+    /// Drops a far alert's second tap that hasn't played yet, for when the workout ends.
+    static func cancelPending() { secondTap?.cancel() }
+
+    private static var secondTap: Task<Void, Never>?
+
     private static func twice(_ type: WKHapticType, on device: WKInterfaceDevice) {
         device.play(type)
-        Task {
+        secondTap = Task {
             try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
             device.play(type)
         }
     }

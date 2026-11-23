@@ -82,7 +82,10 @@ extension RunRecorder {
             }
             stepStartDate = max(end, stepStartDate)
             // A different tap when the workout's last step is over.
-            if transition.started == nil { WKInterfaceDevice.current().play(.success) }
+            if transition.started == nil {
+                ZoneAlertHaptics.cancelPending()
+                WKInterfaceDevice.current().play(.success)
+            }
         }
         // The new step's own haptic comes with its alert state (WATCH-106), once, for the last step
         // started when several went by in one gap.
