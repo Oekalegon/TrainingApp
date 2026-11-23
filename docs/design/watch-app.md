@@ -95,8 +95,8 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 `ZoneAlertEngine` (`TrainingWatchKit`) is a pure value: `beginStep(target:at:)` at each step start and `add(_:at:)` for each reading, on the run's own clock (paused time left out). The target is a plain range and the reading is in one unit where higher means harder, so the same engine can serve heart rate (bpm) and, later, pace targets (as speed, MVP8-101). Heart rate and pace behave differently (heart rate lags the effort by tens of seconds and is smooth; pace follows it at once and is noisy, and a runner can stop or sprint within seconds), so every threshold is in a `ZoneAlertEngine.Settings` preset per signal. `RunRecorder+Alerts.swift` feeds the engine in a planned workout and `ZoneAlertHaptics` plays the haptic.
 
 Heart rate (`Settings.heartRate`):
-- Smoothed value: mean of the last 4 s. Hysteresis: a tenth of the target's width, at least 1 bpm (1.35 bpm on a 13.5 bpm zone); out of the zone at that margin beyond a bound, back in at the bound itself.
-- Out-of-zone alerts wait 3 s after a step starts, so the step's own alert is heard first. The step-start alert is the old step-change haptic (`.notification`); the workout's end keeps `.success`.
+- Smoothed value: mean of the last 3 s. Hysteresis: a tenth of the target's width, at least 1 bpm (1.35 bpm on a 13.5 bpm zone); out of the zone at that margin beyond a bound, back in at the bound itself.
+- Out-of-zone alerts wait 2 s after a step starts, so the step's own alert is heard first. The step-start alert is the old step-change haptic (`.notification`); the workout's end keeps `.success`.
 - Slope rule: quiet while the heart rate moves toward the zone by at least 3 bpm per 10 s (a line over the last 10 s) and the gap is wider than the zone, or would be closed within 20 s at that speed. With too few readings to tell, a gap wider than the zone in the first 5 s of a step waits for them (it is usually the climb); any other alert goes ahead.
 - Entering the zone from outside gives "back in zone" (a step that starts inside the zone gives none).
 - Repeats every 20 s while out, every 10 s after 60 s out; the far variant when three quarters of the zone's width (at least 5 bpm) beyond a bound, or out for 90 s. The time out of the zone keeps counting while the slope rule keeps quiet, so a long climb that stalls gets the far alert at once.
@@ -105,7 +105,7 @@ Pace (`Settings.pace`, placeholder values for MVP8-101, not tuned on any run): a
 
 Pause and resume:
 - Every pause (the button or the system) forgets the readings, in the session delegate.
-- The readings after a resume are held back for one smoothing window (4 s), so a lone reading can't alert.
+- The readings after a resume are held back for one smoothing window (3 s), so a lone reading can't alert.
 - Zones arriving in the middle of a step are picked up at the next reading, without an alert.
 
 Haptics only for now, the same whether or not headphones are connected: the headphones channel and the sound are WATCH-107, the final patterns WATCH-117. The haptics are `directionUp`, `directionDown` and `success`, the far ones twice. To see them in the simulator, use the alert test run (`-fakeAlertPlan`, see "Testing in the simulator" below): the 20 s steps of the interval track are too short for most alerts, since the first comes a few seconds into a step and the average lags. The logic has unit tests; the recorder wiring has none (WATCH-113).

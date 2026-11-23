@@ -77,8 +77,8 @@ public struct ZoneAlertEngine: Sendable {
         /// Heart rate in bpm: slow to respond, little noise, so a long smoothing window, a small
         /// margin, a slope rule for the climb at a step's start, and patient repeats.
         public static let heartRate = Settings(
-            smoothingWindow: 4, hysteresisFraction: 0.1, hysteresisFloor: 1, farFraction: 0.75, farFloor: 5,
-            slopeThreshold: 3, slopeWindow: 10, arrivalHorizon: 20, startGrace: 3, minimumOutside: 0,
+            smoothingWindow: 3, hysteresisFraction: 0.1, hysteresisFloor: 1, farFraction: 0.75, farFloor: 5,
+            slopeThreshold: 3, slopeWindow: 10, arrivalHorizon: 20, startGrace: 2, minimumOutside: 0,
             repeatInterval: 20, escalationAfter: 60, fastRepeatInterval: 10, farAfter: 90)
 
         /// Speed in m/s, for the pace targets to come (MVP8-101): noisy GPS but an immediate response,

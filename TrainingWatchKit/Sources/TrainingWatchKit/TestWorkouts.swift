@@ -17,7 +17,7 @@ public enum TestWorkouts {
     ]
 
     /// 60 s warm-up, 4 × (90 s zone 4, 90 s zone 2), 60 s cool-down: 14 minutes, for the zone alerts.
-    /// Steps are long enough for an alert to fire (the first comes 3 s into a step).
+    /// Steps are long enough for an alert to fire (the first comes 2 s into a step).
     /// `Tools/TestTracks/alert-test.gpx` follows it, and goes out of the zones on purpose.
     public static let alertTest: [WorkoutBlock] = [
         WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(60), target: .heartRateZone(1))]),
