@@ -61,3 +61,24 @@ public struct ZoneBands: Sendable, Hashable {
         return (ranges.lastIndex { bpm >= $0.lowerBound } ?? 0) + 1
     }
 }
+
+extension ZoneBands {
+    /// Where a heart rate is along the zones as one number, for the zone dial: `n.0` is the bottom
+    /// of zone `n` and `n + 1.0` its top, so 2.5 is halfway through zone 2 and 6.0 the top of zone 5
+    /// (the same positions TrainingKit uses for a zone range). Below zone 1 it is 0 to 1, running
+    /// over one zone 1 width under zone 1 (so a heart rate that far below shows as 0), and above
+    /// zone 5 it stays at 6. A heart rate between two zones' ranges sits at the top of the lower one.
+    ///
+    /// - Parameter bpm: The heart rate.
+    public func position(forHeartRate bpm: Double) -> Double {
+        let zone = zone(forHeartRate: bpm)
+        if zone == 0 {
+            let first = ranges[0]
+            let width = max(first.upperBound - first.lowerBound, 1)
+            return min(max(1 - (first.lowerBound - bpm) / width, 0), 1)
+        }
+        let range = ranges[zone - 1]
+        let width = max(range.upperBound - range.lowerBound, 1)
+        return Double(zone) + min(max((bpm - range.lowerBound) / width, 0), 1)
+    }
+}

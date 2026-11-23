@@ -45,6 +45,17 @@ One fixed page showing:
 
 Controls: pause and resume, and a manual lap button. Steps **auto-advance** on their time or distance end condition, and the lap button also moves on manually.
 
+## Target zone dial (WATCH-118)
+
+A second run screen for a planned workout, drawn by the user in FreeForm (2026-11-23; the drawing was white on black the wrong way round, so the real screen is white text on black): a ring round the screen's edge shows the zones, with the **target zone on top**.
+
+- **Ring:** six sectors of 60 degrees as seen from the middle of the screen: zone 0 (below zone 1, grey), then zones 1 to 5 in the shared zone colours (`HeartRateZone.zoneColor`). The sector of the step's target zone is centred on the top and drawn **bright**; the others are **darker**. The next zones follow clockwise, so with a zone 2 target zone 1 is on the left, zone 3 on the right, zone 5 at the bottom and zone 0 at the lower left, as on the drawing. **When the target zone changes, the ring turns** (animated) so the new target is on top.
+- **Triangle:** just inside the ring, pointing at the edge, at the heart rate's position along the zones (`ZoneBands.position(forHeartRate:)`: 2.5 is halfway through zone 2, zone 0 spans one zone 1 width below zone 1, above zone 5 it stays at the end). On a side of the screen it is rotated to face the edge there; in the corners it follows the corner's curve. The geometry is `ZoneDial`, drawn by `ZoneDialRing`.
+- **Text:** the heart rate's place as "Z 2.3" (rounded down) and the bpm, the step's **countdown** (time or distance left; "Open" for an open step), a card with "INTERVAL 5 of 12" (or "STEP 2 of 6" for a block that doesn't repeat), the step ("WORK 1:30 in Zone 2") and the next ("NEXT: RECOVER 4:00 in Zone 1"), and the **total workout time** at the bottom. The countdown is yellow and the card is tinted with the target zone's colour. VoiceOver gets one sentence with all of it, since the ring and the colours say nothing to it.
+- **A step with no heart-rate target** (a pace, power or RPE step, or no zones yet) has no zone for the top: the ring centres on the zone the heart rate is in and no sector is bright.
+- **Where:** a page of a planned workout between the controls and the metrics, and the page the workout opens on; free runs have the metrics page only. A page order and a choice of pages is WATCH-109.
+- **To tune on a real watch:** the corner radius (a quarter of the shorter side, a guess), the stroke width (9 pt) and the dark shade (35% opacity), and the text sizes on the smaller watches.
+
 ## Alerts
 
 ### Trigger
