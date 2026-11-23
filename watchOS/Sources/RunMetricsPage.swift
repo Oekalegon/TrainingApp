@@ -23,6 +23,8 @@ struct RunMetricsPage: View {
                 FreeRunMetrics(recorder: recorder, zoneStore: zoneStore, at: date)
             }
         }
+        // Nothing on this page scrolls: a turn of the Digital Crown would leave the app (`CrownAbsorber`).
+        .takesCrownTurns()
     }
 }
 

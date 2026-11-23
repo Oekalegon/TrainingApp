@@ -28,9 +28,6 @@ private struct Dial: View {
     let engine: WorkoutStepEngine
     let current: PlannedStep
     let at: Date
-    /// Where the Digital Crown is, which nothing reads: see the crown's note on `body`.
-    @State private var crownSink = 0.0
-    @FocusState private var hasCrownFocus: Bool
 
     var body: some View {
         let target = StepHeartRateTarget(step: current.step, bands: bands)
@@ -47,16 +44,8 @@ private struct Dial: View {
             content(target: target, topZone: topZone, position: position, status: status)
         }
         .ignoresSafeArea(.container, edges: [.top, .bottom])
-        // Nothing on this page scrolls, so a turn of the Digital Crown has no view to go to; it is taken here,
-        // so it does nothing, and the athlete who dismissed a warning with the crown and goes on turning
-        // stays in the app. (A press of the crown always goes to the watch face: no app can stop that.)
-        // A placeholder: WATCH-109 turns the crown into the switch between data screens.
-        .focusable()
-        .focused($hasCrownFocus)
-        .digitalCrownRotation(
-            $crownSink, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: true,
-            isHapticFeedbackEnabled: false)
-        .onAppear { hasCrownFocus = true }
+        // Nothing on this page scrolls: a turn of the Digital Crown would leave the app (`CrownAbsorber`).
+        .takesCrownTurns()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
         .accessibilityValue(spoken(target: target, position: position))
