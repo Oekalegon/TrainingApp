@@ -52,8 +52,8 @@ final class RunRecorder: NSObject {
     var batteryWarningTracker = BatteryWarningTracker()
     /// Reads the battery during the run. Set by `RunRecorder+Battery.swift`.
     var batteryTicker: Task<Void, Never>?
-    /// Takes the warning screen away after a few seconds. Set by `RunRecorder+Battery.swift`.
-    var warningTimer: Task<Void, Never>?
+    /// Taps the wrist again every half minute while a warning stays. Set by `RunRecorder+Battery.swift`.
+    var warningNudge: Task<Void, Never>?
     /// How many segment and lap events have been written to the workout, for the simulator's debug line.
     var eventsWritten = 0
     /// When the current step began, for its segment event. Set by `RunRecorder+Steps.swift`.

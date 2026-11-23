@@ -2,14 +2,15 @@ import TrainingWatchKit
 import WatchKit
 
 /// The battery during a run (WATCH-110, WATCH-119): a reading every half minute for the forecast, and
-/// a check every few seconds for a warning, in planned workouts and free runs alike.
+/// a check every few seconds for a warning, in planned workouts and free runs alike. A warning stays until
+/// the athlete dismisses it.
 extension RunRecorder {
     /// How often the battery is read for the forecast, in workout seconds.
     private static let batterySampleInterval = 30.0
     /// How often the battery is checked for a warning, in seconds.
     private static let batteryCheckInterval = 5.0
-    /// How long the warning screen stays, in seconds.
-    private static let warningDuration = 10.0
+    /// How often the wrist is tapped again while a warning stays, in seconds.
+    private static let warningRepeat = 30.0
 
     /// Starts reading and checking the battery for a new run.
     func startBatteryWatch() {
@@ -29,7 +30,7 @@ extension RunRecorder {
     func stopBatteryWatch() {
         batteryTicker?.cancel()
         batteryTicker = nil
-        warningTimer?.cancel()
+        warningNudge?.cancel()
         batteryWarning = nil
     }
 
@@ -49,26 +50,33 @@ extension RunRecorder {
         }
     }
 
-    /// Shows the warning screen for a few seconds and taps the wrist, the harder the worse.
+    /// Shows the warning screen, which stays until the athlete dismisses it, and taps the wrist, the harder
+    /// the worse, and again every half minute while it stays, in case the athlete didn't feel it.
     private func show(_ warning: BatteryWarning) {
         batteryWarning = warning
-        // Starting values, one a level: WATCH-117 gives every signal its own pattern and tone.
+        playHaptic(for: warning)
+        warningNudge?.cancel()
+        warningNudge = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.warningRepeat))
+                guard !Task.isCancelled, let self, let warning = batteryWarning else { return }
+                playHaptic(for: warning)
+            }
+        }
+    }
+
+    /// Starting values, one a level: WATCH-117 gives every signal its own pattern and tone.
+    private func playHaptic(for warning: BatteryWarning) {
         switch warning.level {
         case .tight: WKInterfaceDevice.current().play(.notification)
         case .critical: WKInterfaceDevice.current().play(.retry)
         case .runsOut: WKInterfaceDevice.current().play(.failure)
         }
-        warningTimer?.cancel()
-        warningTimer = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.warningDuration))
-            guard !Task.isCancelled else { return }
-            self?.dismissBatteryWarning()
-        }
     }
 
-    /// Takes the warning screen away: tapped, or its time is up.
+    /// Takes the warning screen away: the athlete tapped it or turned the crown.
     func dismissBatteryWarning() {
-        warningTimer?.cancel()
+        warningNudge?.cancel()
         batteryWarning = nil
     }
 
