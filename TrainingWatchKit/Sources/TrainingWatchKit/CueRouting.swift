@@ -39,21 +39,87 @@ public struct CueRoute: Sendable, Hashable {
     public let sound: CueSound?
 }
 
-/// Which channel a cue uses (`docs/design/watch-app.md`, "One signal per meaning" and "Audio"):
-/// with headphones connected the zone alerts are sound only, without them haptic only, and the watch's
-/// own speaker is never used. Step started, workout done and battery warnings keep the haptic as well.
+/// How the athlete wants to be told (WATCH-107): which channels and, for sound, speech or tones.
+/// Kept on the watch for now.
+public struct CueSettings: Sendable, Hashable {
+    /// When the wrist taps.
+    public enum Haptics: String, Sendable, CaseIterable, Hashable {
+        /// Zone alerts only without earbuds; step start, workout done and battery always.
+        case automatic
+        /// Every cue taps, with or without earbuds.
+        case always
+        case never
+    }
+
+    /// When the watch makes a sound.
+    public enum Sound: String, Sendable, CaseIterable, Hashable {
+        /// Only through earbuds.
+        case automatic
+        /// Also from the watch's speaker when no earbuds are connected.
+        case always
+        case never
+    }
+
+    public var haptics: Haptics
+    public var sound: Sound
+    public var style: AudioCueStyle
+
+    public init(haptics: Haptics = .automatic, sound: Sound = .automatic, style: AudioCueStyle = .speech) {
+        self.haptics = haptics
+        self.sound = sound
+        self.style = style
+    }
+
+    public static let hapticsKey = "cueHaptics"
+    public static let soundKey = "cueSound"
+
+    /// The stored settings; the defaults for what was never chosen.
+    public static func stored(in defaults: UserDefaults = .standard) -> CueSettings {
+        CueSettings(
+            haptics: defaults.string(forKey: hapticsKey).flatMap(Haptics.init(rawValue:)) ?? .automatic,
+            sound: defaults.string(forKey: soundKey).flatMap(Sound.init(rawValue:)) ?? .automatic,
+            style: AudioCueStyle.stored(in: defaults))
+    }
+}
+
+/// Which channel a cue uses (`docs/design/watch-app.md`, "One signal per meaning" and "Audio"). By
+/// default, with headphones connected the zone alerts are sound only and without them haptic only,
+/// and the watch's own speaker is not used. Step started, workout done and battery warnings keep the
+/// haptic as well. ``CueSettings`` can switch either channel on or off.
 ///
 /// The tones and words are starting values; their final shape is WATCH-117.
 public enum CueRouting {
     /// - Parameters:
     ///   - cue: What happened.
     ///   - headphonesConnected: Read when the cue fires, so taking earbuds out mid-run changes the channel.
-    ///   - style: Speech or tones.
-    public static func route(_ cue: RunCue, headphonesConnected: Bool, style: AudioCueStyle) -> CueRoute {
-        guard headphonesConnected else {
-            // No speaker, ever: only the haptic, and nothing for the announcement text.
-            if case .stepAnnouncement = cue { return CueRoute(haptic: false, sound: nil) }
-            return CueRoute(haptic: true, sound: nil)
+    ///   - settings: The athlete's choices.
+    public static func route(_ cue: RunCue, headphonesConnected: Bool, settings: CueSettings = CueSettings()) -> CueRoute {
+        let soundAllowed = switch settings.sound {
+        case .automatic: headphonesConnected
+        case .always: true
+        case .never: false
+        }
+        let base = baseRoute(cue, soundAllowed: soundAllowed, style: settings.style)
+        let haptic: Bool
+        switch settings.haptics {
+        case .never: haptic = false
+        case .always: haptic = hapticCue(cue)
+        case .automatic: haptic = base.haptic
+        }
+        return CueRoute(haptic: haptic, sound: base.sound)
+    }
+
+    /// Cues that have a haptic at all (the announcement is words only).
+    private static func hapticCue(_ cue: RunCue) -> Bool {
+        if case .stepAnnouncement = cue { return false }
+        return true
+    }
+
+    /// The automatic channels: sound where it is allowed, and the haptic where there is no sound to
+    /// carry a zone alert, or for the rare cues that keep both.
+    private static func baseRoute(_ cue: RunCue, soundAllowed: Bool, style: AudioCueStyle) -> CueRoute {
+        guard soundAllowed else {
+            return CueRoute(haptic: hapticCue(cue), sound: nil)
         }
         switch cue {
         case .zoneAlert(let alert):

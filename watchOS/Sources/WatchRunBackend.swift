@@ -45,7 +45,7 @@ final class WatchRunBackend: RunBackend {
     /// is read now, so earbuds put in or taken out mid-run change it.
     func play(_ cue: RunCue) {
         let route = CueRouting.route(
-            cue, headphonesConnected: audio.headphonesConnected, style: AudioCueStyle.stored())
+            cue, headphonesConnected: audio.headphonesConnected, settings: CueSettings.stored())
         if route.haptic { playHaptic(cue) }
         if let sound = route.sound { audio.play(sound) }
     }

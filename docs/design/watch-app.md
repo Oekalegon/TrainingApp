@@ -102,7 +102,7 @@ The haptic and the tone for an event are chosen together from one table (event t
 ### Audio
 
 - Announces step changes, such as "Interval 3 of 6, 4 minutes, zone 4".
-- Only through earbuds. Never from the watch speaker; haptics only otherwise (to confirm).
+- Through earbuds by default. The watch speaker is used only if the athlete turns that on.
 - Pauses **podcasts** and ducks **music**. Use an audio session with `.interruptSpokenAudioAndMixWithOthers`, plus ducking for music.
 
 The thresholds (smoothing window, hysteresis, slope threshold, escalation timing) start as proposed defaults and are tuned in real runs.
@@ -129,7 +129,7 @@ The channel (haptic or earbuds) is WATCH-107, below; the final patterns are WATC
 
 ### As built (WATCH-107)
 
-`CueRouting.route(_:headphonesConnected:style:)` (`TrainingWatchKit`, tested) turns a `RunCue` into a haptic flag and a sound. Without earbuds every cue is a haptic only. With earbuds the zone alerts are sound only; step start, workout done and battery warnings keep the haptic as well; a lap is a haptic. The route is read when the cue fires. The sound is speech ("Speed up", "Slow down", "In zone", "Workout done", "Battery low") or tones by the **speech or tones** setting (`AudioCueStyle`, a picker on the watch's start screen, kept in `UserDefaults`; speech by default). The step announcement (`StepAnnouncement`, a `RunCue.stepAnnouncement`) is spoken in the speech setting only, e.g. "Interval 3 of 6, 4 minutes, zone 4"; in tones the step-start tone stands for it. `CueAudioPlayer` (watchOS) uses `AVSpeechSynthesizer` and generated sine tones in a `.playback` session with `.interruptSpokenAudioAndMixWithOthers` and `.duckOthers`, deactivated with `.notifyOthersOnDeactivation` when the cue ends so podcasts resume and music comes back up. Tones and words are starting values (WATCH-117). Open: checking on a real watch (WATCH-122) and a setting in the iPhone app.
+`CueRouting.route(_:headphonesConnected:style:)` (`TrainingWatchKit`, tested) turns a `RunCue` into a haptic flag and a sound. Without earbuds every cue is a haptic only. With earbuds the zone alerts are sound only; step start, workout done and battery warnings keep the haptic as well; a lap is a haptic. The route is read when the cue fires. Both channels are **settings** (`CueSettings`, pickers on the start screen): **sound** is earbuds only (default), also the watch speaker, or off; **haptics** are automatic (the rule above), always (every cue taps, even with sound), or off. With sound off the haptic carries the alerts as without earbuds. The sound is speech ("Speed up", "Slow down", "In zone", "Workout done", "Battery low") or tones by the **speech or tones** setting (`AudioCueStyle`, a picker on the watch's start screen, kept in `UserDefaults`; speech by default). The step announcement (`StepAnnouncement`, a `RunCue.stepAnnouncement`) is spoken in the speech setting only, e.g. "Interval 3 of 6, 4 minutes, zone 4"; in tones the step-start tone stands for it. `CueAudioPlayer` (watchOS) uses `AVSpeechSynthesizer` and generated sine tones in a `.playback` session with `.interruptSpokenAudioAndMixWithOthers` and `.duckOthers`, deactivated with `.notifyOthersOnDeactivation` when the cue ends so podcasts resume and music comes back up. Tones and words are starting values (WATCH-117). Open: checking on a real watch (WATCH-122) and a setting in the iPhone app.
 
 ## Results
 

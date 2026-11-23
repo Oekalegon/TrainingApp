@@ -152,6 +152,8 @@ private struct TodayWorkouts: View {
     let recorder: RunRecorder
     /// Speech or tones in earbuds (WATCH-107).
     @AppStorage(AudioCueStyle.defaultsKey) private var audioStyle = AudioCueStyle.speech
+    @AppStorage(CueSettings.hapticsKey) private var haptics = CueSettings.Haptics.automatic
+    @AppStorage(CueSettings.soundKey) private var sound = CueSettings.Sound.automatic
 
     var body: some View {
         // The timeline only makes the view redraw each minute; its own date is the schedule's, which
@@ -188,7 +190,17 @@ private struct TodayWorkouts: View {
                     if let note = planStore.staleNote(asOf: now) {
                         Text(note).font(.system(size: 11)).foregroundStyle(.orange)
                     }
-                    Picker("Earbuds say", selection: $audioStyle) {
+                    Picker("Sound", selection: $sound) {
+                        Text("Earbuds only").tag(CueSettings.Sound.automatic)
+                        Text("Also speaker").tag(CueSettings.Sound.always)
+                        Text("Off").tag(CueSettings.Sound.never)
+                    }
+                    Picker("Haptics", selection: $haptics) {
+                        Text("Automatic").tag(CueSettings.Haptics.automatic)
+                        Text("Always").tag(CueSettings.Haptics.always)
+                        Text("Off").tag(CueSettings.Haptics.never)
+                    }
+                    Picker("Sound is", selection: $audioStyle) {
                         Text("Speech").tag(AudioCueStyle.speech)
                         Text("Tones").tag(AudioCueStyle.tones)
                     }

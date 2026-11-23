@@ -13,10 +13,10 @@ struct CueRoutingTests {
         for style in AudioCueStyle.allCases {
             for cue in [RunCue.zoneAlert(.tooLow), .zoneAlert(.stepStarted), .goalReached, .lapMarked,
                         .batteryWarning(.critical)] {
-                let route = CueRouting.route(cue, headphonesConnected: false, style: style)
+                let route = CueRouting.route(cue, headphonesConnected: false, settings: CueSettings(style: style))
                 #expect(route.haptic && route.sound == nil)
             }
-            #expect(CueRouting.route(.stepAnnouncement("x"), headphonesConnected: false, style: style)
+            #expect(CueRouting.route(.stepAnnouncement("x"), headphonesConnected: false, settings: CueSettings(style: style))
                 == CueRoute(haptic: false, sound: nil))
         }
     }
@@ -25,7 +25,7 @@ struct CueRoutingTests {
     func zoneAlertsSoundOnly() {
         for alert in zoneAlerts {
             for style in AudioCueStyle.allCases {
-                let route = CueRouting.route(.zoneAlert(alert), headphonesConnected: true, style: style)
+                let route = CueRouting.route(.zoneAlert(alert), headphonesConnected: true, settings: CueSettings(style: style))
                 #expect(!route.haptic)
                 #expect(route.sound != nil)
             }
@@ -35,30 +35,52 @@ struct CueRoutingTests {
     @Test("step start, workout done and battery keep the haptic with headphones")
     func hapticAndSound() {
         for cue in [RunCue.zoneAlert(.stepStarted), .goalReached, .batteryWarning(.tight)] {
-            let route = CueRouting.route(cue, headphonesConnected: true, style: .tones)
+            let route = CueRouting.route(cue, headphonesConnected: true, settings: CueSettings(style: .tones))
             #expect(route.haptic && route.sound != nil)
         }
     }
 
+    @Test("sound can be switched on without earbuds, or off with them")
+    func soundSetting() {
+        let speaker = CueSettings(sound: .always)
+        // Without earbuds but with sound on, a zone alert is sound only, as it is with earbuds.
+        let route = CueRouting.route(.zoneAlert(.tooLow), headphonesConnected: false, settings: speaker)
+        #expect(route.sound == .speech("Speed up") && !route.haptic)
+        let off = CueRouting.route(.zoneAlert(.tooLow), headphonesConnected: true, settings: CueSettings(sound: .never))
+        // With no sound at all, the haptic carries the alert.
+        #expect(off.sound == nil && off.haptic)
+    }
+
+    @Test("haptics can be always or never")
+    func hapticSetting() {
+        let always = CueSettings(haptics: .always)
+        let both = CueRouting.route(.zoneAlert(.tooLow), headphonesConnected: true, settings: always)
+        #expect(both.haptic && both.sound != nil)
+        #expect(!CueRouting.route(.stepAnnouncement("x"), headphonesConnected: true, settings: always).haptic)
+        let never = CueSettings(haptics: .never)
+        #expect(!CueRouting.route(.goalReached, headphonesConnected: false, settings: never).haptic)
+        #expect(CueRouting.route(.goalReached, headphonesConnected: true, settings: never).sound != nil)
+    }
+
     @Test("the style picks words or tones, and the announcement is only spoken")
     func style() {
-        #expect(CueRouting.route(.zoneAlert(.tooHigh), headphonesConnected: true, style: .speech).sound
+        #expect(CueRouting.route(.zoneAlert(.tooHigh), headphonesConnected: true, settings: CueSettings(style: .speech)).sound
             == .speech("Slow down"))
-        if case .tones(let notes)? = CueRouting.route(.zoneAlert(.tooHigh), headphonesConnected: true, style: .tones).sound {
+        if case .tones(let notes)? = CueRouting.route(.zoneAlert(.tooHigh), headphonesConnected: true, settings: CueSettings(style: .tones)).sound {
             #expect(!notes.isEmpty)
         } else {
             Issue.record("expected tones")
         }
-        #expect(CueRouting.route(.stepAnnouncement("Warm-up"), headphonesConnected: true, style: .speech).sound
+        #expect(CueRouting.route(.stepAnnouncement("Warm-up"), headphonesConnected: true, settings: CueSettings(style: .speech)).sound
             == .speech("Warm-up"))
-        #expect(CueRouting.route(.stepAnnouncement("Warm-up"), headphonesConnected: true, style: .tones).sound == nil)
+        #expect(CueRouting.route(.stepAnnouncement("Warm-up"), headphonesConnected: true, settings: CueSettings(style: .tones)).sound == nil)
         // In speech the announcement says it; the step-start alert itself stays silent.
-        #expect(CueRouting.route(.zoneAlert(.stepStarted), headphonesConnected: true, style: .speech).sound == nil)
+        #expect(CueRouting.route(.zoneAlert(.stepStarted), headphonesConnected: true, settings: CueSettings(style: .speech)).sound == nil)
     }
 
     @Test("the zone alerts sound different from one another in tones")
     func tonesDiffer() {
-        let sounds = zoneAlerts.map { CueRouting.route(.zoneAlert($0), headphonesConnected: true, style: .tones).sound }
+        let sounds = zoneAlerts.map { CueRouting.route(.zoneAlert($0), headphonesConnected: true, settings: CueSettings(style: .tones)).sound }
         #expect(Set(sounds.compactMap { $0 }).count == zoneAlerts.count)
     }
 
