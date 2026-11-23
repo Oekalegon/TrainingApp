@@ -13,11 +13,11 @@ enum BatteryReader {
     static func current(elapsed: TimeInterval) -> BatteryDisplay {
         #if targetEnvironment(simulator)
         let defaults = UserDefaults.standard
-        if let perHour = defaults.object(forKey: "batteryDrainPerHour") as? Double {
-            let start = defaults.object(forKey: "batteryLevel") as? Double ?? 0.8
+        if let perHour = LaunchArgument.double(from: defaults.object(forKey: "batteryDrainPerHour")) {
+            let start = LaunchArgument.double(from: defaults.object(forKey: "batteryLevel")) ?? 0.8
             return BatteryDisplay(level: Float(max(start - perHour * max(elapsed, 0) / 3600, 0)), isCharging: false)
         }
-        if let level = defaults.object(forKey: "batteryLevel") as? Double {
+        if let level = LaunchArgument.double(from: defaults.object(forKey: "batteryLevel")) {
             return BatteryDisplay(level: Float(level), isCharging: false)
         }
         if CommandLine.arguments.contains("-fakeBattery") {

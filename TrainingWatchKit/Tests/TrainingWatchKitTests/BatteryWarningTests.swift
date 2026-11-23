@@ -98,3 +98,16 @@ struct BatteryWarningTests {
         #expect(BatteryWarning.Level.tight < .critical && BatteryWarning.Level.critical < .runsOut)
     }
 }
+
+@Suite("LaunchArgument (WATCH-110)")
+struct LaunchArgumentTests {
+    @Test("a number comes out of a number, and out of the text a launch argument gives")
+    func numbers() {
+        #expect(LaunchArgument.double(from: 0.25) == 0.25)
+        #expect(LaunchArgument.double(from: NSNumber(value: 2.6)) == 2.6)
+        #expect(LaunchArgument.double(from: "0.25") == 0.25)
+        #expect(LaunchArgument.double(from: " 3 ") == 3)
+        #expect(LaunchArgument.double(from: "fast") == nil)
+        #expect(LaunchArgument.double(from: nil) == nil)
+    }
+}
