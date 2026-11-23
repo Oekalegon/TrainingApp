@@ -1,6 +1,6 @@
 # Watch app: requirements
 
-Status: WATCH-101 to WATCH-106 are built (WATCH-106's alerts are unit-tested, not yet run in the simulator or on a watch) (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-107 onwards are open: see `TODO.md`.
+Status: WATCH-101 to WATCH-107 are built (WATCH-106's alerts are unit-tested, not yet run in the simulator or on a watch) (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-108 onwards are open: see `TODO.md`.
 
 ## Why
 
@@ -175,7 +175,7 @@ Decisions from the scoping Q&A of 2026-11-20:
 - **Advancing:** `WorkoutStepEngine` (in `TrainingWatchKit`, pure logic, tested) lays the workout's blocks out as steps, each repetition of a repeated block its own step. A step with a time or distance goal ends when it is reached (time from workout time, so paused time doesn't count; distance from the run's distance); an open step waits for the lap button. The next step starts where the last goal ended, so time goals don't drift by the update interval. The recorder checks twice a second.
 - **Lap button** (on the controls page, "Next step" during a workout, "Lap" otherwise): ends the current step and moves on (a press within a second of the step beginning is ignored, so a double tap doesn't skip two), and the saved workout records a lap event at that moment, so a step cut short can be told from one that ended by itself. In a free run, or after the last step, it only records a lap event.
 - **After the last step** the run keeps recording as a free run until End. The step line says "Workout done" in green.
-- **One haptic** at each step change, whether it came from a goal or the lap button, and a different one when the last step ends. That haptic is now the step-start alert of `ZoneAlertEngine` (WATCH-106); the zone alerts have their own haptics, and the patterns and audio are WATCH-117 and WATCH-107.
+- **One haptic** at each step change, whether it came from a goal or the lap button, and a different one when the last step ends. That haptic is now the step-start alert of `ZoneAlertEngine` (WATCH-106); the zone alerts have their own haptics, and the sound is WATCH-107 (the patterns and tones are WATCH-117).
 - **Saved workout:**
   - A segment `HKWorkoutEvent` per step, from when the step started to when it ended, dated by the engine's own step boundary (not when the half-second tick noticed it) and including any pause inside the step, with the step's index, kind, repetition, goal and how it ended ("goal", "lap" or "workoutEnded") in the event's metadata. A step still going when the run ends gets its segment too. Events that fail to write are kept and tried again with the next batch and just before the workout is ended.
   - A lap event for each lap-button press.

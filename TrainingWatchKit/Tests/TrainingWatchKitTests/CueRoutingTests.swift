@@ -131,3 +131,27 @@ struct CueSettingsTransferTests {
         #expect(CueSettings.stored(in: defaults) == settings)
     }
 }
+
+@Suite("Announcements for other targets (WATCH-107)")
+struct StepAnnouncementTargetTests {
+    private func text(_ step: WorkoutStep) -> String {
+        StepAnnouncement.text(
+            for: PlannedStep(index: 0, step: step, blockIndex: 0, repetition: 1, repetitions: 1),
+            locale: Locale(identifier: "en_NL"))
+    }
+
+    @Test("a zone range and a bpm range are spoken, and a step with no heart-rate target says only its goal")
+    func targets() {
+        #expect(text(WorkoutStep(kind: .work, goal: .time(60), target: .heartRateZoneRange(3.5...4))) == "Run, 1 minute, zone 3.5 to 4")
+        #expect(text(WorkoutStep(kind: .work, goal: .time(60), target: .heartRateRange(150, 160)))
+            == "Run, 1 minute, 150 to 160 beats per minute")
+        #expect(text(WorkoutStep(kind: .work, goal: .time(60))) == "Run, 1 minute")
+    }
+
+    @Test("miles for a US locale")
+    func miles() {
+        let step = PlannedStep(
+            index: 0, step: WorkoutStep(kind: .work, goal: .distance(1609.344)), blockIndex: 0, repetition: 1, repetitions: 1)
+        #expect(StepAnnouncement.text(for: step, locale: Locale(identifier: "en_US")) == "Run, 1 mile")
+    }
+}

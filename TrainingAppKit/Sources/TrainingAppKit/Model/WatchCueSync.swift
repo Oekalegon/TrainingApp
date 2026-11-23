@@ -8,7 +8,8 @@ import TrainingWatchKit
 /// the plan, which keeps the last ones it got.
 ///
 /// `AppTabView` calls ``sync()`` when the app becomes active; a change is sent at once. The
-/// transport holds the latest settings until a watch can take them (see ``WatchSyncChannel``).
+/// transport holds the latest settings until a watch can take them, and sends them again when a watch
+/// is paired or the app installed later (see ``WatchSyncChannel``), so one send per launch is enough.
 @MainActor
 @Observable
 public final class WatchCueSync {

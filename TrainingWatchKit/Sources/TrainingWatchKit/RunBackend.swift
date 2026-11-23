@@ -35,7 +35,8 @@ public enum RunSessionState: Sendable, Hashable {
     case other
 }
 
-/// A signal for the wrist: the backend picks the haptic.
+/// A signal for the athlete: the backend picks the haptic and the sound (``CueRouting`` decides
+/// which channels and what they play).
 public enum RunCue: Sendable, Hashable {
     /// A zone alert (WATCH-106).
     case zoneAlert(ZoneAlert)

@@ -376,6 +376,8 @@ struct RunRecorderStepTests {
         #expect(recorder.stepEngine?.current?.index == 2)
         // The first step's alert, then one for the step the run is in, not one for each passed.
         #expect(backend.cues.filter { $0 == .zoneAlert(.stepStarted) }.count == 2)
+        // One announcement for the first step and one for the step the run is in.
+        #expect(backend.announcements.count == 2)
         #expect(!backend.cues.contains(.goalReached))
     }
 

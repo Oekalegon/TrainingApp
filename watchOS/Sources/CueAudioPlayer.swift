@@ -1,7 +1,8 @@
 import AVFoundation
 import TrainingWatchKit
 
-/// The ears' side of the cues (WATCH-107): speech or tones through earbuds, never the watch speaker.
+/// The ears' side of the cues (WATCH-107): speech or tones through earbuds, or the watch speaker when the athlete
+/// allows it (`CueSettings.sound`).
 ///
 /// While a cue plays the audio session interrupts spoken audio (a podcast pauses) and ducks music;
 /// it is let go when the cue is done, so they carry on at once. Which cue goes where is
@@ -13,6 +14,9 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
     private var playing = 0
+    /// Counts the plays and cancels, so the completion of a cue that was cancelled can't end the
+    /// audio session of a newer one.
+    private var generation = 0
 
     override init() {
         super.init()
@@ -28,23 +32,25 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
 
     func play(_ sound: CueSound) {
         guard begin() else { return }
+        let generation = generation
         switch sound {
         case .speech(let words):
             let utterance = AVSpeechUtterance(string: words)
-            utterance.voice = AVSpeechSynthesisVoice(language: Locale.current.identifier.replacingOccurrences(of: "_", with: "-"))
-                ?? AVSpeechSynthesisVoice(language: AVSpeechSynthesisVoice.currentLanguageCode())
+            // The words are English until they are localised (WATCH-123), so the voice is too: a
+            // Dutch voice reading English is unintelligible.
+            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
             synthesizer.speak(utterance)
         case .tones(let notes):
-            playTones(notes)
+            playTones(notes, generation: generation)
         }
     }
 
     /// Stops what is playing, for when the workout ends.
     func cancel() {
         synthesizer.stopSpeaking(at: .immediate)
+        generation += 1
         node.stop()
         engine.stop()
-        playing = 0
         end(force: true)
     }
 
@@ -74,13 +80,12 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
         Task { @MainActor in self.end() }
     }
 
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.end() }
-    }
+    /// A cancel (`cancel()`) has already let the session go, so there is nothing to end here.
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {}
 
     // MARK: Tones
 
-    private func playTones(_ notes: [ToneNote]) {
+    private func playTones(_ notes: [ToneNote], generation: Int) {
         let rate = 22_050.0
         guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1) else { end(); return }
         var samples: [Float] = []
@@ -107,7 +112,10 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
             return
         }
         node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            Task { @MainActor in self?.end() }
+            Task { @MainActor in
+                guard let self, self.generation == generation else { return }
+                self.end()
+            }
         }
         node.play()
     }

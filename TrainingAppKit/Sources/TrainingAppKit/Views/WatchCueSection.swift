@@ -10,7 +10,7 @@ struct WatchCueSection: View {
         Section {
             Picker("Sound", selection: binding(\.sound)) {
                 Text("Earbuds Only").tag(CueSettings.Sound.automatic)
-                Text("Earbuds and Watch Speaker").tag(CueSettings.Sound.always)
+                Text("Earbuds + Speaker").tag(CueSettings.Sound.always)
                 Text("Off").tag(CueSettings.Sound.never)
             }
             Picker("Haptics", selection: binding(\.haptics)) {

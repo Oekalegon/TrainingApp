@@ -5,11 +5,16 @@ import TrainingWatchKit
 
 @MainActor
 private final class CueSender: WatchSyncSending {
+    struct Failure: Error {}
     var cues: [CueSettings] = []
+    var failing = false
     var lastSendError: String?
     func send(zones: WatchZones) throws {}
     func send(plan: WatchPlan) throws {}
-    func send(cues: CueSettings) throws { self.cues.append(cues) }
+    func send(cues: CueSettings) throws {
+        if failing { throw Failure() }
+        self.cues.append(cues)
+    }
 }
 
 @MainActor
@@ -31,5 +36,17 @@ struct WatchCueSyncTests {
         sync.update(changed)
         #expect(sender.cues.last == changed && sender.cues.count == 2)
         #expect(WatchCueSync(sender: CueSender(), defaults: store).settings == changed)
+    }
+
+    @Test("a send that fails is reported and tried again at the next sync")
+    func failureRetried() throws {
+        let sender = CueSender()
+        sender.failing = true
+        let sync = WatchCueSync(sender: sender, defaults: try defaults())
+        sync.sync()
+        #expect(sync.lastError != nil && sender.cues.isEmpty)
+        sender.failing = false
+        sync.sync()
+        #expect(sync.lastError == nil && sender.cues == [CueSettings()])
     }
 }

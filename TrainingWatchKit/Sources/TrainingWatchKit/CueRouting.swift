@@ -1,6 +1,6 @@
 import Foundation
 
-/// Whether the athlete hears speech or tones in earbuds (WATCH-107). A setting on the watch for now.
+/// Whether the athlete hears speech or tones (WATCH-107), chosen in the iPhone app (``CueSettings``).
 public enum AudioCueStyle: String, Sendable, CaseIterable, Hashable, Codable {
     case speech
     case tones
@@ -123,47 +123,43 @@ public enum CueRouting {
         return true
     }
 
-    /// The automatic channels: sound where it is allowed, and the haptic where there is no sound to
-    /// carry a zone alert, or for the rare cues that keep both.
+    /// The automatic channels: the haptic where there is no sound to carry a zone alert, and for the
+    /// rare cues that keep both.
     private static func baseRoute(_ cue: RunCue, soundAllowed: Bool, style: AudioCueStyle) -> CueRoute {
-        guard soundAllowed else {
-            return CueRoute(haptic: hapticCue(cue), sound: nil)
+        guard soundAllowed else { return CueRoute(haptic: hapticCue(cue), sound: nil) }
+        let haptic: Bool
+        switch cue {
+        case .zoneAlert(.stepStarted), .goalReached, .lapMarked, .batteryWarning: haptic = true
+        case .zoneAlert, .stepAnnouncement: haptic = false
         }
+        return CueRoute(haptic: haptic, sound: sound(for: cue, style: style))
+    }
+
+    /// What a cue sounds like: the words or the tones. One table, so the two can't drift apart and
+    /// WATCH-117 can tune it without touching the channel rules. `nil` for a cue with no sound:
+    /// a lap, the step-start alert in speech (the announcement says it) and the announcement in
+    /// tones (the step-start tone stands for it).
+    public static func sound(for cue: RunCue, style: AudioCueStyle) -> CueSound? {
+        func pick(_ tones: [ToneNote], _ words: String) -> CueSound { style == .tones ? .tones(tones) : .speech(words) }
         switch cue {
         case .zoneAlert(let alert):
             switch alert {
-            case .stepStarted: return CueRoute(haptic: true, sound: sound(.tones(stepTones), "", style))
-            case .tooLow: return CueRoute(haptic: false, sound: sound(.tones(tooLowTones), "Speed up", style))
-            case .tooHigh: return CueRoute(haptic: false, sound: sound(.tones(tooHighTones), "Slow down", style))
-            case .farBelow:
-                return CueRoute(haptic: false, sound: sound(.tones(tooLowTones + tooLowTones), "Speed up now", style))
-            case .farAbove:
-                return CueRoute(haptic: false, sound: sound(.tones(tooHighTones + tooHighTones), "Slow down now", style))
-            case .backInZone: return CueRoute(haptic: false, sound: sound(.tones(backTones), "In zone", style))
+            case .stepStarted: return style == .tones ? .tones(stepTones) : nil
+            case .tooLow: return pick(tooLowTones, "Speed up")
+            case .tooHigh: return pick(tooHighTones, "Slow down")
+            case .farBelow: return pick(tooLowTones + tooLowTones, "Speed up now")
+            case .farAbove: return pick(tooHighTones + tooHighTones, "Slow down now")
+            case .backInZone: return pick(backTones, "In zone")
             }
-        case .stepAnnouncement(let text):
-            // The announcement is the speech version of the step-start signal; tones already have theirs.
-            return CueRoute(haptic: false, sound: style == .speech ? .speech(text) : nil)
-        case .goalReached:
-            return CueRoute(haptic: true, sound: sound(.tones(doneTones), "Workout done", style))
-        case .lapMarked:
-            return CueRoute(haptic: true, sound: nil)
+        case .stepAnnouncement(let text): return style == .speech ? .speech(text) : nil
+        case .goalReached: return pick(doneTones, "Workout done")
+        case .lapMarked: return nil
         case .batteryWarning(let level):
-            let words = switch level {
-            case .tight: "Battery low"
-            case .critical: "Battery critical"
-            case .runsOut: "Battery won't last"
+            switch level {
+            case .tight: return pick(batteryTones, "Battery low")
+            case .critical: return pick(batteryTones, "Battery critical")
+            case .runsOut: return pick(batteryTones, "Battery won't last")
             }
-            return CueRoute(haptic: true, sound: sound(.tones(batteryTones), words, style))
-        }
-    }
-
-    /// The sound for `style`: the given tones, or the words. An empty word means speech has nothing
-    /// to say here (the step announcement does it).
-    private static func sound(_ tones: CueSound, _ words: String, _ style: AudioCueStyle) -> CueSound? {
-        switch style {
-        case .tones: tones
-        case .speech: words.isEmpty ? nil : .speech(words)
         }
     }
 
