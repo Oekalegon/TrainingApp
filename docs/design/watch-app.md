@@ -1,6 +1,6 @@
 # Watch app: requirements
 
-Status: WATCH-101 to WATCH-105 are built and tested in the simulator (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-106 onwards are open: see `TODO.md`.
+Status: WATCH-101 to WATCH-106 are built (WATCH-106's alerts are unit-tested, not yet run in the simulator or on a watch) (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-107 onwards are open: see `TODO.md`.
 
 ## Why
 
@@ -41,7 +41,7 @@ One fixed page showing:
 - **Target forms:** a whole zone, a stretch of zones (positions, such as 4.0-4.5) and a bpm range all resolve to bpm on the watch (`StepHeartRateTarget`, tested). A pace, power or RPE step with no heart-rate target, or a zone target with no zones yet, shows the zone the heart rate is in instead.
 - **In a free run**, and after the last step ("Workout done"): the total time as the big number, the zone the heart rate is in, the heart rate and the distance.
 - **Controls page:** next step (or lap), pause and resume, and end with a confirmation. The simulator's debug lines (fixes, location, events) are at the bottom of this page.
-- The gauge and the colours show only where the heart rate is against the target right now. When and how to alert (smoothing, hysteresis, the slope rule) is WATCH-106.
+- The gauge and the colours show only where the heart rate is against the target right now. When to alert is `ZoneAlertEngine` (WATCH-106, see Alerts below).
 
 Controls: pause and resume, and a manual lap button. Steps **auto-advance** on their time or distance end condition, and the lap button also moves on manually.
 
@@ -90,6 +90,26 @@ The haptic and the tone for an event are chosen together from one table (event t
 
 The thresholds (smoothing window, hysteresis, slope threshold, escalation timing) start as proposed defaults and are tuned in real runs.
 
+### As built (WATCH-106)
+
+`ZoneAlertEngine` (`TrainingWatchKit`) is a pure value: `beginStep(target:at:)` at each step start and `add(_:at:)` for each reading, on the run's own clock (paused time left out). The target is a plain range and the reading is in one unit where higher means harder, so the same engine can serve heart rate (bpm) and, later, pace targets (as speed, MVP8-101). Heart rate and pace behave differently (heart rate lags the effort by tens of seconds and is smooth; pace follows it at once and is noisy, and a runner can stop or sprint within seconds), so every threshold is in a `ZoneAlertEngine.Settings` preset per signal. `RunRecorder+Alerts.swift` feeds the engine in a planned workout and `ZoneAlertHaptics` plays the haptic.
+
+Heart rate (`Settings.heartRate`):
+- Smoothed value: mean of the last 8 s. Hysteresis: a tenth of the target's width, at least 1 bpm (1.35 bpm on a 13.5 bpm zone); out of the zone at that margin beyond a bound, back in at the bound itself.
+- Out-of-zone alerts wait 8 s after a step starts, so the step's own alert is heard first. The step-start alert is the old step-change haptic (`.notification`); the workout's end keeps `.success`.
+- Slope rule: quiet while the heart rate moves toward the zone by at least 3 bpm per 10 s (a line over the last 10 s) and the gap is wider than the zone, or would be closed within 20 s at that speed. With too few readings the alert goes ahead.
+- Entering the zone from outside gives "back in zone" (a step that starts inside the zone gives none).
+- Repeats every 20 s while out, every 10 s after 60 s out; the far variant when three quarters of the zone's width (at least 5 bpm) beyond a bound, or out for 90 s. The time out of the zone keeps counting while the slope rule keeps quiet, so a long climb that stalls gets the far alert at once.
+
+Pace (`Settings.pace`, placeholder values for MVP8-101, not tuned on any run): a wider margin, a wait of 4 s out of the target before the first alert (a lone GPS fix is not a pace), no slope rule, a 5 s grace and quicker repeats. A pace step has no alerts yet, since only heart-rate targets resolve (`StepHeartRateTarget`).
+
+Pause and resume:
+- Every pause (the button or the system) forgets the readings, in the session delegate.
+- The readings after a resume are held back for the grace, so a lone reading can't alert.
+- Zones arriving in the middle of a step are picked up at the next reading, without an alert.
+
+Haptics only for now, the same whether or not headphones are connected: the headphones channel and the sound are WATCH-107, the final patterns WATCH-117. The haptics are `directionUp`, `directionDown` and `success`, the far ones twice. Not run in the simulator yet: the interval track (`-gpxPath`) goes out of its zones on purpose in the 2nd, 4th and 6th hard steps and the 3rd and 5th easy ones, so look for the alerts there. The logic has unit tests; the recorder wiring has none (WATCH-113).
+
 ## Results
 
 - Save the run as an `HKWorkout` through `HKLiveWorkoutBuilder`.
@@ -112,7 +132,7 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 - The phone sends the athlete's current `HeartRateZoneSettings` (not precomputed bpm ranges), so the watch uses the same `HeartRateZoneModel` and can't disagree about a boundary, whichever zone method is set. `AppTabView` sends them through `WatchZoneSync` when the app becomes active and whenever the settings change, only when they differ from what was last sent.
 - Transport is a WatchConnectivity application context (`WatchSyncChannel`): only the newest zones matter, and the system delivers the latest one when the watch app next runs. The phone holds the zones until the session is active and a watch with the app installed is paired.
 - The watch keeps the last zones in `UserDefaults` (`WatchZoneStore`), so a run can start with the phone out of reach.
-- The metrics page shows the current zone as a coloured "Z3" with its bpm range, "<Z1" below zone 1, and "No zones yet" until some arrive. The colours come from one definition in `TrainingWatchKit` that the phone's charts use too. This is the current heart rate; smoothing comes with the alerts (WATCH-106).
+- The metrics page shows the current zone as a coloured "Z3" with its bpm range, "<Z1" below zone 1, and "No zones yet" until some arrive. The colours come from one definition in `TrainingWatchKit` that the phone's charts use too. This is the raw current heart rate; only the alerts smooth it (WATCH-106).
 - The CloudKit fallback for a phone that isn't reachable is WATCH-114.
 - Simulator: `-fakeZones` gives the watch zones (resting 55, maximum 190) when no phone has sent any.
 
@@ -134,7 +154,7 @@ Decisions from the scoping Q&A of 2026-11-20:
 - **Advancing:** `WorkoutStepEngine` (in `TrainingWatchKit`, pure logic, tested) lays the workout's blocks out as steps, each repetition of a repeated block its own step. A step with a time or distance goal ends when it is reached (time from workout time, so paused time doesn't count; distance from the run's distance); an open step waits for the lap button. The next step starts where the last goal ended, so time goals don't drift by the update interval. The recorder checks twice a second.
 - **Lap button** (on the controls page, "Next step" during a workout, "Lap" otherwise): ends the current step and moves on (a press within a second of the step beginning is ignored, so a double tap doesn't skip two), and the saved workout records a lap event at that moment, so a step cut short can be told from one that ended by itself. In a free run, or after the last step, it only records a lap event.
 - **After the last step** the run keeps recording as a free run until End. The step line says "Workout done" in green.
-- **One haptic** at each step change, whether it came from a goal or the lap button, and a different one when the last step ends. The zone alerts, patterns and audio are WATCH-106 and WATCH-107.
+- **One haptic** at each step change, whether it came from a goal or the lap button, and a different one when the last step ends. That haptic is now the step-start alert of `ZoneAlertEngine` (WATCH-106); the zone alerts have their own haptics, and the patterns and audio are WATCH-117 and WATCH-107.
 - **Saved workout:**
   - A segment `HKWorkoutEvent` per step, from when the step started to when it ended, dated by the engine's own step boundary (not when the half-second tick noticed it) and including any pause inside the step, with the step's index, kind, repetition, goal and how it ended ("goal", "lap" or "workoutEnded") in the event's metadata. A step still going when the run ends gets its segment too. Events that fail to write are kept and tried again with the next batch and just before the workout is ended.
   - A lap event for each lap-button press.

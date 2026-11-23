@@ -14,6 +14,7 @@ struct TrainingWatchApp: App {
         WindowGroup {
             RunView(recorder: recorder, zoneStore: zoneStore, planStore: planStore)
                 .task {
+                    recorder.zoneStore = zoneStore
                     syncChannel?.activate { context in
                         // A part the phone hasn't sent yet is `nil`: keep what the watch has.
                         // In the simulator, test data wins over anything a paired phone sends.

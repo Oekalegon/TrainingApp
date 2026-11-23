@@ -15,6 +15,7 @@ extension RunRecorder {
     func beginSteps(for plan: WatchPlannedWorkout, at start: Date) async {
         stepEngine = WorkoutStepEngine(blocks: plan.blocks)
         stepStartDate = start
+        alertStepStarted()
         do {
             try await builder?.addMetadata(WorkoutMetadata.workout(plannedActivityID: plan.id, name: plan.name))
         } catch {
@@ -81,7 +82,15 @@ extension RunRecorder {
             }
             stepStartDate = max(end, stepStartDate)
             // A different tap when the workout's last step is over.
-            WKInterfaceDevice.current().play(transition.started == nil ? .success : .notification)
+            if transition.started == nil {
+                ZoneAlertHaptics.cancelPending()
+                WKInterfaceDevice.current().play(.success)
+            }
+        }
+        // The new step's own haptic comes with its alert state (WATCH-106), once, for the last step
+        // started when several went by in one gap.
+        if transitions.last?.started != nil {
+            alertStepStarted()
         }
         await addEvents(events)
     }

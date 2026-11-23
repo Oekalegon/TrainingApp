@@ -7,7 +7,8 @@ import TrainingWatchKit
 
 /// Records an outdoor run with an `HKWorkoutSession` and an `HKLiveWorkoutBuilder`, so the run is
 /// saved to Health as a normal `HKWorkout` (WATCH-101). It shows the live heart rate and elapsed
-/// time and nothing else yet: zones, steps and alerts come in later todos.
+/// time, runs a planned workout's steps and plays the zone alerts (`RunRecorder+Steps.swift`,
+/// `RunRecorder+Alerts.swift`).
 @MainActor
 @Observable
 final class RunRecorder: NSObject {
@@ -31,6 +32,11 @@ final class RunRecorder: NSObject {
     /// The steps of the planned workout being run, or `nil` in a free run. Set and changed by
     /// `RunRecorder+Steps.swift`; views only read it.
     var stepEngine: WorkoutStepEngine?
+    /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
+    var zoneStore: WatchZoneStore?
+    /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
+    /// `RunRecorder+Alerts.swift`.
+    var alertEngine = ZoneAlertEngine(settings: .heartRate)
     /// How many segment and lap events have been written to the workout, for the simulator's debug line.
     var eventsWritten = 0
     /// When the current step began, for its segment event. Set by `RunRecorder+Steps.swift`.
@@ -205,7 +211,10 @@ final class RunRecorder: NSObject {
         return false
     }
 
-    func pause() { if phase == .running { session?.pause() } }
+    func pause() {
+        guard phase == .running else { return }
+        session?.pause()
+    }
     func resume() {
         guard phase == .paused else { return }
         // Fixes are ignored while paused, so measure the next one from nothing, not from the
@@ -306,6 +315,7 @@ final class RunRecorder: NSObject {
         // Shown before the await, so readings land in the order they were taken and one still in
         // flight when the run ends can't show up on the next run.
         heartRate = bpm
+        alertHeartRate(bpm)
         let sample = HKQuantitySample(
             type: HKQuantityType(.heartRate),
             quantity: HKQuantity(unit: HKUnit.count().unitDivided(by: .minute()), doubleValue: bpm),
@@ -393,6 +403,8 @@ extension RunRecorder: HKWorkoutSessionDelegate {
                 #endif
             case .paused:
                 phase = .paused
+                // Whoever paused it: the button or the system.
+                alertEngine.pause()
                 #if targetEnvironment(simulator)
                 replay.pause()
                 #endif
@@ -425,7 +437,10 @@ extension RunRecorder: HKLiveWorkoutBuilderDelegate {
         let bpm = Self.mostRecentHeartRate(in: workoutBuilder, collectedTypes: collectedTypes)
         let distance = Self.totalDistance(in: workoutBuilder, collectedTypes: collectedTypes)
         Task { @MainActor in
-            if let bpm { heartRate = bpm }
+            if let bpm {
+                heartRate = bpm
+                alertHeartRate(bpm)
+            }
             if let distance { distanceMeters = distance }
         }
         #endif
