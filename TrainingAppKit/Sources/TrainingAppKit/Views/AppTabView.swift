@@ -41,6 +41,7 @@ public struct AppTabView: View {
     @Environment(\.openURL) private var openURL
     private let watchSync: WatchScheduleSync?
     private let watchZoneSync: WatchZoneSync?
+    private let watchCues: WatchCueSync?
     private let workoutInspector: (any WorkoutInspecting)?
 
     /// - Parameters:
@@ -49,13 +50,15 @@ public struct AppTabView: View {
     ///   - watchSync: Run on launch and every time the app becomes active again; `nil` skips it.
     ///   - watchZoneSync: Sends the athlete's heart-rate zones to the Watch app when the app becomes
     ///     active and when they change (WATCH-102); `nil` skips it.
+    ///   - watchCues: The settings for the watch's sound and haptics (WATCH-107), sent when the app
+    ///     becomes active and when changed; `nil` hides them.
     ///   - iCloud: Looks up the iCloud account, for the first-run introduction and the warning banner
     ///     (MVP2-147); `nil` never warns.
     ///   - workoutInspector: Reads what HealthKit recorded for recent workouts, for the Developer
     ///     screen (MVP2-146 spike); `nil` hides it.
     public init(
         model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil,
-        watchZoneSync: WatchZoneSync? = nil, iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
+        watchZoneSync: WatchZoneSync? = nil, watchCues: WatchCueSync? = nil, iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
     ) {
         let viewModel = MicroCycleViewModel(model: model, refresher: refresher, watchSync: watchSync, iCloud: iCloud)
         _viewModel = State(initialValue: viewModel)
@@ -64,6 +67,7 @@ public struct AppTabView: View {
         _searchViewModel = State(initialValue: viewModel.searchViewModel(library: libraryViewModel))
         self.watchSync = watchSync
         self.watchZoneSync = watchZoneSync
+        self.watchCues = watchCues
         self.workoutInspector = workoutInspector
     }
 
@@ -122,6 +126,7 @@ public struct AppTabView: View {
                     onUnlinkPlan: { await viewModel.unlinkActivity($0) },
                     onSetActivitySport: { await viewModel.setActivitySport($0, sport: $1, venue: $2) },
                     watchSync: watchSync,
+                    watchCues: watchCues,
                     workoutInspector: workoutInspector
                 )
             }
@@ -138,6 +143,7 @@ public struct AppTabView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             watchSync?.requestSync()
+            watchCues?.sync()
             watchZoneSync?.sync(settings: viewModel.currentHeartRateZoneSettings)
             // The athlete may have signed in to iCloud in Settings meanwhile (MVP2-147).
             Task { await viewModel.onboarding.refreshICloudStatus() }

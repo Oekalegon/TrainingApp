@@ -20,6 +20,7 @@ struct TrainingWatchApp: App {
                         // In the simulator, test data wins over anything a paired phone sends.
                         if let zones = context.zones, !SimulatorTestData.replacesZones { zoneStore.update(zones) }
                         if let plan = context.plan, !SimulatorTestData.replacesPlan { planStore.update(plan) }
+                        context.cues?.save()
                     }
                     #if targetEnvironment(simulator)
                     SimulatorTestData.apply(zoneStore: zoneStore, planStore: planStore)

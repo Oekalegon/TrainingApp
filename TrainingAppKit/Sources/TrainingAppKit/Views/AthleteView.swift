@@ -46,6 +46,8 @@ struct AthleteView: View {
     /// Backs the Apple Watch screens (MVP2-117); `nil` where WorkoutKit isn't available, which hides
     /// the Apple Watch row.
     let watchSync: WatchScheduleSync?
+    /// The settings for the watch's alerts (WATCH-107), shown on the synchronisation screen.
+    var watchCues: WatchCueSync?
     /// Reads what HealthKit recorded for recent workouts, for the Developer screen (MVP2-146 spike).
     var workoutInspector: (any WorkoutInspecting)?
     /// Whether the overlap-review sheet (MVP1-67), opened by tapping ``OverlapWarningBanner``, is
@@ -165,7 +167,7 @@ struct AthleteView: View {
             AppleWatchView()
         case .synchronisation:
             if let watchSync {
-                WatchSynchronisationView(sync: watchSync)
+                WatchSynchronisationView(sync: watchSync, cues: watchCues)
             }
         case .calendar:
             CalendarSettingsView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)

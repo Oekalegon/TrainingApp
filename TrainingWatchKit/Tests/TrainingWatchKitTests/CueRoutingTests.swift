@@ -103,3 +103,31 @@ struct CueRoutingTests {
             == "Run, open")
     }
 }
+
+@Suite("Cue settings travel to the watch (WATCH-107)")
+struct CueSettingsTransferTests {
+    @Test("the settings survive the application context")
+    func contextRoundTrip() throws {
+        let settings = CueSettings(haptics: .always, sound: .always, style: .tones)
+        let context = WatchContext(cues: settings)
+        let decoded = try #require(WatchContext(applicationContext: try context.applicationContext()))
+        #expect(decoded.cues == settings)
+    }
+
+    @Test("a context without settings leaves them out, and unreadable ones are dropped")
+    func missing() throws {
+        let plain = try #require(WatchContext(applicationContext: try WatchContext().applicationContext()))
+        #expect(plain.cues == nil)
+        let json = #"{"cues":{"haptics":"nonsense"}}"#.data(using: .utf8)!
+        #expect(WatchContext(data: json)?.cues == nil)
+    }
+
+    @Test("stored settings are read back, and speech with automatic channels is the default")
+    func storage() throws {
+        let defaults = try #require(UserDefaults(suiteName: "CueSettingsTests-\(UUID().uuidString)"))
+        #expect(CueSettings.stored(in: defaults) == CueSettings())
+        let settings = CueSettings(haptics: .never, sound: .never, style: .tones)
+        settings.save(in: defaults)
+        #expect(CueSettings.stored(in: defaults) == settings)
+    }
+}

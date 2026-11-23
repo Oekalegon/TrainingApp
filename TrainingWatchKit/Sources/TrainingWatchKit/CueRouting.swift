@@ -1,7 +1,7 @@
 import Foundation
 
 /// Whether the athlete hears speech or tones in earbuds (WATCH-107). A setting on the watch for now.
-public enum AudioCueStyle: String, Sendable, CaseIterable, Hashable {
+public enum AudioCueStyle: String, Sendable, CaseIterable, Hashable, Codable {
     case speech
     case tones
 
@@ -40,10 +40,11 @@ public struct CueRoute: Sendable, Hashable {
 }
 
 /// How the athlete wants to be told (WATCH-107): which channels and, for sound, speech or tones.
-/// Kept on the watch for now.
-public struct CueSettings: Sendable, Hashable {
+/// Chosen in the iPhone app and sent to the watch with the zones and the plan (``WatchContext``); the
+/// watch keeps the last ones it got in its `UserDefaults`.
+public struct CueSettings: Sendable, Hashable, Codable {
     /// When the wrist taps.
-    public enum Haptics: String, Sendable, CaseIterable, Hashable {
+    public enum Haptics: String, Sendable, CaseIterable, Hashable, Codable {
         /// Zone alerts only without earbuds; step start, workout done and battery always.
         case automatic
         /// Every cue taps, with or without earbuds.
@@ -52,7 +53,7 @@ public struct CueSettings: Sendable, Hashable {
     }
 
     /// When the watch makes a sound.
-    public enum Sound: String, Sendable, CaseIterable, Hashable {
+    public enum Sound: String, Sendable, CaseIterable, Hashable, Codable {
         /// Only through earbuds.
         case automatic
         /// Also from the watch's speaker when no earbuds are connected.
@@ -72,6 +73,13 @@ public struct CueSettings: Sendable, Hashable {
 
     public static let hapticsKey = "cueHaptics"
     public static let soundKey = "cueSound"
+
+    /// Keeps the settings for the next launch.
+    public func save(in defaults: UserDefaults = .standard) {
+        defaults.set(haptics.rawValue, forKey: Self.hapticsKey)
+        defaults.set(sound.rawValue, forKey: Self.soundKey)
+        defaults.set(style.rawValue, forKey: AudioCueStyle.defaultsKey)
+    }
 
     /// The stored settings; the defaults for what was never chosen.
     public static func stored(in defaults: UserDefaults = .standard) -> CueSettings {

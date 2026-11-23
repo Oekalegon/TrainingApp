@@ -29,6 +29,7 @@ struct TrainingAppApp: App {
                 AppTabView(
                     model: environment.model, refresher: environment, watchSync: environment.watchSync,
                     watchZoneSync: environment.watchZoneSync,
+                    watchCues: environment.watchCueSync,
                     iCloud: CloudKitAccountChecker(containerIdentifier: TrainingAppEnvironment.cloudKitContainerIdentifier),
                     workoutInspector: environment.workoutInspector
                 )
