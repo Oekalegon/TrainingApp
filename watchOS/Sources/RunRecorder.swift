@@ -7,7 +7,8 @@ import TrainingWatchKit
 
 /// Records an outdoor run with an `HKWorkoutSession` and an `HKLiveWorkoutBuilder`, so the run is
 /// saved to Health as a normal `HKWorkout` (WATCH-101). It shows the live heart rate and elapsed
-/// time and nothing else yet: zones, steps and alerts come in later todos.
+/// time, runs a planned workout's steps and plays the zone alerts (`RunRecorder+Steps.swift`,
+/// `RunRecorder+Alerts.swift`).
 @MainActor
 @Observable
 final class RunRecorder: NSObject {
@@ -35,7 +36,7 @@ final class RunRecorder: NSObject {
     var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
     /// `RunRecorder+Alerts.swift`.
-    var alertEngine = ZoneAlertEngine()
+    var alertEngine = ZoneAlertEngine(settings: .heartRate)
     /// How many segment and lap events have been written to the workout, for the simulator's debug line.
     var eventsWritten = 0
     /// When the current step began, for its segment event. Set by `RunRecorder+Steps.swift`.
@@ -212,7 +213,6 @@ final class RunRecorder: NSObject {
 
     func pause() {
         guard phase == .running else { return }
-        alertEngine.pause()
         session?.pause()
     }
     func resume() {
@@ -403,6 +403,8 @@ extension RunRecorder: HKWorkoutSessionDelegate {
                 #endif
             case .paused:
                 phase = .paused
+                // Whoever paused it: the button or the system.
+                alertEngine.pause()
                 #if targetEnvironment(simulator)
                 replay.pause()
                 #endif

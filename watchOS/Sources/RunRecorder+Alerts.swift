@@ -5,9 +5,9 @@ import TrainingWatchKit
 extension RunRecorder {
     /// The current step's heart-rate target against the athlete's zones, or `nil` in a free run, in
     /// a step without a heart-rate target, or before zones have arrived.
-    private var currentTarget: StepHeartRateTarget? {
+    private var currentTarget: ClosedRange<Double>? {
         guard let step = stepEngine?.current?.step else { return nil }
-        return StepHeartRateTarget(step: step, bands: zoneStore?.bands)
+        return StepHeartRateTarget(step: step, bands: zoneStore?.bands)?.bpm
     }
 
     /// A step began (the first one, a goal reached or the lap button): resets the engine for its
@@ -21,7 +21,7 @@ extension RunRecorder {
         guard phase == .running, let engine = stepEngine, !engine.isFinished else { return }
         // Zones can arrive in the middle of a step; a step already running picks them up here.
         alertEngine.updateTarget(currentTarget)
-        if let alert = alertEngine.add(heartRate: bpm, at: elapsed()) {
+        if let alert = alertEngine.add(bpm, at: elapsed()) {
             ZoneAlertHaptics.play(alert)
         }
     }
