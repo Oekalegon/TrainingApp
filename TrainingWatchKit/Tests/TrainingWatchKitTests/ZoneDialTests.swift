@@ -161,7 +161,7 @@ struct ZoneDialTests {
         #expect(ZoneDialText.positionText(6) == "Z 5.9")
     }
 
-    @Test("the step lines read as on the drawing")
+    @Test("the step lines read as VoiceOver should say them")
     func lines() {
         let work = WorkoutStep(kind: .work, goal: .time(90), target: .heartRateZone(2))
         let recover = WorkoutStep(kind: .recovery, goal: .time(240), target: .heartRateZone(1))
@@ -172,9 +172,7 @@ struct ZoneDialTests {
         #expect(ZoneDialText.stepLine(km, locale: locale) == "COOL-DOWN 1 km in Zone 1.0-1.5")
         let engine = WorkoutStepEngine(blocks: [WorkoutBlock(steps: [work, recover], repetitions: 12)])
         #expect(ZoneDialText.placeLine(engine.current!, of: engine.steps.count) == "INTERVAL 1 of 12")
-        #expect(ZoneDialText.nextLine(engine, locale: locale) == "NEXT: RECOVER 4:00 in Zone 1")
         let single = WorkoutStepEngine(blocks: [WorkoutBlock(steps: [work])])
         #expect(ZoneDialText.placeLine(single.current!, of: 1) == "STEP 1 of 1")
-        #expect(ZoneDialText.nextLine(single, locale: locale) == "LAST STEP")
     }
 }

@@ -4,8 +4,7 @@ import TrainingWatchKit
 
 /// The target-zone screen of a planned workout (WATCH-118): a ring round the screen's edge with the
 /// target zone bright on top and a triangle where the heart rate is, the heart rate's place in the
-/// zones and in bpm, the step's countdown, a card with the step and the next one, and the total
-/// time. When the target zone changes, the ring turns.
+/// zones and in bpm, the step's countdown and the total time. When the target zone changes, the ring turns.
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
@@ -32,7 +31,6 @@ private struct Dial: View {
         // A step with no heart-rate target has no zone for the top: the ring then centres on the
         // zone the heart rate is in, and no sector is bright.
         let topZone = target?.zone ?? position.map { min(max(Int($0), 1), 5) } ?? 2
-        let accent = Color.zone(topZone)
         ZStack {
             // Dark blue below the target and dark red above it, black in it, so a glance says
             // whether to speed up or slow down.
@@ -49,7 +47,7 @@ private struct Dial: View {
             }
             .ignoresSafeArea()
             GeometryReader { proxy in
-                content(accent: accent, position: position, timerSize: min(40, proxy.size.width * 0.2))
+                content(position: position, timerSize: min(40, proxy.size.width * 0.2))
             }
         }
         .accessibilityElement(children: .ignore)
@@ -67,18 +65,18 @@ private struct Dial: View {
         }
     }
 
-    private func content(accent: Color, position: Double?, timerSize: Double) -> some View {
+    private func content(position: Double?, timerSize: Double) -> some View {
         let progress = recorder.stepProgress(at: at)
-        return VStack(spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        return VStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(position.map(ZoneDialText.positionText) ?? "Z --")
-                    .font(.system(size: 20, weight: .semibold).monospacedDigit())
+                    .font(.system(size: 32, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.white)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(recorder.heartRate.map { "\(Int($0.rounded()))" } ?? "--")
-                        .font(.system(size: 20, weight: .semibold).monospacedDigit())
+                        .font(.system(size: 32, weight: .semibold).monospacedDigit())
                         .foregroundStyle(.white)
-                    Text("BPM").font(.system(size: 9)).foregroundStyle(.secondary)
+                    Text("BPM").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
@@ -86,29 +84,12 @@ private struct Dial: View {
                 .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.yellow)
                 .lineLimit(1).minimumScaleFactor(0.8)
-            card(accent: accent)
             Text(Duration.seconds(recorder.elapsed(at: at)), format: .time(pattern: .hourMinuteSecond))
                 .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    /// The step's place, the step and the next one, on a tint of the target zone's colour.
-    private func card(accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(ZoneDialText.placeLine(current, of: engine.steps.count))
-                .font(.system(size: 10, weight: .semibold)).foregroundStyle(accent)
-            Text(ZoneDialText.stepLine(current.step)).font(.system(size: 11, weight: .semibold))
-            if let next = ZoneDialText.nextLine(engine) {
-                Text(next).font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-        }
-        .lineLimit(1).minimumScaleFactor(0.7)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(accent.opacity(0.22), in: RoundedRectangle(cornerRadius: 10))
     }
 
     /// Everything on the screen as one sentence, since the ring and the colours say nothing to VoiceOver.
@@ -131,12 +112,5 @@ private struct Dial: View {
         parts.append(ZoneDialText.placeLine(current, of: engine.steps.count).lowercased())
         parts.append(ZoneDialText.stepLine(current.step).lowercased())
         return parts.joined(separator: ", ")
-    }
-}
-
-private extension Color {
-    /// A zone's colour: the shared zone ramp, and grey below zone 1.
-    static func zone(_ zone: Int) -> Color {
-        HeartRateZone(rawValue: zone)?.zoneColor ?? .gray
     }
 }

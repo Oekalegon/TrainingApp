@@ -2,7 +2,7 @@ import Foundation
 import TrainingCore
 
 /// The words of the zone dial (WATCH-118): the heart rate's position as "Z 2.3" and the step lines
-/// on the card.
+/// VoiceOver reads.
 public enum ZoneDialText {
     /// The heart rate's place along the zones, such as "Z 2.3": one decimal, rounded down so it
     /// never shows a zone before the heart rate has reached it, and "Z <1" below zone 1.
@@ -35,14 +35,6 @@ public enum ZoneDialText {
         step.repetitions > 1
             ? "INTERVAL \(step.repetition) of \(step.repetitions)"
             : "STEP \(step.index + 1) of \(count)"
-    }
-
-    /// The line for the step after this one: "NEXT: RECOVER 4:00 in Zone 1", "LAST STEP", or `nil`
-    /// once the workout is done.
-    public static func nextLine(_ engine: WorkoutStepEngine, locale: Locale = .current) -> String? {
-        guard engine.current != nil else { return nil }
-        guard let next = engine.next else { return "LAST STEP" }
-        return "NEXT: " + stepLine(next.step, locale: locale)
     }
 
     private static func kindText(_ kind: StepKind) -> String {
