@@ -58,7 +58,7 @@ private struct Dial: View {
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
     /// time fits with its hours.
-    private static let timerSize = 60.0
+    private static let timerSize = 46.0
 
     /// The colour of the zone and the heart rate: blue under the target, red over it, white in it
     /// (and without a target), so a glance says whether to speed up or slow down.
@@ -135,6 +135,7 @@ private struct Dial: View {
             Text("BATTERY \(battery.percentText)")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
                 .padding(.horizontal, Self.batteryInset)
+                .padding(.top, 12)
                 .accessibilityHidden(true)
             BatteryBar(battery)
                 .padding(.horizontal, Self.batteryInset)
