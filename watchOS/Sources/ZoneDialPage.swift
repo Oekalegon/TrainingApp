@@ -37,7 +37,6 @@ private struct Dial: View {
         GeometryReader { proxy in
             content(
                 target: target, topZone: topZone, position: position, status: status,
-                width: proxy.size.width, height: proxy.size.height,
                 extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
         }
         .accessibilityElement(children: .ignore)
@@ -50,21 +49,9 @@ private struct Dial: View {
     private static let minimumClockHeight = 30.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
-    /// The largest size of the two timers, in points.
-    private static let largestTimerSize = 64.0
-    /// The room the interval number takes in the countdown's row, with its gap.
-    private static let intervalWidth = 64.0
-    /// The height of the rows that aren't the timers (the heart rate and zone, the bar and the gaps
-    /// between the rows), and a line's height as a multiple of its font size, for sizing the timers.
-    private static let otherRowsHeight = 94.0
-    private static let lineHeight = 1.2
-
-    /// About how wide a text is in the condensed timer font, in multiples of its font size: a digit
-    /// is 0.49 of it, a colon or a point 0.21, anything else 0.47 (measured on the system font, so
-    /// "0:24:15" is 2.85). A rough measure, used with some room to spare.
-    private static func em(_ text: String) -> Double {
-        max(text.reduce(0) { $0 + ($1.isNumber ? 0.49 : ($1 == ":" || $1 == "." ? 0.21 : 0.47)) }, 1)
-    }
+    /// The size of the two timers, in points: the same for both, in a condensed font so the total
+    /// time fits with its hours.
+    private static let timerSize = 60.0
 
     /// The colour of the zone and the heart rate: blue under the target, red over it, white in it
     /// (and without a target), so a glance says whether to speed up or slow down.
@@ -78,24 +65,17 @@ private struct Dial: View {
 
     private func content(
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?,
-        width: Double, height: Double, extraTop: Double
+        extraTop: Double
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
         let color = Self.color(for: status)
         let countdown = progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open"
         let total = ZoneDialText.totalTimeText(recorder.elapsed(at: at))
         let interval = ZoneDialText.intervalFraction(current)
-        // Both timers have one size, the largest at which the longer of the two fits its row (the
-        // countdown's row also holds the interval) and the two rows fit the height under the clock
-        // with the other rows: so they match, and neither is squeezed by the other.
-        let available = width - 2 * Self.sidePadding
-        let timerSize = min(
-            Self.largestTimerSize,
-            (available - (interval == nil ? 0 : Self.intervalWidth)) / Self.em(countdown),
-            available / Self.em(total),
-            (height - extraTop - Self.otherRowsHeight) / (2 * Self.lineHeight))
+        // Both timers have the same, large size.
+        let timerSize = Self.timerSize
         // Values to the left, the interval to the right.
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 2) {
             // The time left in the step, with which interval it is (5/12) to the right of it.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(countdown)
