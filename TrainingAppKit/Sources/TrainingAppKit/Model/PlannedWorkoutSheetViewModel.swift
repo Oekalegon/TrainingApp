@@ -10,10 +10,11 @@ import TrainingWorkoutKit
 /// WorkoutKit workout, and schedules it on the Watch if it's due within 7 days.
 ///
 /// Also drives the same sheet in edit mode (MVP2-39, ``init(model:editing:templates:estimator:scheduler:)``):
-/// an existing plan's date and expected-load override are editable, its workout is shown read-only
-/// (the template and parameters it was instantiated from aren't stored, and a workout definition
-/// may be shared by other plans, so it isn't edited here), and ``save(asOf:)`` updates the plan in
-/// place — rescheduling on WorkoutKit if the day moved.
+/// an existing plan's date and expected-load override are editable, and so are its parameters and venue when its
+/// workout was made from a template that still exists (MVP2-41); a workout may be shared by other plans, so a
+/// change makes a new workout and repoints this plan at it, and ``save(asOf:)`` updates the plan in place —
+/// rescheduling on WorkoutKit if the day moved or the workout changed. The workout can also be replaced by another
+/// one picked from the ranked list of workouts for the day (``choose(_:)``, MVP5-156).
 @Observable
 @MainActor
 public final class PlannedWorkoutSheetViewModel {
@@ -48,7 +49,7 @@ public final class PlannedWorkoutSheetViewModel {
     /// parameter instantiates the template's current blocks, so a plan made before the athlete
     /// edited the template takes its new structure. Recorded values the template no longer has fall
     /// back to its defaults.
-    private let editedTemplate: WorkoutTemplate?
+    private var editedTemplate: WorkoutTemplate?
     /// ``editedWorkout``'s recorded parameter values (filled out with defaults), to detect whether the
     /// athlete changed any.
     private let originalParameterValues: [String: Double]
@@ -77,7 +78,9 @@ public final class PlannedWorkoutSheetViewModel {
     }
     /// Whether saving an edit needs a new workout: a workout may be shared with other plans, so
     /// a new name or parameter value is never written into it.
-    private var workoutNeedsReplacing: Bool { parametersChanged || venueChanged || nameChanged }
+    private var workoutNeedsReplacing: Bool { templateReplaced || parametersChanged || venueChanged || nameChanged }
+    /// Whether the athlete picked another workout to replace the edited one (MVP5-156, ``choose(_:)``).
+    private var templateReplaced = false
 
     /// Whether ``save(asOf:)`` has something to save: an edit always does (date/load/parameters); a new plan
     /// needs a template picked first. The sheet's save button follows this — keying it off
@@ -308,6 +311,48 @@ public final class PlannedWorkoutSheetViewModel {
         recomputeGuardrails()
     }
 
+    /// Whether the sheet can replace the workout it edits with another (MVP5-156): it edits a plan whose workout is in the library.
+    public var canReplaceWorkout: Bool { isEditing && editedWorkout != nil }
+
+    /// The ranked list of workouts for this sheet's day (MVP5-156): when creating, to pick the workout from; when
+    /// editing, to replace the plan's workout, with that workout's load as the target.
+    func makeSuggestions() -> WorkoutSuggestionsViewModel {
+        WorkoutSuggestionsViewModel(model: model, day: date, replacing: editingPlan)
+    }
+
+    /// Takes the workout the athlete picked from the ranked list (MVP5-156): its template and parameter values.
+    ///
+    /// The values are kept exactly as ranked, not moved onto the slider's notches: they are on ``ParameterGrid``, and the load and
+    /// form the list showed are those of exactly these values. Moving a slider afterwards snaps as usual.
+    ///
+    /// Creating, that is the same as picking the template and setting its parameters by hand. Editing, the plan's
+    /// workout is replaced: saving instantiates the picked template and repoints this plan at the new workout,
+    /// as for a parameter change (``saveEdit(of:asOf:)``), and the plan's own load override, which belonged to the old
+    /// workout, is dropped.
+    ///
+    /// - Parameter ranked: The workout picked from ``WorkoutSuggestionsViewModel``.
+    public func choose(_ ranked: RankedWorkout) {
+        if isEditing {
+            guard canReplaceWorkout else { return }
+            editedTemplate = ranked.template
+            templateReplaced = true
+            loadOverride = nil
+            venue = ranked.template.defaultVenue(for: model.athlete)
+            parameterValues = Dictionary(uniqueKeysWithValues: ranked.template.parameters.map {
+                ($0.key, ranked.values[$0.key] ?? $0.defaultValue)
+            })
+            nameIsCustomized = false
+        } else {
+            selectedTemplate = ranked.template
+            for parameter in ranked.template.parameters {
+                if let value = ranked.values[parameter.key] { parameterValues[parameter.key] = value }
+            }
+        }
+        refreshGeneratedTitle()
+        recomputeExpectedLoad()
+        recomputeGuardrails()
+    }
+
     /// Writes one parameter's value and recomputes ``expectedLoad``/``guardrailFindings``. The
     /// sheet's controls call this rather than mutating ``parameterValues`` directly, since a plain
     /// dictionary write wouldn't trigger the guardrail simulation.
@@ -384,7 +429,7 @@ public final class PlannedWorkoutSheetViewModel {
         guard let editedWorkout else { return nil }
         guard workoutNeedsReplacing else { return editedWorkout }
         let name = workoutName.isEmpty ? editedWorkout.name : workoutName
-        if parametersChanged || venueChanged {
+        if templateReplaced || parametersChanged || venueChanged {
             // A malformed template (not reachable from the UI) leaves the workout untouched, name
             // change included.
             guard let editedTemplate,

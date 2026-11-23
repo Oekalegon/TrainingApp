@@ -89,6 +89,9 @@ struct PlannedWorkoutSheet: View {
 /// picker) still owns the `Form`, title, toolbar, and save-error alert around this.
 struct PlannedWorkoutFormFields: View {
     @Bindable var viewModel: PlannedWorkoutSheetViewModel
+    /// The ranked list of workouts for the day while its sheet is open (MVP5-156). Made when a button is tapped and kept
+    /// here, so the sheet's content isn't rebuilt (and its ranking started again) each time this view's body is evaluated.
+    @State private var suggestions: WorkoutSuggestionsViewModel?
 
     fileprivate static let loadFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
     fileprivate static let dayRangeFormat = Date.FormatStyle.dateTime.month(.abbreviated).day()
@@ -133,7 +136,11 @@ struct PlannedWorkoutFormFields: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if viewModel.canReplaceWorkout {
+                    Button("Replace Workout…", systemImage: "arrow.triangle.2.circlepath") { suggestions = viewModel.makeSuggestions() }
+                }
             } else {
+                Button("Find the Best Workout…", systemImage: "list.number") { suggestions = viewModel.makeSuggestions() }
                 Picker("Template", selection: $viewModel.selectedTemplate) {
                     Text("Select a template").tag(nil as WorkoutTemplate?)
                     ForEach(viewModel.templates) { template in
@@ -147,6 +154,11 @@ struct PlannedWorkoutFormFields: View {
             // `DayActivitiesSection`'s "+" enforces at the entry point -- without this, a
             // sheet opened for today could still be scrolled back to yesterday from here.
             DatePicker("Date", selection: $viewModel.date, in: viewModel.minimumDate()..., displayedComponents: .date)
+        }
+        .sheet(isPresented: Binding(get: { suggestions != nil }, set: { if !$0 { suggestions = nil } })) {
+            if let suggestions {
+                WorkoutSuggestionsView(viewModel: suggestions) { viewModel.choose($0) }
+            }
         }
 
         if viewModel.isEditing, !viewModel.editableParameters.isEmpty {
