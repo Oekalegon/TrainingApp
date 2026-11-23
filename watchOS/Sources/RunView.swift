@@ -85,7 +85,10 @@ private struct RunPages: View {
         .onAppear { if hasSteps { page = .zones } }
         .onChange(of: hasSteps) { _, hasSteps in
             // The steps are set a moment after the run starts, and are used up when the last one ends.
-            page = hasSteps ? .zones : .metrics
+            // Only a page that is going away, or the default one, is moved off: someone on the
+            // controls page to pause or end the run stays there.
+            if hasSteps, page == .metrics { page = .zones }
+            if !hasSteps, page == .zones { page = .metrics }
         }
     }
 }

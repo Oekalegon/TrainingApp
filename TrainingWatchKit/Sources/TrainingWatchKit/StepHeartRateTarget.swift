@@ -79,6 +79,28 @@ public struct StepHeartRateTarget: Sendable, Hashable {
         return .inside
     }
 
+    /// Whether a heart rate is under, in or over the target, for the zone dial's background: out of the
+    /// target only when beyond a bound by a margin (a tenth of the target's width, at least 1 bpm,
+    /// as for the alerts), so a reading hovering on a bound doesn't make the screen flicker.
+    public enum Status: Sendable, Hashable { case below, inside, above }
+
+    /// - Parameter heartRate: The heart rate in bpm.
+    public func status(forHeartRate heartRate: Double) -> Status {
+        let margin = max((bpm.upperBound - bpm.lowerBound) * 0.1, 1)
+        if heartRate < bpm.lowerBound - margin { return .below }
+        if heartRate > bpm.upperBound + margin { return .above }
+        return .inside
+    }
+
+    /// The target as a stretch along the zones (``ZoneBands/position(forHeartRate:)``), for drawing
+    /// it on the zone dial's top bar: a whole zone is `n.0...n+1.0`, and a stretch such as Z4.0-4.5 or
+    /// 150-160 bpm only part of one.
+    ///
+    /// - Parameter bands: The athlete's zone bands.
+    public func positions(in bands: ZoneBands) -> ClosedRange<Double> {
+        bands.position(forHeartRate: bpm.lowerBound)...bands.position(forHeartRate: bpm.upperBound)
+    }
+
     /// Where to draw `heartRate` on a gauge, 0 to 1: the target takes the middle half (0.25 to 0.75)
     /// and the gauge reaches half a target's width beyond each end, so a reading just outside is
     /// still plainly inside the gauge. Clamped, so a far-off reading sits at an end.

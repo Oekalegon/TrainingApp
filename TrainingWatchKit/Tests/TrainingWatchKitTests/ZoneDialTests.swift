@@ -153,6 +153,38 @@ struct ZoneDialTests {
         #expect(try zone(.heartRateRange(150, 160)) == 3)
     }
 
+    @Test("the dial's status leaves the target only beyond a margin of a tenth of its width, at least 1 bpm")
+    func status() throws {
+        let step = WorkoutStep(kind: .work, goal: .time(60), target: .heartRateZone(3))
+        let target = try #require(StepHeartRateTarget(step: step, bands: bands))
+        // Zone 3 is 149.5 to 163: 13.5 wide, so 1.35 bpm of margin.
+        #expect(target.status(forHeartRate: 156) == .inside)
+        #expect(target.status(forHeartRate: 149.5 - 1.0) == .inside)
+        #expect(target.status(forHeartRate: 149.5 - 2.0) == .below)
+        #expect(target.status(forHeartRate: 163 + 1.0) == .inside)
+        #expect(target.status(forHeartRate: 163 + 2.0) == .above)
+        // A narrow target has at least 1 bpm.
+        let narrow = try #require(StepHeartRateTarget(
+            step: WorkoutStep(kind: .work, goal: .time(60), target: .heartRateRange(150, 152)), bands: bands))
+        #expect(narrow.status(forHeartRate: 149.2) == .inside)
+        #expect(narrow.status(forHeartRate: 148.5) == .below)
+    }
+
+    @Test("a target as a stretch of the zones: a whole zone, part of one, or bpm")
+    func targetPositions() throws {
+        func positions(_ target: IntensityTarget) throws -> ClosedRange<Double> {
+            let step = WorkoutStep(kind: .work, goal: .time(60), target: target)
+            return try #require(StepHeartRateTarget(step: step, bands: bands)).positions(in: bands)
+        }
+        let whole = try positions(.heartRateZone(4))
+        #expect(abs(whole.lowerBound - 4) < 0.001 && abs(whole.upperBound - 5) < 0.001)
+        let half = try positions(.heartRateZoneRange(4.0...4.5))
+        #expect(abs(half.lowerBound - 4) < 0.001 && abs(half.upperBound - 4.5) < 0.001)
+        // 150 to 156.25 bpm in zone 3 (149.5 to 163): 3.04 to 3.5.
+        let bpm = try positions(.heartRateRange(150, 156.25))
+        #expect(abs(bpm.lowerBound - 3.037) < 0.01 && abs(bpm.upperBound - 3.5) < 0.01)
+    }
+
     @Test("the position text rounds down and never shows zone 6")
     func positionText() {
         #expect(ZoneDialText.positionText(2.3) == "Z 2.3")

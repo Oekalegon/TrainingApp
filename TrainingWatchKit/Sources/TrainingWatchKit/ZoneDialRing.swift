@@ -19,6 +19,9 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
     /// Whether the target's sector is bright. Off for a step with no heart-rate target, when the
     /// ring only shows which zone the heart rate is in.
     public var highlightsTarget: Bool
+    /// The target as a stretch along the zones (``StepHeartRateTarget/positions(in:)``). The part of
+    /// the target zone's sector outside it is drawn in the darker shade; `nil` makes the whole zone bright.
+    public var targetRange: ClosedRange<Double>?
     public var lineWidth: Double
     /// The screen's corner radius, which the ring follows.
     public var cornerRadius: Double
@@ -32,12 +35,13 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
 
     public init(
         target: Double, position: Double, showsMarker: Bool = true, highlightsTarget: Bool = true,
-        lineWidth: Double = 9, cornerRadius: Double = 52, topInset: Double = 0
+        targetRange: ClosedRange<Double>? = nil, lineWidth: Double = 9, cornerRadius: Double = 52, topInset: Double = 0
     ) {
         self.target = target
         self.position = position
         self.showsMarker = showsMarker
         self.highlightsTarget = highlightsTarget
+        self.targetRange = targetRange
         self.lineWidth = lineWidth
         self.cornerRadius = cornerRadius
         self.topInset = topInset
@@ -62,19 +66,34 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
 
             let spans = ZoneDial.spans(target: target, outline: outline)
             let bright = Int(target.rounded())
-            for zone in 0...5 {
-                let span = spans[zone]
+            func stroke(_ zone: Int, from start: Double, to end: Double, bright isBright: Bool) {
                 // A point or so off each end, so the sectors read as separate.
-                let start = span.start + 1.5, end = span.end - 1.5
-                guard end > start else { continue }
+                guard end > start else { return }
                 var path = Path()
                 path.move(to: point(start).point)
                 let steps = max(Int(((end - start) / 3).rounded(.up)), 1)
                 for step in 1...steps { path.addLine(to: point(start + (end - start) * Double(step) / Double(steps)).point) }
-                let isBright = highlightsTarget && zone == bright
                 context.stroke(
                     path, with: .color(Self.color(ofZone: zone).opacity(isBright ? 1 : 0.4)),
                     style: StrokeStyle(lineWidth: isBright ? lineWidth : lineWidth * 0.8, lineCap: .butt, lineJoin: .round))
+            }
+            for zone in 0...5 {
+                let span = spans[zone]
+                let start = span.start + 1.5, end = span.end - 1.5
+                guard highlightsTarget, zone == bright else {
+                    stroke(zone, from: start, to: end, bright: false)
+                    continue
+                }
+                // The target zone: all of it bright, or, for a target that is part of the zone, the
+                // part that is the target over the whole zone in the darker shade.
+                if let targetRange {
+                    stroke(zone, from: start, to: end, bright: false)
+                    let low = min(max(targetRange.lowerBound - Double(zone), 0), 1)
+                    let high = min(max(targetRange.upperBound - Double(zone), 0), 1)
+                    stroke(zone, from: start + (end - start) * low, to: start + (end - start) * high, bright: true)
+                } else {
+                    stroke(zone, from: start, to: end, bright: true)
+                }
             }
 
             guard showsMarker else { return }

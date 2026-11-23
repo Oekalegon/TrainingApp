@@ -28,19 +28,21 @@ private struct Dial: View {
     var body: some View {
         let target = StepHeartRateTarget(step: current.step, bands: bands)
         let position = recorder.heartRate.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
-        // A step with no heart-rate target has no zone for the top: the ring then centres on the
-        // zone the heart rate is in, and no sector is bright.
-        let topZone = target?.zone ?? position.map { min(max(Int($0), 1), 5) } ?? 2
+        // A step with no heart-rate target has no zone for the top: the ring keeps zone 3 there, so it
+        // doesn't re-lay itself at each zone boundary, with no sector bright and only the triangle moving.
+        let topZone = target?.zone ?? 3
+        let status = recorder.heartRate.flatMap { bpm in target?.status(forHeartRate: bpm) }
         ZStack {
             // Dark blue below the target and dark red above it, black in it, so a glance says
             // whether to speed up or slow down.
-            Self.background(for: target, heartRate: recorder.heartRate)
+            Self.background(for: status)
                 .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.5), value: target.flatMap { t in recorder.heartRate.map { t.position(forHeartRate: $0) } })
+                .animation(.easeInOut(duration: 0.5), value: status)
             GeometryReader { proxy in
                 ZoneDialRing(
                     target: Double(topZone), position: position ?? Double(topZone) + 0.5,
                     showsMarker: position != nil, highlightsTarget: target != nil,
+                    targetRange: bands.flatMap { target?.positions(in: $0) },
                     lineWidth: 9, cornerRadius: min(proxy.size.width, proxy.size.height) * 0.26,
                     topInset: Self.clockHeight)
                     .animation(.easeInOut(duration: 0.6), value: topZone)
@@ -61,12 +63,11 @@ private struct Dial: View {
     private static let clockHeight = 24.0
 
     /// Black in the target, dark blue under it and dark red over it.
-    private static func background(for target: StepHeartRateTarget?, heartRate: Double?) -> Color {
-        guard let target, let heartRate else { return .black }
-        switch target.position(forHeartRate: heartRate) {
-        case .inside: return .black
-        case .below: return Color(red: 0.0, green: 0.02, blue: 0.11)
-        case .above: return Color(red: 0.14, green: 0.01, blue: 0.01)
+    private static func background(for status: StepHeartRateTarget.Status?) -> Color {
+        switch status {
+        case .below: Color(red: 0.0, green: 0.02, blue: 0.11)
+        case .above: Color(red: 0.14, green: 0.01, blue: 0.01)
+        case .inside, nil: .black
         }
     }
 
@@ -107,7 +108,10 @@ private struct Dial: View {
         } else {
             parts.append("No heart rate reading")
         }
-        if let target { parts.append("target \(target.label)") }
+        if let target {
+            parts.append("target \(target.label)")
+            if let bpm = recorder.heartRate { parts.append(target.position(forHeartRate: bpm).text.lowercased()) }
+        }
         if let progress = recorder.stepProgress(at: at) {
             if let seconds = progress.remainingTime {
                 parts.append(Duration.seconds(seconds.rounded(.up)).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide)) + " left")
