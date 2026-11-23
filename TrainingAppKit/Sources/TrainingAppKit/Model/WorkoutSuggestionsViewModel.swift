@@ -183,12 +183,21 @@ public final class WorkoutSuggestionsViewModel {
     /// - Returns: `nil` when no micro-cycle holds the day.
     /// - Throws: Whatever the stores throw.
     func microTimes(on date: Date) async throws -> MicroTimes? {
+        try await microTimes(on: date, cycles: activeCycles(around: calendar.startOfDay(for: date)))
+    }
+
+    /// ``microTimes(on:)`` with the plan's cycles already read, so ``load()`` reads them once.
+    ///
+    /// - Parameters:
+    ///   - date: A day in the micro-cycle.
+    ///   - cycles: The active plan's cycles around the day (``activeCycles(around:)``).
+    func microTimes(on date: Date, cycles: [TrainingCycle]) async throws -> MicroTimes? {
         let calendar = calendar
         let day = calendar.startOfDay(for: date)
         func range(_ cycle: TrainingCycle) -> ClosedRange<Date> {
             calendar.startOfDay(for: cycle.dateRange.lowerBound)...calendar.startOfDay(for: cycle.dateRange.upperBound)
         }
-        let micros = try await activeCycles(around: day).filter { $0.level == .micro }
+        let micros = cycles.filter { $0.level == .micro }
         guard let micro = micros.first(where: { range($0).contains(day) }) else { return nil }
         let peers = micros.filter { $0.id != micro.id && $0.phase == micro.phase && $0.loadRole == micro.loadRole }
         let involved = [micro] + peers
@@ -232,7 +241,7 @@ public final class WorkoutSuggestionsViewModel {
         let calendar = calendar
         do {
             let cycles = try await activeCycles(around: day)
-            let times = try await microTimes(on: day)
+            let times = try await microTimes(on: day, cycles: cycles)
             microTarget = times?.typical
             microRemaining = times?.remaining
             let from = calendar.date(byAdding: .day, value: -Self.historyDays, to: day) ?? day

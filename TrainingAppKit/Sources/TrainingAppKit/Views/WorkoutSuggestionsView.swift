@@ -87,8 +87,15 @@ private struct RowContent: View {
             Text(row.title).font(.headline)
             Text(row.detail).font(.subheadline).foregroundStyle(.secondary)
             ForEach(row.effects, id: \.self) { Text($0).font(.footnote).foregroundStyle(.secondary) }
-            ForEach(row.reasons, id: \.self) {
-                Label($0, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.orange)
+            ForEach(row.reasons, id: \.self) { reason in
+                // The icon is decoration; the words say it, and VoiceOver is told what they are.
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle").accessibilityHidden(true)
+                    Text(reason)
+                }
+                .font(.footnote).foregroundStyle(.orange)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Ranks lower: \(reason)")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
