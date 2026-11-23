@@ -55,7 +55,7 @@ A second run screen for a planned workout, drawn by the user in FreeForm (2026-1
 - **Background:** black while the heart rate is in the target, **dark blue below** it and **dark red above** it, so a glance says whether to speed up or slow down.
 - **A step with no heart-rate target** (a pace, power or RPE step, or no zones yet) has no zone for the top: the ring centres on the zone the heart rate is in and no sector is bright.
 - **Where:** a page of a planned workout between the controls and the metrics, and the page the workout opens on; free runs have the metrics page only. A page order and a choice of pages is WATCH-109.
-- **To tune on a real watch:** the corner radius (about a quarter of the shorter side, a guess), the stroke width (9 pt), the dark shade (40% opacity), the blue and red of the background, and the text sizes on the smaller watches.
+- **To tune on a real watch:** the corner radius (about a quarter of the shorter side, a guess), the stroke width (9 pt), the dark shade (40% opacity), the blue and red of the background (dark, to save battery), and the text sizes on the smaller watches.
 
 ## Alerts
 

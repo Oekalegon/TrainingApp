@@ -65,8 +65,8 @@ private struct Dial: View {
         guard let target, let heartRate else { return .black }
         switch target.position(forHeartRate: heartRate) {
         case .inside: return .black
-        case .below: return Color(red: 0.0, green: 0.10, blue: 0.38)
-        case .above: return Color(red: 0.40, green: 0.04, blue: 0.04)
+        case .below: return Color(red: 0.0, green: 0.04, blue: 0.20)
+        case .above: return Color(red: 0.24, green: 0.02, blue: 0.02)
         }
     }
 
