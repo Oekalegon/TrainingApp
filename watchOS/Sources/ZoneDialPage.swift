@@ -98,6 +98,9 @@ private struct Dial: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
+            // The room left over is shared equally by the gap under the countdown and the one above
+            // the total time, so the heart rate and the bar have the same space above and below.
+            Spacer(minLength: 0)
             // The heart rate to the left, its "BPM" in the secondary colour, and the zone to the right,
             // its "Zone" small and in the secondary colour and the value in the state's colour.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
@@ -123,7 +126,6 @@ private struct Dial: View {
                 targetRange: bands.flatMap { target?.positions(in: $0) })
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
-            // Any room left over goes here, so the content starts right under the clock.
             Spacer(minLength: 0)
             Text(total)
                 .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
