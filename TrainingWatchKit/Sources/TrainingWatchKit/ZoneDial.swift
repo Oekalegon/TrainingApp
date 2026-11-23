@@ -1,24 +1,19 @@
 import CoreGraphics
 import Foundation
 
-/// The geometry of the zone dial (WATCH-118): all the zones on one horizontal line, lowest on the
-/// left, so a rising heart rate moves to the right.
-///
-/// The zones sit along it by their place against the target zone, in three stretches that keep the
-/// target in the middle:
-/// - the zones **below** the target first, on the left, with zone 0 (below zone 1) half the size of
-///   the others (the whole stretch when the target is zone 1);
-/// - the **target zone**, in the middle;
-/// - the zones **above** it, equal, on the right.
+/// The geometry of the zone dial (WATCH-118): all the zones on one horizontal line in their own
+/// order, zone 0 (below zone 1) on the left to zone 5 on the right, so a rising heart rate moves to
+/// the right. Every zone is the same size except the target zone, which is twice as wide. The target
+/// is therefore a bit to the left of the middle for a low target zone and to the right of it for a
+/// high one.
 ///
 /// A new target lays the line out again. ``spans(target:length:)`` blends two layouts when the target
 /// is between two zones, so the change can be animated.
 ///
 /// Pure arithmetic, so it can be tested without a screen; `ZoneDialBar` draws it.
 public enum ZoneDial {
-    /// The share of the line the zones below the target, the target and the zones above it take.
-    /// A stretch with no zones in it (nothing above a zone 5 target) is left empty.
-    public static let shares = (below: 0.35, target: 0.30, above: 0.35)
+    /// How many times as wide the target zone is as each of the other zones.
+    public static let targetWidth = 2.0
 
     /// Where a zone lies along the line, as distances from its left end.
     public struct Span: Sendable, Hashable {
@@ -35,30 +30,13 @@ public enum ZoneDial {
     /// - Returns: Six spans, by zone number.
     public static func spans(target: Int, length: Double) -> [Span] {
         let target = min(max(target, 1), 5)
-        var spans = [Span](repeating: Span(start: 0, end: 0), count: 6)
-        let total = length
-        let belowEnd = total * shares.below
-        let targetEnd = belowEnd + total * shares.target
-        // Below the target: zone 0, half a size unless it is alone, then the zones up to the target.
-        let weights = (0..<target).map { zone in zone == 0 && target > 1 ? 0.5 : 1.0 }
-        let weightTotal = weights.reduce(0, +)
+        let weights = (0...5).map { $0 == target ? targetWidth : 1.0 }
+        let unit = length / weights.reduce(0, +)
         var cursor = 0.0
-        for zone in 0..<target {
-            let length = belowEnd * weights[zone] / weightTotal
-            spans[zone] = Span(start: cursor, end: cursor + length)
-            cursor += length
+        return weights.map { weight in
+            defer { cursor += weight * unit }
+            return Span(start: cursor, end: cursor + weight * unit)
         }
-        spans[target] = Span(start: belowEnd, end: targetEnd)
-        // Above the target: equal, the nearest to the target first, the last ending at the gap.
-        let above = 5 - target
-        if above > 0 {
-            let length = (total * shares.above) / Double(above)
-            for (index, zone) in ((target + 1)...5).enumerated() {
-                let start = targetEnd + Double(index) * length
-                spans[zone] = Span(start: start, end: start + length)
-            }
-        }
-        return spans
     }
 
     /// Where each zone lies for a target that may be between two zones, while the ring changes

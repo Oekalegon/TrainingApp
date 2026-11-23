@@ -3,8 +3,8 @@ import TrainingCore
 import TrainingWatchKit
 
 /// The target-zone screen of a planned workout (WATCH-118): the step's countdown with the interval
-/// number (5/12, in a repeat), the heart rate's place in the zones and in bpm, a bar with all the zones on one
-/// line, the target bright in the middle and a triangle where the heart rate is, and the total time.
+/// number (5/12, in a repeat) to the right, the heart rate's place in the zones and in bpm, a bar with all the zones on one
+/// line, the target twice as wide as the others and bright, and a triangle where the heart rate is, and the total time.
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
@@ -65,13 +65,15 @@ private struct Dial: View {
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
         let color = Self.color(for: status)
-        return VStack(spacing: 6) {
+        // Values to the left, the interval to the right.
+        return VStack(alignment: .leading, spacing: 6) {
             // The time left in the step, with which interval it is (5/12) to the right of it.
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open")
                     .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.yellow)
                     .lineLimit(1).minimumScaleFactor(0.6)
+                Spacer(minLength: 8)
                 // Only in a repeat: a warm-up, a cool-down or a single run has no interval number.
                 if let interval = ZoneDialText.intervalFraction(current) {
                     Text(interval)

@@ -33,42 +33,33 @@ struct ZoneDialTests {
     /// A line 200 long.
     private let length = 200.0
 
-    @Test("the target has its own stretch in the middle, the lower zones come before it and the higher ones after")
+    @Test("the zones are in order from the left, the same size, and the target twice as wide")
     func layout() {
-        let total = length
         let spans = ZoneDial.spans(target: 3, length: length)
-        #expect(abs(spans[3].start - total * 0.35) < 0.001 && abs(spans[3].end - total * 0.65) < 0.001)
-        // Below: zones 0, 1 and 2 in order from the start, zone 0 half the size of the others.
-        #expect(spans[0].start == 0 && abs(spans[2].end - total * 0.35) < 0.001)
-        #expect(abs(spans[1].start - spans[0].end) < 0.001 && abs(spans[2].start - spans[1].end) < 0.001)
-        #expect(abs(spans[0].length * 2 - spans[1].length) < 0.001)
-        #expect(abs(spans[1].length - spans[2].length) < 0.001)
-        // Above: zones 4 and 5, equal, the last ending at the gap.
-        #expect(abs(spans[4].start - total * 0.65) < 0.001)
-        #expect(abs(spans[5].end - total) < 0.001)
-        #expect(abs(spans[4].length - spans[5].length) < 0.001)
+        let unit = length / 7
+        for zone in 0...5 {
+            #expect(abs(spans[zone].length - (zone == 3 ? 2 * unit : unit)) < 0.001, "zone \(zone)")
+        }
+        #expect(spans[0].start == 0 && abs(spans[5].end - length) < 0.001)
+        for zone in 1...5 { #expect(abs(spans[zone].start - spans[zone - 1].end) < 0.001) }
     }
 
-    @Test("with zone 1 as the target, zone 0 has the whole lower stretch at full size; with zone 5, nothing is above")
-    func edgeTargets() {
-        let total = length
-        let low = ZoneDial.spans(target: 1, length: length)
-        #expect(low[0] == ZoneDial.Span(start: 0, end: total * 0.35))
-        #expect(abs(low[2].length - total * 0.35 / 4) < 0.001)
-        let high = ZoneDial.spans(target: 5, length: length)
-        #expect(abs(high[0].length * 2 - high[1].length) < 0.001)
-        #expect(abs(high[4].end - total * 0.35) < 0.001)
-        #expect(abs(high[5].length - total * 0.30) < 0.001)
+    @Test("a low target is a bit to the left of the middle, a high one to the right of it")
+    func targetPlace() {
+        func middle(_ target: Int) -> Double {
+            let span = ZoneDial.spans(target: target, length: length)[target]
+            return (span.start + span.end) / 2
+        }
+        #expect(middle(1) < length / 2 - 20)
+        #expect(middle(5) > length / 2 + 20)
+        for target in 1...4 { #expect(middle(target) < middle(target + 1)) }
     }
 
-    @Test("the zones tile the ring without gaps or overlap, for every target")
+    @Test("the zones tile the line without gaps or overlap, for every target")
     func tiling() {
         for target in 1...5 {
             let spans = ZoneDial.spans(target: target, length: length)
-            let covered = spans.reduce(0) { $0 + $1.length }
-            // Everything is covered except the stretch for the zones above a zone 5 target.
-            let expected = target == 5 ? length * 0.65 : length
-            #expect(abs(covered - expected) < 0.001, "target \(target)")
+            #expect(abs(spans.reduce(0) { $0 + $1.length } - length) < 0.001, "target \(target)")
         }
     }
 
@@ -88,10 +79,10 @@ struct ZoneDialTests {
     func distances() {
         let total = length
         let spans = ZoneDial.spans(target: 2, length: length)
-        // 2.5: the middle of the target's stretch.
-        #expect(abs(ZoneDial.distance(forPosition: 2.5, in: spans) - total * 0.5) < 0.001)
-        #expect(abs(ZoneDial.distance(forPosition: 2.0, in: spans) - total * 0.35) < 0.001)
-        // Zone 0 starts the ring, and 6.0 (the top of zone 5) ends it at the gap.
+        // Zones 0 and 1 are a seventh each: zone 2 starts at 2/7 and is two sevenths wide.
+        #expect(abs(ZoneDial.distance(forPosition: 2.5, in: spans) - total * 3 / 7) < 0.001)
+        #expect(abs(ZoneDial.distance(forPosition: 2.0, in: spans) - total * 2 / 7) < 0.001)
+        // Zone 0 starts the line, and 6.0 (the top of zone 5) ends it.
         #expect(ZoneDial.distance(forPosition: 0, in: spans) == 0)
         #expect(abs(ZoneDial.distance(forPosition: 6, in: spans) - total) < 0.001)
         // Rising heart rate only moves forward along the ring.
