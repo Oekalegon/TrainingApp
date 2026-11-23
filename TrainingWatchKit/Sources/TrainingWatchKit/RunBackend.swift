@@ -43,6 +43,8 @@ public enum RunCue: Sendable, Hashable {
     case goalReached
     /// A lap was marked in a free run.
     case lapMarked
+    /// The words for a step that began, said in earbuds in the speech setting (WATCH-107).
+    case stepAnnouncement(String)
     /// A battery warning of this level (WATCH-110).
     case batteryWarning(BatteryWarning.Level)
 }

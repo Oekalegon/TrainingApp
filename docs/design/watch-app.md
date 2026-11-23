@@ -125,7 +125,11 @@ Pause and resume:
 - The readings after a resume are held back for one smoothing window (3 s), so a lone reading can't alert.
 - Zones arriving in the middle of a step are picked up at the next reading, without an alert.
 
-Haptics only for now, the same whether or not headphones are connected: the headphones channel and the sound are WATCH-107, the final patterns WATCH-117. The haptics are `directionUp`, `directionDown` and `success`, the far ones twice. To see them in the simulator, use the alert test run (`-fakeAlertPlan`, see "Testing in the simulator" below): the 20 s steps of the interval track are too short for most alerts, since the first comes a few seconds into a step and the average lags. The logic has unit tests; the recorder wiring has none (WATCH-113).
+The channel (haptic or earbuds) is WATCH-107, below; the final patterns are WATCH-117. The haptics are `directionUp`, `directionDown` and `success`, the far ones twice. To see them in the simulator, use the alert test run (`-fakeAlertPlan`, see "Testing in the simulator" below): the 20 s steps of the interval track are too short for most alerts, since the first comes a few seconds into a step and the average lags. The logic has unit tests; the recorder wiring has none (WATCH-113).
+
+### As built (WATCH-107)
+
+`CueRouting.route(_:headphonesConnected:style:)` (`TrainingWatchKit`, tested) turns a `RunCue` into a haptic flag and a sound. Without earbuds every cue is a haptic only. With earbuds the zone alerts are sound only; step start, workout done and battery warnings keep the haptic as well; a lap is a haptic. The route is read when the cue fires. The sound is speech ("Speed up", "Slow down", "In zone", "Workout done", "Battery low") or tones by the **speech or tones** setting (`AudioCueStyle`, a picker on the watch's start screen, kept in `UserDefaults`; speech by default). The step announcement (`StepAnnouncement`, a `RunCue.stepAnnouncement`) is spoken in the speech setting only, e.g. "Interval 3 of 6, 4 minutes, zone 4"; in tones the step-start tone stands for it. `CueAudioPlayer` (watchOS) uses `AVSpeechSynthesizer` and generated sine tones in a `.playback` session with `.interruptSpokenAudioAndMixWithOthers` and `.duckOthers`, deactivated with `.notifyOthersOnDeactivation` when the cue ends so podcasts resume and music comes back up. Tones and words are starting values (WATCH-117). Open: checking on a real watch (WATCH-122) and a setting in the iPhone app.
 
 ## Results
 

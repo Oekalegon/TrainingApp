@@ -150,6 +150,8 @@ private struct RunControlsPage: View {
 private struct TodayWorkouts: View {
     let planStore: WatchPlanStore
     let recorder: RunRecorder
+    /// Speech or tones in earbuds (WATCH-107).
+    @AppStorage(AudioCueStyle.defaultsKey) private var audioStyle = AudioCueStyle.speech
 
     var body: some View {
         // The timeline only makes the view redraw each minute; its own date is the schedule's, which
@@ -185,6 +187,10 @@ private struct TodayWorkouts: View {
                     }
                     if let note = planStore.staleNote(asOf: now) {
                         Text(note).font(.system(size: 11)).foregroundStyle(.orange)
+                    }
+                    Picker("Earbuds say", selection: $audioStyle) {
+                        Text("Speech").tag(AudioCueStyle.speech)
+                        Text("Tones").tag(AudioCueStyle.tones)
                     }
                 }
             }

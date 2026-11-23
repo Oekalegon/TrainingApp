@@ -112,7 +112,11 @@ final class FakeBackend: RunBackend {
     func pauseSensors() { sensorCalls.append("pause") }
     func resumeSensors() { sensorCalls.append("resume") }
     func stopSensors() { sensorCalls.append("stop") }
-    func play(_ cue: RunCue) { cues.append(cue) }
+    /// The spoken step announcements, kept apart so `cues` stays the haptic cues.
+    private(set) var announcements: [String] = []
+    func play(_ cue: RunCue) {
+        if case .stepAnnouncement(let text) = cue { announcements.append(text) } else { cues.append(cue) }
+    }
     func cancelPendingCues() { cancelledCues += 1 }
     func battery(elapsed: TimeInterval) -> BatteryDisplay { BatteryDisplay(level: batteryLevel, isCharging: false) }
 }

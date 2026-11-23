@@ -354,6 +354,7 @@ struct RunRecorderStepTests {
         #expect(backend.builder.metadata.count == 1)
         #expect(backend.builder.metadata[0][WorkoutMetadata.plannedActivityID] as? String == planned.id.uuidString)
         #expect(backend.cues == [.zoneAlert(.stepStarted)])
+        #expect(backend.announcements == ["Run, 1 minute, 140 to 150 beats per minute"])
     }
 
     @Test("a free run has no steps and no step alerts")
