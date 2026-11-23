@@ -37,7 +37,7 @@ private struct Dial: View {
         GeometryReader { proxy in
             content(
                 target: target, topZone: topZone, position: position, status: status,
-                timerSize: min(40, proxy.size.width * 0.2),
+                timerSize: min(50, proxy.size.width * 0.25),
                 extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
         }
         .accessibilityElement(children: .ignore)
@@ -82,14 +82,15 @@ private struct Dial: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
-            // The zone to the left, with its "Z" in the secondary colour and the value in the state's
+            // The zone to the left, with its "Zone" small and in the secondary colour and the value in the state's
             // colour, and the heart rate to the right, its "BPM" in the secondary colour.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("Z").foregroundStyle(.secondary)
-                    Text(position.map(ZoneDialText.positionValue) ?? "--").foregroundStyle(color)
+                    Text("Zone").font(.system(size: 14)).foregroundStyle(.secondary)
+                    Text(position.map(ZoneDialText.positionValue) ?? "--")
+                        .font(.system(size: 32, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(color)
                 }
-                .font(.system(size: 32, weight: .semibold).monospacedDigit())
                 Spacer(minLength: 8)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(recorder.heartRate.map { "\(Int($0.rounded()))" } ?? "--")
