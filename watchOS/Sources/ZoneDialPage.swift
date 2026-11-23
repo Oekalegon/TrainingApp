@@ -35,21 +35,10 @@ private struct Dial: View {
         let status = recorder.heartRate.flatMap { bpm in target?.status(forHeartRate: bpm) }
         // The reader keeps to the safe area, whose top inset is what the system keeps free for the
         // clock; the content starts below the larger of that and the least room for the clock.
-        ZStack(alignment: .top) {
-            GeometryReader { proxy in
-                content(
-                    target: target, topZone: topZone, position: position, status: status,
-                    extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
-            }
-            // The battery, as a bar along the very top. watchOS has no battery indicator of its own
-            // in an app, as it has the clock. Its own reader ignores the safe area, so the bar can
-            // be at the top edge; it is kept in from the sides, where the screen's corners round off.
-            GeometryReader { _ in
-                BatteryBar(Self.battery(at: at))
-                    .padding(.horizontal, Self.batteryInset)
-                    .padding(.top, 3)
-            }
-            .ignoresSafeArea()
+        GeometryReader { proxy in
+            content(
+                target: target, topZone: topZone, position: position, status: status,
+                extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
@@ -59,9 +48,9 @@ private struct Dial: View {
     /// The least room kept free at the top for the watch's clock, which can't be hidden without private
     /// API, when the safe area says less.
     private static let minimumClockHeight = 30.0
-    /// How far the battery bar is kept in from each side: the screen's corners are rounded, so
-    /// a bar right across the top would lose its ends.
-    private static let batteryInset = 30.0
+    /// How far the battery bar is kept in from each side, on top of the content's own padding: the
+    /// screen's corners are rounded, so a bar right across the bottom would lose its ends.
+    private static let batteryInset = 18.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
@@ -90,13 +79,14 @@ private struct Dial: View {
         // Both timers have the same, large size.
         let timerSize = Self.timerSize
         // Values to the left, the interval to the right.
-        return VStack(alignment: .leading, spacing: 2) {
+        return VStack(alignment: .leading, spacing: 3) {
             // The time left in the step, with which interval it is (5/12) to the right of it.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(countdown)
                     .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
                     .foregroundStyle(.yellow)
                     .lineLimit(1).minimumScaleFactor(0.5)
+                    .frame(height: timerSize * 0.85)
                 Spacer(minLength: 8)
                 // Only in a repeat: a warm-up, a cool-down or a single run has no interval number.
                 if let interval {
@@ -136,6 +126,16 @@ private struct Dial: View {
             Text(total)
                 .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.5)
+                .frame(height: timerSize * 0.85)
+            // The battery at the very bottom, just under the total time: its charge in small type
+            // and the bar, which is kept in from the sides where the screen's corners round off.
+            let battery = Self.battery(at: at)
+            Text("BATTERY \(battery.percentText)")
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            BatteryBar(battery)
+                .padding(.horizontal, Self.batteryInset)
+                .padding(.bottom, 6)
         }
         .padding(.horizontal, Self.sidePadding)
         .padding(.top, extraTop)
