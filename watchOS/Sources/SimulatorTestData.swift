@@ -12,7 +12,7 @@ import TrainingWatchKit
 /// - `-fakeShortPlan`: a workout of steps a few seconds long, for testing the steps.
 /// - `-fakeIntervalPlan`: 6 × 20 s intervals, which `Tools/TestTracks/short-intervals.gpx` follows.
 /// - `-fakeAlertPlan`: 4 × 90 s intervals for the zone alerts, which `Tools/TestTracks/alert-test.gpx` follows and leaves the zones in.
-/// - `-fakeBattery`: the battery bar drains from 100% to 0% every two minutes of the run (the simulator has no battery); `-batteryLevel 0.15` holds a level, 0 to 1.
+/// - `-fakeBattery`: the battery bar drains from 100% to 0% every two minutes of the run (the simulator has no battery); `-batteryLevel 0.15` holds a level, 0 to 1; `-batteryDrainPerHour 2.6` drains it steadily from 80% (or from `-batteryLevel`) at that share of the full charge per hour, for the battery forecast. See `BatteryReader`.
 /// - `-fakeStalePlan`: sent 3 days ago, whichever workout is asked for (the `-fakePlan` one by default).
 ///
 /// On a real watch the arguments do nothing.

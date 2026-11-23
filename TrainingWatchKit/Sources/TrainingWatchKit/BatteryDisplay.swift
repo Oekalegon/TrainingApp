@@ -95,10 +95,14 @@ extension BatteryDisplay.Band {
 public struct BatteryBar: View {
     public let battery: BatteryDisplay
     public var height: Double
+    /// The colour of the filled part: the forecast's verdict in a planned workout, otherwise (`nil`)
+    /// the colour of the charge itself.
+    public var tint: Color?
 
-    public init(_ battery: BatteryDisplay, height: Double = 5) {
+    public init(_ battery: BatteryDisplay, height: Double = 5, tint: Color? = nil) {
         self.battery = battery
         self.height = height
+        self.tint = tint
     }
 
     public var body: some View {
@@ -116,7 +120,7 @@ public struct BatteryBar: View {
                     let part = CGRect(x: x, y: 0, width: width * fill, height: size.height)
                     context.fill(
                         Path(roundedRect: part, cornerRadius: min(2, size.height / 2)),
-                        with: .color(battery.band.color))
+                        with: .color(tint ?? battery.band.color))
                 }
             }
         }

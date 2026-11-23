@@ -15,6 +15,8 @@ extension RunRecorder {
     func beginSteps(for plan: WatchPlannedWorkout, at start: Date) async {
         stepEngine = WorkoutStepEngine(blocks: plan.blocks)
         stepStartDate = start
+        resetBatteryReadings()
+        sampleBattery()
         alertStepStarted()
         do {
             try await builder?.addMetadata(WorkoutMetadata.workout(plannedActivityID: plan.id, name: plan.name))
@@ -34,6 +36,7 @@ extension RunRecorder {
     /// Ends the steps whose time or distance has been reached.
     private func tickSteps() async {
         guard phase == .running, var engine = stepEngine, !engine.isFinished else { return }
+        sampleBattery()
         let transitions = engine.update(elapsed: elapsed(), distance: distanceMeters)
         guard !transitions.isEmpty else { return }
         stepEngine = engine

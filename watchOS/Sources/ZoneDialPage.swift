@@ -77,52 +77,19 @@ private struct Dial: View {
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
-        let color = Self.color(for: status)
-        let countdown = progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open"
-        let total = ZoneDialText.totalTimeText(recorder.elapsed(at: at))
-        let interval = ZoneDialText.intervalFraction(current)
-        // Both timers have the same, large size.
-        let timerSize = Self.timerSize
+        let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         // Values to the left, the interval to the right.
         return VStack(alignment: .leading, spacing: 2) {
-            // The time left in the step, with which interval it is (5/12) to the right of it.
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(countdown)
-                    .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
-                    .foregroundStyle(.yellow)
-                    .lineLimit(1).minimumScaleFactor(0.5)
-                    .padding(.vertical, -timerSize * 0.23)
-                Spacer(minLength: 8)
-                // Only in a repeat: a warm-up, a cool-down or a single run has no interval number.
-                if let interval {
-                    Text(interval)
-                        .font(.system(size: 20, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                }
-            }
+            ZoneDialCountdown(
+                remaining: progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open",
+                interval: ZoneDialText.intervalFraction(current), timerSize: Self.timerSize)
             // The room left over is shared equally by the gap under the countdown and the one above
             // the total time, so the heart rate and the bar have the same space above and below.
             Spacer(minLength: 0)
-            // The heart rate to the left, its "BPM" in the secondary colour, and the zone to the right,
-            // its "Zone" small and in the secondary colour and the value in the state's colour.
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(recorder.heartRate.map { "\(Int($0.rounded()))" } ?? "--")
-                        .font(.system(size: 32, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(color)
-                    Text("BPM").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("Zone").font(.system(size: 14)).foregroundStyle(.secondary)
-                    Text(position.map(ZoneDialText.positionValue) ?? "--")
-                        .font(.system(size: 32, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(color)
-                }
-            }
-            .animation(.easeInOut(duration: 0.4), value: status)
-            .lineLimit(1).minimumScaleFactor(0.7)
+            ZoneDialHeartRate(
+                heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
+                color: Self.color(for: status))
+                .animation(.easeInOut(duration: 0.4), value: status)
             ZoneDialBar(
                 target: Double(topZone), position: position ?? Double(topZone) + 0.5,
                 showsMarker: position != nil, highlightsTarget: target != nil,
@@ -130,26 +97,21 @@ private struct Dial: View {
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
             Spacer(minLength: 0)
-            Text(total)
-                .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
-                .lineLimit(1).minimumScaleFactor(0.5)
-                .padding(.vertical, -timerSize * 0.23)
-            // The battery at the very bottom, just under the total time: its charge in small type
-            // and the bar, which is kept in from the sides where the screen's corners round off.
-            let battery = Self.battery(elapsed: recorder.elapsed(at: at))
-            Text("BATTERY \(battery.percentText)")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-                .padding(.horizontal, Self.batteryInset)
-                .padding(.top, 12)
-                .accessibilityHidden(true)
-            BatteryBar(battery)
-                .padding(.horizontal, Self.batteryInset)
-                // Room for the page indicator of the run's pages, which is drawn over the page's bottom.
-                .padding(.bottom, Self.pageIndicatorHeight)
+            ZoneDialTotalTime(text: ZoneDialText.totalTimeText(recorder.elapsed(at: at)), timerSize: Self.timerSize)
+            ZoneDialBattery(
+                battery: battery, projection: projection(for: battery, progress: progress),
+                inset: Self.batteryInset, bottomInset: Self.pageIndicatorHeight)
         }
         .padding(.horizontal, Self.sidePadding)
         .padding(.top, Self.contentTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// What the battery will be at the end of the workout (WATCH-119), or `nil` when that isn't known.
+    private func projection(for battery: BatteryDisplay, progress: StepProgress?) -> BatteryProjection? {
+        BatteryProjection(
+            battery: battery, readings: recorder.batteryReadings,
+            remaining: engine.remaining(progress: progress, secondsPerMeter: recorder.secondsPerMeter))
     }
 
     /// Everything on the screen as one sentence, since the bar and the colours say nothing to VoiceOver.
@@ -174,27 +136,11 @@ private struct Dial: View {
         }
         parts.append(ZoneDialText.placeLine(current, of: engine.steps.count).lowercased())
         parts.append(ZoneDialText.stepLine(current.step).lowercased())
-        parts.append(Self.battery(elapsed: recorder.elapsed(at: at)).spokenText.lowercased())
+        let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
+        parts.append(battery.spokenText.lowercased())
+        if let projection = projection(for: battery, progress: recorder.stepProgress(at: at)) {
+            parts.append(projection.spoken)
+        }
         return parts.joined(separator: ", ")
-    }
-}
-
-extension Dial {
-    /// The watch's battery now. Read once a second with the dial's timeline, since watchOS has no
-    /// notification for it. The simulator reports no level, which shows as an empty grey bar, unless
-    /// an argument asks for one: `-fakeBattery` drains it from 100% to 0% every two minutes of the run,
-    /// and `-batteryLevel 0.15` holds a level (0 to 1).
-    fileprivate static func battery(elapsed: TimeInterval) -> BatteryDisplay {
-        #if targetEnvironment(simulator)
-        if let level = UserDefaults.standard.object(forKey: "batteryLevel") as? Double {
-            return BatteryDisplay(level: Float(level), isCharging: false)
-        }
-        if CommandLine.arguments.contains("-fakeBattery") {
-            return BatteryDisplay(level: BatteryDisplay.simulatedLevel(elapsed: elapsed), isCharging: false)
-        }
-        #endif
-        let device = WKInterfaceDevice.current()
-        return BatteryDisplay(
-            level: device.batteryLevel, isCharging: device.batteryState == .charging || device.batteryState == .full)
     }
 }
