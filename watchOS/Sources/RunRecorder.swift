@@ -42,6 +42,9 @@ final class RunRecorder: NSObject {
     /// (the simulator plays no haptics). Set by `RunRecorder+Alerts.swift`.
     var alertLog: [(time: TimeInterval, alert: ZoneAlert)] = []
     #endif
+    /// The battery readings of a planned workout so far, for the forecast (WATCH-119). Set by
+    /// `RunRecorder+Battery.swift`.
+    var batteryReadings: [BatteryForecast.Reading] = []
     /// How many segment and lap events have been written to the workout, for the simulator's debug line.
     var eventsWritten = 0
     /// When the current step began, for its segment event. Set by `RunRecorder+Steps.swift`.

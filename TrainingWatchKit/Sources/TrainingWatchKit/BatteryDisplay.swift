@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// How the watch's battery is shown on the run screen (WATCH-118): a bar along the very top with a
-/// small gap every 10%, coloured by how much is left. Pure arithmetic apart from the colours, so it
-/// can be tested; the watch app reads the level from `WKInterfaceDevice`, and `BatteryBar` draws it.
+/// How the watch's battery is shown on the run screen (WATCH-118): a bar at the bottom with a small
+/// gap every 10%, coloured by how much is left. Pure arithmetic apart from the colours, so it can be
+/// tested; the watch app reads the level from `WKInterfaceDevice`, and `BatteryBar` draws it.
 public struct BatteryDisplay: Sendable, Hashable {
     /// The colour band of a charge.
     public enum Band: Sendable, Hashable {
@@ -87,41 +87,5 @@ extension BatteryDisplay.Band {
         case .veryLow: .orange
         case .critical: .red
         }
-    }
-}
-
-/// The battery bar of the run screen (WATCH-118): ten parts in a row with a small gap between them,
-/// each filled in the band's colour up to the charge and in a dim grey beyond it.
-public struct BatteryBar: View {
-    public let battery: BatteryDisplay
-    public var height: Double
-
-    public init(_ battery: BatteryDisplay, height: Double = 5) {
-        self.battery = battery
-        self.height = height
-    }
-
-    public var body: some View {
-        Canvas { context, size in
-            let count = BatteryDisplay.segmentCount
-            let gap = 2.0
-            let width = (size.width - gap * Double(count - 1)) / Double(count)
-            for index in 0..<count {
-                let x = Double(index) * (width + gap)
-                let rect = CGRect(x: x, y: 0, width: width, height: size.height)
-                let path = Path(roundedRect: rect, cornerRadius: min(2, size.height / 2))
-                context.fill(path, with: .color(.gray.opacity(0.3)))
-                let fill = battery.fill(ofSegment: index)
-                if fill > 0 {
-                    let part = CGRect(x: x, y: 0, width: width * fill, height: size.height)
-                    context.fill(
-                        Path(roundedRect: part, cornerRadius: min(2, size.height / 2)),
-                        with: .color(battery.band.color))
-                }
-            }
-        }
-        .frame(height: height)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(battery.spokenText)
     }
 }
