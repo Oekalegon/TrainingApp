@@ -37,6 +37,11 @@ final class RunRecorder: NSObject {
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
     /// `RunRecorder+Alerts.swift`.
     var alertEngine = ZoneAlertEngine(settings: .heartRate)
+    #if targetEnvironment(simulator)
+    /// The latest alerts with the run time they came at, newest last, for the simulator's debug line
+    /// (the simulator plays no haptics). Set by `RunRecorder+Alerts.swift`.
+    var alertLog: [(time: TimeInterval, alert: ZoneAlert)] = []
+    #endif
     /// How many segment and lap events have been written to the workout, for the simulator's debug line.
     var eventsWritten = 0
     /// When the current step began, for its segment event. Set by `RunRecorder+Steps.swift`.
