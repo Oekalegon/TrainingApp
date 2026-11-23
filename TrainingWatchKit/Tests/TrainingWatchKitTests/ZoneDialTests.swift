@@ -165,7 +165,9 @@ struct ZoneDialTests {
         #expect(ZoneDialText.stepLine(km, locale: locale) == "COOL-DOWN 1 km in Zone 1.0-1.5")
         let engine = WorkoutStepEngine(blocks: [WorkoutBlock(steps: [work, recover], repetitions: 12)])
         #expect(ZoneDialText.placeLine(engine.current!, of: engine.steps.count) == "INTERVAL 1 of 12")
+        #expect(ZoneDialText.placeFraction(engine.current!, of: engine.steps.count) == "1/12")
         let single = WorkoutStepEngine(blocks: [WorkoutBlock(steps: [work])])
         #expect(ZoneDialText.placeLine(single.current!, of: 1) == "STEP 1 of 1")
+        #expect(ZoneDialText.placeFraction(single.current!, of: 1) == "1/1")
     }
 }

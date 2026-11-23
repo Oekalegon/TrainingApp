@@ -30,6 +30,12 @@ public enum ZoneDialText {
         return line
     }
 
+    /// Which interval this is, for the dial: "5/12" for the fifth of a block repeated 12 times,
+    /// otherwise the step's place in the workout, such as "2/6".
+    public static func placeFraction(_ step: PlannedStep, of count: Int) -> String {
+        step.repetitions > 1 ? "\(step.repetition)/\(step.repetitions)" : "\(step.index + 1)/\(count)"
+    }
+
     /// The line above the step: "INTERVAL 5 of 12" for a repeated block, otherwise "STEP 2 of 6".
     public static func placeLine(_ step: PlannedStep, of count: Int) -> String {
         step.repetitions > 1

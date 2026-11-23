@@ -2,9 +2,9 @@ import SwiftUI
 import TrainingCore
 import TrainingWatchKit
 
-/// The target-zone screen of a planned workout (WATCH-118): the heart rate's place in the zones and in
-/// bpm, a bar with all the zones on one line, the target bright in the middle and a triangle where
-/// the heart rate is, the step's countdown and the total time.
+/// The target-zone screen of a planned workout (WATCH-118): the step's countdown with the interval
+/// number (5/12), the heart rate's place in the zones and in bpm, a bar with all the zones on one
+/// line, the target bright in the middle and a triangle where the heart rate is, and the total time.
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
@@ -66,6 +66,17 @@ private struct Dial: View {
         let progress = recorder.stepProgress(at: at)
         let color = Self.color(for: status)
         return VStack(spacing: 6) {
+            // The time left in the step, with which interval it is (5/12) to the right of it.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open")
+                    .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.yellow)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(ZoneDialText.placeFraction(current, of: engine.steps.count))
+                    .font(.system(size: 20, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(position.map(ZoneDialText.positionText) ?? "Z --")
                     .font(.system(size: 32, weight: .semibold).monospacedDigit())
@@ -84,10 +95,6 @@ private struct Dial: View {
                 targetRange: bands.flatMap { target?.positions(in: $0) })
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
-            Text(progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open")
-                .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.yellow)
-                .lineLimit(1).minimumScaleFactor(0.8)
             Text(Duration.seconds(recorder.elapsed(at: at)), format: .time(pattern: .hourMinuteSecond))
                 .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.8)
