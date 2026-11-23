@@ -45,6 +45,15 @@ final class RunRecorder: NSObject {
     /// The battery readings of a planned workout so far, for the forecast (WATCH-119). Set by
     /// `RunRecorder+Battery.swift`.
     var batteryReadings: [BatteryForecast.Reading] = []
+    /// The temporary battery warning screen, or `nil` when none shows (WATCH-110). Set and cleared by
+    /// `RunRecorder+Battery.swift`; the run view shows it.
+    var batteryWarning: BatteryWarning?
+    /// Decides when the battery is worth a warning. Used by `RunRecorder+Battery.swift`.
+    var batteryWarningTracker = BatteryWarningTracker()
+    /// Reads the battery during the run. Set by `RunRecorder+Battery.swift`.
+    var batteryTicker: Task<Void, Never>?
+    /// Takes the warning screen away after a few seconds. Set by `RunRecorder+Battery.swift`.
+    var warningTimer: Task<Void, Never>?
     /// How many segment and lap events have been written to the workout, for the simulator's debug line.
     var eventsWritten = 0
     /// When the current step began, for its segment event. Set by `RunRecorder+Steps.swift`.
@@ -128,6 +137,7 @@ final class RunRecorder: NSObject {
             try await builder.beginCollection(at: start)
             lastDistanceSampleEnd = start
             phase = .running
+            startBatteryWatch()
             if let plan { await beginSteps(for: plan, at: start) }
             routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: nil)
             routePointCount = 0
@@ -160,6 +170,7 @@ final class RunRecorder: NSObject {
     /// Stops the GPS and the step clock (and, in the simulator, the replay and its heart rate).
     private func stopLocation() {
         stepTicker?.cancel()
+        stopBatteryWatch()
         locationFeed.stop()
         #if targetEnvironment(simulator)
         replay.stop()
