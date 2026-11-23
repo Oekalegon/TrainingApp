@@ -33,8 +33,12 @@ private struct Dial: View {
         // doesn't re-lay itself at each zone boundary, with no zone bright and only the triangle moving.
         let topZone = target?.zone ?? 3
         let status = recorder.heartRate.flatMap { bpm in target?.status(forHeartRate: bpm) }
-        content(target: target, topZone: topZone, position: position, status: status)
-            .ignoresSafeArea(.container, edges: .top)
+        // The reader gives the content the whole page to fill (the room left over goes between the bar
+        // and the total time), and the content starts a fixed way down, whatever the safe area says.
+        GeometryReader { _ in
+            content(target: target, topZone: topZone, position: position, status: status)
+        }
+        .ignoresSafeArea(.container, edges: .top)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
         .accessibilityValue(spoken(target: target, position: position))
@@ -47,7 +51,7 @@ private struct Dial: View {
     /// screen's corners are rounded, so a bar right across the bottom would lose its ends.
     private static let batteryInset = 18.0
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
-    private static let pageIndicatorHeight = 38.0
+    private static let pageIndicatorHeight = 24.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
