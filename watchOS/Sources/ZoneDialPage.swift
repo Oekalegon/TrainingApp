@@ -11,10 +11,15 @@ struct ZoneDialPage: View {
     let zoneStore: WatchZoneStore
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            if let engine = recorder.stepEngine, let current = engine.current {
-                Dial(recorder: recorder, bands: zoneStore.bands, engine: engine, current: current, at: context.date)
+        // The clock at the top right belongs to the navigation bar, so the page sits in a
+        // navigation stack whose bar is hidden: a bare page has no bar to hide it with.
+        NavigationStack {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                if let engine = recorder.stepEngine, let current = engine.current {
+                    Dial(recorder: recorder, bands: zoneStore.bands, engine: engine, current: current, at: context.date)
+                }
             }
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 }
@@ -52,9 +57,7 @@ private struct Dial: View {
                 content(accent: accent, position: position, timerSize: min(40, proxy.size.width * 0.2))
             }
         }
-        // The watch's clock isn't needed in a run, and takes room at the top.
         .persistentSystemOverlays(.hidden)
-        .toolbar(.hidden, for: .navigationBar)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
         .accessibilityValue(spoken(target: target, position: position))
