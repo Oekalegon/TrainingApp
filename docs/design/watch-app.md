@@ -97,7 +97,7 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 Heart rate (`Settings.heartRate`):
 - Smoothed value: mean of the last 3 s. Hysteresis: a tenth of the target's width, at least 1 bpm (1.35 bpm on a 13.5 bpm zone); out of the zone at that margin beyond a bound, back in at the bound itself.
 - Out-of-zone alerts wait 2 s after a step starts, so the step's own alert is heard first. The step-start alert is the old step-change haptic (`.notification`); the workout's end keeps `.success`.
-- Slope rule: quiet while the heart rate moves toward the zone by at least 3 bpm per 10 s (a line over the last 10 s) and the gap is wider than the zone, or would be closed within 20 s at that speed. With too few readings to tell, a gap wider than the zone in the first 5 s of a step waits for them (it is usually the climb); any other alert goes ahead.
+- Slope rule: quiet while the heart rate moves toward the zone by at least 3 bpm per 10 s (a line over the last 10 s) and the gap is wider than the zone, or would be closed within 20 s at that speed. With too few readings to tell (under two, or less than 2 s apart), a gap wider than the zone waits for them, for 10 s at most after a step starts or a run resumes (it is usually the climb, and a watch may report only every few seconds); any other alert goes ahead.
 - Entering the zone from outside gives "back in zone" (a step that starts inside the zone gives none).
 - Repeats every 20 s while out, every 10 s after 60 s out; the far variant when three quarters of the zone's width (at least 5 bpm) beyond a bound, or out for 90 s. The time out of the zone keeps counting while the slope rule keeps quiet, so a long climb that stalls gets the far alert at once.
 

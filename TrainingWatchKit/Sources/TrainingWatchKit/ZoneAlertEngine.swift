@@ -34,7 +34,9 @@ public enum ZoneAlert: Sendable, Hashable {
 ///   outside it (not when a step starts inside it).
 /// - With a ``Settings/slopeThreshold`` (heart rate), when the gap to the target is more than its
 ///   width, or will be closed within the arrival horizon, it stays **quiet while the signal is
-///   moving fast enough** toward it, as at the start of a hard step after an easy one. Pace has no
+///   moving fast enough** toward it, as at the start of a hard step after an easy one. Until two
+///   readings show which way it is moving, a wide gap after a step starts or a resume waits (for a
+///   slope window at most). Pace has no
 ///   such rule: it can change at once, so being far off says nothing about where it is going.
 /// - While out of the target it **repeats**, more often the longer it lasts, and as the far
 ///   variant when well out or out for long.
@@ -60,8 +62,8 @@ public struct ZoneAlertEngine: Sendable {
         /// A gap that the signal, at its current speed toward the target, closes within this many
         /// seconds is treated like a wide one for the slope rule.
         public var arrivalHorizon: TimeInterval
-        /// How long after a step starts (and after a resume) that out-of-target alerts are held
-        /// back, so the step's own alert is heard first and the first readings settle, in seconds.
+        /// How long after a step starts that out-of-target alerts are held back, so the step's own
+        /// alert is heard first, in seconds. (After a pause the hold is one ``smoothingWindow``.)
         public var startGrace: TimeInterval
         /// How long the signal must have been out of the target before the first alert, in seconds.
         public var minimumOutside: TimeInterval
@@ -101,6 +103,8 @@ public struct ZoneAlertEngine: Sendable {
     private var lastAlert: TimeInterval?
     /// Set by ``pause()``: the first reading afterwards starts a new hold.
     private var holdPending = false
+    /// When the slope rule's wait for a first slope began: a step's start, or the first reading after a pause.
+    private var slopeWaitFrom: TimeInterval = 0
     private var holdUntil: TimeInterval = -.infinity
 
     public init(settings: Settings = .heartRate) {
@@ -116,6 +120,7 @@ public struct ZoneAlertEngine: Sendable {
     public mutating func beginStep(target: ClosedRange<Double>?, at time: TimeInterval) -> ZoneAlert {
         self.target = target
         stepStart = time
+        slopeWaitFrom = time
         status = .unknown
         outsideSince = nil
         lastAlert = nil
@@ -155,6 +160,7 @@ public struct ZoneAlertEngine: Sendable {
         if holdPending {
             holdPending = false
             holdUntil = time + settings.smoothingWindow
+            slopeWaitFrom = time
         }
         samples.append((time, value))
         let keep = max(settings.smoothingWindow, settings.slopeWindow)
@@ -195,9 +201,10 @@ public struct ZoneAlertEngine: Sendable {
         if let threshold = settings.slopeThreshold {
             if let speed = speedToward(below: below, at: time) {
                 if speed >= threshold, gap > width || gap / speed * 10 <= settings.arrivalHorizon { return nil }
-            } else if gap > width, time - stepStart < settings.slopeWindow / 2 {
+            } else if gap > width, time - slopeWaitFrom < settings.slopeWindow {
                 // Too few readings yet to tell whether it is on its way: a wide gap just after a step
-                // started is usually the climb, so wait for the slope rather than alert on it.
+                // started (or a resume) is usually the climb, so wait for the slope, for one slope
+                // window at most, rather than alert on it. A watch may report every few seconds.
                 return nil
             }
         }
@@ -226,7 +233,7 @@ public struct ZoneAlertEngine: Sendable {
     /// seconds, when the signal is not known to be moving and the alert goes ahead.
     private func speedToward(below: Bool, at time: TimeInterval) -> Double? {
         let recent = samples.filter { time - $0.time <= settings.slopeWindow }
-        guard recent.count >= 3, let first = recent.first, time - first.time >= settings.slopeWindow / 5 else { return nil }
+        guard recent.count >= 2, let first = recent.first, time - first.time >= settings.slopeWindow / 5 else { return nil }
         let n = Double(recent.count)
         let meanT = recent.reduce(0) { $0 + $1.time } / n
         let meanV = recent.reduce(0) { $0 + $1.value } / n

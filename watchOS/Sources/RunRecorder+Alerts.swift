@@ -29,6 +29,16 @@ extension RunRecorder {
         }
     }
 
+    #if targetEnvironment(simulator)
+    /// The last alerts as one line for the simulator's metrics page, newest first, as "1:12 tooLow".
+    var alertLogText: String {
+        alertLog.reversed().map { entry in
+            let seconds = Int(entry.time)
+            return "\(seconds / 60):\(String(format: "%02d", seconds % 60)) \(entry.alert)"
+        }.joined(separator: "  ")
+    }
+    #endif
+
     /// Keeps the last few alerts for the simulator's debug line.
     private func log(_ alert: ZoneAlert) {
         #if targetEnvironment(simulator)

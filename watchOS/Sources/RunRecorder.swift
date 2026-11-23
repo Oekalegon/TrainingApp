@@ -191,6 +191,9 @@ final class RunRecorder: NSObject {
         heartRate = nil
         distanceMeters = 0
         routePointCount = 0
+        #if targetEnvironment(simulator)
+        alertLog = []
+        #endif
         phase = .idle
     }
 

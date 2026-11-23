@@ -74,20 +74,19 @@ else:
     OUTPUT_NAME = "short-intervals.gpx"
     TRACK_NAME = "Short intervals (synthetic)"
     LEGS = STEPS
-STEPS = LEGS
 HR_TIME_CONSTANT = 6.0  # seconds a heart rate takes to move about two thirds of the way
 START_HR = 100.0
 CENTRE = (52.0, 5.0)  # an arbitrary spot on the map
 METRES_PER_DEGREE_LAT = 111_320.0
 
-total_distance = sum(seconds * speed for seconds, speed, _ in STEPS)
+total_distance = sum(seconds * speed for seconds, speed, _ in LEGS)
 radius = total_distance / (2 * math.pi)  # one lap of a circle for the whole workout
 
 start = datetime(2026, 1, 1, 8, 0, 0, tzinfo=timezone.utc)
 points = []
 distance, heart_rate, second = 0.0, START_HR, 0
 points.append((second, distance, heart_rate))
-for seconds, speed, target in STEPS:
+for seconds, speed, target in LEGS:
     for _ in range(seconds):
         second += 1
         distance += speed

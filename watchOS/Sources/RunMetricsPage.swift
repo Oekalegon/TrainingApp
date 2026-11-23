@@ -67,7 +67,7 @@ private struct StepMetrics: View {
             footer
             #if targetEnvironment(simulator)
             // The simulator plays no haptics: show what would have been played, newest first.
-            Text(recorder.alertLog.reversed().map { "\(Int($0.time) / 60):\(String(format: "%02d", Int($0.time) % 60)) \($0.alert)" }.joined(separator: "  "))
+            Text(recorder.alertLogText)
                 .font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.6).accessibilityHidden(true)
             #endif
         }
