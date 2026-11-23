@@ -50,6 +50,7 @@ private struct Dial: View {
         // Nothing on this page scrolls, so a turn of the Digital Crown has no view to go to; it is taken here,
         // so it does nothing, and the athlete who dismissed a warning with the crown and goes on turning
         // stays in the app. (A press of the crown always goes to the watch face: no app can stop that.)
+        // A placeholder: WATCH-109 turns the crown into the switch between data screens.
         .focusable()
         .focused($hasCrownFocus)
         .digitalCrownRotation(
