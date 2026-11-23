@@ -56,6 +56,7 @@ final class GPXReplay {
                 (try? String(contentsOfFile: (path as NSString).expandingTildeInPath, encoding: .utf8))
                     .map(GPXTrack.points(in:)) ?? []
             }.value
+            guard !Task.isCancelled else { return }
             guard let first = track.first else {
                 onLoaded(false)
                 onError("no GPX points at \(path)")

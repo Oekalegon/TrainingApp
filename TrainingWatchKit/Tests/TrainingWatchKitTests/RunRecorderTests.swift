@@ -483,6 +483,42 @@ struct RunRecorderStepTests {
         #expect(await alertsAfterReadings(pausing: true).isEmpty)
     }
 
+    @Test("a zone target is turned into bpm with the athlete's zones, also when they arrive mid-step")
+    func zoneTarget() async throws {
+        let zones = WatchZones(settings: .init(effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190))
+        let bands = try #require(ZoneBands(zones: zones))
+        let zone2 = try #require(bands.range(of: 2))
+        let step = WorkoutStep(kind: .work, goal: .time(600), target: .heartRateZone(2))
+        let (recorder, backend) = await running(plan: plan([step]))
+        let store = WatchZoneStore(cache: WatchZonesCache(defaults: UserDefaults(suiteName: UUID().uuidString)!))
+        recorder.zoneStore = store
+        // No zones yet: nothing to alert against.
+        for second in 0..<5 {
+            backend.builder.elapsed = 100 + Double(second)
+            recorder.heartRateArrived(zone2.upperBound + 15)
+        }
+        #expect(backend.cues == [.zoneAlert(.stepStarted)])
+        store.update(zones, persist: false)
+        for second in 5..<15 {
+            backend.builder.elapsed = 100 + Double(second)
+            recorder.heartRateArrived(zone2.upperBound + 15)
+        }
+        #expect(backend.cues.count > 1)
+    }
+
+    @Test("a second retry while one is saving does nothing")
+    func doubleRetry() async {
+        let (recorder, backend) = await running()
+        backend.builder.finishWorkoutFailures = 1
+        backend.session.onStateChange?(.ended)
+        await settle()
+        async let first: Void = recorder.retrySave()
+        async let second: Void = recorder.retrySave()
+        _ = await (first, second)
+        #expect(recorder.phase == .saved)
+        #expect(backend.builder.calls.filter { $0 == "finishWorkout" }.count == 2)
+    }
+
     @Test("heart rates only alert while running")
     func noAlertsWhilePaused() async {
         let (recorder, backend) = await running(plan: plan([time(600)]))

@@ -44,6 +44,9 @@ extension HealthKitRunSession: HKWorkoutSessionDelegate {
     }
 }
 
+/// Why a route couldn't be saved.
+private enum RouteError: Error { case noWorkout }
+
 /// An `HKLiveWorkoutBuilder` and an `HKWorkoutRouteBuilder` behind ``RunWorkoutBuilder``.
 @MainActor
 final class HealthKitRunBuilder: NSObject, RunWorkoutBuilder {
@@ -61,6 +64,7 @@ final class HealthKitRunBuilder: NSObject, RunWorkoutBuilder {
         builder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: configuration)
         routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: nil)
         self.reportsReadings = reportsReadings
+        // The delegate is set after `super.init()`, which `self` needs.
         super.init()
         builder.delegate = self
     }
@@ -95,7 +99,7 @@ final class HealthKitRunBuilder: NSObject, RunWorkoutBuilder {
     func insertRoute(_ locations: [CLLocation]) async throws { try await routeBuilder.insertRouteData(locations) }
 
     func finishRoute() async throws {
-        guard let workout else { return }
+        guard let workout else { throw RouteError.noWorkout }
         try await routeBuilder.finishRoute(with: workout, metadata: nil)
     }
 

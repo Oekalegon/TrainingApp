@@ -118,7 +118,10 @@ final class FakeBackend: RunBackend {
 }
 
 /// Lets the main actor run what the recorder started in a `Task` (the callbacks of a session).
+/// Yields generously and for a short real time, so a longer chain of awaits can't make a test
+/// depend on an exact count.
 @MainActor
 func settle() async {
-    for _ in 0..<20 { await Task.yield() }
+    for _ in 0..<200 { await Task.yield() }
+    try? await Task.sleep(for: .milliseconds(5))
 }

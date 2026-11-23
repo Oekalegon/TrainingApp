@@ -3,6 +3,9 @@ import Foundation
 
 /// A segment or lap marker written into the workout being recorded (WATCH-104). The watch app turns
 /// it into an `HKWorkoutEvent`.
+///
+/// It carries `[String: Any]` metadata, so it isn't `Sendable`: it only travels between the
+/// main-actor recorder and the main-actor backend.
 public struct RunEvent {
     public enum Kind: Sendable, Hashable {
         case segment

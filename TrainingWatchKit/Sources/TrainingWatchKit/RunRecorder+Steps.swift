@@ -2,7 +2,7 @@ import Foundation
 import TrainingCore
 
 /// Running a planned workout's steps (WATCH-104): the `WorkoutStepEngine` decides when a step ends,
-/// this writes what happened into the saved workout and taps the wrist.
+/// this writes what happened into the saved workout and has the backend tap the wrist.
 extension RunRecorder {
     /// Starts the steps of `plan`: tags the workout with the planned activity's ID, so TrainingApp
     /// can match the run to its plan exactly, and starts watching the clock and the distance.
