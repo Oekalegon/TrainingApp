@@ -143,6 +143,8 @@ struct ZoneDialTests {
         #expect(ZoneDialText.positionText(2.99) == "Z 2.9")
         #expect(ZoneDialText.positionText(0.4) == "Z <1")
         #expect(ZoneDialText.positionText(6) == "Z 5.9")
+        #expect(ZoneDialText.positionValue(2.3) == "2.3")
+        #expect(ZoneDialText.positionValue(0.4) == "<1")
     }
 
     @Test("the step lines read as VoiceOver should say them")

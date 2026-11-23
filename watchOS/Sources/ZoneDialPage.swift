@@ -82,16 +82,22 @@ private struct Dial: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(position.map(ZoneDialText.positionText) ?? "Z --")
-                    .font(.system(size: 32, weight: .semibold).monospacedDigit())
+            // The zone to the left, with its "Z" in the secondary colour and the value in the state's
+            // colour, and the heart rate to the right, its "BPM" in the secondary colour.
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("Z").foregroundStyle(.secondary)
+                    Text(position.map(ZoneDialText.positionValue) ?? "--").foregroundStyle(color)
+                }
+                .font(.system(size: 32, weight: .semibold).monospacedDigit())
+                Spacer(minLength: 8)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(recorder.heartRate.map { "\(Int($0.rounded()))" } ?? "--")
                         .font(.system(size: 32, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(color)
                     Text("BPM").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
-            .foregroundStyle(color)
             .animation(.easeInOut(duration: 0.4), value: status)
             .lineLimit(1).minimumScaleFactor(0.7)
             ZoneDialBar(

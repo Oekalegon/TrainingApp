@@ -9,8 +9,15 @@ public enum ZoneDialText {
     ///
     /// - Parameter position: ``ZoneBands/position(forHeartRate:)``.
     public static func positionText(_ position: Double) -> String {
-        guard position >= 1 else { return "Z <1" }
-        return String(format: "Z %.1f", min((position * 10).rounded(.down) / 10, 5.9))
+        "Z " + positionValue(position)
+    }
+
+    /// Just the value of ``positionText(_:)``, "2.3" or "<1", for a screen that sets the "Z" apart.
+    ///
+    /// - Parameter position: ``ZoneBands/position(forHeartRate:)``.
+    public static func positionValue(_ position: Double) -> String {
+        guard position >= 1 else { return "<1" }
+        return String(format: "%.1f", min((position * 10).rounded(.down) / 10, 5.9))
     }
 
     /// A step as one line for the card, such as "WORK 1:30 in Zone 2": the kind, the goal and the
