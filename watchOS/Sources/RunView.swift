@@ -56,23 +56,40 @@ struct RunView: View {
     }
 }
 
-/// The pages of a run in progress. Like the Workout app, the metrics page is the default and the
-/// controls (pause or resume, end, later next step) sit one swipe to the right.
+/// The pages of a run in progress. Like the Workout app, the controls (pause or resume, end, later
+/// next step) sit one swipe to the side of the main page: the zone dial in a planned workout (WATCH-118),
+/// otherwise the metrics.
 private struct RunPages: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
     @State private var page = Page.metrics
 
-    private enum Page { case controls, metrics }
+    private enum Page { case controls, zones, metrics }
+
+    /// Whether a planned workout still has steps to run: the zone dial is for those.
+    private var hasSteps: Bool { recorder.stepEngine.map { !$0.isFinished } ?? false }
 
     var body: some View {
         TabView(selection: $page) {
             RunControlsPage(recorder: recorder)
                 .tag(Page.controls)
+            // The target-zone dial is for a planned workout, and is the page it opens on (WATCH-118).
+            if hasSteps {
+                ZoneDialPage(recorder: recorder, zoneStore: zoneStore)
+                    .tag(Page.zones)
+            }
             RunMetricsPage(recorder: recorder, zoneStore: zoneStore)
                 .tag(Page.metrics)
         }
         .tabViewStyle(.page)
+        .onAppear { if hasSteps { page = .zones } }
+        .onChange(of: hasSteps) { _, hasSteps in
+            // The steps are set a moment after the run starts, and are used up when the last one ends.
+            // Only a page that is going away, or the default one, is moved off: someone on the
+            // controls page to pause or end the run stays there.
+            if hasSteps, page == .metrics { page = .zones }
+            if !hasSteps, page == .zones { page = .metrics }
+        }
     }
 }
 

@@ -95,6 +95,8 @@ schemes:
         "-fakePlan": false
         "-fakeShortPlan": false
         "-fakeAlertPlan": true
+        "-fakeBattery": true
+        "-batteryLevel 0.15": false
         "-autostartPlan": true
         "-gpxPath $(SRCROOT)/Tools/TestTracks/short-intervals.gpx": false
         "-gpxPath $(SRCROOT)/Tools/TestTracks/alert-test.gpx": true

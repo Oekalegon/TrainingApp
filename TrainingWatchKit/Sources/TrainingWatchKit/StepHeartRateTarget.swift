@@ -19,6 +19,9 @@ public struct StepHeartRateTarget: Sendable, Hashable {
     public let label: String
     /// The target's heart-rate range in bpm.
     public let bpm: ClosedRange<Double>
+    /// The zone (1 to 5) the target is in, for the zone dial: the zone itself, the zone a stretch
+    /// of zones starts in, or the zone of the middle of a bpm range.
+    public let zone: Int
 
     /// The heart-rate target of `step`, in bpm.
     ///
@@ -34,7 +37,7 @@ public struct StepHeartRateTarget: Sendable, Hashable {
         switch target {
         case .heartRateZone(let zone):
             guard let range = bands?.range(of: zone) else { return nil }
-            self.init(label: "Z\(zone)", bpm: range)
+            self.init(label: "Z\(zone)", bpm: range, zone: min(max(zone, 1), 5))
         case .heartRateZoneRange(let positions):
             guard let bands, let low = Self.bpm(atPosition: positions.lowerBound, in: bands),
                   let high = Self.bpm(atPosition: positions.upperBound, in: bands) else { return nil }
@@ -42,17 +45,22 @@ public struct StepHeartRateTarget: Sendable, Hashable {
             let whole = positions.lowerBound == zone && positions.upperBound == zone + 1
             self.init(
                 label: whole ? "Z\(Int(zone))" : String(format: "Z%.1f-%.1f", positions.lowerBound, positions.upperBound),
-                bpm: min(low, high)...max(low, high))
+                bpm: min(low, high)...max(low, high),
+                zone: min(max(Int(zone), 1), 5))
         case .heartRateRange(let low, let high):
-            self.init(label: "\(Int(low.rounded()))-\(Int(high.rounded())) bpm", bpm: min(low, high)...max(low, high))
+            let middle = (low + high) / 2
+            self.init(
+                label: "\(Int(low.rounded()))-\(Int(high.rounded())) bpm", bpm: min(low, high)...max(low, high),
+                zone: min(max(bands?.zone(forHeartRate: middle) ?? 1, 1), 5))
         case .phaseIntensity, .pace, .power, .rpe:
             return nil
         }
     }
 
-    private init(label: String, bpm: ClosedRange<Double>) {
+    private init(label: String, bpm: ClosedRange<Double>, zone: Int) {
         self.label = label
         self.bpm = bpm
+        self.zone = zone
     }
 
     /// A zone position (`n.0` the bottom of zone `n`, 6.0 the top of zone 5, as TrainingKit has them)
@@ -69,6 +77,28 @@ public struct StepHeartRateTarget: Sendable, Hashable {
         if heartRate < bpm.lowerBound { return .below(bpm.lowerBound - heartRate) }
         if heartRate > bpm.upperBound { return .above(heartRate - bpm.upperBound) }
         return .inside
+    }
+
+    /// Whether a heart rate is under, in or over the target, for the zone dial's background: out of the
+    /// target only when beyond a bound by a margin (a tenth of the target's width, at least 1 bpm,
+    /// as for the alerts), so a reading hovering on a bound doesn't make the screen flicker.
+    public enum Status: Sendable, Hashable { case below, inside, above }
+
+    /// - Parameter heartRate: The heart rate in bpm.
+    public func status(forHeartRate heartRate: Double) -> Status {
+        let margin = max((bpm.upperBound - bpm.lowerBound) * 0.1, 1)
+        if heartRate < bpm.lowerBound - margin { return .below }
+        if heartRate > bpm.upperBound + margin { return .above }
+        return .inside
+    }
+
+    /// The target as a stretch along the zones (``ZoneBands/position(forHeartRate:)``), for drawing
+    /// it on the zone dial's top bar: a whole zone is `n.0...n+1.0`, and a stretch such as Z4.0-4.5 or
+    /// 150-160 bpm only part of one.
+    ///
+    /// - Parameter bands: The athlete's zone bands.
+    public func positions(in bands: ZoneBands) -> ClosedRange<Double> {
+        bands.position(forHeartRate: bpm.lowerBound)...bands.position(forHeartRate: bpm.upperBound)
     }
 
     /// Where to draw `heartRate` on a gauge, 0 to 1: the target takes the middle half (0.25 to 0.75)
