@@ -4,8 +4,9 @@ import TrainingCore
 import TrainingWatchKit
 
 /// The target-zone screen of a planned workout (WATCH-118): the step's countdown with the interval
-/// number (5/12, in a repeat) to the right, the heart rate's place in the zones and in bpm, a bar with all the zones on one
-/// line, the target three times as wide as the others and bright, and a triangle where the heart rate is, and the total time.
+/// number (5/12, in a repeat) to the right, the heart rate in bpm and its place in the zones, a bar
+/// with all the zones on one line (the target three times as wide as the others and bright, and a
+/// triangle where the heart rate is), the total time, and the watch's battery at the bottom.
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
@@ -16,6 +17,8 @@ struct ZoneDialPage: View {
                 Dial(recorder: recorder, bands: zoneStore.bands, engine: engine, current: current, at: context.date)
             }
         }
+        // The battery level can only be read once monitoring is on; once is enough.
+        .onAppear { WKInterfaceDevice.current().isBatteryMonitoringEnabled = true }
     }
 }
 
@@ -71,7 +74,7 @@ private struct Dial: View {
     }
 
     private func content(
-        target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?,
+        target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
         let color = Self.color(for: status)
@@ -149,7 +152,7 @@ private struct Dial: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    /// Everything on the screen as one sentence, since the ring and the colours say nothing to VoiceOver.
+    /// Everything on the screen as one sentence, since the bar and the colours say nothing to VoiceOver.
     private func spoken(target: StepHeartRateTarget?, position: Double?) -> String {
         var parts: [String] = []
         if let bpm = recorder.heartRate {
@@ -171,6 +174,7 @@ private struct Dial: View {
         }
         parts.append(ZoneDialText.placeLine(current, of: engine.steps.count).lowercased())
         parts.append(ZoneDialText.stepLine(current.step).lowercased())
+        parts.append(Self.battery(elapsed: recorder.elapsed(at: at)).spokenText.lowercased())
         return parts.joined(separator: ", ")
     }
 }
@@ -190,8 +194,6 @@ extension Dial {
         }
         #endif
         let device = WKInterfaceDevice.current()
-        // Monitoring has to be on before the level can be read.
-        device.isBatteryMonitoringEnabled = true
         return BatteryDisplay(
             level: device.batteryLevel, isCharging: device.batteryState == .charging || device.batteryState == .full)
     }
