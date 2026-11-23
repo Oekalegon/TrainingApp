@@ -5,13 +5,10 @@ import SwiftUI
 /// opens this screen (``AthleteRoute/watchSettings``).
 struct WatchSynchronisationView: View {
     let sync: WatchScheduleSync
-    /// How the watch tells the athlete things (WATCH-107); `nil` hides the section.
-    let cues: WatchCueSync?
 
     var body: some View {
         List {
             WatchSchedulingSection(sync: sync)
-            if let cues { WatchCueSection(cues: cues) }
         }
         .navigationTitle(AthleteRoute.synchronisation.title)
         #if os(iOS)

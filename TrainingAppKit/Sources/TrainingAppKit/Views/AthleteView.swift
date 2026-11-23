@@ -164,10 +164,14 @@ struct AthleteView: View {
                 onImport: onImport, onConnect: onConnectHealth
             )
         case .appleWatch:
-            AppleWatchView()
+            AppleWatchView(showsAlerts: watchCues != nil)
         case .synchronisation:
             if let watchSync {
-                WatchSynchronisationView(sync: watchSync, cues: watchCues)
+                WatchSynchronisationView(sync: watchSync)
+            }
+        case .watchAlerts:
+            if let watchCues {
+                WatchAlertsView(cues: watchCues)
             }
         case .calendar:
             CalendarSettingsView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)

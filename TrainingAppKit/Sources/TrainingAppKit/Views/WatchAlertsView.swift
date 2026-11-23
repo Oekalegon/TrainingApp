@@ -1,12 +1,22 @@
 import SwiftUI
 import TrainingWatchKit
 
-/// The Apple Watch ▸ Synchronisation screen's section for how the watch tells the athlete things
-/// during a run (WATCH-107): sound, haptics, and speech or tones. Changes go to the watch at once.
-struct WatchCueSection: View {
+/// Apple Watch ▸ Alerts During a Run (WATCH-107): how the watch tells the athlete things during a
+/// run, with sound, haptics, and speech or tones. Changes go to the watch at once.
+struct WatchAlertsView: View {
     let cues: WatchCueSync
 
     var body: some View {
+        List {
+            alerts
+        }
+        .navigationTitle(AthleteRoute.watchAlerts.title)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+    }
+
+    private var alerts: some View {
         Section {
             Picker("Sound", selection: binding(\.sound)) {
                 Text("Earbuds Only").tag(CueSettings.Sound.automatic)
@@ -22,8 +32,6 @@ struct WatchCueSection: View {
                 Text("Speech").tag(AudioCueStyle.speech)
                 Text("Tones").tag(AudioCueStyle.tones)
             }
-        } header: {
-            Text("Alerts During a Run")
         } footer: {
             Text("""
                 With earbuds, zone alerts are sound only and automatic haptics are for step changes, \

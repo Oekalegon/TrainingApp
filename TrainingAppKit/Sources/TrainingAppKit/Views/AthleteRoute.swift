@@ -11,6 +11,7 @@ enum AthleteRoute: Hashable {
     case appleHealth
     case appleWatch
     case synchronisation
+    case watchAlerts
     case calendar
     case developer
 
@@ -28,6 +29,7 @@ enum AthleteRoute: Hashable {
         case .appleHealth: "Apple Health"
         case .appleWatch: "Apple Watch"
         case .synchronisation: "Synchronisation"
+        case .watchAlerts: "Alerts During a Run"
         case .calendar: "Calendar"
         case .developer: "Developer"
         }
@@ -43,6 +45,7 @@ enum AthleteRoute: Hashable {
         case .appleHealth: "heart.text.square"
         case .appleWatch: "applewatch"
         case .synchronisation: "arrow.triangle.2.circlepath"
+        case .watchAlerts: "speaker.wave.2"
         case .calendar: "calendar"
         case .developer: "wrench.and.screwdriver"
         }
