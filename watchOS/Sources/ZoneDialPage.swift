@@ -33,26 +33,21 @@ private struct Dial: View {
         // doesn't re-lay itself at each zone boundary, with no zone bright and only the triangle moving.
         let topZone = target?.zone ?? 3
         let status = recorder.heartRate.flatMap { bpm in target?.status(forHeartRate: bpm) }
-        // The reader keeps to the safe area, whose top inset is what the system keeps free for the
-        // clock; the content starts below the larger of that and the least room for the clock.
-        GeometryReader { proxy in
-            content(
-                target: target, topZone: topZone, position: position, status: status,
-                extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
-        }
+        content(target: target, topZone: topZone, position: position, status: status)
+            .ignoresSafeArea(.container, edges: .top)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
         .accessibilityValue(spoken(target: target, position: position))
     }
 
-    /// The least room kept free at the top for the watch's clock, which can't be hidden without private
-    /// API, when the safe area says less.
-    private static let minimumClockHeight = 30.0
+    /// How far down the content starts: the clock can't be hidden without private API and sits at the
+    /// top right, so the countdown starts level with its lower edge. A guess to check on a watch.
+    private static let contentTop = 34.0
     /// How far the battery bar is kept in from each side, on top of the content's own padding: the
     /// screen's corners are rounded, so a bar right across the bottom would lose its ends.
     private static let batteryInset = 18.0
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
-    private static let pageIndicatorHeight = 30.0
+    private static let pageIndicatorHeight = 38.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
@@ -71,7 +66,6 @@ private struct Dial: View {
 
     private func content(
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?,
-        extraTop: Double
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
         let color = Self.color(for: status)
@@ -81,14 +75,14 @@ private struct Dial: View {
         // Both timers have the same, large size.
         let timerSize = Self.timerSize
         // Values to the left, the interval to the right.
-        return VStack(alignment: .leading, spacing: 3) {
+        return VStack(alignment: .leading, spacing: 2) {
             // The time left in the step, with which interval it is (5/12) to the right of it.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(countdown)
                     .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
                     .foregroundStyle(.yellow)
                     .lineLimit(1).minimumScaleFactor(0.5)
-                    .frame(height: timerSize * 0.8)
+                    .padding(.vertical, -timerSize * 0.23)
                 Spacer(minLength: 8)
                 // Only in a repeat: a warm-up, a cool-down or a single run has no interval number.
                 if let interval {
@@ -128,12 +122,13 @@ private struct Dial: View {
             Text(total)
                 .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.5)
-                .frame(height: timerSize * 0.8)
+                .padding(.vertical, -timerSize * 0.23)
             // The battery at the very bottom, just under the total time: its charge in small type
             // and the bar, which is kept in from the sides where the screen's corners round off.
             let battery = Self.battery(at: at)
             Text("BATTERY \(battery.percentText)")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
+                .padding(.horizontal, Self.batteryInset)
                 .accessibilityHidden(true)
             BatteryBar(battery)
                 .padding(.horizontal, Self.batteryInset)
@@ -141,7 +136,7 @@ private struct Dial: View {
                 .padding(.bottom, Self.pageIndicatorHeight)
         }
         .padding(.horizontal, Self.sidePadding)
-        .padding(.top, extraTop)
+        .padding(.top, Self.contentTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
