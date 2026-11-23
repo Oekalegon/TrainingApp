@@ -147,6 +147,16 @@ struct ZoneDialTests {
         #expect(ZoneDialText.positionValue(0.4) == "<1")
     }
 
+    @Test("the total time is m:ss under an hour and h:mm:ss from an hour on")
+    func totalTime() {
+        #expect(ZoneDialText.totalTimeText(0) == "0:00")
+        #expect(ZoneDialText.totalTimeText(59.9) == "0:59")
+        #expect(ZoneDialText.totalTimeText(24 * 60 + 15) == "24:15")
+        #expect(ZoneDialText.totalTimeText(3599) == "59:59")
+        #expect(ZoneDialText.totalTimeText(3600 + 24 * 60 + 15) == "1:24:15")
+        #expect(ZoneDialText.totalTimeText(-3) == "0:00")
+    }
+
     @Test("the step lines read as VoiceOver should say them")
     func lines() {
         let work = WorkoutStep(kind: .work, goal: .time(90), target: .heartRateZone(2))

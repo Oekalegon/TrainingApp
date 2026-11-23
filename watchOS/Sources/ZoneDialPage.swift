@@ -37,7 +37,7 @@ private struct Dial: View {
         GeometryReader { proxy in
             content(
                 target: target, topZone: topZone, position: position, status: status,
-                timerSize: min(50, proxy.size.width * 0.25),
+                width: proxy.size.width,
                 extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
         }
         .accessibilityElement(children: .ignore)
@@ -48,6 +48,18 @@ private struct Dial: View {
     /// The least room kept free at the top for the watch's clock, which can't be hidden without private
     /// API, when the safe area says less.
     private static let minimumClockHeight = 30.0
+    /// The room on each side of the content.
+    private static let sidePadding = 12.0
+    /// The largest size of the two timers, in points.
+    private static let largestTimerSize = 64.0
+    /// The room the interval number takes in the countdown's row, with its gap.
+    private static let intervalWidth = 64.0
+
+    /// About how wide a text is, in multiples of its font size, for sizing the timers: a digit is
+    /// 0.62 of it, a colon or a point 0.3, anything else 0.6. A rough measure, used with room to spare.
+    private static func em(_ text: String) -> Double {
+        max(text.reduce(0) { $0 + ($1.isNumber ? 0.62 : ($1 == ":" || $1 == "." ? 0.3 : 0.6)) }, 1)
+    }
 
     /// The colour of the zone and the heart rate: blue under the target, red over it, white in it
     /// (and without a target), so a glance says whether to speed up or slow down.
@@ -61,42 +73,52 @@ private struct Dial: View {
 
     private func content(
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?,
-        timerSize: Double, extraTop: Double
+        width: Double, extraTop: Double
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
         let color = Self.color(for: status)
+        let countdown = progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open"
+        let total = ZoneDialText.totalTimeText(recorder.elapsed(at: at))
+        let interval = ZoneDialText.intervalFraction(current)
+        // Both timers have one size, the largest at which the longer of the two fits its row (the
+        // countdown's row also holds the interval): so they match, and neither is squeezed by the other.
+        let available = width - 2 * Self.sidePadding
+        let timerSize = min(
+            Self.largestTimerSize,
+            (available - (interval == nil ? 0 : Self.intervalWidth)) / Self.em(countdown),
+            available / Self.em(total))
         // Values to the left, the interval to the right.
         return VStack(alignment: .leading, spacing: 6) {
             // The time left in the step, with which interval it is (5/12) to the right of it.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open")
+                Text(countdown)
                     .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.yellow)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .lineLimit(1).minimumScaleFactor(0.5)
                 Spacer(minLength: 8)
                 // Only in a repeat: a warm-up, a cool-down or a single run has no interval number.
-                if let interval = ZoneDialText.intervalFraction(current) {
+                if let interval {
                     Text(interval)
                         .font(.system(size: 20, weight: .semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
-            // The zone to the left, with its "Zone" small and in the secondary colour and the value in the state's
-            // colour, and the heart rate to the right, its "BPM" in the secondary colour.
+            // The heart rate to the left, its "BPM" in the secondary colour, and the zone to the right,
+            // its "Zone" small and in the secondary colour and the value in the state's colour.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("Zone").font(.system(size: 14)).foregroundStyle(.secondary)
-                    Text(position.map(ZoneDialText.positionValue) ?? "--")
-                        .font(.system(size: 32, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(color)
-                }
-                Spacer(minLength: 8)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(recorder.heartRate.map { "\(Int($0.rounded()))" } ?? "--")
                         .font(.system(size: 32, weight: .semibold).monospacedDigit())
                         .foregroundStyle(color)
                     Text("BPM").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("Zone").font(.system(size: 14)).foregroundStyle(.secondary)
+                    Text(position.map(ZoneDialText.positionValue) ?? "--")
+                        .font(.system(size: 32, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(color)
                 }
             }
             .animation(.easeInOut(duration: 0.4), value: status)
@@ -107,11 +129,11 @@ private struct Dial: View {
                 targetRange: bands.flatMap { target?.positions(in: $0) })
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
-            Text(Duration.seconds(recorder.elapsed(at: at)), format: .time(pattern: .hourMinuteSecond))
+            Text(total)
                 .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .lineLimit(1).minimumScaleFactor(0.5)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, Self.sidePadding)
         .padding(.top, extraTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
