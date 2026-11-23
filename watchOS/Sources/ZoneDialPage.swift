@@ -35,20 +35,21 @@ private struct Dial: View {
         let status = recorder.heartRate.flatMap { bpm in target?.status(forHeartRate: bpm) }
         // The reader keeps to the safe area, whose top inset is what the system keeps free for the
         // clock; the content starts below the larger of that and the least room for the clock.
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: .top) {
             GeometryReader { proxy in
                 content(
                     target: target, topZone: topZone, position: position, status: status,
                     extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
-                    // The clock sits in the safe area's top inset: the battery goes into the lower
-                    // part of that same band, so the two are on one level.
-                    .overlay(alignment: .topLeading) {
-                        BatteryStatus(at: at)
-                            .padding(.leading, Self.sidePadding + 2)
-                            .offset(y: max(proxy.safeAreaInsets.top, Self.minimumClockHeight) - Self.batteryHeight
-                                - proxy.safeAreaInsets.top - Self.clockTextInset)
-                    }
             }
+            // The battery, as a bar along the very top. watchOS has no battery indicator of its own
+            // in an app, as it has the clock. Its own reader ignores the safe area, so the bar can
+            // be at the top edge; it is kept in from the sides, where the screen's corners round off.
+            GeometryReader { _ in
+                BatteryBar(Self.battery(at: at))
+                    .padding(.horizontal, Self.batteryInset)
+                    .padding(.top, 3)
+            }
+            .ignoresSafeArea()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
@@ -58,10 +59,9 @@ private struct Dial: View {
     /// The least room kept free at the top for the watch's clock, which can't be hidden without private
     /// API, when the safe area says less.
     private static let minimumClockHeight = 30.0
-    /// The height of the battery's line, and how far the clock's text sits above the bottom of the band the
-    /// system keeps free for it: guesses to check on a watch, which decide where the battery sits.
-    private static let batteryHeight = 18.0
-    private static let clockTextInset = 8.0
+    /// How far the battery bar is kept in from each side: the screen's corners are rounded, so
+    /// a bar right across the top would lose its ends.
+    private static let batteryInset = 30.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
@@ -168,27 +168,15 @@ private struct Dial: View {
     }
 }
 
-/// The watch's battery: a symbol and the percentage, at the top of the dial on the clock's level
-/// (WATCH-118). Red at 20% or less, green while charging. Read once a second with the dial's timeline,
-/// since watchOS has no notification for it. The simulator reports no level and shows "--%".
-private struct BatteryStatus: View {
-    let at: Date
-
-    var body: some View {
-        // `at` is only here to re-read the battery on every tick of the dial's timeline.
-        let _ = at
+extension Dial {
+    /// The watch's battery now. Read once a second with the dial's timeline, since watchOS has no
+    /// notification for it. The simulator reports no level, which shows as an empty grey bar.
+    fileprivate static func battery(at date: Date) -> BatteryDisplay {
         let device = WKInterfaceDevice.current()
-        let battery = BatteryDisplay(
+        // Monitoring has to be on before the level can be read.
+        device.isBatteryMonitoringEnabled = true
+        _ = date
+        return BatteryDisplay(
             level: device.batteryLevel, isCharging: device.batteryState == .charging || device.batteryState == .full)
-        let color: Color = battery.isLow ? .red : (battery.isCharging ? .green : .secondary)
-        HStack(spacing: 3) {
-            Image(systemName: battery.symbolName)
-                .font(.system(size: 14))
-            Text(battery.percentText)
-                .font(.system(size: 15, weight: .semibold).monospacedDigit())
-        }
-        .foregroundStyle(color)
-        .onAppear { device.isBatteryMonitoringEnabled = true }
-        .accessibilityLabel(battery.spokenText)
     }
 }

@@ -11,30 +11,38 @@ struct BatteryDisplayTests {
         #expect(BatteryDisplay(level: 1.4, isCharging: false).percentText == "100%")
     }
 
-    @Test("an unknown level (the simulator's -1) shows as dashes, neutral and not low")
+    @Test("green above 20%, yellow above 10%, orange from 5%, red under 5%")
+    func bands() {
+        func band(_ level: Float) -> BatteryDisplay.Band { BatteryDisplay(level: level, isCharging: false).band }
+        #expect(band(1) == .good)
+        #expect(band(0.21) == .good)
+        #expect(band(0.2) == .low)
+        #expect(band(0.11) == .low)
+        #expect(band(0.1) == .veryLow)
+        #expect(band(0.05) == .veryLow)
+        #expect(band(0.044) == .critical)
+        #expect(band(0) == .critical)
+    }
+
+    @Test("an unknown level (the simulator's -1) is neutral, with an empty bar")
     func unknown() {
         let battery = BatteryDisplay(level: -1, isCharging: false)
         #expect(battery.percentText == "--%")
-        #expect(battery.isLow == false)
-        #expect(battery.symbolName == "battery.0percent")
+        #expect(battery.band == .unknown)
         #expect(battery.spokenText == "Battery level unknown")
+        for index in 0..<BatteryDisplay.segmentCount { #expect(battery.fill(ofSegment: index) == 0) }
     }
 
-    @Test("20% or less is low, unless the watch is charging")
-    func low() {
-        #expect(BatteryDisplay(level: 0.2, isCharging: false).isLow)
-        #expect(!BatteryDisplay(level: 0.21, isCharging: false).isLow)
-        #expect(!BatteryDisplay(level: 0.1, isCharging: true).isLow)
-    }
-
-    @Test("the symbol follows the charge in quarters, and a charging battery has the bolt")
-    func symbols() {
-        #expect(BatteryDisplay(level: 0.05, isCharging: false).symbolName == "battery.0percent")
-        #expect(BatteryDisplay(level: 0.25, isCharging: false).symbolName == "battery.25percent")
-        #expect(BatteryDisplay(level: 0.5, isCharging: false).symbolName == "battery.50percent")
-        #expect(BatteryDisplay(level: 0.75, isCharging: false).symbolName == "battery.75percent")
-        #expect(BatteryDisplay(level: 0.95, isCharging: false).symbolName == "battery.100percent")
-        #expect(BatteryDisplay(level: 0.5, isCharging: true).symbolName == "battery.100percent.bolt")
+    @Test("the bar is ten parts, whole ones up to the charge and a part of the one it falls in")
+    func segments() {
+        let battery = BatteryDisplay(level: 0.35, isCharging: false)
+        #expect(battery.fill(ofSegment: 0) == 1 && battery.fill(ofSegment: 2) == 1)
+        #expect(abs(battery.fill(ofSegment: 3) - 0.5) < 0.001)
+        #expect(battery.fill(ofSegment: 4) == 0 && battery.fill(ofSegment: 9) == 0)
+        let full = BatteryDisplay(level: 1, isCharging: true)
+        for index in 0..<BatteryDisplay.segmentCount { #expect(full.fill(ofSegment: index) == 1) }
+        let empty = BatteryDisplay(level: 0, isCharging: false)
+        for index in 0..<BatteryDisplay.segmentCount { #expect(empty.fill(ofSegment: index) == 0) }
     }
 
     @Test("VoiceOver hears the charge, and that it is charging")
