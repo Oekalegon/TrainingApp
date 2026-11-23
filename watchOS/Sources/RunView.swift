@@ -32,6 +32,16 @@ struct RunView: View {
             ProgressView()
         case .running, .paused:
             RunPages(recorder: recorder, zoneStore: zoneStore)
+                // The temporary battery warning, over everything, in the battery's colour (WATCH-110).
+                .overlay {
+                    if let warning = recorder.batteryWarning {
+                        BatteryWarningScreen(warning: warning) { recorder.dismissBatteryWarning() }
+                            // A new, worse warning is a new screen, with its own first moment.
+                            .id(warning)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.3), value: recorder.batteryWarning)
         case .saved:
             VStack {
                 Text("Saved to Health")

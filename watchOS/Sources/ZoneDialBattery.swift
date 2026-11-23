@@ -16,15 +16,16 @@ struct ZoneDialBattery: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 0) {
+            // The charge at the left and, in a planned workout, the forecast at the right, in the forecast's colour.
+            HStack(spacing: 6) {
                 Text("BATTERY \(battery.percentText)").foregroundStyle(.secondary)
+                Spacer(minLength: 4)
                 if let projection {
-                    Text("  ·  ").foregroundStyle(.secondary)
                     Text(projection.text).foregroundStyle(projection.verdict.color)
                 }
             }
-            .font(.system(size: 10))
-            .lineLimit(1).minimumScaleFactor(0.7)
+            .font(.system(size: 12, weight: .medium).monospacedDigit())
+            .lineLimit(1).minimumScaleFactor(0.85)
             .accessibilityHidden(true)
             BatteryBar(battery, tint: projection?.verdict.color)
         }

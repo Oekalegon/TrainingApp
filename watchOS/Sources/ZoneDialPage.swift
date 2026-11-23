@@ -54,7 +54,7 @@ private struct Dial: View {
     private static let contentTop = 34.0
     /// How far the battery bar is kept in from each side, on top of the content's own padding: the
     /// screen's corners are rounded, so a bar right across the bottom would lose its ends.
-    private static let batteryInset = 18.0
+    private static let batteryInset = 10.0
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
     private static let pageIndicatorHeight = 22.0
     /// The room on each side of the content.
