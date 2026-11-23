@@ -2,9 +2,9 @@ import SwiftUI
 import TrainingCore
 import TrainingWatchKit
 
-/// The target-zone screen of a planned workout (WATCH-118): a ring round the screen's edge with the
-/// target zone bright on top and a triangle where the heart rate is, the heart rate's place in the
-/// zones and in bpm, the step's countdown and the total time. When the target zone changes, the ring turns.
+/// The target-zone screen of a planned workout (WATCH-118): the heart rate's place in the zones and in
+/// bpm, a bar with all the zones on one line, the target bright in the middle and a triangle where
+/// the heart rate is, the step's countdown and the total time.
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
@@ -28,36 +28,17 @@ private struct Dial: View {
     var body: some View {
         let target = StepHeartRateTarget(step: current.step, bands: bands)
         let position = recorder.heartRate.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
-        // A step with no heart-rate target has no zone for the top: the ring keeps zone 3 there, so it
-        // doesn't re-lay itself at each zone boundary, with no sector bright and only the triangle moving.
+        // A step with no heart-rate target has no zone for the middle: the bar keeps zone 3 there, so it
+        // doesn't re-lay itself at each zone boundary, with no zone bright and only the triangle moving.
         let topZone = target?.zone ?? 3
         let status = recorder.heartRate.flatMap { bpm in target?.status(forHeartRate: bpm) }
         // The reader keeps to the safe area, whose top inset is what the system keeps free for the
-        // clock; the ring and the background then reach past it and the ring starts below it.
-        GeometryReader { outer in
-        let clock = max(outer.safeAreaInsets.top, Self.minimumClockHeight)
-        ZStack {
-            // Dark blue below the target and dark red above it, black in it, so a glance says
-            // whether to speed up or slow down.
-            Self.background(for: status)
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.5), value: status)
-            GeometryReader { _ in
-                ZoneDialRing(
-                    target: Double(topZone), position: position ?? Double(topZone) + 0.5,
-                    showsMarker: position != nil, highlightsTarget: target != nil,
-                    targetRange: bands.flatMap { target?.positions(in: $0) },
-                    lineWidth: 10, gapAngle: Self.gapAngle, topInset: clock)
-                    .animation(.easeInOut(duration: 0.6), value: topZone)
-                    .animation(.easeOut(duration: 0.8), value: position)
-            }
-            .ignoresSafeArea()
-            GeometryReader { proxy in
-                content(
-                    position: position, timerSize: min(40, proxy.size.width * 0.2),
-                    extraTop: max(clock - outer.safeAreaInsets.top, 0))
-            }
-        }
+        // clock; the content starts below the larger of that and the least room for the clock.
+        GeometryReader { proxy in
+            content(
+                target: target, topZone: topZone, position: position, status: status,
+                timerSize: min(40, proxy.size.width * 0.2),
+                extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
@@ -65,49 +46,54 @@ private struct Dial: View {
     }
 
     /// The least room kept free at the top for the watch's clock, which can't be hidden without private
-    /// API, when the safe area says less. The circle starts below the larger of the two, so the clock
-    /// in the upper right corner doesn't reach into it.
+    /// API, when the safe area says less.
     private static let minimumClockHeight = 30.0
-    /// The angle the ring is open at the bottom, where the total time sits, in degrees.
-    private static let gapAngle = 76.0
 
-    /// Black in the target, dark blue under it and dark red over it.
-    private static func background(for status: StepHeartRateTarget.Status?) -> Color {
+    /// The colour of the zone and the heart rate: blue under the target, red over it, white in it
+    /// (and without a target), so a glance says whether to speed up or slow down.
+    private static func color(for status: StepHeartRateTarget.Status?) -> Color {
         switch status {
-        case .below: Color(red: 0.0, green: 0.04, blue: 0.18)
-        case .above: Color(red: 0.14, green: 0.01, blue: 0.01)
-        case .inside, nil: .black
+        case .below: Color(red: 0.35, green: 0.65, blue: 1.0)
+        case .above: Color(red: 1.0, green: 0.4, blue: 0.4)
+        case .inside, nil: .white
         }
     }
 
-    private func content(position: Double?, timerSize: Double, extraTop: Double) -> some View {
+    private func content(
+        target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?,
+        timerSize: Double, extraTop: Double
+    ) -> some View {
         let progress = recorder.stepProgress(at: at)
-        return VStack(spacing: 8) {
+        let color = Self.color(for: status)
+        return VStack(spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(position.map(ZoneDialText.positionText) ?? "Z --")
                     .font(.system(size: 32, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.white)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(recorder.heartRate.map { "\(Int($0.rounded()))" } ?? "--")
                         .font(.system(size: 32, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(.white)
                     Text("BPM").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
+            .foregroundStyle(color)
+            .animation(.easeInOut(duration: 0.4), value: status)
             .lineLimit(1).minimumScaleFactor(0.7)
+            ZoneDialBar(
+                target: Double(topZone), position: position ?? Double(topZone) + 0.5,
+                showsMarker: position != nil, highlightsTarget: target != nil,
+                targetRange: bands.flatMap { target?.positions(in: $0) })
+                .animation(.easeInOut(duration: 0.6), value: topZone)
+                .animation(.easeOut(duration: 0.8), value: position)
             Text(progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open")
                 .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.yellow)
                 .lineLimit(1).minimumScaleFactor(0.8)
-            // The total time sits in the gap at the bottom of the circle.
-            Spacer(minLength: 0)
             Text(Duration.seconds(recorder.elapsed(at: at)), format: .time(pattern: .hourMinuteSecond))
                 .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, extraTop + 22)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 12)
+        .padding(.top, extraTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

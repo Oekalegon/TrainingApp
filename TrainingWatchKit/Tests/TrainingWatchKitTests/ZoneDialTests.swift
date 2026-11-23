@@ -30,62 +30,13 @@ struct ZoneDialTests {
         }
     }
 
-    // A circle of radius 100 round (100, 120), open for 80 degrees at the bottom.
-    private let outline = ZoneDial.Outline(center: CGPoint(x: 100, y: 120), radius: 100, gapAngle: 80)
+    /// A line 200 long.
+    private let length = 200.0
 
-    @Test("the outline's length is the circle's arc without the gap")
-    func outlineLength() {
-        #expect(abs(outline.totalLength - 100 * 280 * Double.pi / 180) < 0.001)
-        // No gap: the whole circle.
-        let closed = ZoneDial.Outline(center: .zero, radius: 10, gapAngle: 0)
-        #expect(abs(closed.totalLength - 2 * Double.pi * 10) < 0.001)
-    }
-
-    @Test("the outline starts at the lower left and runs clockwise over the top to the lower right")
-    func outlinePoints() {
-        let start = outline.point(at: 0)
-        // 40 degrees either side of the bottom: left of the middle and below it.
-        #expect(abs(start.point.x - (100 - 100 * sin(40 * .pi / 180))) < 0.001)
-        #expect(abs(start.point.y - (120 + 100 * cos(40 * .pi / 180))) < 0.001)
-        #expect(abs(start.outward - 220) < 0.001)
-        // A quarter of the way along it is on the left, facing left.
-        let left = outline.point(at: 100 * 50 * Double.pi / 180)
-        #expect(abs(left.point.x) < 0.001 && abs(left.point.y - 120) < 0.001 && abs(left.outward - 270) < 0.001)
-        // Half way is the top, facing up.
-        let top = outline.point(at: outline.totalLength / 2)
-        #expect(abs(top.point.x - 100) < 0.001 && abs(top.point.y - 20) < 0.001)
-        #expect(min(top.outward, 360 - top.outward) < 0.001)
-        // The end is at the lower right, mirroring the start.
-        let end = outline.point(at: outline.totalLength)
-        #expect(abs(end.point.x - (100 + 100 * sin(40 * .pi / 180))) < 0.001)
-        #expect(abs(end.point.y - start.point.y) < 0.001)
-        #expect(abs(end.outward - 140) < 0.001)
-        // Past the ends it stays at the ends.
-        #expect(outline.point(at: -10).point == start.point)
-        #expect(outline.point(at: outline.totalLength + 10).point == end.point)
-    }
-
-    @Test("every point of the outline is on the circle, and none is in the gap at the bottom")
-    func outlineShape() {
-        for index in 0...300 {
-            let edge = outline.point(at: outline.totalLength * Double(index) / 300)
-            #expect(abs(hypot(Double(edge.point.x) - 100, Double(edge.point.y) - 120) - 100) < 0.001)
-            // The gap is 140 to 220 degrees: nothing between them.
-            #expect(!(edge.outward > 140.01 && edge.outward < 219.99), "\(index): \(edge.outward)")
-        }
-    }
-
-    @Test("the gap is held between nothing and almost the whole circle")
-    func gapLimits() {
-        #expect(ZoneDial.Outline(center: .zero, radius: 10, gapAngle: -5).gapAngle == 0)
-        #expect(ZoneDial.Outline(center: .zero, radius: 10, gapAngle: 900).gapAngle == 340)
-        #expect(ZoneDial.Outline(center: .zero, radius: -3, gapAngle: 80).totalLength == 0)
-    }
-
-    @Test("the target has its own stretch, the lower zones come before it and the higher ones after")
+    @Test("the target has its own stretch in the middle, the lower zones come before it and the higher ones after")
     func layout() {
-        let total = outline.totalLength
-        let spans = ZoneDial.spans(target: 3, outline: outline)
+        let total = length
+        let spans = ZoneDial.spans(target: 3, length: length)
         #expect(abs(spans[3].start - total * 0.35) < 0.001 && abs(spans[3].end - total * 0.65) < 0.001)
         // Below: zones 0, 1 and 2 in order from the start, zone 0 half the size of the others.
         #expect(spans[0].start == 0 && abs(spans[2].end - total * 0.35) < 0.001)
@@ -100,11 +51,11 @@ struct ZoneDialTests {
 
     @Test("with zone 1 as the target, zone 0 has the whole lower stretch at full size; with zone 5, nothing is above")
     func edgeTargets() {
-        let total = outline.totalLength
-        let low = ZoneDial.spans(target: 1, outline: outline)
+        let total = length
+        let low = ZoneDial.spans(target: 1, length: length)
         #expect(low[0] == ZoneDial.Span(start: 0, end: total * 0.35))
         #expect(abs(low[2].length - total * 0.35 / 4) < 0.001)
-        let high = ZoneDial.spans(target: 5, outline: outline)
+        let high = ZoneDial.spans(target: 5, length: length)
         #expect(abs(high[0].length * 2 - high[1].length) < 0.001)
         #expect(abs(high[4].end - total * 0.35) < 0.001)
         #expect(abs(high[5].length - total * 0.30) < 0.001)
@@ -113,20 +64,20 @@ struct ZoneDialTests {
     @Test("the zones tile the ring without gaps or overlap, for every target")
     func tiling() {
         for target in 1...5 {
-            let spans = ZoneDial.spans(target: target, outline: outline)
+            let spans = ZoneDial.spans(target: target, length: length)
             let covered = spans.reduce(0) { $0 + $1.length }
             // Everything is covered except the stretch for the zones above a zone 5 target.
-            let expected = target == 5 ? outline.totalLength * 0.65 : outline.totalLength
+            let expected = target == 5 ? length * 0.65 : length
             #expect(abs(covered - expected) < 0.001, "target \(target)")
         }
     }
 
     @Test("between two targets the layouts are blended, and a whole number gives its own")
     func blending() {
-        let two = ZoneDial.spans(target: 2, outline: outline)
-        let three = ZoneDial.spans(target: 3, outline: outline)
-        #expect(ZoneDial.spans(target: 2.0, outline: outline) == two)
-        let half = ZoneDial.spans(target: 2.5, outline: outline)
+        let two = ZoneDial.spans(target: 2, length: length)
+        let three = ZoneDial.spans(target: 3, length: length)
+        #expect(ZoneDial.spans(target: 2.0, length: length) == two)
+        let half = ZoneDial.spans(target: 2.5, length: length)
         for zone in 0...5 {
             #expect(abs(half[zone].start - (two[zone].start + three[zone].start) / 2) < 0.001)
             #expect(abs(half[zone].end - (two[zone].end + three[zone].end) / 2) < 0.001)
@@ -135,8 +86,8 @@ struct ZoneDialTests {
 
     @Test("a position along the zones is a distance inside its zone's span")
     func distances() {
-        let total = outline.totalLength
-        let spans = ZoneDial.spans(target: 2, outline: outline)
+        let total = length
+        let spans = ZoneDial.spans(target: 2, length: length)
         // 2.5: the middle of the target's stretch.
         #expect(abs(ZoneDial.distance(forPosition: 2.5, in: spans) - total * 0.5) < 0.001)
         #expect(abs(ZoneDial.distance(forPosition: 2.0, in: spans) - total * 0.35) < 0.001)
