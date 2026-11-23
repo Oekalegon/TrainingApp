@@ -48,7 +48,7 @@ private struct Dial: View {
                     showsMarker: position != nil, highlightsTarget: target != nil,
                     targetRange: bands.flatMap { target?.positions(in: $0) },
                     lineWidth: 9, cornerRadius: min(proxy.size.width, proxy.size.height) * 0.26,
-                    topInset: clock)
+                    clockSize: CGSize(width: Self.clockWidth, height: clock))
                     .animation(.easeInOut(duration: 0.6), value: topZone)
                     .animation(.easeOut(duration: 0.8), value: position)
             }
@@ -68,6 +68,8 @@ private struct Dial: View {
     /// The least room kept free at the top for the watch's clock, which can't be hidden without private
     /// API, when the safe area says less. The ring and the text stay below the larger of the two.
     private static let minimumClockHeight = 30.0
+    /// The width of the gap the ring leaves for the clock in the upper right corner (a guess).
+    private static let clockWidth = 76.0
 
     /// Black in the target, dark blue under it and dark red over it.
     private static func background(for status: StepHeartRateTarget.Status?) -> Color {
