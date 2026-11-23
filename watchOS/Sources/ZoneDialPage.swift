@@ -44,8 +44,6 @@ private struct Dial: View {
             content(target: target, topZone: topZone, position: position, status: status)
         }
         .ignoresSafeArea(.container, edges: [.top, .bottom])
-        // Nothing on this page scrolls: a turn of the Digital Crown would leave the app (`CrownAbsorber`).
-        .takesCrownTurns()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
         .accessibilityValue(spoken(target: target, position: position))

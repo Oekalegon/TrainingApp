@@ -76,7 +76,7 @@ extension RunRecorder {
         }
     }
 
-    /// Takes the warning screen away: the athlete tapped it or turned the crown.
+    /// Takes the warning screen away: the athlete tapped it.
     func dismissBatteryWarning() {
         warningNudge?.cancel()
         batteryWarning = nil
