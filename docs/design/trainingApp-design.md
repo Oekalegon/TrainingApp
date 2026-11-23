@@ -14,7 +14,7 @@ Scope of MVP 1:
 
 Explicitly **not** MVP 1: manual activity entry (still open, MVP 4), planning workouts by hand (shipped
 in MVP 2) and plan generation (MVP 5), a dedicated onboarding flow (shipped in MVP 2), multi-athlete switching UI (the data layer supports it per
-`AthleteProfile`, but nothing in this app builds a roster), iPad/watchOS layouts.
+`AthleteProfile`, but nothing in this app builds a roster), iPad layouts and a watch UI inside this app (the Apple Watch recording app is its own target, `TrainingWatch`: `docs/design/watch-app.md`).
 
 ---
 
@@ -1211,6 +1211,23 @@ Not done yet: linking an imported workout to its plan by the plan id it was star
 imported and linked without a pull-to-refresh (MVP2-121).
 
 ---
+
+**Heart-rate zones on the Watch app** (WATCH-102). The Apple Watch recording app (`docs/design/watch-app.md`) uses
+the athlete's own zones. `WatchZoneSync` sends the athlete's current `HeartRateZoneSettings` to it with
+WatchConnectivity (`TrainingWatchKit`'s `WatchSyncChannel`): when `AppTabView` sees `scenePhase == .active`, and whenever
+`MicroCycleViewModel.currentHeartRateZoneSettings` changes, but only when they differ from what was last sent in this run
+of the app. The settings are sent as they are, not as bpm ranges, so the Watch works out zones with the same
+`HeartRateZoneModel` as the phone. The channel holds them until a Watch with the app installed is paired and sends them
+again when one is added later. Nothing is shown on the phone yet: `WatchZoneSync.lastError` is there for a Watch screen
+on the Athlete tab.
+
+**Planned runs on the Watch app** (WATCH-103). `WatchPlanSync` sends the active plan's planned runs of the next 7 days that
+aren't completed, with their workouts, in the same WatchConnectivity context as the zones. `WatchScheduleSync` runs it at the
+start of every sync, so it follows the same moments (the app becoming active, a plan saved, deleted or imported, a link or
+unlink), and it doesn't follow the Athlete tab's "Send Planned Workouts to Apple Watch" switch or need WorkoutKit permission.
+A plan is sent when it differs from the last one sent in this run of the app, and again after 6 hours if it doesn't, because each
+plan carries when it was sent and the Watch says so when its plan is more than a day old; an empty plan is sent too, so the Watch
+clears what it had. Only the next 7 days' plans and the workouts they use are read, not the whole plan and library.
 
 ## 4. Testing & previews
 

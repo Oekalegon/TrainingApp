@@ -28,3 +28,6 @@ build/
 # Claude Code
 .claude/settings.local.json
 *~
+
+# Local packages resolve with the workspace; their own pins would drift from the app's.
+TrainingWatchKit/Package.resolved
