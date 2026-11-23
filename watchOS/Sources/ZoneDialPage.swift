@@ -34,6 +34,11 @@ private struct Dial: View {
         let topZone = target?.zone ?? position.map { min(max(Int($0), 1), 5) } ?? 2
         let accent = Color.zone(topZone)
         ZStack {
+            // Dark blue below the target and dark red above it, black in it, so a glance says
+            // whether to speed up or slow down.
+            Self.background(for: target, heartRate: recorder.heartRate)
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.5), value: target.flatMap { t in recorder.heartRate.map { t.position(forHeartRate: $0) } })
             GeometryReader { proxy in
                 ZoneDialRing(
                     target: Double(topZone), position: position ?? Double(topZone) + 0.5,
@@ -43,39 +48,54 @@ private struct Dial: View {
                     .animation(.easeOut(duration: 0.8), value: position)
             }
             .ignoresSafeArea()
-            content(accent: accent, position: position)
+            GeometryReader { proxy in
+                content(accent: accent, position: position, timerSize: min(40, proxy.size.width * 0.2))
+            }
         }
+        // The watch's clock isn't needed in a run, and takes room at the top.
+        .persistentSystemOverlays(.hidden)
+        .toolbar(.hidden, for: .navigationBar)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
         .accessibilityValue(spoken(target: target, position: position))
     }
 
-    private func content(accent: Color, position: Double?) -> some View {
+    /// Black in the target, dark blue under it and dark red over it.
+    private static func background(for target: StepHeartRateTarget?, heartRate: Double?) -> Color {
+        guard let target, let heartRate else { return .black }
+        switch target.position(forHeartRate: heartRate) {
+        case .inside: return .black
+        case .below: return Color(red: 0.0, green: 0.10, blue: 0.38)
+        case .above: return Color(red: 0.40, green: 0.04, blue: 0.04)
+        }
+    }
+
+    private func content(accent: Color, position: Double?, timerSize: Double) -> some View {
         let progress = recorder.stepProgress(at: at)
-        let hrColor = position.map { Color.zone(Int($0)) } ?? .secondary
         return VStack(spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(position.map(ZoneDialText.positionText) ?? "Z --")
                     .font(.system(size: 20, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(hrColor)
+                    .foregroundStyle(.white)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(recorder.heartRate.map { "\(Int($0.rounded()))" } ?? "--")
                         .font(.system(size: 20, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(hrColor)
+                        .foregroundStyle(.white)
                     Text("BPM").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
             Text(progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open")
-                .font(.system(size: 36, weight: .semibold).monospacedDigit())
+                .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.yellow)
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .lineLimit(1).minimumScaleFactor(0.8)
             card(accent: accent)
             Text(Duration.seconds(recorder.elapsed(at: at)), format: .time(pattern: .hourMinuteSecond))
-                .font(.system(size: 28, weight: .semibold).monospacedDigit())
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
+                .lineLimit(1).minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// The step's place, the step and the next one, on a tint of the target zone's colour.

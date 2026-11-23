@@ -30,75 +30,115 @@ struct ZoneDialTests {
         }
     }
 
-    @Test("a sector is centred on the top for the target, and the others follow clockwise")
-    func sectors() {
-        #expect(ZoneDial.sectorCenter(zone: 2, target: 2) == 0)
-        #expect(ZoneDial.sectorCenter(zone: 3, target: 2) == 60)
-        #expect(ZoneDial.sectorCenter(zone: 1, target: 2) == -60)
-        // Zone 0 is two sectors to the left of zone 2, the drawing's lower left.
-        #expect(ZoneDial.sectorCenter(zone: 0, target: 2) == -120)
-        #expect(ZoneDial.sectorCenter(zone: 5, target: 2) == 180)
+    private let outline = ZoneDial.Outline(size: CGSize(width: 200, height: 250), cornerRadius: 50)
+
+    @Test("the outline's lengths add up: three sides, four corner arcs")
+    func outlineLengths() {
+        let arc = 50 * Double.pi / 2
+        #expect(abs(outline.leftLength - (arc + 150)) < 0.001)
+        #expect(abs(outline.topLength - (2 * arc + 100)) < 0.001)
+        #expect(abs(outline.rightLength - (150 + arc)) < 0.001)
+        #expect(abs(outline.totalLength - (outline.leftLength + outline.topLength + outline.rightLength)) < 0.001)
     }
 
-    @Test("a position's angle is inside its zone's sector, and 2.3 against a zone 2 target is just left of the top")
-    func angles() {
-        #expect(abs(ZoneDial.angle(forPosition: 2.3, target: 2) - (-12)) < 0.001)
-        #expect(ZoneDial.angle(forPosition: 2.5, target: 2) == 0)
-        for zone in 0...5 {
-            for fraction in [0.0, 0.25, 0.99] {
-                let angle = ZoneDial.angle(forPosition: Double(zone) + fraction, target: 3)
-                let center = ZoneDial.sectorCenter(zone: zone, target: 3)
-                #expect(abs(angle - center) <= 30.001)
-            }
+    @Test("the outline starts at the bottom left, goes up the left side, across the top and down the right")
+    func outlinePoints() {
+        let start = outline.point(at: 0)
+        #expect(abs(start.point.x - 50) < 0.001 && abs(start.point.y - 250) < 0.001)
+        #expect(abs(start.outward - 180) < 0.001)
+        // Up the left side: facing left.
+        let side = outline.point(at: 50 * .pi / 2 + 75)
+        #expect(abs(side.point.x) < 0.001 && abs(side.point.y - 125) < 0.001 && side.outward == 270)
+        // The middle of the top: facing up.
+        let top = outline.point(at: outline.leftLength + outline.topLength / 2)
+        #expect(abs(top.point.x - 100) < 0.001 && abs(top.point.y) < 0.001 && abs(top.outward) < 0.001)
+        // Down the right side: facing right.
+        let right = outline.point(at: outline.leftLength + outline.topLength + 75)
+        #expect(abs(right.point.x - 200) < 0.001 && abs(right.point.y - 125) < 0.001 && right.outward == 90)
+        // The end: the bottom right, where the bottom edge starts, facing down.
+        let end = outline.point(at: outline.totalLength)
+        #expect(abs(end.point.x - 150) < 0.001 && abs(end.point.y - 250) < 0.001 && abs(end.outward - 180) < 0.001)
+        // Past the ends it stays at the ends.
+        #expect(outline.point(at: -10).point == start.point)
+        #expect(outline.point(at: outline.totalLength + 10).point == end.point)
+    }
+
+    @Test("the outline stays inside the screen and on its rounded edge")
+    func outlineShape() {
+        for index in 0...200 {
+            let edge = outline.point(at: outline.totalLength * Double(index) / 200)
+            #expect(edge.point.x >= -0.001 && edge.point.x <= 200.001 && edge.point.y >= -0.001 && edge.point.y <= 250.001)
+            // In a corner, it is `radius` from the corner circle's middle.
+            let x = Double(edge.point.x), y = Double(edge.point.y)
+            let cx = x < 50 ? 50.0 : (x > 150 ? 150.0 : x), cy = y < 50 ? 50.0 : (y > 200 ? 200.0 : y)
+            if (x < 50 || x > 150), (y < 50 || y > 200) { #expect(abs(hypot(x - cx, y - cy) - 50) < 0.01) }
         }
     }
 
-    @Test("a new target turns the ring by a sector")
-    func turning() {
-        let before = ZoneDial.angle(forPosition: 2.3, target: 2)
-        let after = ZoneDial.angle(forPosition: 2.3, target: 3)
-        #expect(abs((before - after) - 60) < 0.001)
+    @Test("the target has the whole top, the lower zones the left and the higher ones the right")
+    func layout() {
+        let spans = ZoneDial.spans(target: 3, outline: outline)
+        #expect(spans[3] == ZoneDial.Span(start: outline.leftLength, end: outline.leftLength + outline.topLength))
+        // Left: zones 0, 1 and 2 in order along the left side, zone 0 half the size of the others.
+        #expect(spans[0].start == 0 && abs(spans[2].end - outline.leftLength) < 0.001)
+        #expect(abs(spans[1].start - spans[0].end) < 0.001 && abs(spans[2].start - spans[1].end) < 0.001)
+        #expect(abs(spans[0].length * 2 - spans[1].length) < 0.001)
+        #expect(abs(spans[1].length - spans[2].length) < 0.001)
+        // Right: zones 4 and 5, the nearer to the top first, equal.
+        #expect(abs(spans[4].start - (outline.leftLength + outline.topLength)) < 0.001)
+        #expect(abs(spans[5].end - outline.totalLength) < 0.001)
+        #expect(abs(spans[4].length - spans[5].length) < 0.001)
     }
 
-    @Test("the edge point at the top, right, bottom and left of a plain rectangle")
-    func edges() {
-        let size = CGSize(width: 200, height: 300)
-        let top = ZoneDial.edgePoint(atAngle: 0, size: size, cornerRadius: 0)
-        #expect(abs(top.point.x - 100) < 0.001 && abs(top.point.y) < 0.001 && abs(top.outward) < 0.001)
-        let right = ZoneDial.edgePoint(atAngle: 90, size: size, cornerRadius: 0)
-        #expect(abs(right.point.x - 200) < 0.001 && abs(right.point.y - 150) < 0.001 && abs(right.outward - 90) < 0.001)
-        let bottom = ZoneDial.edgePoint(atAngle: 180, size: size, cornerRadius: 0)
-        #expect(abs(bottom.point.y - 300) < 0.001 && abs(abs(bottom.outward) - 180) < 0.001)
-        let left = ZoneDial.edgePoint(atAngle: -90, size: size, cornerRadius: 0)
-        #expect(abs(left.point.x) < 0.001 && abs(left.outward + 90) < 0.001)
+    @Test("with zone 1 as the target, zone 0 has the whole left side at full size; with zone 5, the right side is empty")
+    func edgeTargets() {
+        let low = ZoneDial.spans(target: 1, outline: outline)
+        #expect(low[0] == ZoneDial.Span(start: 0, end: outline.leftLength))
+        #expect(abs(low[2].length - outline.rightLength / 4) < 0.001)
+        let high = ZoneDial.spans(target: 5, outline: outline)
+        #expect(abs(high[0].length * 2 - high[1].length) < 0.001)
+        #expect(abs(high[4].end - outline.leftLength) < 0.001)
+        #expect(high[5].length == outline.topLength)
     }
 
-    @Test("a rounded corner pulls the edge in, and faces diagonally")
-    func corner() {
-        let size = CGSize(width: 200, height: 200)
-        // The diagonal to the top right: a plain corner is at (200, 0); a radius of 40 is 11.7 in from it.
-        let square = ZoneDial.edgePoint(atAngle: 45, size: size, cornerRadius: 0)
-        let rounded = ZoneDial.edgePoint(atAngle: 45, size: size, cornerRadius: 40)
-        #expect(abs(square.point.x - 200) < 0.001)
-        let pulledIn = (40 * (2.0.squareRoot() - 1)) / 2.0.squareRoot()
-        #expect(abs(rounded.point.x - (200 - pulledIn)) < 0.01)
-        #expect(abs(rounded.point.y - pulledIn) < 0.01)
-        #expect(abs(rounded.outward - 45) < 0.01)
+    @Test("the zones tile the outline without gaps or overlap, for every target")
+    func tiling() {
+        for target in 1...5 {
+            let spans = ZoneDial.spans(target: target, outline: outline)
+            let covered = spans.reduce(0) { $0 + $1.length }
+            // Everything is covered except the right side when nothing is above the target.
+            let expected = target == 5 ? outline.totalLength - outline.rightLength : outline.totalLength
+            #expect(abs(covered - expected) < 0.001, "target \(target)")
+        }
     }
 
-    @Test("every edge point of a rounded rectangle is inside it, and its normal is a unit direction")
-    func insideTheShape() {
-        let size = CGSize(width: 205, height: 251)
-        let radius = 50.0
-        for angle in stride(from: -180.0, through: 180, by: 3) {
-            let edge = ZoneDial.edgePoint(atAngle: angle, size: size, cornerRadius: radius)
-            #expect(edge.point.x >= -0.001 && edge.point.x <= 205.001 && edge.point.y >= -0.001 && edge.point.y <= 251.001)
-            // In a corner, the point is `radius` from the corner circle's middle.
-            let dx = Double(edge.point.x) - 102.5, dy = Double(edge.point.y) - 125.5
-            if abs(dx) > 102.5 - radius, abs(dy) > 125.5 - radius {
-                let cx = (dx < 0 ? -1.0 : 1.0) * (102.5 - radius), cy = (dy < 0 ? -1.0 : 1.0) * (125.5 - radius)
-                #expect(abs(hypot(dx - cx, dy - cy) - radius) < 0.01, "\(angle)")
-            }
+    @Test("between two targets the layouts are blended, and a whole number gives its own")
+    func blending() {
+        let two = ZoneDial.spans(target: 2, outline: outline)
+        let three = ZoneDial.spans(target: 3, outline: outline)
+        #expect(ZoneDial.spans(target: 2.0, outline: outline) == two)
+        let half = ZoneDial.spans(target: 2.5, outline: outline)
+        for zone in 0...5 {
+            #expect(abs(half[zone].start - (two[zone].start + three[zone].start) / 2) < 0.001)
+            #expect(abs(half[zone].end - (two[zone].end + three[zone].end) / 2) < 0.001)
+        }
+    }
+
+    @Test("a position along the zones is a distance inside its zone's span")
+    func distances() {
+        let spans = ZoneDial.spans(target: 2, outline: outline)
+        // 2.5: the middle of the top, which the target has to itself.
+        #expect(abs(ZoneDial.distance(forPosition: 2.5, in: spans) - (outline.leftLength + outline.topLength / 2)) < 0.001)
+        #expect(abs(ZoneDial.distance(forPosition: 2.0, in: spans) - outline.leftLength) < 0.001)
+        // Zone 0 starts the ring, and 6.0 (the top of zone 5) ends it.
+        #expect(ZoneDial.distance(forPosition: 0, in: spans) == 0)
+        #expect(abs(ZoneDial.distance(forPosition: 6, in: spans) - outline.totalLength) < 0.001)
+        // Rising heart rate only moves forward along the ring.
+        var last = -1.0
+        for position in stride(from: 0.0, through: 6, by: 0.1) {
+            let distance = ZoneDial.distance(forPosition: position, in: spans)
+            #expect(distance >= last)
+            last = distance
         }
     }
 

@@ -1,15 +1,16 @@
 import SwiftUI
 import TrainingCore
 
-/// The ring of the zone dial (WATCH-118): six sectors round the screen's edge, zone 0 (below zone
-/// 1, grey) and the five zones in their colours, with the target zone's sector centred on the top
-/// and bright and the others in a darker shade, and a triangle just inside the ring pointing at where
+/// The ring of the zone dial (WATCH-118): along the screen's edge from the bottom left, up, across
+/// the top and down to the bottom right, with the bottom free. The target zone's sector has the whole
+/// top and is bright, the lower zones are squeezed into the left side and the higher ones go down the
+/// right, all in a darker shade of their colours, and a triangle just inside the ring points at where
 /// the heart rate is. Fill the screen with it, ignoring the safe area, and put the text on top.
 ///
-/// Both numbers animate, so a new target turns the ring and the triangle glides with the heart
-/// rate. The geometry is `ZoneDial`.
+/// Both numbers animate, so a new target moves the zones into their new places and the triangle
+/// glides with the heart rate. The geometry is `ZoneDial`.
 public struct ZoneDialRing: View, @preconcurrency Animatable {
-    /// The zone at the top, 1 to 5. Between two zones while the ring turns.
+    /// The zone on top, 1 to 5. Between two zones while the ring changes over.
     public var target: Double
     /// Where the heart rate is along the zones, 0 to 6 (``ZoneBands/position(forHeartRate:)``).
     public var position: Double
@@ -47,34 +48,35 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
     public var body: some View {
         Canvas { context, size in
             // The ring is drawn on the centre line of its stroke, half a stroke in from the edge.
-            let ring = CGSize(width: size.width - lineWidth, height: size.height - lineWidth)
-            let radius = max(cornerRadius - lineWidth / 2, 0)
-            let origin = CGPoint(x: lineWidth / 2, y: lineWidth / 2)
-            func point(_ angle: Double) -> (point: CGPoint, outward: Double) {
-                let edge = ZoneDial.edgePoint(atAngle: angle, size: ring, cornerRadius: radius)
-                return (CGPoint(x: edge.point.x + origin.x, y: edge.point.y + origin.y), edge.outward)
+            let outline = ZoneDial.Outline(
+                size: CGSize(width: size.width - lineWidth, height: size.height - lineWidth),
+                cornerRadius: max(cornerRadius - lineWidth / 2, 0))
+            let inset = lineWidth / 2
+            func point(_ distance: Double) -> (point: CGPoint, outward: Double) {
+                let edge = outline.point(at: distance)
+                return (CGPoint(x: edge.point.x + inset, y: edge.point.y + inset), edge.outward)
             }
 
+            let spans = ZoneDial.spans(target: target, outline: outline)
             let bright = Int(target.rounded())
             for zone in 0...5 {
-                let center = ZoneDial.sectorCenter(zone: zone, target: target)
-                // A degree off each end, so the sectors read as separate.
+                let span = spans[zone]
+                // A point or so off each end, so the sectors read as separate.
+                let start = span.start + 1.5, end = span.end - 1.5
+                guard end > start else { continue }
                 var path = Path()
-                var angle = center - 29
-                path.move(to: point(angle).point)
-                while angle < center + 29 {
-                    angle = min(angle + 2, center + 29)
-                    path.addLine(to: point(angle).point)
-                }
+                path.move(to: point(start).point)
+                let steps = max(Int(((end - start) / 3).rounded(.up)), 1)
+                for step in 1...steps { path.addLine(to: point(start + (end - start) * Double(step) / Double(steps)).point) }
                 let isBright = highlightsTarget && zone == bright
                 context.stroke(
-                    path, with: .color(Self.color(ofZone: zone).opacity(isBright ? 1 : 0.35)),
+                    path, with: .color(Self.color(ofZone: zone).opacity(isBright ? 1 : 0.4)),
                     style: StrokeStyle(lineWidth: isBright ? lineWidth : lineWidth * 0.8, lineCap: .butt, lineJoin: .round))
             }
 
             guard showsMarker else { return }
             // A triangle just inside the ring, its tip towards the edge.
-            let edge = point(ZoneDial.angle(forPosition: position, target: target))
+            let edge = point(ZoneDial.distance(forPosition: position, in: spans))
             let outward = edge.outward * .pi / 180
             let nx = sin(outward), ny = -cos(outward)
             let tipDistance = lineWidth / 2 + 3
