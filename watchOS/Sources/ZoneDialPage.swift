@@ -40,15 +40,15 @@ private struct Dial: View {
                 content(
                     target: target, topZone: topZone, position: position, status: status,
                     extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
+                    // The clock sits in the safe area's top inset: the battery goes into the lower
+                    // part of that same band, so the two are on one level.
+                    .overlay(alignment: .topLeading) {
+                        BatteryStatus(at: at)
+                            .padding(.leading, Self.sidePadding + 2)
+                            .offset(y: max(proxy.safeAreaInsets.top, Self.minimumClockHeight) - Self.batteryHeight
+                                - proxy.safeAreaInsets.top - Self.clockTextInset)
+                    }
             }
-            // The battery, on the clock's level at the other side of the top. Its own reader ignores
-            // the safe area, which is what the clock sits in.
-            GeometryReader { _ in
-                BatteryStatus(at: at)
-                    .padding(.leading, Self.sidePadding + 2)
-                    .padding(.top, Self.clockTop)
-            }
-            .ignoresSafeArea()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
@@ -58,8 +58,10 @@ private struct Dial: View {
     /// The least room kept free at the top for the watch's clock, which can't be hidden without private
     /// API, when the safe area says less.
     private static let minimumClockHeight = 30.0
-    /// How far down the clock's text starts, which the battery lines up with (a guess to check on a watch).
-    private static let clockTop = 6.0
+    /// The height of the battery's line, and how far the clock's text sits above the bottom of the band the
+    /// system keeps free for it: guesses to check on a watch, which decide where the battery sits.
+    private static let batteryHeight = 18.0
+    private static let clockTextInset = 8.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
