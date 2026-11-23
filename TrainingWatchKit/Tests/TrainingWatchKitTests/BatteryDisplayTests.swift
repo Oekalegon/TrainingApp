@@ -45,6 +45,17 @@ struct BatteryDisplayTests {
         for index in 0..<BatteryDisplay.segmentCount { #expect(empty.fill(ofSegment: index) == 0) }
     }
 
+    @Test("the simulated battery drains from full to empty over the period, and starts again")
+    func simulated() {
+        #expect(BatteryDisplay.simulatedLevel(elapsed: 0) == 1)
+        #expect(abs(BatteryDisplay.simulatedLevel(elapsed: 60) - 0.5) < 0.001)
+        #expect(abs(BatteryDisplay.simulatedLevel(elapsed: 114) - 0.05) < 0.001)
+        #expect(BatteryDisplay.simulatedLevel(elapsed: 120) == 1)
+        #expect(abs(BatteryDisplay.simulatedLevel(elapsed: 150) - 0.75) < 0.001)
+        #expect(BatteryDisplay.simulatedLevel(elapsed: -5) == 1)
+        #expect(BatteryDisplay.simulatedLevel(elapsed: 10, period: 0) == 1)
+    }
+
     @Test("VoiceOver hears the charge, and that it is charging")
     func spoken() {
         #expect(BatteryDisplay(level: 0.87, isCharging: false).spokenText == "Battery 87 percent")

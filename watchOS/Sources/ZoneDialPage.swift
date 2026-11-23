@@ -133,7 +133,7 @@ private struct Dial: View {
                 .padding(.vertical, -timerSize * 0.23)
             // The battery at the very bottom, just under the total time: its charge in small type
             // and the bar, which is kept in from the sides where the screen's corners round off.
-            let battery = Self.battery(at: at)
+            let battery = Self.battery(elapsed: recorder.elapsed(at: at))
             Text("BATTERY \(battery.percentText)")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
                 .padding(.horizontal, Self.batteryInset)
@@ -177,12 +177,21 @@ private struct Dial: View {
 
 extension Dial {
     /// The watch's battery now. Read once a second with the dial's timeline, since watchOS has no
-    /// notification for it. The simulator reports no level, which shows as an empty grey bar.
-    fileprivate static func battery(at date: Date) -> BatteryDisplay {
+    /// notification for it. The simulator reports no level, which shows as an empty grey bar, unless
+    /// an argument asks for one: `-fakeBattery` drains it from 100% to 0% every two minutes of the run,
+    /// and `-batteryLevel 0.15` holds a level (0 to 1).
+    fileprivate static func battery(elapsed: TimeInterval) -> BatteryDisplay {
+        #if targetEnvironment(simulator)
+        if let level = UserDefaults.standard.object(forKey: "batteryLevel") as? Double {
+            return BatteryDisplay(level: Float(level), isCharging: false)
+        }
+        if CommandLine.arguments.contains("-fakeBattery") {
+            return BatteryDisplay(level: BatteryDisplay.simulatedLevel(elapsed: elapsed), isCharging: false)
+        }
+        #endif
         let device = WKInterfaceDevice.current()
         // Monitoring has to be on before the level can be read.
         device.isBatteryMonitoringEnabled = true
-        _ = date
         return BatteryDisplay(
             level: device.batteryLevel, isCharging: device.batteryState == .charging || device.batteryState == .full)
     }

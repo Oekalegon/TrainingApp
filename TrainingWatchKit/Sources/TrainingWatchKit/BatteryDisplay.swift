@@ -57,6 +57,19 @@ public struct BatteryDisplay: Sendable, Hashable {
         return min(max(level * Double(Self.segmentCount) - Double(index), 0), 1)
     }
 
+    /// A battery level that drains with the run, for the simulator, which has none: from 100% to 0% in
+    /// `period` seconds, then again, so every colour of the bar comes by (green above 20%, yellow above
+    /// 10%, orange from 5%, red under 5%).
+    ///
+    /// - Parameters:
+    ///   - elapsed: The workout time in seconds.
+    ///   - period: How long a full drain takes.
+    public static func simulatedLevel(elapsed: TimeInterval, period: TimeInterval = 120) -> Float {
+        guard period > 0 else { return 1 }
+        let phase = max(elapsed, 0).truncatingRemainder(dividingBy: period) / period
+        return Float(1 - phase)
+    }
+
     /// What VoiceOver says: "Battery 87 percent", "Battery 87 percent, charging" or "Battery level unknown".
     public var spokenText: String {
         guard let level else { return "Battery level unknown" }
