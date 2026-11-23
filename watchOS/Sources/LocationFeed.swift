@@ -1,7 +1,7 @@
 import CoreLocation
 
-/// Streams GPS fixes for an outdoor run. `RunRecorder` forwards them to an `HKWorkoutRouteBuilder`
-/// so the route is saved with the workout (WATCH-101).
+/// Streams GPS fixes for an outdoor run. `WatchRunBackend` hands them to `RunRecorder`, which gives
+/// them to the route builder so the route is saved with the workout (WATCH-101).
 @MainActor
 final class LocationFeed: NSObject, CLLocationManagerDelegate {
     /// Called with each batch of usable fixes (valid and no coarser than 50 m).

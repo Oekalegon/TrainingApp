@@ -1,4 +1,4 @@
-import TrainingWatchKit
+import Foundation
 
 /// Zone alerts while a planned workout runs (WATCH-106): `ZoneAlertEngine` decides when, this feeds
 /// it the steps and the heart rate and plays the haptic.
@@ -15,7 +15,7 @@ extension RunRecorder {
     func alertStepStarted() {
         let alert = alertEngine.beginStep(target: currentTarget, at: elapsed())
         log(alert)
-        ZoneAlertHaptics.play(alert)
+        backend.play(.zoneAlert(alert))
     }
 
     /// A heart-rate reading arrived. Alerts only in a planned workout, while running.
@@ -25,24 +25,20 @@ extension RunRecorder {
         alertEngine.updateTarget(currentTarget)
         if let alert = alertEngine.add(bpm, at: elapsed()) {
             log(alert)
-            ZoneAlertHaptics.play(alert)
+            backend.play(.zoneAlert(alert))
         }
     }
 
-    #if targetEnvironment(simulator)
     /// The last alerts as one line for the simulator's metrics page, newest first, as "1:12 tooLow".
-    var alertLogText: String {
+    public var alertLogText: String {
         alertLog.reversed().map { entry in
             let seconds = Int(entry.time)
             return "\(seconds / 60):\(String(format: "%02d", seconds % 60)) \(entry.alert)"
         }.joined(separator: "  ")
     }
-    #endif
 
     /// Keeps the last few alerts for the simulator's debug line.
     private func log(_ alert: ZoneAlert) {
-        #if targetEnvironment(simulator)
         alertLog = Array((alertLog + [(elapsed(), alert)]).suffix(3))
-        #endif
     }
 }

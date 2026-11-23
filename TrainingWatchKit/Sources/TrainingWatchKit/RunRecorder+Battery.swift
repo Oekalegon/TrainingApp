@@ -1,5 +1,4 @@
-import TrainingWatchKit
-import WatchKit
+import Foundation
 
 /// The battery during a run (WATCH-110, WATCH-119): a reading every half minute for the forecast, and
 /// a check every few seconds for a warning, in planned workouts and free runs alike. A warning stays until
@@ -37,10 +36,10 @@ extension RunRecorder {
     }
 
     /// Takes a reading when it is time for one, and gives a warning if the battery has got worse.
-    private func checkBattery() {
+    func checkBattery() {
         guard phase == .running else { return }
         let time = elapsed()
-        let battery = BatteryReader.current(elapsed: time)
+        let battery = backend.battery(elapsed: time)
         if let level = battery.level, batteryReadings.last.map({ time - $0.time >= Self.batterySampleInterval }) ?? true {
             batteryReadings.append(BatteryForecast.Reading(time: time, level: level))
         }
@@ -69,22 +68,18 @@ extension RunRecorder {
 
     /// Starting values, one a level: WATCH-117 gives every signal its own pattern and tone.
     private func playHaptic(for warning: BatteryWarning) {
-        switch warning.level {
-        case .tight: WKInterfaceDevice.current().play(.notification)
-        case .critical: WKInterfaceDevice.current().play(.retry)
-        case .runsOut: WKInterfaceDevice.current().play(.failure)
-        }
+        backend.play(.batteryWarning(warning.level))
     }
 
     /// Takes the warning screen away: the athlete tapped it.
-    func dismissBatteryWarning() {
+    public func dismissBatteryWarning() {
         warningNudge?.cancel()
         batteryWarning = nil
     }
 
     /// The pace distances are counted at for what is left of the workout: the run's own average once it
     /// has gone a few hundred metres, otherwise 6:00 per kilometre.
-    var secondsPerMeter: Double {
+    public var secondsPerMeter: Double {
         distanceMeters >= 300 ? elapsed() / distanceMeters : 0.36
     }
 }
