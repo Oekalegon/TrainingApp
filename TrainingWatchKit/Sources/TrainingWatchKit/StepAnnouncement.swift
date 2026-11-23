@@ -7,7 +7,8 @@ public enum StepAnnouncement {
     /// - Parameters:
     ///   - step: The step that began.
     ///   - locale: Decides whether distances are in kilometres or miles.
-    public static func text(for step: PlannedStep, locale: Locale = .current) -> String {
+    ///   - ahead: Whether it is said before the step starts, as "Next: work for 4 minutes, zone 4".
+    public static func text(for step: PlannedStep, locale: Locale = .current, ahead: Bool = false) -> String {
         let name: String
         switch step.step.kind {
         case .warmup: name = "Warm-up"
@@ -15,9 +16,35 @@ public enum StepAnnouncement {
         case .cooldown: name = "Cool-down"
         case .work: name = step.repetitions > 1 ? "Interval \(step.repetition) of \(step.repetitions)" : "Run"
         }
-        return [name, goal(step.step.goal, locale: locale), target(of: step.step)]
+        let text = [name, goal(step.step.goal, locale: locale), target(of: step.step)]
             .compactMap { $0 }
             .joined(separator: ", ")
+        return ahead ? aheadText(for: step, locale: locale) : text
+    }
+
+    /// "Next: work for 4 minutes, zone 4": what is said before a work step starts.
+    private static func aheadText(for step: PlannedStep, locale: Locale) -> String {
+        let goal = goal(step.step.goal, locale: locale)
+        let what = switch step.step.goal {
+        case .open: "work, open"
+        default: goal.map { "work for \($0)" } ?? "work"
+        }
+        return (["Next: " + what] + [target(of: step.step)].compactMap { $0 }).joined(separator: ", ")
+    }
+
+    /// Whether `next` is to be announced now, ahead of its start: a work step, with the setting on,
+    /// when the step before it has a time goal with no more than the lead time left. A step
+    /// after an open step or one with a distance goal can't be foreseen, so it is announced as it
+    /// starts, like every other kind of step (recovery, warm-up and cool-down).
+    ///
+    /// - Parameters:
+    ///   - next: The step after the current one.
+    ///   - progress: How far into the current step the run is.
+    ///   - settings: The athlete's choices.
+    public static func announcesAhead(next: PlannedStep?, progress: StepProgress?, settings: CueSettings) -> Bool {
+        guard settings.announceWorkAhead, let next, next.step.kind == .work,
+              let remaining = progress?.remainingTime else { return false }
+        return remaining <= Double(settings.aheadSeconds)
     }
 
     static func goal(_ goal: StepGoal, locale: Locale) -> String? {

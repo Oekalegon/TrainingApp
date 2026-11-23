@@ -44,11 +44,13 @@ final class WatchRunBackend: RunBackend {
     /// Plays `cue` on the channels `CueRouting` picks: the wrist, the earbuds, or both. The channel
     /// is read now, so earbuds put in or taken out mid-run change it.
     func play(_ cue: RunCue) {
-        let route = CueRouting.route(
-            cue, headphonesConnected: audio.headphonesConnected, settings: CueSettings.stored())
+        let route = CueRouting.route(cue, headphonesConnected: audio.headphonesConnected, settings: cueSettings)
         if route.haptic { playHaptic(cue) }
         if let sound = route.sound { audio.play(sound) }
     }
+
+    /// What the phone last sent, read at each cue so a change applies at once.
+    var cueSettings: CueSettings { CueSettings.stored() }
 
     private func playHaptic(_ cue: RunCue) {
         switch cue {

@@ -1,22 +1,5 @@
 import Foundation
 
-/// Whether the athlete hears tones alone or tones followed by speech (WATCH-107), chosen in the
-/// iPhone app (``CueSettings``).
-public enum AudioCueStyle: String, Sendable, CaseIterable, Hashable, Codable {
-    /// Tones, then the words.
-    case speech
-    /// Tones only.
-    case tones
-
-    /// The `UserDefaults` key the watch keeps the setting under.
-    public static let defaultsKey = "audioCueStyle"
-
-    /// The stored setting; speech when none was chosen.
-    public static func stored(in defaults: UserDefaults = .standard) -> AudioCueStyle {
-        defaults.string(forKey: defaultsKey).flatMap(AudioCueStyle.init(rawValue:)) ?? .speech
-    }
-}
-
 /// One note of a tone signal.
 public struct ToneNote: Sendable, Hashable {
     /// Pitch in hertz.
@@ -30,13 +13,17 @@ public struct ToneNote: Sendable, Hashable {
     }
 }
 
-/// What the earbuds play for a cue.
-public enum CueSound: Sendable, Hashable {
-    case speech(String)
-    case tones([ToneNote])
-    /// The tones, then the words: what the speech setting plays for a cue that has both, so the
-    /// signal is still heard as a sound and the words say what it means.
-    case tonesThenSpeech([ToneNote], String)
+/// What the earbuds play for a cue: tones, words, or the tones and then the words.
+public struct CueSound: Sendable, Hashable {
+    /// The tone signal; empty for none.
+    public var tones: [ToneNote]
+    /// The words to say after the tones; `nil` for none.
+    public var words: String?
+
+    public init(tones: [ToneNote] = [], words: String? = nil) {
+        self.tones = tones
+        self.words = words
+    }
 }
 
 /// How one cue reaches the athlete: the wrist, the earbuds, or both.
@@ -45,15 +32,74 @@ public struct CueRoute: Sendable, Hashable {
     public let sound: CueSound?
 }
 
-/// How the athlete wants to be told (WATCH-107): which channels and, for sound, speech or tones.
-/// Chosen in the iPhone app and sent to the watch with the zones and the plan (``WatchContext``); the
-/// watch keeps the last ones it got in its `UserDefaults`.
+/// A kind of signal the athlete can set the sound of (WATCH-107): each has its own choice of tone
+/// and speech.
+public enum SignalKind: String, Sendable, CaseIterable, Hashable, Codable, Identifiable {
+    /// A step begins (and its announcement).
+    case stepStart
+    /// Under the target zone: speed up (far or not).
+    case belowZone
+    /// Over the target zone: slow down (far or not).
+    case aboveZone
+    /// Back in the target zone.
+    case backInZone
+    /// The workout's last step is over.
+    case workoutDone
+    /// A battery warning.
+    case battery
+
+    public var id: String { rawValue }
+
+    /// The name in the iPhone app.
+    public var title: String {
+        switch self {
+        case .stepStart: "Step Starts"
+        case .belowZone: "Below Zone"
+        case .aboveZone: "Above Zone"
+        case .backInZone: "Back in Zone"
+        case .workoutDone: "Workout Done"
+        case .battery: "Battery Warning"
+        }
+    }
+
+    /// The signal a cue belongs to; `nil` for a lap, which is a haptic only.
+    public init?(_ cue: RunCue) {
+        switch cue {
+        case .zoneAlert(let alert):
+            switch alert {
+            case .stepStarted: self = .stepStart
+            case .tooLow, .farBelow: self = .belowZone
+            case .tooHigh, .farAbove: self = .aboveZone
+            case .backInZone: self = .backInZone
+            }
+        case .stepAnnouncement: self = .stepStart
+        case .goalReached: self = .workoutDone
+        case .batteryWarning: self = .battery
+        case .lapMarked: return nil
+        }
+    }
+}
+
+/// Whether a signal plays its tone, its words, both (the tone first) or neither.
+public struct SignalSound: Sendable, Hashable, Codable {
+    public var tone: Bool
+    public var speech: Bool
+
+    public init(tone: Bool = true, speech: Bool = false) {
+        self.tone = tone
+        self.speech = speech
+    }
+}
+
+/// How the athlete wants to be told (WATCH-107): which channels, and for each kind of signal whether
+/// it has a tone, speech or both. Chosen in the iPhone app and sent to the watch with the zones and
+/// the plan (``WatchContext``); the watch keeps the last ones it got in its `UserDefaults`.
 public struct CueSettings: Sendable, Hashable, Codable {
     /// When the wrist taps.
     public enum Haptics: String, Sendable, CaseIterable, Hashable, Codable {
-        /// Zone alerts only without earbuds; step start, workout done and battery always.
+        /// A zone alert only when it has no sound; step start, workout done and battery always.
         case automatic
-        /// Every cue taps, with or without earbuds.
+        /// Every cue taps, with or without sound.
         case always
         case never
     }
@@ -69,37 +115,75 @@ public struct CueSettings: Sendable, Hashable, Codable {
 
     public var haptics: Haptics
     public var sound: Sound
-    public var style: AudioCueStyle
+    /// Whether a work step is announced shortly before it starts, so the athlete can get ready for
+    /// it; other steps are announced as they start. A step that can't be foreseen (after an open
+    /// step, or one with a distance goal) is announced as it starts.
+    public var announceWorkAhead: Bool
+    /// How long before a work step starts it is announced, in seconds.
+    public var aheadSeconds: Int
 
-    public init(haptics: Haptics = .automatic, sound: Sound = .automatic, style: AudioCueStyle = .speech) {
+    /// Each kind's tone and speech, by raw value, so it encodes as a plain object.
+    private var signals: [String: SignalSound]
+
+    public init(
+        haptics: Haptics = .automatic, sound: Sound = .automatic, announceWorkAhead: Bool = true,
+        aheadSeconds: Int = 10, signals: [SignalKind: SignalSound] = [:]
+    ) {
         self.haptics = haptics
         self.sound = sound
-        self.style = style
+        self.announceWorkAhead = announceWorkAhead
+        self.aheadSeconds = aheadSeconds
+        self.signals = Dictionary(uniqueKeysWithValues: signals.map { ($0.key.rawValue, $0.value) })
     }
 
-    public static let hapticsKey = "cueHaptics"
-    public static let soundKey = "cueSound"
+    /// What a kind plays when the athlete hasn't chosen: the step changes and the end are heard and
+    /// spoken, and the zone alerts and warnings are tones, which are quicker to take in mid-effort.
+    public static func defaultSound(of kind: SignalKind) -> SignalSound {
+        switch kind {
+        case .stepStart, .workoutDone, .battery: SignalSound(tone: true, speech: true)
+        case .belowZone, .aboveZone, .backInZone: SignalSound(tone: true, speech: false)
+        }
+    }
+
+    public subscript(kind: SignalKind) -> SignalSound {
+        get { signals[kind.rawValue] ?? Self.defaultSound(of: kind) }
+        set { signals[kind.rawValue] = newValue }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case haptics, sound, announceWorkAhead, aheadSeconds, signals
+    }
+
+    /// Each part is read on its own with its default, so settings from a phone with an older or newer
+    /// app still give the watch what it can understand.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        haptics = (try? container.decodeIfPresent(Haptics.self, forKey: .haptics)) ?? .automatic
+        sound = (try? container.decodeIfPresent(Sound.self, forKey: .sound)) ?? .automatic
+        announceWorkAhead = (try? container.decodeIfPresent(Bool.self, forKey: .announceWorkAhead)) ?? true
+        aheadSeconds = (try? container.decodeIfPresent(Int.self, forKey: .aheadSeconds)) ?? 10
+        signals = (try? container.decodeIfPresent([String: SignalSound].self, forKey: .signals)) ?? [:]
+    }
+
+    private static let defaultsKey = "cueSettings.v2"
 
     /// Keeps the settings for the next launch.
     public func save(in defaults: UserDefaults = .standard) {
-        defaults.set(haptics.rawValue, forKey: Self.hapticsKey)
-        defaults.set(sound.rawValue, forKey: Self.soundKey)
-        defaults.set(style.rawValue, forKey: AudioCueStyle.defaultsKey)
+        defaults.set(try? JSONEncoder().encode(self), forKey: Self.defaultsKey)
     }
 
     /// The stored settings; the defaults for what was never chosen.
     public static func stored(in defaults: UserDefaults = .standard) -> CueSettings {
-        CueSettings(
-            haptics: defaults.string(forKey: hapticsKey).flatMap(Haptics.init(rawValue:)) ?? .automatic,
-            sound: defaults.string(forKey: soundKey).flatMap(Sound.init(rawValue:)) ?? .automatic,
-            style: AudioCueStyle.stored(in: defaults))
+        defaults.data(forKey: defaultsKey).flatMap { try? JSONDecoder().decode(CueSettings.self, from: $0) }
+            ?? CueSettings()
     }
 }
 
-/// Which channel a cue uses (`docs/design/watch-app.md`, "One signal per meaning" and "Audio"). By
-/// default, with headphones connected the zone alerts are sound only and without them haptic only,
-/// and the watch's own speaker is not used. Step started, workout done and battery warnings keep the
-/// haptic as well. ``CueSettings`` can switch either channel on or off.
+/// Which channel a cue uses (`docs/design/watch-app.md`, "One signal per meaning" and "Audio"), by
+/// the athlete's ``CueSettings``. By default, with headphones connected a zone alert is sound only
+/// and without them haptic only, and the watch's own speaker is not used. Step started, workout
+/// done and battery warnings keep the haptic as well. A zone alert whose signal has no tone and no
+/// speech chosen is a haptic, so it isn't lost.
 ///
 /// The tones and words are starting values; their final shape is WATCH-117.
 public enum CueRouting {
@@ -113,14 +197,20 @@ public enum CueRouting {
         case .always: true
         case .never: false
         }
-        let base = baseRoute(cue, soundAllowed: soundAllowed, style: settings.style)
+        let sound = soundAllowed ? sound(for: cue, settings: settings) : nil
+        let automatic: Bool
+        switch cue {
+        case .lapMarked, .goalReached, .batteryWarning, .zoneAlert(.stepStarted): automatic = true
+        case .stepAnnouncement: automatic = false
+        case .zoneAlert: automatic = sound == nil
+        }
         let haptic: Bool
         switch settings.haptics {
         case .never: haptic = false
         case .always: haptic = hapticCue(cue)
-        case .automatic: haptic = base.haptic
+        case .automatic: haptic = automatic
         }
-        return CueRoute(haptic: haptic, sound: base.sound)
+        return CueRoute(haptic: haptic, sound: sound)
     }
 
     /// Cues that have a haptic at all (the announcement is words only).
@@ -129,45 +219,39 @@ public enum CueRouting {
         return true
     }
 
-    /// The automatic channels: the haptic where there is no sound to carry a zone alert, and for the
-    /// rare cues that keep both.
-    private static func baseRoute(_ cue: RunCue, soundAllowed: Bool, style: AudioCueStyle) -> CueRoute {
-        guard soundAllowed else { return CueRoute(haptic: hapticCue(cue), sound: nil) }
-        let haptic: Bool
-        switch cue {
-        case .zoneAlert(.stepStarted), .goalReached, .lapMarked, .batteryWarning: haptic = true
-        case .zoneAlert, .stepAnnouncement: haptic = false
-        }
-        return CueRoute(haptic: haptic, sound: sound(for: cue, style: style))
+    /// What the cue sounds like with the athlete's choice for its signal: its tones if the tone is
+    /// on, then its words if speech is on; `nil` when neither is, or for a cue with no sound (a lap).
+    /// One table of tones and words, so the two can't drift apart and WATCH-117 can tune it without
+    /// touching the channel rules.
+    public static func sound(for cue: RunCue, settings: CueSettings) -> CueSound? {
+        guard let kind = SignalKind(cue) else { return nil }
+        let choice = settings[kind]
+        let (tones, words) = material(for: cue)
+        let sound = CueSound(tones: choice.tone ? tones : [], words: choice.speech ? words : nil)
+        return sound.tones.isEmpty && sound.words == nil ? nil : sound
     }
 
-    /// What a cue sounds like: the words or the tones. One table, so the two can't drift apart and
-    /// WATCH-117 can tune it without touching the channel rules. In the speech setting a cue plays
-    /// its tones and then its words. `nil` for a cue with no sound: a lap, and the announcement in
-    /// tones (the step-start tone stands for it).
-    public static func sound(for cue: RunCue, style: AudioCueStyle) -> CueSound? {
-        func pick(_ tones: [ToneNote], _ words: String) -> CueSound {
-            style == .tones ? .tones(tones) : .tonesThenSpeech(tones, words)
-        }
+    /// A cue's tones and its words. The step-start alert has only its tone and the announcement
+    /// only its words (the text is the step's), so the two together are the step's signal.
+    private static func material(for cue: RunCue) -> (tones: [ToneNote], words: String?) {
         switch cue {
         case .zoneAlert(let alert):
             switch alert {
-            // The announcement follows in speech, so the tone is all this one adds.
-            case .stepStarted: return .tones(stepTones)
-            case .tooLow: return pick(tooLowTones, "Speed up")
-            case .tooHigh: return pick(tooHighTones, "Slow down")
-            case .farBelow: return pick(tooLowTones + tooLowTones, "Speed up now")
-            case .farAbove: return pick(tooHighTones + tooHighTones, "Slow down now")
-            case .backInZone: return pick(backTones, "In zone")
+            case .stepStarted: return (stepTones, nil)
+            case .tooLow: return (tooLowTones, "Speed up")
+            case .tooHigh: return (tooHighTones, "Slow down")
+            case .farBelow: return (tooLowTones + tooLowTones, "Speed up now")
+            case .farAbove: return (tooHighTones + tooHighTones, "Slow down now")
+            case .backInZone: return (backTones, "In zone")
             }
-        case .stepAnnouncement(let text): return style == .speech ? .speech(text) : nil
-        case .goalReached: return pick(doneTones, "Workout done")
-        case .lapMarked: return nil
+        case .stepAnnouncement(let text): return ([], text)
+        case .goalReached: return (doneTones, "Workout done")
+        case .lapMarked: return ([], nil)
         case .batteryWarning(let level):
             switch level {
-            case .tight: return pick(batteryTones, "Battery low")
-            case .critical: return pick(batteryTones, "Battery critical")
-            case .runsOut: return pick(batteryTones, "Battery won't last")
+            case .tight: return (batteryTones, "Battery low")
+            case .critical: return (batteryTones, "Battery critical")
+            case .runsOut: return (batteryTones, "Battery won't last")
             }
         }
     }

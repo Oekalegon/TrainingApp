@@ -85,6 +85,7 @@ final class FakeBackend: RunBackend {
     var locationAllowed = true
     var suppliesSensorReadings = false
     var batteryLevel: Float = 0.9
+    var cueSettings = CueSettings()
     let session = FakeRunSession()
     let builder = FakeBuilder()
     private(set) var cues: [RunCue] = []

@@ -118,6 +118,8 @@ public protocol RunBackend: AnyObject {
     var locationDescription: String { get }
     var locationDiagnostics: String { get }
 
+    /// How the athlete wants to be told, as the phone last sent it (WATCH-107).
+    var cueSettings: CueSettings { get }
     func play(_ cue: RunCue)
     /// Drops a cue that hasn't played yet (a far alert's second tap), for when the workout ends.
     func cancelPendingCues()

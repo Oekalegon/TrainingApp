@@ -1,7 +1,7 @@
 import AVFoundation
 import TrainingWatchKit
 
-/// The ears' side of the cues (WATCH-107): tones, or tones and then speech, through earbuds, or the
+/// The ears' side of the cues (WATCH-107): tones and speech through earbuds, or the
 /// watch speaker when the athlete allows it (`CueSettings.sound`).
 ///
 /// While a cue plays the audio session interrupts spoken audio (a podcast pauses) and ducks music;
@@ -41,11 +41,9 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
     /// Plays `sound` after whatever is playing, so a step's tone and its announcement don't talk
     /// over each other. A long backlog (cues piling up in a stalled session) is dropped.
     func play(_ sound: CueSound) {
-        let parts: [Part] = switch sound {
-        case .speech(let words): [.speech(words)]
-        case .tones(let notes): [.tones(notes)]
-        case .tonesThenSpeech(let notes, let words): [.tones(notes), .speech(words)]
-        }
+        var parts: [Part] = []
+        if !sound.tones.isEmpty { parts.append(.tones(sound.tones)) }
+        if let words = sound.words { parts.append(.speech(words)) }
         guard queue.count < 6 else { return }
         queue += parts
         if !busy { startNext() }

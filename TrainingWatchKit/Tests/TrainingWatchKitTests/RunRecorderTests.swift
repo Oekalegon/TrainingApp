@@ -357,6 +357,43 @@ struct RunRecorderStepTests {
         #expect(backend.announcements == ["Run, 1 minute, 140 to 150 beats per minute"])
     }
 
+    @Test("a work step is announced ahead, once, and not again as it starts; a recovery is announced as it starts")
+    func announcedAhead() async {
+        let (recorder, backend) = await running(plan: plan([time(60, kind: .recovery), time(60), time(60, kind: .recovery)]))
+        #expect(backend.announcements.count == 1)  // the first step, as it starts
+        backend.builder.elapsed = 40
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 1)  // 20 s left: too early
+        backend.builder.elapsed = 52
+        await recorder.tickSteps()
+        #expect(backend.announcements.last == "Next: work for 1 minute, 140 to 150 beats per minute")
+        backend.builder.elapsed = 55
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 2)  // not twice
+        backend.builder.elapsed = 61
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 2)  // the work step began: already announced
+        backend.builder.elapsed = 115
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 2)  // a recovery isn't announced ahead
+        backend.builder.elapsed = 121
+        await recorder.tickSteps()
+        #expect(backend.announcements.last == "Recovery, 1 minute, 140 to 150 beats per minute")
+    }
+
+    @Test("with announcing ahead off, a work step is announced as it starts")
+    func notAhead() async {
+        let fake = FakeBackend()
+        fake.cueSettings = CueSettings(announceWorkAhead: false)
+        let (recorder, backend) = await running(plan: plan([time(60, kind: .recovery), time(60)]), backend: fake)
+        backend.builder.elapsed = 55
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 1)
+        backend.builder.elapsed = 61
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 2)
+    }
+
     @Test("a free run has no steps and no step alerts")
     func freeRun() async {
         let (recorder, backend) = await running()

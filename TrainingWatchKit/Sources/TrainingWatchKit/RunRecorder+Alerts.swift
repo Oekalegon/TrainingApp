@@ -16,7 +16,7 @@ extension RunRecorder {
         let alert = alertEngine.beginStep(target: currentTarget, at: elapsed())
         log(alert)
         backend.play(.zoneAlert(alert))
-        if let step = stepEngine?.current {
+        if let step = stepEngine?.current, announcedAheadIndex != step.index {
             backend.play(.stepAnnouncement(StepAnnouncement.text(for: step)))
         }
     }

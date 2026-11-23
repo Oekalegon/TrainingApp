@@ -12,6 +12,7 @@ extension RunRecorder {
     ///   - start: When the run started, which is when its first step does.
     func beginSteps(for plan: WatchPlannedWorkout, at start: Date) async {
         stepEngine = WorkoutStepEngine(blocks: plan.blocks)
+        announcedAheadIndex = nil
         stepStartDate = start
         alertStepStarted()
         do {
@@ -33,9 +34,24 @@ extension RunRecorder {
     func tickSteps() async {
         guard phase == .running, var engine = stepEngine, !engine.isFinished else { return }
         let transitions = engine.update(elapsed: elapsed(), distance: distanceMeters)
-        guard !transitions.isEmpty else { return }
+        guard !transitions.isEmpty else {
+            announceNextAhead(engine)
+            return
+        }
         stepEngine = engine
         await record(transitions)
+    }
+
+    /// Says the next step before it starts when it is a work step and the current one is nearly over
+    /// (WATCH-107), once per step.
+    private func announceNextAhead(_ engine: WorkoutStepEngine) {
+        guard let next = engine.next, announcedAheadIndex != next.index,
+              StepAnnouncement.announcesAhead(
+                next: next, progress: engine.progress(elapsed: elapsed(), distance: distanceMeters),
+                settings: backend.cueSettings)
+        else { return }
+        announcedAheadIndex = next.index
+        backend.play(.stepAnnouncement(StepAnnouncement.text(for: next, ahead: true)))
     }
 
     /// The lap button. During a planned workout it ends the current step and moves on, marked as a
