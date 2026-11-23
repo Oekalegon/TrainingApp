@@ -1,8 +1,11 @@
 import Foundation
 
-/// Whether the athlete hears speech or tones (WATCH-107), chosen in the iPhone app (``CueSettings``).
+/// Whether the athlete hears tones alone or tones followed by speech (WATCH-107), chosen in the
+/// iPhone app (``CueSettings``).
 public enum AudioCueStyle: String, Sendable, CaseIterable, Hashable, Codable {
+    /// Tones, then the words.
     case speech
+    /// Tones only.
     case tones
 
     /// The `UserDefaults` key the watch keeps the setting under.
@@ -31,6 +34,9 @@ public struct ToneNote: Sendable, Hashable {
 public enum CueSound: Sendable, Hashable {
     case speech(String)
     case tones([ToneNote])
+    /// The tones, then the words: what the speech setting plays for a cue that has both, so the
+    /// signal is still heard as a sound and the words say what it means.
+    case tonesThenSpeech([ToneNote], String)
 }
 
 /// How one cue reaches the athlete: the wrist, the earbuds, or both.
@@ -136,15 +142,18 @@ public enum CueRouting {
     }
 
     /// What a cue sounds like: the words or the tones. One table, so the two can't drift apart and
-    /// WATCH-117 can tune it without touching the channel rules. `nil` for a cue with no sound:
-    /// a lap, the step-start alert in speech (the announcement says it) and the announcement in
+    /// WATCH-117 can tune it without touching the channel rules. In the speech setting a cue plays
+    /// its tones and then its words. `nil` for a cue with no sound: a lap, and the announcement in
     /// tones (the step-start tone stands for it).
     public static func sound(for cue: RunCue, style: AudioCueStyle) -> CueSound? {
-        func pick(_ tones: [ToneNote], _ words: String) -> CueSound { style == .tones ? .tones(tones) : .speech(words) }
+        func pick(_ tones: [ToneNote], _ words: String) -> CueSound {
+            style == .tones ? .tones(tones) : .tonesThenSpeech(tones, words)
+        }
         switch cue {
         case .zoneAlert(let alert):
             switch alert {
-            case .stepStarted: return style == .tones ? .tones(stepTones) : nil
+            // The announcement follows in speech, so the tone is all this one adds.
+            case .stepStarted: return .tones(stepTones)
             case .tooLow: return pick(tooLowTones, "Speed up")
             case .tooHigh: return pick(tooHighTones, "Slow down")
             case .farBelow: return pick(tooLowTones + tooLowTones, "Speed up now")

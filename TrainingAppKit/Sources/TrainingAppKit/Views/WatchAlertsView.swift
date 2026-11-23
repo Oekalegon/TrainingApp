@@ -28,8 +28,8 @@ struct WatchAlertsView: View {
                 Text("Always").tag(CueSettings.Haptics.always)
                 Text("Off").tag(CueSettings.Haptics.never)
             }
-            Picker("Sound Is", selection: binding(\.style)) {
-                Text("Speech").tag(AudioCueStyle.speech)
+            Picker("Style", selection: binding(\.style)) {
+                Text("Tones and Speech").tag(AudioCueStyle.speech)
                 Text("Tones").tag(AudioCueStyle.tones)
             }
         } footer: {
