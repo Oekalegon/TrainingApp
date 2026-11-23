@@ -52,7 +52,7 @@ private struct Dial: View {
     /// screen's corners are rounded, so a bar right across the bottom would lose its ends.
     private static let batteryInset = 18.0
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
-    private static let pageIndicatorHeight = 22.0
+    private static let pageIndicatorHeight = 30.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
