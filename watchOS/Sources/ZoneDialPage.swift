@@ -32,6 +32,10 @@ private struct Dial: View {
         // doesn't re-lay itself at each zone boundary, with no sector bright and only the triangle moving.
         let topZone = target?.zone ?? 3
         let status = recorder.heartRate.flatMap { bpm in target?.status(forHeartRate: bpm) }
+        // The reader keeps to the safe area, whose top inset is what the system keeps free for the
+        // clock; the ring and the background then reach past it and the ring starts below it.
+        GeometryReader { outer in
+        let clock = max(outer.safeAreaInsets.top, Self.minimumClockHeight)
         ZStack {
             // Dark blue below the target and dark red above it, black in it, so a glance says
             // whether to speed up or slow down.
@@ -44,34 +48,37 @@ private struct Dial: View {
                     showsMarker: position != nil, highlightsTarget: target != nil,
                     targetRange: bands.flatMap { target?.positions(in: $0) },
                     lineWidth: 9, cornerRadius: min(proxy.size.width, proxy.size.height) * 0.26,
-                    topInset: Self.clockHeight)
+                    topInset: clock)
                     .animation(.easeInOut(duration: 0.6), value: topZone)
                     .animation(.easeOut(duration: 0.8), value: position)
             }
             .ignoresSafeArea()
             GeometryReader { proxy in
-                content(position: position, timerSize: min(40, proxy.size.width * 0.2))
+                content(
+                    position: position, timerSize: min(40, proxy.size.width * 0.2),
+                    extraTop: max(clock - outer.safeAreaInsets.top, 0))
             }
+        }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
         .accessibilityValue(spoken(target: target, position: position))
     }
 
-    /// The room the watch's clock takes at the top, which the ring and the text stay below. The
-    /// clock can't be hidden without private API. A first guess, to check on a watch.
-    private static let clockHeight = 24.0
+    /// The least room kept free at the top for the watch's clock, which can't be hidden without private
+    /// API, when the safe area says less. The ring and the text stay below the larger of the two.
+    private static let minimumClockHeight = 30.0
 
     /// Black in the target, dark blue under it and dark red over it.
     private static func background(for status: StepHeartRateTarget.Status?) -> Color {
         switch status {
-        case .below: Color(red: 0.0, green: 0.02, blue: 0.11)
+        case .below: Color(red: 0.0, green: 0.04, blue: 0.18)
         case .above: Color(red: 0.14, green: 0.01, blue: 0.01)
         case .inside, nil: .black
         }
     }
 
-    private func content(position: Double?, timerSize: Double) -> some View {
+    private func content(position: Double?, timerSize: Double, extraTop: Double) -> some View {
         let progress = recorder.stepProgress(at: at)
         return VStack(spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -95,7 +102,7 @@ private struct Dial: View {
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 18)
-        .padding(.top, Self.clockHeight)
+        .padding(.top, extraTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
