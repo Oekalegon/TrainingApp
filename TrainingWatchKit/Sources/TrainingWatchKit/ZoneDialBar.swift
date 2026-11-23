@@ -83,7 +83,8 @@ public struct ZoneDialBar: View, @preconcurrency Animatable {
 
             guard showsMarker else { return }
             // A triangle under the bar, its tip up at the heart rate.
-            let x = min(max(ZoneDial.distance(forPosition: position, in: spans), 0), size.width)
+            // Kept a half triangle in from the ends, so it isn't cut off at the edge of the view.
+            let x = min(max(ZoneDial.distance(forPosition: position, in: spans), 7), max(size.width - 7, 7))
             let tipY = barHeight + 2
             var triangle = Path()
             triangle.move(to: CGPoint(x: x, y: tipY))
