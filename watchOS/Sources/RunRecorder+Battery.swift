@@ -9,8 +9,10 @@ extension RunRecorder {
     private static let batterySampleInterval = 30.0
     /// How often the battery is checked for a warning, in seconds.
     private static let batteryCheckInterval = 5.0
-    /// How often the wrist is tapped again while a warning stays, in seconds.
+    /// How often the wrist is tapped again while a warning stays, in seconds, and how many times at most: a
+    /// warning that is ignored for long stays on screen, but stops buzzing.
     private static let warningRepeat = 30.0
+    private static let warningRepeats = 4
 
     /// Starts reading and checking the battery for a new run.
     func startBatteryWatch() {
@@ -51,13 +53,13 @@ extension RunRecorder {
     }
 
     /// Shows the warning screen, which stays until the athlete dismisses it, and taps the wrist, the harder
-    /// the worse, and again every half minute while it stays, in case the athlete didn't feel it.
+    /// the worse, and again every half minute (four times at most) while it stays, in case the athlete didn't feel it.
     private func show(_ warning: BatteryWarning) {
         batteryWarning = warning
         playHaptic(for: warning)
         warningNudge?.cancel()
         warningNudge = Task { [weak self] in
-            while !Task.isCancelled {
+            for _ in 0..<Self.warningRepeats {
                 try? await Task.sleep(for: .seconds(Self.warningRepeat))
                 guard !Task.isCancelled, let self, let warning = batteryWarning else { return }
                 playHaptic(for: warning)

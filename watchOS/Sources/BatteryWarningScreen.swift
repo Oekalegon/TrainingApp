@@ -10,6 +10,17 @@ struct BatteryWarningScreen: View {
     /// The Digital Crown's position: any turn of it dismisses the screen.
     @State private var crown = 0.0
     @FocusState private var hasFocus: Bool
+    /// When the screen appeared: a tap or a turn in its first moment is not an answer to it, but the
+    /// athlete's last tap or turn, meant for what was on screen, so it doesn't dismiss the warning.
+    @State private var shownAt = Date.now
+
+    /// How long after it appears the screen ignores taps and turns, in seconds.
+    private static let grace = 1.0
+
+    private func dismiss() {
+        guard Date.now.timeIntervalSince(shownAt) >= Self.grace else { return }
+        onDismiss()
+    }
 
     var body: some View {
         ZStack {
@@ -33,19 +44,20 @@ struct BatteryWarningScreen: View {
             .padding(.horizontal, 12)
         }
         .contentShape(Rectangle())
-        .onTapGesture(perform: onDismiss)
+        .onTapGesture(perform: dismiss)
         // The crown only reports a turn to the view that has focus.
         .focusable()
         .focused($hasFocus)
         .digitalCrownRotation(
             $crown, from: -100, through: 100, by: 0.5, sensitivity: .medium, isContinuous: true,
             isHapticFeedbackEnabled: false)
-        .onChange(of: crown) { _, _ in onDismiss() }
+        .onChange(of: crown) { _, _ in dismiss() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(warning.spoken)
         .accessibilityHint("Double tap, or turn the Digital Crown, to dismiss")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits([.isButton, .isModal])
         .onAppear {
+            shownAt = .now
             hasFocus = true
             AccessibilityNotification.Announcement(warning.spoken).post()
         }

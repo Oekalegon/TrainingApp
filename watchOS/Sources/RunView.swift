@@ -36,6 +36,8 @@ struct RunView: View {
                 .overlay {
                     if let warning = recorder.batteryWarning {
                         BatteryWarningScreen(warning: warning) { recorder.dismissBatteryWarning() }
+                            // A new, worse warning is a new screen, with its own first moment.
+                            .id(warning)
                             .transition(.opacity)
                     }
                 }
