@@ -51,6 +51,8 @@ private struct Dial: View {
     /// How far the battery bar is kept in from each side, on top of the content's own padding: the
     /// screen's corners are rounded, so a bar right across the bottom would lose its ends.
     private static let batteryInset = 18.0
+    /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
+    private static let pageIndicatorHeight = 22.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
@@ -86,7 +88,7 @@ private struct Dial: View {
                     .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
                     .foregroundStyle(.yellow)
                     .lineLimit(1).minimumScaleFactor(0.5)
-                    .frame(height: timerSize * 0.85)
+                    .frame(height: timerSize * 0.8)
                 Spacer(minLength: 8)
                 // Only in a repeat: a warm-up, a cool-down or a single run has no interval number.
                 if let interval {
@@ -126,7 +128,7 @@ private struct Dial: View {
             Text(total)
                 .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.5)
-                .frame(height: timerSize * 0.85)
+                .frame(height: timerSize * 0.8)
             // The battery at the very bottom, just under the total time: its charge in small type
             // and the bar, which is kept in from the sides where the screen's corners round off.
             let battery = Self.battery(at: at)
@@ -135,7 +137,8 @@ private struct Dial: View {
                 .accessibilityHidden(true)
             BatteryBar(battery)
                 .padding(.horizontal, Self.batteryInset)
-                .padding(.bottom, 6)
+                // Room for the page indicator of the run's pages, which is drawn over the page's bottom.
+                .padding(.bottom, Self.pageIndicatorHeight)
         }
         .padding(.horizontal, Self.sidePadding)
         .padding(.top, extraTop)
