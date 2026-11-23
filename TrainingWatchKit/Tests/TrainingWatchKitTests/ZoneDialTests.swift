@@ -33,12 +33,12 @@ struct ZoneDialTests {
     /// A line 200 long.
     private let length = 200.0
 
-    @Test("the zones are in order from the left, the same size, and the target twice as wide")
+    @Test("the zones are in order from the left, the same size, and the target three times as wide")
     func layout() {
         let spans = ZoneDial.spans(target: 3, length: length)
-        let unit = length / 7
+        let unit = length / 8
         for zone in 0...5 {
-            #expect(abs(spans[zone].length - (zone == 3 ? 2 * unit : unit)) < 0.001, "zone \(zone)")
+            #expect(abs(spans[zone].length - (zone == 3 ? 3 * unit : unit)) < 0.001, "zone \(zone)")
         }
         #expect(spans[0].start == 0 && abs(spans[5].end - length) < 0.001)
         for zone in 1...5 { #expect(abs(spans[zone].start - spans[zone - 1].end) < 0.001) }
@@ -79,9 +79,9 @@ struct ZoneDialTests {
     func distances() {
         let total = length
         let spans = ZoneDial.spans(target: 2, length: length)
-        // Zones 0 and 1 are a seventh each: zone 2 starts at 2/7 and is two sevenths wide.
-        #expect(abs(ZoneDial.distance(forPosition: 2.5, in: spans) - total * 3 / 7) < 0.001)
-        #expect(abs(ZoneDial.distance(forPosition: 2.0, in: spans) - total * 2 / 7) < 0.001)
+        // Zones 0 and 1 are an eighth each: zone 2 starts at 2/8 and is three eighths wide.
+        #expect(abs(ZoneDial.distance(forPosition: 2.5, in: spans) - total * 3.5 / 8) < 0.001)
+        #expect(abs(ZoneDial.distance(forPosition: 2.0, in: spans) - total * 2 / 8) < 0.001)
         // Zone 0 starts the line, and 6.0 (the top of zone 5) ends it.
         #expect(ZoneDial.distance(forPosition: 0, in: spans) == 0)
         #expect(abs(ZoneDial.distance(forPosition: 6, in: spans) - total) < 0.001)

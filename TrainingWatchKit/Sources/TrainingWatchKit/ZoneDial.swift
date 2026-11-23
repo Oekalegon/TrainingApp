@@ -3,7 +3,7 @@ import Foundation
 
 /// The geometry of the zone dial (WATCH-118): all the zones on one horizontal line in their own
 /// order, zone 0 (below zone 1) on the left to zone 5 on the right, so a rising heart rate moves to
-/// the right. Every zone is the same size except the target zone, which is twice as wide. The target
+/// the right. Every zone is the same size except the target zone, which is three times as wide. The target
 /// is therefore a bit to the left of the middle for a low target zone and to the right of it for a
 /// high one.
 ///
@@ -13,7 +13,7 @@ import Foundation
 /// Pure arithmetic, so it can be tested without a screen; `ZoneDialBar` draws it.
 public enum ZoneDial {
     /// How many times as wide the target zone is as each of the other zones.
-    public static let targetWidth = 2.0
+    public static let targetWidth = 3.0
 
     /// Where a zone lies along the line, as distances from its left end.
     public struct Span: Sendable, Hashable {

@@ -4,7 +4,7 @@ import TrainingWatchKit
 
 /// The target-zone screen of a planned workout (WATCH-118): the step's countdown with the interval
 /// number (5/12, in a repeat) to the right, the heart rate's place in the zones and in bpm, a bar with all the zones on one
-/// line, the target twice as wide as the others and bright, and a triangle where the heart rate is, and the total time.
+/// line, the target three times as wide as the others and bright, and a triangle where the heart rate is, and the total time.
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
