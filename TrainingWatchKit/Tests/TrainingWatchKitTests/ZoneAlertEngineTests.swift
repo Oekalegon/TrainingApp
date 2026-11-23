@@ -56,14 +56,14 @@ struct ZoneAlertEngineTests {
         #expect(feed(&wide, 146, from: 1, to: 15).isEmpty)
     }
 
-    @Test("under the zone: too low after the start grace, then repeated, and back in zone once")
+    @Test("under the zone: too low after the 3 s start grace, then repeated, and back in zone once")
     func tooLowThenBack() throws {
         let zone = try target(3)
         var engine = ZoneAlertEngine()
         _ = engine.beginStep(target: zone, at: 0)
         let alerts = feed(&engine, zone.lowerBound - 5, from: 1, to: 50)
         #expect(alerts.map(\.1) == [.tooLow, .tooLow, .tooLow])
-        #expect(alerts.first!.0 == 8)
+        #expect(alerts.first!.0 == 3)
         #expect(alerts[1].0 - alerts[0].0 == 20)
         let back = feed(&engine, zone.lowerBound + 3, from: 51, to: 80)
         #expect(back.map(\.1) == [.backInZone])
@@ -122,7 +122,7 @@ struct ZoneAlertEngineTests {
         let alerts = (1...30).compactMap { t in
             engine.add(150 - Double(t) * 0.5, at: Double(t)).map { (t, $0) }
         }
-        #expect(alerts.first?.0 == 8)
+        #expect(alerts.first?.0 == 3)
     }
 
     @Test("a small gap alerts even when rising slowly")
@@ -181,11 +181,11 @@ struct ZoneAlertEngineTests {
         // Far above the zone before the pause...
         _ = feed(&engine, zone.upperBound + 30, from: 1, to: 20)
         engine.pause()
-        // ...and below it after: a lone reading doesn't alert, nor do the ones in the next 8 s,
+        // ...and below it after: a lone reading doesn't alert, nor do the ones in the next 4 s,
         // and the earlier readings don't drag the mean up.
-        let held = feed(&engine, zone.lowerBound - 5, from: 21, to: 28)
+        let held = feed(&engine, zone.lowerBound - 5, from: 21, to: 24)
         #expect(held.isEmpty)
-        let after = feed(&engine, zone.lowerBound - 5, from: 29, to: 40)
+        let after = feed(&engine, zone.lowerBound - 5, from: 25, to: 40)
         #expect(after.map(\.1) == [.tooLow])
     }
 

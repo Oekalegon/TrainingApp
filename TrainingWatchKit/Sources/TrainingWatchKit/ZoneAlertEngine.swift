@@ -77,8 +77,8 @@ public struct ZoneAlertEngine: Sendable {
         /// Heart rate in bpm: slow to respond, little noise, so a long smoothing window, a small
         /// margin, a slope rule for the climb at a step's start, and patient repeats.
         public static let heartRate = Settings(
-            smoothingWindow: 8, hysteresisFraction: 0.1, hysteresisFloor: 1, farFraction: 0.75, farFloor: 5,
-            slopeThreshold: 3, slopeWindow: 10, arrivalHorizon: 20, startGrace: 8, minimumOutside: 0,
+            smoothingWindow: 4, hysteresisFraction: 0.1, hysteresisFloor: 1, farFraction: 0.75, farFloor: 5,
+            slopeThreshold: 3, slopeWindow: 10, arrivalHorizon: 20, startGrace: 3, minimumOutside: 0,
             repeatInterval: 20, escalationAfter: 60, fastRepeatInterval: 10, farAfter: 90)
 
         /// Speed in m/s, for the pace targets to come (MVP8-101): noisy GPS but an immediate response,
@@ -137,7 +137,7 @@ public struct ZoneAlertEngine: Sendable {
 
     /// Forgets the readings, for when the run was paused: they are too old to say where the signal
     /// is going, and what happened while paused isn't the runner's effort. The first readings after
-    /// the resume are held back for the ``Settings/startGrace``, so a lone reading can't alert.
+    /// the resume are held back for one ``Settings/smoothingWindow``, so a lone reading can't alert.
     public mutating func pause() {
         samples.removeAll()
         status = .unknown
@@ -154,7 +154,7 @@ public struct ZoneAlertEngine: Sendable {
     public mutating func add(_ value: Double, at time: TimeInterval) -> ZoneAlert? {
         if holdPending {
             holdPending = false
-            holdUntil = time + settings.startGrace
+            holdUntil = time + settings.smoothingWindow
         }
         samples.append((time, value))
         let keep = max(settings.smoothingWindow, settings.slopeWindow)
@@ -192,8 +192,15 @@ public struct ZoneAlertEngine: Sendable {
         // Quiet while closing in fast enough: a gap wider than the target, or one the signal will
         // close within the arrival horizon at this speed (so the last stretch before the target is
         // not answered with "speed up" either).
-        if let threshold = settings.slopeThreshold, let speed = speedToward(below: below, at: time),
-           speed >= threshold, gap > width || gap / speed * 10 <= settings.arrivalHorizon { return nil }
+        if let threshold = settings.slopeThreshold {
+            if let speed = speedToward(below: below, at: time) {
+                if speed >= threshold, gap > width || gap / speed * 10 <= settings.arrivalHorizon { return nil }
+            } else if gap > width, time - stepStart < settings.slopeWindow / 2 {
+                // Too few readings yet to tell whether it is on its way: a wide gap just after a step
+                // started is usually the climb, so wait for the slope rather than alert on it.
+                return nil
+            }
+        }
 
         let interval = outFor >= settings.escalationAfter ? settings.fastRepeatInterval : settings.repeatInterval
         if let lastAlert, time - lastAlert < interval { return nil }
@@ -219,7 +226,7 @@ public struct ZoneAlertEngine: Sendable {
     /// seconds, when the signal is not known to be moving and the alert goes ahead.
     private func speedToward(below: Bool, at time: TimeInterval) -> Double? {
         let recent = samples.filter { time - $0.time <= settings.slopeWindow }
-        guard recent.count >= 3, let first = recent.first, time - first.time >= settings.slopeWindow / 2 else { return nil }
+        guard recent.count >= 3, let first = recent.first, time - first.time >= settings.slopeWindow / 5 else { return nil }
         let n = Double(recent.count)
         let meanT = recent.reduce(0) { $0 + $1.time } / n
         let meanV = recent.reduce(0) { $0 + $1.value } / n
