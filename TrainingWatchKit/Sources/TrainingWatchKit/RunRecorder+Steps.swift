@@ -1,7 +1,5 @@
-import HealthKit
+import Foundation
 import TrainingCore
-import TrainingWatchKit
-import WatchKit
 
 /// Running a planned workout's steps (WATCH-104): the `WorkoutStepEngine` decides when a step ends,
 /// this writes what happened into the saved workout and taps the wrist.
@@ -32,7 +30,7 @@ extension RunRecorder {
     }
 
     /// Ends the steps whose time or distance has been reached.
-    private func tickSteps() async {
+    func tickSteps() async {
         guard phase == .running, var engine = stepEngine, !engine.isFinished else { return }
         let transitions = engine.update(elapsed: elapsed(), distance: distanceMeters)
         guard !transitions.isEmpty else { return }
@@ -42,7 +40,7 @@ extension RunRecorder {
 
     /// The lap button. During a planned workout it ends the current step and moves on, marked as a
     /// lap; in a free run, or after the last step, it only marks a lap.
-    func lap() async {
+    public func lap() async {
         guard phase == .running else { return }
         if var engine = stepEngine, !engine.isFinished {
             // A second tap, or a brush of the wrist, right after a step began would skip that one too.
@@ -51,22 +49,22 @@ extension RunRecorder {
             stepEngine = engine
             await record([transition])
         } else {
-            WKInterfaceDevice.current().play(.click)
-            await addEvents([HKWorkoutEvent(type: .lap, dateInterval: DateInterval(start: .now, duration: 0), metadata: nil)])
+            backend.play(.lapMarked)
+            await addEvents([RunEvent(kind: .lap, start: .now, end: .now, metadata: nil)])
         }
     }
 
     /// How far into the current step the run is, or `nil` in a free run and after the last step.
     ///
     /// - Parameter date: When to measure at, so a ticking view stays in step with the clock.
-    func stepProgress(at date: Date = .now) -> StepProgress? {
+    public func stepProgress(at date: Date = .now) -> StepProgress? {
         stepEngine?.progress(elapsed: elapsed(at: date), distance: distanceMeters)
     }
 
     /// Writes a segment event for each step that ended, and a lap event for one the lap button
     /// ended, then taps the wrist once for the change.
     private func record(_ transitions: [WorkoutStepEngine.Transition]) async {
-        var events: [HKWorkoutEvent] = []
+        var events: [RunEvent] = []
         let now = Date.now
         let elapsedNow = elapsed(at: now)
         for transition in transitions {
@@ -78,13 +76,13 @@ extension RunRecorder {
             events.append(segmentEvent(
                 for: transition.ended, from: stepStartDate, to: end, end: WorkoutMetadata.StepEnd(transition.reason)))
             if transition.reason == .lap {
-                events.append(HKWorkoutEvent(type: .lap, dateInterval: DateInterval(start: end, duration: 0), metadata: nil))
+                events.append(RunEvent(kind: .lap, start: end, end: end, metadata: nil))
             }
             stepStartDate = max(end, stepStartDate)
             // A different tap when the workout's last step is over.
             if transition.started == nil {
-                ZoneAlertHaptics.cancelPending()
-                WKInterfaceDevice.current().play(.success)
+                backend.cancelPendingCues()
+                backend.play(.goalReached)
             }
         }
         // The new step's own haptic comes with its alert state (WATCH-106), once, for the last step
@@ -106,20 +104,20 @@ extension RunRecorder {
 
     private func segmentEvent(
         for step: PlannedStep, from start: Date, to end: Date, end reason: WorkoutMetadata.StepEnd
-    ) -> HKWorkoutEvent {
-        HKWorkoutEvent(
-            type: .segment, dateInterval: DateInterval(start: start, end: max(end, start)),
+    ) -> RunEvent {
+        RunEvent(
+            kind: .segment, start: start, end: max(end, start),
             metadata: WorkoutMetadata.segment(for: step, end: reason))
     }
 
     /// Writes events to the workout. Ones that fail are kept and tried again with the next batch
     /// and when the run is saved (`flushPendingEvents()`), so a hiccup doesn't lose a step.
-    private func addEvents(_ events: [HKWorkoutEvent]) async {
+    private func addEvents(_ events: [RunEvent]) async {
         let batch = pendingEvents + events
         guard !batch.isEmpty, let builder else { return }
         pendingEvents = []
         do {
-            try await builder.addWorkoutEvents(batch)
+            try await builder.addEvents(batch)
             eventsWritten += batch.count
         } catch {
             pendingEvents = batch
