@@ -41,7 +41,8 @@ private struct Dial: View {
                 ZoneDialRing(
                     target: Double(topZone), position: position ?? Double(topZone) + 0.5,
                     showsMarker: position != nil, highlightsTarget: target != nil,
-                    lineWidth: 9, cornerRadius: min(proxy.size.width, proxy.size.height) * 0.26)
+                    lineWidth: 9, cornerRadius: min(proxy.size.width, proxy.size.height) * 0.26,
+                    topInset: Self.clockHeight)
                     .animation(.easeInOut(duration: 0.6), value: topZone)
                     .animation(.easeOut(duration: 0.8), value: position)
             }
@@ -54,6 +55,10 @@ private struct Dial: View {
         .accessibilityLabel("Heart rate zone dial")
         .accessibilityValue(spoken(target: target, position: position))
     }
+
+    /// The room the watch's clock takes at the top, which the ring and the text stay below. The
+    /// clock can't be hidden without private API. A first guess, to check on a watch.
+    private static let clockHeight = 24.0
 
     /// Black in the target, dark blue under it and dark red over it.
     private static func background(for target: StepHeartRateTarget?, heartRate: Double?) -> Color {
@@ -89,6 +94,7 @@ private struct Dial: View {
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 18)
+        .padding(.top, Self.clockHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

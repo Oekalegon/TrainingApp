@@ -22,6 +22,8 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
     public var lineWidth: Double
     /// The screen's corner radius, which the ring follows.
     public var cornerRadius: Double
+    /// Space left free at the top, for the watch's clock: the ring starts below it.
+    public var topInset: Double
 
     public var animatableData: AnimatablePair<Double, Double> {
         get { AnimatablePair(target, position) }
@@ -30,7 +32,7 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
 
     public init(
         target: Double, position: Double, showsMarker: Bool = true, highlightsTarget: Bool = true,
-        lineWidth: Double = 9, cornerRadius: Double = 52
+        lineWidth: Double = 9, cornerRadius: Double = 52, topInset: Double = 0
     ) {
         self.target = target
         self.position = position
@@ -38,6 +40,7 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
         self.highlightsTarget = highlightsTarget
         self.lineWidth = lineWidth
         self.cornerRadius = cornerRadius
+        self.topInset = topInset
     }
 
     /// The colour of a sector: grey below zone 1, otherwise the zone's own.
@@ -49,12 +52,12 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
         Canvas { context, size in
             // The ring is drawn on the centre line of its stroke, half a stroke in from the edge.
             let outline = ZoneDial.Outline(
-                size: CGSize(width: size.width - lineWidth, height: size.height - lineWidth),
+                size: CGSize(width: size.width - lineWidth, height: size.height - lineWidth - topInset),
                 cornerRadius: max(cornerRadius - lineWidth / 2, 0))
             let inset = lineWidth / 2
             func point(_ distance: Double) -> (point: CGPoint, outward: Double) {
                 let edge = outline.point(at: distance)
-                return (CGPoint(x: edge.point.x + inset, y: edge.point.y + inset), edge.outward)
+                return (CGPoint(x: edge.point.x + inset, y: edge.point.y + inset + topInset), edge.outward)
             }
 
             let spans = ZoneDial.spans(target: target, outline: outline)
