@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 import TrainingCore
 import TrainingWatchKit
 
@@ -34,10 +35,20 @@ private struct Dial: View {
         let status = recorder.heartRate.flatMap { bpm in target?.status(forHeartRate: bpm) }
         // The reader keeps to the safe area, whose top inset is what the system keeps free for the
         // clock; the content starts below the larger of that and the least room for the clock.
-        GeometryReader { proxy in
-            content(
-                target: target, topZone: topZone, position: position, status: status,
-                extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
+        ZStack(alignment: .topLeading) {
+            GeometryReader { proxy in
+                content(
+                    target: target, topZone: topZone, position: position, status: status,
+                    extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
+            }
+            // The battery, on the clock's level at the other side of the top. Its own reader ignores
+            // the safe area, which is what the clock sits in.
+            GeometryReader { _ in
+                BatteryStatus(at: at)
+                    .padding(.leading, Self.sidePadding + 2)
+                    .padding(.top, Self.clockTop)
+            }
+            .ignoresSafeArea()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate zone dial")
@@ -47,6 +58,8 @@ private struct Dial: View {
     /// The least room kept free at the top for the watch's clock, which can't be hidden without private
     /// API, when the safe area says less.
     private static let minimumClockHeight = 30.0
+    /// How far down the clock's text starts, which the battery lines up with (a guess to check on a watch).
+    private static let clockTop = 6.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
@@ -150,5 +163,30 @@ private struct Dial: View {
         parts.append(ZoneDialText.placeLine(current, of: engine.steps.count).lowercased())
         parts.append(ZoneDialText.stepLine(current.step).lowercased())
         return parts.joined(separator: ", ")
+    }
+}
+
+/// The watch's battery: a symbol and the percentage, at the top of the dial on the clock's level
+/// (WATCH-118). Red at 20% or less, green while charging. Read once a second with the dial's timeline,
+/// since watchOS has no notification for it. The simulator reports no level and shows "--%".
+private struct BatteryStatus: View {
+    let at: Date
+
+    var body: some View {
+        // `at` is only here to re-read the battery on every tick of the dial's timeline.
+        let _ = at
+        let device = WKInterfaceDevice.current()
+        let battery = BatteryDisplay(
+            level: device.batteryLevel, isCharging: device.batteryState == .charging || device.batteryState == .full)
+        let color: Color = battery.isLow ? .red : (battery.isCharging ? .green : .secondary)
+        HStack(spacing: 3) {
+            Image(systemName: battery.symbolName)
+                .font(.system(size: 14))
+            Text(battery.percentText)
+                .font(.system(size: 15, weight: .semibold).monospacedDigit())
+        }
+        .foregroundStyle(color)
+        .onAppear { device.isBatteryMonitoringEnabled = true }
+        .accessibilityLabel(battery.spokenText)
     }
 }
