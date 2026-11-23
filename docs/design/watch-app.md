@@ -41,7 +41,7 @@ One fixed page showing:
 - **Target forms:** a whole zone, a stretch of zones (positions, such as 4.0-4.5) and a bpm range all resolve to bpm on the watch (`StepHeartRateTarget`, tested). A pace, power or RPE step with no heart-rate target, or a zone target with no zones yet, shows the zone the heart rate is in instead.
 - **In a free run**, and after the last step ("Workout done"): the total time as the big number, the zone the heart rate is in, the heart rate and the distance.
 - **Controls page:** next step (or lap), pause and resume, and end with a confirmation. The simulator's debug lines (fixes, location, events) are at the bottom of this page.
-- The gauge and the colours show only where the heart rate is against the target right now. When and how to alert (smoothing, hysteresis, the slope rule) is WATCH-106.
+- The gauge and the colours show only where the heart rate is against the target right now. When to alert is `ZoneAlertEngine` (WATCH-106, see Alerts below).
 
 Controls: pause and resume, and a manual lap button. Steps **auto-advance** on their time or distance end condition, and the lap button also moves on manually.
 
@@ -89,6 +89,19 @@ The haptic and the tone for an event are chosen together from one table (event t
 - Pauses **podcasts** and ducks **music**. Use an audio session with `.interruptSpokenAudioAndMixWithOthers`, plus ducking for music.
 
 The thresholds (smoothing window, hysteresis, slope threshold, escalation timing) start as proposed defaults and are tuned in real runs.
+
+### As built (WATCH-106)
+
+`ZoneAlertEngine` (`TrainingWatchKit`) is a pure value: `beginStep(target:at:)` at each step start and `add(heartRate:at:)` for each reading, on the run's own clock (paused time left out). `RunRecorder+Alerts.swift` feeds it in a planned workout and `ZoneAlertHaptics` plays the haptic. Defaults in `ZoneAlertEngine.Settings`:
+
+- Smoothed HR: mean of the last 8 s. Hysteresis: out of the zone at 3 bpm beyond a bound, back in at the bound itself.
+- Out-of-zone alerts wait 8 s after a step starts, so the step's own alert is heard first. The step-start alert is the old step-change haptic (`.notification`); the workout's end keeps `.success`.
+- Slope rule: quiet while the heart rate moves toward the zone by at least 3 bpm per 10 s (a line over the last 10 s) and the gap is wider than the zone, or would be closed within 20 s at that speed. With too few readings the alert goes ahead.
+- Entering the zone from outside gives "back in zone" (a step that starts inside the zone gives none).
+- Repeats every 20 s while out, every 10 s after 60 s out; the far variant when 10 bpm beyond a bound or out for 90 s.
+- A pause forgets the readings; zones arriving mid-step are picked up at the next reading.
+- Haptics only for now, the same whether or not headphones are connected: the headphones channel and the sound are WATCH-107, the final patterns WATCH-117. The haptics are `directionUp`, `directionDown` and `success`, the far ones twice.
+- Test it in the simulator with the interval track (`-gpxPath`), whose steps go out of their zones on purpose; the simulator can't play haptics, so the debug check is the logic's unit tests.
 
 ## Results
 
