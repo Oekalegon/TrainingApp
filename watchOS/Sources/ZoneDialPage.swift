@@ -50,8 +50,8 @@ private struct Dial: View {
     /// The room on each side of the content.
     private static let sidePadding = 8.0
     /// The size of the two timers, in points: the same for both, in a condensed font so the total
-    /// time fits with its hours.
-    private static let timerSize = 60.0
+    /// time fits with its hours. A row is only 0.85 of the size high: digits have no descenders.
+    private static let timerSize = 76.0
 
     /// The colour of the zone and the heart rate: blue under the target, red over it, white in it
     /// (and without a target), so a glance says whether to speed up or slow down.
@@ -79,9 +79,10 @@ private struct Dial: View {
             // The time left in the step, with which interval it is (5/12) to the right of it.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(countdown)
-                    .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
+                    .font(.system(size: timerSize, weight: .semibold).width(.compressed).monospacedDigit())
                     .foregroundStyle(.yellow)
                     .lineLimit(1).minimumScaleFactor(0.5)
+                    .frame(height: timerSize * 0.85)
                 Spacer(minLength: 8)
                 // Only in a repeat: a warm-up, a cool-down or a single run has no interval number.
                 if let interval {
@@ -117,8 +118,9 @@ private struct Dial: View {
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
             Text(total)
-                .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
+                .font(.system(size: timerSize, weight: .semibold).width(.compressed).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.5)
+                .frame(height: timerSize * 0.85)
         }
         .padding(.horizontal, Self.sidePadding)
         .padding(.top, extraTop)
