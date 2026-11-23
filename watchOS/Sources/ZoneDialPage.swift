@@ -37,7 +37,7 @@ private struct Dial: View {
         GeometryReader { proxy in
             content(
                 target: target, topZone: topZone, position: position, status: status,
-                width: proxy.size.width,
+                width: proxy.size.width, height: proxy.size.height,
                 extraTop: max(Self.minimumClockHeight - proxy.safeAreaInsets.top, 0))
         }
         .accessibilityElement(children: .ignore)
@@ -49,16 +49,21 @@ private struct Dial: View {
     /// API, when the safe area says less.
     private static let minimumClockHeight = 30.0
     /// The room on each side of the content.
-    private static let sidePadding = 12.0
+    private static let sidePadding = 8.0
     /// The largest size of the two timers, in points.
     private static let largestTimerSize = 64.0
     /// The room the interval number takes in the countdown's row, with its gap.
     private static let intervalWidth = 64.0
+    /// The height of the rows that aren't the timers (the heart rate and zone, the bar and the gaps
+    /// between the rows), and a line's height as a multiple of its font size, for sizing the timers.
+    private static let otherRowsHeight = 94.0
+    private static let lineHeight = 1.2
 
-    /// About how wide a text is, in multiples of its font size, for sizing the timers: a digit is
-    /// 0.62 of it, a colon or a point 0.3, anything else 0.6. A rough measure, used with room to spare.
+    /// About how wide a text is in the condensed timer font, in multiples of its font size: a digit
+    /// is 0.49 of it, a colon or a point 0.21, anything else 0.47 (measured on the system font, so
+    /// "0:24:15" is 2.85). A rough measure, used with some room to spare.
     private static func em(_ text: String) -> Double {
-        max(text.reduce(0) { $0 + ($1.isNumber ? 0.62 : ($1 == ":" || $1 == "." ? 0.3 : 0.6)) }, 1)
+        max(text.reduce(0) { $0 + ($1.isNumber ? 0.49 : ($1 == ":" || $1 == "." ? 0.21 : 0.47)) }, 1)
     }
 
     /// The colour of the zone and the heart rate: blue under the target, red over it, white in it
@@ -73,7 +78,7 @@ private struct Dial: View {
 
     private func content(
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?,
-        width: Double, extraTop: Double
+        width: Double, height: Double, extraTop: Double
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
         let color = Self.color(for: status)
@@ -81,18 +86,20 @@ private struct Dial: View {
         let total = ZoneDialText.totalTimeText(recorder.elapsed(at: at))
         let interval = ZoneDialText.intervalFraction(current)
         // Both timers have one size, the largest at which the longer of the two fits its row (the
-        // countdown's row also holds the interval): so they match, and neither is squeezed by the other.
+        // countdown's row also holds the interval) and the two rows fit the height under the clock
+        // with the other rows: so they match, and neither is squeezed by the other.
         let available = width - 2 * Self.sidePadding
         let timerSize = min(
             Self.largestTimerSize,
             (available - (interval == nil ? 0 : Self.intervalWidth)) / Self.em(countdown),
-            available / Self.em(total))
+            available / Self.em(total),
+            (height - extraTop - Self.otherRowsHeight) / (2 * Self.lineHeight))
         // Values to the left, the interval to the right.
         return VStack(alignment: .leading, spacing: 6) {
             // The time left in the step, with which interval it is (5/12) to the right of it.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(countdown)
-                    .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
+                    .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
                     .foregroundStyle(.yellow)
                     .lineLimit(1).minimumScaleFactor(0.5)
                 Spacer(minLength: 8)
@@ -130,7 +137,7 @@ private struct Dial: View {
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
             Text(total)
-                .font(.system(size: timerSize, weight: .semibold).monospacedDigit())
+                .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.5)
         }
         .padding(.horizontal, Self.sidePadding)

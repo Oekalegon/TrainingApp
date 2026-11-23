@@ -147,14 +147,14 @@ struct ZoneDialTests {
         #expect(ZoneDialText.positionValue(0.4) == "<1")
     }
 
-    @Test("the total time is m:ss under an hour and h:mm:ss from an hour on")
+    @Test("the total time always has the hours")
     func totalTime() {
-        #expect(ZoneDialText.totalTimeText(0) == "0:00")
-        #expect(ZoneDialText.totalTimeText(59.9) == "0:59")
-        #expect(ZoneDialText.totalTimeText(24 * 60 + 15) == "24:15")
-        #expect(ZoneDialText.totalTimeText(3599) == "59:59")
+        #expect(ZoneDialText.totalTimeText(0) == "0:00:00")
+        #expect(ZoneDialText.totalTimeText(59.9) == "0:00:59")
+        #expect(ZoneDialText.totalTimeText(24 * 60 + 15) == "0:24:15")
+        #expect(ZoneDialText.totalTimeText(3599) == "0:59:59")
         #expect(ZoneDialText.totalTimeText(3600 + 24 * 60 + 15) == "1:24:15")
-        #expect(ZoneDialText.totalTimeText(-3) == "0:00")
+        #expect(ZoneDialText.totalTimeText(-3) == "0:00:00")
     }
 
     @Test("the step lines read as VoiceOver should say them")

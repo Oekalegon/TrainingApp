@@ -76,15 +76,12 @@ public enum ZoneDialText {
         }
     }
 
-    /// The total workout time for the dial: "24:15" under an hour and "1:24:15" from an hour on, so the
-    /// usual short run's time has five characters and can be set larger.
+    /// The total workout time for the dial, with the hours: "0:24:15" or "1:24:15".
     ///
     /// - Parameter seconds: The workout time, paused time left out.
     public static func totalTimeText(_ seconds: TimeInterval) -> String {
         let total = max(Int(seconds.rounded(.down)), 0)
-        return total >= 3600
-            ? String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
-            : String(format: "%d:%02d", total / 60, total % 60)
+        return String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
     }
 
     /// `1:30` or `1:02:00`.
