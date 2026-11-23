@@ -1,16 +1,17 @@
 import CoreGraphics
 import Foundation
 
-/// The geometry of the zone dial (WATCH-118): a ring along the whole edge of the screen with a gap in
-/// the upper right corner, where the watch's clock is. It starts on the right side just below the
-/// gap, runs clockwise down the right side, along the bottom, up the left side and along the top to
-/// the gap, like a gauge. Zone 0 (below zone 1) comes first and zone 5 last.
+/// The geometry of the zone dial (WATCH-118): a round ring, like a gauge, with a gap at the bottom.
+/// It starts at the lower left, runs clockwise up the left side, over the top and down the right side
+/// to the lower right. Zone 0 (below zone 1) comes first and zone 5 last, so a rising heart rate
+/// moves clockwise.
 ///
-/// The zones sit along it by their place against the target zone, in three stretches:
-/// - the zones **below** the target first, with zone 0 half the size of the others (the whole
-///   stretch when the target is zone 1);
-/// - the **target zone**, a stretch of its own;
-/// - the zones **above** it, equal, ending at the gap.
+/// The zones sit along it by their place against the target zone, in three stretches that keep the
+/// target on top:
+/// - the zones **below** the target first, on the left, with zone 0 half the size of the others (the
+///   whole stretch when the target is zone 1);
+/// - the **target zone**, in the middle, centred on the top;
+/// - the zones **above** it, equal, on the right.
 ///
 /// A new target lays the ring out again. ``spans(target:outline:)`` blends two layouts when the
 /// target is between two zones, so the change can be animated.
@@ -21,108 +22,40 @@ public enum ZoneDial {
     /// A stretch with no zones in it (nothing above a zone 5 target) is left empty.
     public static let shares = (below: 0.35, target: 0.30, above: 0.35)
 
-    /// The ring's outline: the screen's rounded rectangle without a gap in its upper right corner,
-    /// measured along its length from the start, on the right side below the gap, clockwise.
-    public struct Outline: Sendable {
-        public let size: CGSize
-        public let cornerRadius: Double
-        /// How far down the right side the ring starts: the height of the gap.
-        public let gapHeight: Double
-        /// How far from the right the top ends: the width of the gap.
-        public let gapWidth: Double
+    /// The ring's outline: an arc of a circle, open at the bottom, measured along its length from
+    /// the start at the lower left, clockwise.
+    public struct Outline: Sendable, Hashable {
+        /// The middle of the circle.
+        public let center: CGPoint
+        public let radius: Double
+        /// The angle left open at the bottom, in degrees.
+        public let gapAngle: Double
+        /// The angle the ring starts at, degrees clockwise from the top: the lower left.
+        public var startAngle: Double { 180 + gapAngle / 2 }
         /// The length of the whole outline.
-        public let totalLength: Double
-
-        private enum Segment {
-            case line(from: CGPoint, to: CGPoint, outward: Double, length: Double)
-            case arc(center: CGPoint, from: Double, length: Double)
-        }
-        private let segments: [Segment]
+        public var totalLength: Double { radius * (360 - gapAngle) * .pi / 180 }
 
         /// - Parameters:
-        ///   - size: The size of the rounded rectangle.
-        ///   - cornerRadius: The radius of its corners, at most half its shorter side.
-        ///   - gapWidth: The width of the gap at the top right.
-        ///   - gapHeight: The height of the gap at the top right.
-        public init(size: CGSize, cornerRadius: Double, gapWidth: Double = 0, gapHeight: Double = 0) {
-            self.size = size
-            let width = Double(size.width), height = Double(size.height)
-            let r = min(max(cornerRadius, 0), width / 2, height / 2)
-            self.cornerRadius = r
-            // The gap can't reach past the bottom right and top left corners' curves.
-            let gapY = min(max(gapHeight, 0), height - r)
-            let gapX = min(max(gapWidth, 0), width - r)
-            self.gapHeight = gapY
-            self.gapWidth = gapX
-            let arc = r * .pi / 2
-            var list: [Segment] = []
-            func line(_ from: CGPoint, _ to: CGPoint, _ outward: Double) {
-                let length = hypot(Double(to.x - from.x), Double(to.y - from.y))
-                if length > 0 { list.append(.line(from: from, to: to, outward: outward, length: length)) }
-            }
-            func corner(_ center: CGPoint, _ from: Double, length: Double? = nil) {
-                let length = length ?? arc
-                if length > 0 { list.append(.arc(center: center, from: from, length: length)) }
-            }
-            // Down the right side, round the bottom right corner, along the bottom, round the
-            // bottom left corner, up the left side, round the top left corner, along the top to the gap.
-            // A gap shorter than the corner's radius cuts into the top right corner's curve: the ring
-            // then starts part-way round it, instead of on a straight line outside the rounded screen.
-            let topRight = CGPoint(x: width - r, y: r)
-            if gapY < r, r > 0 {
-                let start = acos((r - gapY) / r)
-                corner(topRight, start * 180 / .pi, length: r * (.pi / 2 - start))
-                line(CGPoint(x: width, y: r), CGPoint(x: width, y: height - r), 90)
-            } else {
-                line(CGPoint(x: width, y: gapY), CGPoint(x: width, y: height - r), 90)
-            }
-            corner(CGPoint(x: width - r, y: height - r), 90)
-            line(CGPoint(x: width - r, y: height), CGPoint(x: r, y: height), 180)
-            corner(CGPoint(x: r, y: height - r), 180)
-            line(CGPoint(x: 0, y: height - r), CGPoint(x: 0, y: r), 270)
-            corner(CGPoint(x: r, y: r), 270)
-            if gapX < r, r > 0 {
-                // The gap is narrower than the corner's radius: the top runs on round the corner's curve.
-                line(CGPoint(x: r, y: 0), CGPoint(x: width - r, y: 0), 0)
-                let end = asin((r - gapX) / r)
-                corner(topRight, 0, length: r * end)
-            } else {
-                line(CGPoint(x: r, y: 0), CGPoint(x: width - gapX, y: 0), 0)
-            }
-            segments = list
-            totalLength = list.reduce(0) { total, segment in
-                switch segment {
-                case .line(_, _, _, let length): total + length
-                case .arc(_, _, let length): total + length
-                }
-            }
+        ///   - center: The middle of the circle.
+        ///   - radius: The circle's radius, along the middle of the ring's stroke.
+        ///   - gapAngle: The angle left open at the bottom, 0 to 340 degrees.
+        public init(center: CGPoint, radius: Double, gapAngle: Double) {
+            self.center = center
+            self.radius = max(radius, 0)
+            self.gapAngle = min(max(gapAngle, 0), 340)
         }
 
         /// The point at `distance` along the outline, with the angle its outward normal points at
-        /// (degrees clockwise from the top, so the left side faces 270 and the right side 90).
-        /// A distance beyond the ends is held at the end.
+        /// (degrees clockwise from the top, 0 to 360). A distance beyond the ends is held at the end.
         public func point(at distance: Double) -> (point: CGPoint, outward: Double) {
-            var d = min(max(distance, 0), totalLength)
-            for segment in segments {
-                switch segment {
-                case .line(let from, let to, let outward, let length):
-                    if d <= length {
-                        let f = length > 0 ? d / length : 0
-                        return (CGPoint(x: from.x + (to.x - from.x) * f, y: from.y + (to.y - from.y) * f), outward)
-                    }
-                    d -= length
-                case .arc(let center, let from, let length):
-                    if d <= length {
-                        let r = cornerRadius
-                        let angle = from + (r > 0 ? d / r * 180 / .pi : 0)
-                        let radians = angle * .pi / 180
-                        return (CGPoint(x: Double(center.x) + r * sin(radians), y: Double(center.y) - r * cos(radians)), angle)
-                    }
-                    d -= length
-                }
-            }
-            // Only reached with no segments at all.
-            return (.zero, 0)
+            let d = min(max(distance, 0), totalLength)
+            let angle = startAngle + (radius > 0 ? d / radius * 180 / .pi : 0)
+            let radians = angle * .pi / 180
+            var outward = angle.truncatingRemainder(dividingBy: 360)
+            if outward < 0 { outward += 360 }
+            return (
+                CGPoint(x: Double(center.x) + radius * sin(radians), y: Double(center.y) - radius * cos(radians)),
+                outward)
         }
     }
 

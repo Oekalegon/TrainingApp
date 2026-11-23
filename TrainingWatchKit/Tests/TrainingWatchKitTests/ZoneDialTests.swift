@@ -30,63 +30,56 @@ struct ZoneDialTests {
         }
     }
 
-    // A 200 x 250 screen with corners of 50, and a gap of 60 x 30 in the upper right corner for the clock.
-    private let outline = ZoneDial.Outline(size: CGSize(width: 200, height: 250), cornerRadius: 50, gapWidth: 60, gapHeight: 30)
-    private let arc = 50 * Double.pi / 2
+    // A circle of radius 100 round (100, 120), open for 80 degrees at the bottom.
+    private let outline = ZoneDial.Outline(center: CGPoint(x: 100, y: 120), radius: 100, gapAngle: 80)
 
-    @Test("the outline's length: the sides, three whole corner arcs, and the part of the top right corner's curve below the gap")
+    @Test("the outline's length is the circle's arc without the gap")
     func outlineLength() {
-        // The gap is 30 down, inside the top right corner's curve (radius 50), so the ring starts
-        // part-way round it; then the right side (150), the bottom (100), the left side (150) and the
-        // top as far as the gap (90), with three whole corner arcs between.
-        let curve = 50 * (Double.pi / 2 - acos((50.0 - 30) / 50))
-        #expect(abs(outline.totalLength - (curve + 150 + 100 + 150 + 90 + 3 * arc)) < 0.001)
+        #expect(abs(outline.totalLength - 100 * 280 * Double.pi / 180) < 0.001)
+        // No gap: the whole circle.
+        let closed = ZoneDial.Outline(center: .zero, radius: 10, gapAngle: 0)
+        #expect(abs(closed.totalLength - 2 * Double.pi * 10) < 0.001)
     }
 
-    @Test("the outline starts on the right side below the gap and goes clockwise to the top just before it")
+    @Test("the outline starts at the lower left and runs clockwise over the top to the lower right")
     func outlinePoints() {
         let start = outline.point(at: 0)
-        // 30 down the right edge, which is inside the corner's curve: so a bit in from the edge.
-        #expect(abs(start.point.y - 30) < 0.001 && start.point.x < 200 && start.point.x > 190)
-        let toTheSide = start.outward
-        #expect(toTheSide > 0 && toTheSide < 90)
-        // Down the right side: facing right.
-        let rightStart = 50 * (Double.pi / 2 - acos(0.4))
-        let right = outline.point(at: rightStart + 100)
-        #expect(abs(right.point.x - 200) < 0.001 && abs(right.point.y - 150) < 0.001 && right.outward == 90)
-        // The bottom: facing down, going left.
-        let bottom = outline.point(at: rightStart + 150 + arc + 50)
-        #expect(abs(bottom.point.x - 100) < 0.001 && abs(bottom.point.y - 250) < 0.001 && bottom.outward == 180)
-        // The left side: facing left, going up.
-        let left = outline.point(at: rightStart + 150 + arc + 100 + arc + 75)
-        #expect(abs(left.point.x) < 0.001 && abs(left.point.y - 125) < 0.001 && left.outward == 270)
-        // The end: on the top, 60 from the right edge, facing up.
+        // 40 degrees either side of the bottom: left of the middle and below it.
+        #expect(abs(start.point.x - (100 - 100 * sin(40 * .pi / 180))) < 0.001)
+        #expect(abs(start.point.y - (120 + 100 * cos(40 * .pi / 180))) < 0.001)
+        #expect(abs(start.outward - 220) < 0.001)
+        // A quarter of the way along it is on the left, facing left.
+        let left = outline.point(at: 100 * 50 * Double.pi / 180)
+        #expect(abs(left.point.x) < 0.001 && abs(left.point.y - 120) < 0.001 && abs(left.outward - 270) < 0.001)
+        // Half way is the top, facing up.
+        let top = outline.point(at: outline.totalLength / 2)
+        #expect(abs(top.point.x - 100) < 0.001 && abs(top.point.y - 20) < 0.001)
+        #expect(min(top.outward, 360 - top.outward) < 0.001)
+        // The end is at the lower right, mirroring the start.
         let end = outline.point(at: outline.totalLength)
-        #expect(abs(end.point.x - 140) < 0.001 && abs(end.point.y) < 0.001 && end.outward == 0)
+        #expect(abs(end.point.x - (100 + 100 * sin(40 * .pi / 180))) < 0.001)
+        #expect(abs(end.point.y - start.point.y) < 0.001)
+        #expect(abs(end.outward - 140) < 0.001)
         // Past the ends it stays at the ends.
         #expect(outline.point(at: -10).point == start.point)
         #expect(outline.point(at: outline.totalLength + 10).point == end.point)
     }
 
-    @Test("the outline stays inside the screen, on its rounded edge, and out of the clock's corner")
+    @Test("every point of the outline is on the circle, and none is in the gap at the bottom")
     func outlineShape() {
         for index in 0...300 {
             let edge = outline.point(at: outline.totalLength * Double(index) / 300)
-            let x = Double(edge.point.x), y = Double(edge.point.y)
-            #expect(x >= -0.001 && x <= 200.001 && y >= -0.001 && y <= 250.001)
-            // Nothing in the gap: the top right 60 x 30.
-            #expect(!(x > 140.001 && y < 29.999), "\(index): \(x), \(y)")
-            // In a corner, it is the radius from the corner circle's middle.
-            let cx = x < 50 ? 50.0 : (x > 150 ? 150.0 : x), cy = y < 50 ? 50.0 : (y > 200 ? 200.0 : y)
-            if (x < 50 || x > 150), (y < 50 || y > 200) { #expect(abs(hypot(x - cx, y - cy) - 50) < 0.01) }
+            #expect(abs(hypot(Double(edge.point.x) - 100, Double(edge.point.y) - 120) - 100) < 0.001)
+            // The gap is 140 to 220 degrees: nothing between them.
+            #expect(!(edge.outward > 140.01 && edge.outward < 219.99), "\(index): \(edge.outward)")
         }
     }
 
-    @Test("a gap bigger than the screen is held at the corners instead of breaking the outline")
-    func hugeGap() {
-        let tight = ZoneDial.Outline(size: CGSize(width: 200, height: 250), cornerRadius: 50, gapWidth: 900, gapHeight: 900)
-        #expect(tight.totalLength > 0)
-        #expect(tight.gapWidth <= 150 && tight.gapHeight <= 200)
+    @Test("the gap is held between nothing and almost the whole circle")
+    func gapLimits() {
+        #expect(ZoneDial.Outline(center: .zero, radius: 10, gapAngle: -5).gapAngle == 0)
+        #expect(ZoneDial.Outline(center: .zero, radius: 10, gapAngle: 900).gapAngle == 340)
+        #expect(ZoneDial.Outline(center: .zero, radius: -3, gapAngle: 80).totalLength == 0)
     }
 
     @Test("the target has its own stretch, the lower zones come before it and the higher ones after")

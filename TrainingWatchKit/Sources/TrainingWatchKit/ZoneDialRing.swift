@@ -1,10 +1,10 @@
 import SwiftUI
 import TrainingCore
 
-/// The ring of the zone dial (WATCH-118): along the whole edge of the screen, clockwise from the right
-/// side just below the clock, with a gap in the upper right corner for the clock. The target zone's
-/// sector is bright, the others are in a darker shade of their colours, and a triangle just inside the
-/// ring points at where the heart rate is. Fill the screen with it, ignoring the safe area, and put the text on top.
+/// The ring of the zone dial (WATCH-118): a circle like a gauge, open at the bottom, starting at the
+/// lower left and running clockwise over the top. The target zone's arc is centred on the top and
+/// bright, the lower zones are on the left and the higher ones on the right in a darker shade of their
+/// colours, and a triangle just inside the ring points at where the heart rate is. Fill the screen with it, ignoring the safe area, and put the text on top.
 ///
 /// Both numbers animate, so a new target moves the zones into their new places and the triangle
 /// glides with the heart rate. The geometry is `ZoneDial`.
@@ -22,10 +22,11 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
     /// the target zone's sector outside it is drawn in the darker shade; `nil` makes the whole zone bright.
     public var targetRange: ClosedRange<Double>?
     public var lineWidth: Double
-    /// The screen's corner radius, which the ring follows.
-    public var cornerRadius: Double
-    /// The room the watch's clock takes in the upper right corner, where the ring has its gap.
-    public var clockSize: CGSize
+    /// The angle left open at the bottom, in degrees.
+    public var gapAngle: Double
+    /// Space kept free at the top, so the circle starts below the watch's clock, which sits in the
+    /// upper right corner and would reach into a circle that went all the way up.
+    public var topInset: Double
 
     public var animatableData: AnimatablePair<Double, Double> {
         get { AnimatablePair(target, position) }
@@ -34,8 +35,8 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
 
     public init(
         target: Double, position: Double, showsMarker: Bool = true, highlightsTarget: Bool = true,
-        targetRange: ClosedRange<Double>? = nil, lineWidth: Double = 9, cornerRadius: Double = 52,
-        clockSize: CGSize = .zero
+        targetRange: ClosedRange<Double>? = nil, lineWidth: Double = 10, gapAngle: Double = 76,
+        topInset: Double = 0
     ) {
         self.target = target
         self.position = position
@@ -43,8 +44,8 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
         self.highlightsTarget = highlightsTarget
         self.targetRange = targetRange
         self.lineWidth = lineWidth
-        self.cornerRadius = cornerRadius
-        self.clockSize = clockSize
+        self.gapAngle = gapAngle
+        self.topInset = topInset
     }
 
     /// The colour of a sector: grey below zone 1, otherwise the zone's own.
@@ -54,16 +55,13 @@ public struct ZoneDialRing: View, @preconcurrency Animatable {
 
     public var body: some View {
         Canvas { context, size in
-            // The ring is drawn on the centre line of its stroke, half a stroke in from the edge.
+            // The circle fits the screen's width and the height below the clock, with the ring's
+            // stroke inside it; the ring is drawn on the centre line of its stroke.
+            let radius = max(min(size.width, size.height - topInset) / 2 - lineWidth / 2 - 1, 0)
             let outline = ZoneDial.Outline(
-                size: CGSize(width: size.width - lineWidth, height: size.height - lineWidth),
-                cornerRadius: max(cornerRadius - lineWidth / 2, 0),
-                gapWidth: clockSize.width, gapHeight: max(clockSize.height - lineWidth / 2, 0))
-            let inset = lineWidth / 2
-            func point(_ distance: Double) -> (point: CGPoint, outward: Double) {
-                let edge = outline.point(at: distance)
-                return (CGPoint(x: edge.point.x + inset, y: edge.point.y + inset), edge.outward)
-            }
+                center: CGPoint(x: size.width / 2, y: topInset + lineWidth / 2 + 1 + radius),
+                radius: radius, gapAngle: gapAngle)
+            func point(_ distance: Double) -> (point: CGPoint, outward: Double) { outline.point(at: distance) }
 
             let spans = ZoneDial.spans(target: target, outline: outline)
             let bright = Int(target.rounded())
