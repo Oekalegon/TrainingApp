@@ -77,9 +77,11 @@ targets:
         SWIFT_VERSION: "6.2"
         TARGETED_DEVICE_FAMILY: "4"
 
-# The watch scheme carries the simulator's test arguments. The ones that start the 6 x 20 s interval
-# test run on the matching GPX track by themselves are on; untick them in Xcode under Product >
-# Scheme > Edit Scheme > Run > Arguments (they are ignored on a real watch).
+# The watch scheme carries the simulator's test arguments. The ones that start the 4 x 90 s alert
+# test run on the matching GPX track by themselves are on (they are ignored on a real watch).
+# For the 6 x 20 s interval run, untick -fakeAlertPlan and the alert-test track and tick
+# -fakeIntervalPlan and the short-intervals track, in Xcode under Product > Scheme > Edit Scheme >
+# Run > Arguments.
 schemes:
   TrainingWatch:
     build:
@@ -89,8 +91,10 @@ schemes:
       config: Debug
       commandLineArguments:
         "-fakeZones": true
-        "-fakeIntervalPlan": true
+        "-fakeIntervalPlan": false
         "-fakePlan": false
         "-fakeShortPlan": false
+        "-fakeAlertPlan": true
         "-autostartPlan": true
-        "-gpxPath $(SRCROOT)/Tools/TestTracks/short-intervals.gpx": true
+        "-gpxPath $(SRCROOT)/Tools/TestTracks/short-intervals.gpx": false
+        "-gpxPath $(SRCROOT)/Tools/TestTracks/alert-test.gpx": true

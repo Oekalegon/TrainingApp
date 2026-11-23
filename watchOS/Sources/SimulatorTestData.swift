@@ -11,6 +11,7 @@ import TrainingWatchKit
 /// - `-fakePlan`: a 4 × 3 min interval workout planned for today, sent just now.
 /// - `-fakeShortPlan`: a workout of steps a few seconds long, for testing the steps.
 /// - `-fakeIntervalPlan`: 6 × 20 s intervals, which `Tools/TestTracks/short-intervals.gpx` follows.
+/// - `-fakeAlertPlan`: 4 × 90 s intervals for the zone alerts, which `Tools/TestTracks/alert-test.gpx` follows and leaves the zones in.
 /// - `-fakeStalePlan`: sent 3 days ago, whichever workout is asked for (the `-fakePlan` one by default).
 ///
 /// On a real watch the arguments do nothing.
@@ -19,7 +20,7 @@ enum SimulatorTestData {
     private static let arguments = Set(CommandLine.arguments)
     static var replacesZones: Bool { arguments.contains("-fakeZones") }
     static var replacesPlan: Bool {
-        !arguments.isDisjoint(with: ["-fakePlan", "-fakeShortPlan", "-fakeIntervalPlan", "-fakeStalePlan"])
+        !arguments.isDisjoint(with: ["-fakePlan", "-fakeShortPlan", "-fakeIntervalPlan", "-fakeAlertPlan", "-fakeStalePlan"])
     }
 
     /// Puts the requested test zones and plan in the stores, replacing what they hold.
@@ -32,7 +33,9 @@ enum SimulatorTestData {
         guard replacesPlan else { return }
         let name: String
         let blocks: [WorkoutBlock]
-        if arguments.contains("-fakeIntervalPlan") {
+        if arguments.contains("-fakeAlertPlan") {
+            (name, blocks) = ("4 × 90 s alert test", TestWorkouts.alertTest)
+        } else if arguments.contains("-fakeIntervalPlan") {
             (name, blocks) = ("6 × 20 s intervals", TestWorkouts.intervals)
         } else if arguments.contains("-fakeShortPlan") {
             (name, blocks) = ("Short test", TestWorkouts.short)

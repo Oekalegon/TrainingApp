@@ -95,9 +95,9 @@ The thresholds (smoothing window, hysteresis, slope threshold, escalation timing
 `ZoneAlertEngine` (`TrainingWatchKit`) is a pure value: `beginStep(target:at:)` at each step start and `add(_:at:)` for each reading, on the run's own clock (paused time left out). The target is a plain range and the reading is in one unit where higher means harder, so the same engine can serve heart rate (bpm) and, later, pace targets (as speed, MVP8-101). Heart rate and pace behave differently (heart rate lags the effort by tens of seconds and is smooth; pace follows it at once and is noisy, and a runner can stop or sprint within seconds), so every threshold is in a `ZoneAlertEngine.Settings` preset per signal. `RunRecorder+Alerts.swift` feeds the engine in a planned workout and `ZoneAlertHaptics` plays the haptic.
 
 Heart rate (`Settings.heartRate`):
-- Smoothed value: mean of the last 8 s. Hysteresis: a tenth of the target's width, at least 1 bpm (1.35 bpm on a 13.5 bpm zone); out of the zone at that margin beyond a bound, back in at the bound itself.
-- Out-of-zone alerts wait 8 s after a step starts, so the step's own alert is heard first. The step-start alert is the old step-change haptic (`.notification`); the workout's end keeps `.success`.
-- Slope rule: quiet while the heart rate moves toward the zone by at least 3 bpm per 10 s (a line over the last 10 s) and the gap is wider than the zone, or would be closed within 20 s at that speed. With too few readings the alert goes ahead.
+- Smoothed value: mean of the last 3 s. Hysteresis: a tenth of the target's width, at least 1 bpm (1.35 bpm on a 13.5 bpm zone); out of the zone at that margin beyond a bound, back in at the bound itself.
+- Out-of-zone alerts wait 2 s after a step starts, so the step's own alert is heard first. The step-start alert is the old step-change haptic (`.notification`); the workout's end keeps `.success`.
+- Slope rule: quiet while the heart rate moves toward the zone by at least 3 bpm per 10 s (a line over the last 10 s) and the gap is wider than the zone, or would be closed within 20 s at that speed. With too few readings to tell (under two, or less than 2 s apart), a gap wider than the zone waits for them, for 10 s at most after a step starts or a run resumes (it is usually the climb, and a watch may report only every few seconds); any other alert goes ahead.
 - Entering the zone from outside gives "back in zone" (a step that starts inside the zone gives none).
 - Repeats every 20 s while out, every 10 s after 60 s out; the far variant when three quarters of the zone's width (at least 5 bpm) beyond a bound, or out for 90 s. The time out of the zone keeps counting while the slope rule keeps quiet, so a long climb that stalls gets the far alert at once.
 
@@ -105,10 +105,10 @@ Pace (`Settings.pace`, placeholder values for MVP8-101, not tuned on any run): a
 
 Pause and resume:
 - Every pause (the button or the system) forgets the readings, in the session delegate.
-- The readings after a resume are held back for the grace, so a lone reading can't alert.
+- The readings after a resume are held back for one smoothing window (3 s), so a lone reading can't alert.
 - Zones arriving in the middle of a step are picked up at the next reading, without an alert.
 
-Haptics only for now, the same whether or not headphones are connected: the headphones channel and the sound are WATCH-107, the final patterns WATCH-117. The haptics are `directionUp`, `directionDown` and `success`, the far ones twice. Not run in the simulator yet: the interval track (`-gpxPath`) goes out of its zones on purpose in the 2nd, 4th and 6th hard steps and the 3rd and 5th easy ones, so look for the alerts there. The logic has unit tests; the recorder wiring has none (WATCH-113).
+Haptics only for now, the same whether or not headphones are connected: the headphones channel and the sound are WATCH-107, the final patterns WATCH-117. The haptics are `directionUp`, `directionDown` and `success`, the far ones twice. To see them in the simulator, use the alert test run (`-fakeAlertPlan`, see "Testing in the simulator" below): the 20 s steps of the interval track are too short for most alerts, since the first comes a few seconds into a step and the average lags. The logic has unit tests; the recorder wiring has none (WATCH-113).
 
 ## Results
 
@@ -164,11 +164,12 @@ Decisions from the scoping Q&A of 2026-11-20:
 - Simulator launch arguments (all in `SimulatorTestData` and `SimulatorTestHooks`; they do nothing on a real watch):
   - `-fakeZones`: the athlete's zones (resting 55, maximum 190).
   - `-fakeShortPlan`: a workout of steps a few seconds long (and a 15 m cool-down).
+  - `-fakeAlertPlan` (WATCH-106): a 14-minute workout for the zone alerts: 60 s warm-up, 4 × (90 s zone 4, 90 s zone 2), 60 s cool-down (`TestWorkouts.alertTest`). Use it with `-gpxPath .../alert-test.gpx` (`make-interval-gpx.py --alert`), whose heart rate leaves the step's zone for a stretch in most steps: hard 2 goes above zone 4 and far above, hard 3 below and far below, hard 4 never gets there (155), easy 2 above zone 2, easy 3 below it, easy 4 stays above (158); the first hard and easy steps stay in their zones, as the quiet case. `AlertTestTrackTests` replays the track through `ZoneAlertEngine` and keeps the alerts it gives in step with this.
   - `-fakeIntervalPlan`: a 6-minute workout: 60 s warm-up, 6 × (20 s zone 4, 20 s zone 2), 60 s cool-down (`TestWorkouts.intervals`).
   - `-gpxPath <file>`: the GPX to play. `Tools/TestTracks/short-intervals.gpx` is a synthetic track that follows the interval workout step for step, with a heart rate that moves towards each step's level over a few seconds, so the first seconds of each hard step are still below zone 4. Some steps deliberately leave their zone, to test the alerts: the 2nd hard step goes far above zone 4 (about 188 bpm), the 4th far below it (about 140), the 6th a little below (about 158); the 3rd easy step goes below zone 2 (about 129) and the 5th above it (about 155). `Tools/make-interval-gpx.py` makes it; it is no real place. `TestWorkoutTrackTests` keeps it and the workout in step.
-  - `-autostartPlan` starts today's first workout, `-autolap <after>` presses the lap button, and the simulator's debug line shows how many events were written.
+  - `-autostartPlan` starts today's first workout, `-autolap <after>` presses the lap button, and the simulator's debug line shows how many events were written. The metrics page of a planned workout shows the last three zone alerts with their run time in a small line at the bottom (the simulator plays no haptics), newest first.
   - While one of the fake arguments is given, what a paired phone sends is ignored.
-- **From Xcode** the TrainingWatch scheme (in `project.yml`) passes `-fakeZones`, `-fakeIntervalPlan`, `-autostartPlan` and `-gpxPath $(SRCROOT)/Tools/TestTracks/short-intervals.gpx`, so a run on a watch simulator starts the interval workout on that track by itself. Untick them under Product > Scheme > Edit Scheme > Run > Arguments for a normal run. A repo path with spaces breaks the `-gpxPath` one.
+- **From Xcode** the TrainingWatch scheme (in `project.yml`) passes `-fakeZones`, `-fakeAlertPlan`, `-autostartPlan` and `-gpxPath $(SRCROOT)/Tools/TestTracks/alert-test.gpx`, so a run on a watch simulator starts the 4 × 90 s alert test workout on that track by itself (since WATCH-106; before it the 6 × 20 s interval run). Untick them under Product > Scheme > Edit Scheme > Run > Arguments for a normal run. For the 20 s interval run, untick `-fakeAlertPlan` and the `alert-test.gpx` path, and tick `-fakeIntervalPlan` and the `short-intervals.gpx` one. A repo path with spaces breaks the `-gpxPath` one.
 - **From the command line** pass the same arguments to `xcrun simctl launch`, with the GPX's full path.
 
 ## Battery monitoring and hand-off to the iPhone (wanted, needs a spike)

@@ -56,14 +56,14 @@ struct ZoneAlertEngineTests {
         #expect(feed(&wide, 146, from: 1, to: 15).isEmpty)
     }
 
-    @Test("under the zone: too low after the start grace, then repeated, and back in zone once")
+    @Test("under the zone: too low after the 2 s start grace, then repeated, and back in zone once")
     func tooLowThenBack() throws {
         let zone = try target(3)
         var engine = ZoneAlertEngine()
         _ = engine.beginStep(target: zone, at: 0)
         let alerts = feed(&engine, zone.lowerBound - 5, from: 1, to: 50)
         #expect(alerts.map(\.1) == [.tooLow, .tooLow, .tooLow])
-        #expect(alerts.first!.0 == 8)
+        #expect(alerts.first!.0 == 2)
         #expect(alerts[1].0 - alerts[0].0 == 20)
         let back = feed(&engine, zone.lowerBound + 3, from: 51, to: 80)
         #expect(back.map(\.1) == [.backInZone])
@@ -114,6 +114,48 @@ struct ZoneAlertEngineTests {
         #expect(!feed(&engine, 140, from: 41, to: 70).isEmpty)
     }
 
+    @Test("a climb reported every 5 s stays quiet too, as a watch may report it")
+    func slopeRuleSparse() throws {
+        let zone = try target(4)
+        var engine = ZoneAlertEngine()
+        _ = engine.beginStep(target: zone, at: 0)
+        // 100 bpm up by 2 bpm a second, one reading every 5 s.
+        let climbing = stride(from: 3, through: 28, by: 5).compactMap { t in
+            engine.add(100 + 2 * Double(t), at: Double(t)).map { (t, $0) }
+        }
+        #expect(climbing.isEmpty)
+    }
+
+    @Test("a wide gap waits for the slope at the start of a step, and not for longer than a slope window")
+    func waitsForSlope() throws {
+        let zone = try target(4)
+        var engine = ZoneAlertEngine()
+        _ = engine.beginStep(target: zone, at: 0)
+        // One reading, far below, and nothing yet to say which way it is going: wait.
+        #expect(engine.add(100, at: 3) == nil)
+        // The next reading shows it flat, so it alerts (here 9 s into the step).
+        #expect(engine.add(100, at: 9) == .farBelow)
+        // A first reading that comes only after the slope window has nothing to wait for.
+        var late = ZoneAlertEngine()
+        _ = late.beginStep(target: zone, at: 0)
+        #expect(late.add(100, at: 11) == .farBelow)
+    }
+
+    @Test("a wide gap after a resume waits for the slope too")
+    func waitsAfterResume() throws {
+        let zone = try target(4)
+        var engine = ZoneAlertEngine()
+        _ = engine.beginStep(target: zone, at: 0)
+        _ = feed(&engine, zone.lowerBound + 3, from: 1, to: 60)
+        engine.pause()
+        // The resume: the first readings are held back for the smoothing window, then a climbing
+        // heart rate far below the zone stays quiet.
+        let climbing = stride(from: 100, through: 130, by: 5).compactMap { t in
+            engine.add(100 + 2 * Double(t - 100), at: Double(t)).map { (t, $0) }
+        }
+        #expect(climbing.isEmpty)
+    }
+
     @Test("a heart rate falling while below the zone is not excused by the slope rule")
     func fallingBelow() throws {
         let zone = try target(4)
@@ -122,7 +164,8 @@ struct ZoneAlertEngineTests {
         let alerts = (1...30).compactMap { t in
             engine.add(150 - Double(t) * 0.5, at: Double(t)).map { (t, $0) }
         }
-        #expect(alerts.first?.0 == 8)
+        // The gap is wider than the zone, so the first second waits for the slope; a falling heart rate then alerts.
+        #expect(alerts.first?.0 == 3)
     }
 
     @Test("a small gap alerts even when rising slowly")
@@ -181,11 +224,11 @@ struct ZoneAlertEngineTests {
         // Far above the zone before the pause...
         _ = feed(&engine, zone.upperBound + 30, from: 1, to: 20)
         engine.pause()
-        // ...and below it after: a lone reading doesn't alert, nor do the ones in the next 8 s,
+        // ...and below it after: a lone reading doesn't alert, nor do the ones in the next 3 s,
         // and the earlier readings don't drag the mean up.
-        let held = feed(&engine, zone.lowerBound - 5, from: 21, to: 28)
+        let held = feed(&engine, zone.lowerBound - 5, from: 21, to: 23)
         #expect(held.isEmpty)
-        let after = feed(&engine, zone.lowerBound - 5, from: 29, to: 40)
+        let after = feed(&engine, zone.lowerBound - 5, from: 24, to: 40)
         #expect(after.map(\.1) == [.tooLow])
     }
 

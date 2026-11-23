@@ -65,6 +65,11 @@ private struct StepMetrics: View {
                 ZoneBadge(bands: bands, hasZones: bands != nil, heartRate: recorder.heartRate)
             }
             footer
+            #if targetEnvironment(simulator)
+            // The simulator plays no haptics: show what would have been played, newest first.
+            Text(recorder.alertLogText)
+                .font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.6).accessibilityHidden(true)
+            #endif
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(stepAccessibilityLabel(progress: progress))

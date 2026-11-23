@@ -13,7 +13,9 @@ extension RunRecorder {
     /// A step began (the first one, a goal reached or the lap button): resets the engine for its
     /// target and plays the step's own haptic.
     func alertStepStarted() {
-        ZoneAlertHaptics.play(alertEngine.beginStep(target: currentTarget, at: elapsed()))
+        let alert = alertEngine.beginStep(target: currentTarget, at: elapsed())
+        log(alert)
+        ZoneAlertHaptics.play(alert)
     }
 
     /// A heart-rate reading arrived. Alerts only in a planned workout, while running.
@@ -22,7 +24,25 @@ extension RunRecorder {
         // Zones can arrive in the middle of a step; a step already running picks them up here.
         alertEngine.updateTarget(currentTarget)
         if let alert = alertEngine.add(bpm, at: elapsed()) {
+            log(alert)
             ZoneAlertHaptics.play(alert)
         }
+    }
+
+    #if targetEnvironment(simulator)
+    /// The last alerts as one line for the simulator's metrics page, newest first, as "1:12 tooLow".
+    var alertLogText: String {
+        alertLog.reversed().map { entry in
+            let seconds = Int(entry.time)
+            return "\(seconds / 60):\(String(format: "%02d", seconds % 60)) \(entry.alert)"
+        }.joined(separator: "  ")
+    }
+    #endif
+
+    /// Keeps the last few alerts for the simulator's debug line.
+    private func log(_ alert: ZoneAlert) {
+        #if targetEnvironment(simulator)
+        alertLog = Array((alertLog + [(elapsed(), alert)]).suffix(3))
+        #endif
     }
 }
