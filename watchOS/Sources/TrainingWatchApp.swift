@@ -4,7 +4,7 @@ import TrainingWatchKit
 
 @main
 struct TrainingWatchApp: App {
-    @State private var recorder = RunRecorder(backend: WatchRunBackend())
+    @State private var recorder = RunRecorder(backend: WatchRunBackend(), drainStore: BatteryDrainStore())
     @State private var zoneStore = WatchZoneStore()
     @State private var planStore = WatchPlanStore()
     /// Receives the athlete's zones and plan from the iPhone (WATCH-102, WATCH-103).

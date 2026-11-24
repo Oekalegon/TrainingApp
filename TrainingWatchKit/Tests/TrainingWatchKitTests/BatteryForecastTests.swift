@@ -200,3 +200,45 @@ struct BatteryMetadataTests {
         #expect(WorkoutMetadata.battery(readings: [.init(time: 0, level: 0.9)]) == nil)
     }
 }
+
+@Suite("BatteryDrainHistory (WATCH-119)")
+struct BatteryDrainHistoryTests {
+    private func run(from start: Double, to end: Double, hours: Double = 1) -> [BatteryForecast.Reading] {
+        [.init(time: 0, level: start), .init(time: hours * 3600, level: end)]
+    }
+
+    @Test("a run's drain is its drop over its time; short runs, flat runs and charging give none")
+    func drainOfRun() {
+        #expect(abs(BatteryDrainHistory.drain(of: run(from: 0.9, to: 0.78))! - 0.12) < 1e-9)
+        #expect(BatteryDrainHistory.drain(of: run(from: 0.9, to: 0.6, hours: 0.1)) == nil)
+        #expect(BatteryDrainHistory.drain(of: run(from: 0.9, to: 0.895)) == nil)
+        #expect(BatteryDrainHistory.drain(of: run(from: 0.5, to: 0.8)) == nil)
+        #expect(BatteryDrainHistory.drain(of: []) == nil)
+    }
+
+    @Test("the typical drain is the median, and needs two runs")
+    func median() {
+        var history = BatteryDrainHistory()
+        history.add(readings: run(from: 0.9, to: 0.8))
+        #expect(history.typicalDrain == nil)
+        history.add(readings: run(from: 0.9, to: 0.7))
+        #expect(abs(history.typicalDrain! - 0.15) < 1e-9)
+        history.add(readings: run(from: 0.9, to: 0.5))
+        #expect(abs(history.typicalDrain! - 0.2) < 1e-9)
+    }
+
+    @Test("only the last ten runs are kept")
+    func capacity() {
+        var history = BatteryDrainHistory()
+        for _ in 0..<15 { history.add(readings: run(from: 0.9, to: 0.8)) }
+        #expect(history.drains.count == BatteryDrainHistory.capacity)
+    }
+
+    @Test("the store keeps the history between launches")
+    func store() throws {
+        let defaults = try #require(UserDefaults(suiteName: "BatteryDrainStoreTests-\(UUID().uuidString)"))
+        BatteryDrainStore(defaults: defaults).record(readings: run(from: 0.9, to: 0.8))
+        BatteryDrainStore(defaults: defaults).record(readings: run(from: 0.9, to: 0.7))
+        #expect(BatteryDrainStore(defaults: defaults).load().drains.count == 2)
+    }
+}

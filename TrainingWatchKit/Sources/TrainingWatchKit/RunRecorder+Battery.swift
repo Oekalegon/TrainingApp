@@ -18,6 +18,7 @@ extension RunRecorder {
         batteryReadings = []
         plannedTypicalDuration = nil
         plannedDrainPerHour = nil
+        learnedDrainPerHour = drainStore?.load().typicalDrain
         batteryWarningTracker = BatteryWarningTracker()
         batteryWarning = nil
         batteryTicker?.cancel()
@@ -48,7 +49,7 @@ extension RunRecorder {
         let projection = BatteryProjection(
             battery: battery, readings: batteryReadings,
             remaining: stepEngine?.remaining(progress: stepProgress(), secondsPerMeter: secondsPerMeter),
-            elapsed: time, typicalDuration: plannedTypicalDuration, drainPerHour: plannedDrainPerHour)
+            elapsed: time, typicalDuration: plannedTypicalDuration, drainPerHour: plannedDrainPerHour ?? learnedDrainPerHour)
         if let warning = batteryWarningTracker.update(battery: battery, projection: projection, at: time) {
             show(warning)
         }
