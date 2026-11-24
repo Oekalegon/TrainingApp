@@ -92,7 +92,9 @@ public final class RunRecorder {
     /// Where the drain of finished runs is kept for the next run's forecast; `nil` keeps nothing (tests).
     let drainStore: BatteryDrainStore?
     /// The athlete's typical drain from earlier runs, read when a run starts (WATCH-119).
-    var learnedDrainPerHour: Double?
+    var learnedDrain: BatteryDrainHistory.Estimate?
+    /// What could explain this run's drain, read when it starts.
+    var drainFactors = BatteryDrainFactors()
 
     public init(backend: any RunBackend, drainStore: BatteryDrainStore? = nil) {
         self.backend = backend
@@ -322,7 +324,7 @@ public final class RunRecorder {
             }
             await writeBatteryMetadata()
             try await builder.finishWorkout()
-            drainStore?.record(readings: batteryReadings)
+            drainStore?.record(readings: batteryReadings, factors: drainFactors)
         } catch {
             canRetrySave = true
             phase = .failed("The run couldn't be saved: \(error.localizedDescription)")

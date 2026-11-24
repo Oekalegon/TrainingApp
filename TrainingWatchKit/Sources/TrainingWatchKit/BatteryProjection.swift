@@ -18,11 +18,13 @@ public struct BatteryProjection: Sendable, Hashable {
     ///   - elapsed: How long the run has gone, in seconds.
     ///   - typicalDuration: How long earlier runs of the same workout took, to stand in for an open step.
     ///   - drainPerHour: The athlete's own drain, to start from instead of the typical one.
+    ///   - isRough: Whether that start is a weak guess (few or differing earlier runs), which VoiceOver says.
     /// - Returns: `nil` while the battery is charging or unknown, or when what is left of the workout
     ///   isn't known (no workout, or an open step with no earlier runs to go by).
     public init?(
         battery: BatteryDisplay, readings: [BatteryForecast.Reading], remaining: RemainingEstimate?,
-        elapsed: TimeInterval = 0, typicalDuration: TimeInterval? = nil, drainPerHour: Double? = nil
+        elapsed: TimeInterval = 0, typicalDuration: TimeInterval? = nil, drainPerHour: Double? = nil,
+        isRough: Bool = false
     ) {
         guard let level = battery.level, !battery.isCharging, let remaining else { return nil }
         var left = remaining.seconds
@@ -43,7 +45,7 @@ public struct BatteryProjection: Sendable, Hashable {
         } else {
             let percent = Int((end * 100).rounded())
             text = "~\(percent)% AT END"
-            spoken = "about \(percent) percent at the end"
+            spoken = "about \(percent) percent at the end" + (isRough ? ", a rough estimate" : "")
         }
     }
 }
