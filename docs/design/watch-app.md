@@ -154,7 +154,7 @@ Tones and words are starting values (WATCH-117). Open: checking on a real watch 
 - **Signing:** companion app `org.oekalegon.trainingapp.watchkitapp`, embedded in the iOS app, sharing its iCloud container, HealthKit entitlement and team.
 - **Units and language:** follow the athlete's setting in TrainingApp, falling back to the system's. Speech uses the watch's language.
 - **Auto-pause:** off in v1 (manual pause only).
-- **Display:** the standard always-on behaviour with no custom dimmed layout. Alerts rely on haptics and audio.
+- **Display:** the standard always-on behaviour with no custom dimmed layout, for now: the run screens still show every second with the wrist down (a darker display without seconds is WATCH-125). Alerts rely on haptics and audio.
 - **GPS:** outdoor running configuration with an `HKWorkoutRouteBuilder`, so the route is saved. A low-power mode (reduced GPS sampling for long runs) is wanted but comes after v1.
 
 ## Zones on the watch (WATCH-102)
