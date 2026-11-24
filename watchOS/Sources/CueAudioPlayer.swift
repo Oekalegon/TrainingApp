@@ -22,6 +22,11 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
     private var queue: [Part] = []
     /// Whether a part is playing, and the audio session is ours.
     private var busy = false
+    /// Whether the session is active, so parts can play; false while it is being activated.
+    private var sessionActive = false
+    private var activating = false
+    /// The session being let go, which a new activation waits for, so the two can't cross.
+    private var deactivation: Task<Void, Never>?
     /// Counts the cancels, so the completion of a part that was cancelled can't carry on with
     /// the queue of a newer cue.
     private var generation = 0
@@ -63,11 +68,33 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
 
     // MARK: Queue
 
+    /// Carries on with the queue: the next part, or, when it is empty, lets the session go. The
+    /// first part waits for the session to be activated, which is asynchronous so the main thread
+    /// never blocks on it.
     private func startNext() {
         guard !queue.isEmpty else { finish(); return }
-        if !busy {
-            guard activateSession() else { queue = []; return }
+        guard sessionActive else {
+            guard !activating else { return }
+            activating = true
             busy = true
+            let generation = generation
+            Task {
+                let activated = await activateSession()
+                activating = false
+                guard generation == self.generation else {
+                    // Cancelled while activating: nobody wants the session now.
+                    if activated, !busy { await deactivateSession() }
+                    return
+                }
+                guard activated else {
+                    queue = []
+                    busy = false
+                    return
+                }
+                sessionActive = true
+                startNext()
+            }
+            return
         }
         switch queue.removeFirst() {
         case .speech(let words):
@@ -85,22 +112,32 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
     private func finish() {
         guard busy else { return }
         busy = false
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        sessionActive = false
+        deactivation = Task { await deactivateSession() }
     }
 
     // MARK: Session
 
-    private func activateSession() -> Bool {
+    private func activateSession() async -> Bool {
+        await deactivation?.value
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(
                 .playback, mode: .spokenAudio,
                 options: [.interruptSpokenAudioAndMixWithOthers, .duckOthers])
-            try session.setActive(true)
+            _ = try await session.activate()
             return true
         } catch {
             return false
         }
+    }
+
+    /// Off the main thread: `setActive(false)` blocks, and the asynchronous `deactivate` needs
+    /// watchOS 27.
+    private func deactivateSession() async {
+        await Task.detached {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }.value
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
