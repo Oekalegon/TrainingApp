@@ -25,6 +25,9 @@ public protocol WatchSyncSending: AnyObject {
     /// Sends the plan, replacing any that hasn't been delivered yet. The zones sent before stay.
     func send(plan: WatchPlan) throws
 
+    /// Sends the sound and haptic settings (WATCH-107), replacing any that haven't been delivered.
+    func send(cues: CueSettings) throws
+
     /// Why the last attempt to hand the context to the transport failed, or `nil` when it worked.
     var lastSendError: String? { get }
 }
@@ -83,6 +86,13 @@ public final class WatchSyncChannel: WatchSyncSending {
     public func send(plan: WatchPlan) throws {
         var context = latest
         context.plan = plan
+        try hold(context)
+    }
+
+    /// - Throws: An encoding error.
+    public func send(cues: CueSettings) throws {
+        var context = latest
+        context.cues = cues
         try hold(context)
     }
 

@@ -11,6 +11,8 @@ private final class FakeSender: WatchSyncSending {
     var failing = false
     var lastSendError: String?
 
+    func send(cues: CueSettings) throws {}
+
     func send(zones: WatchZones) throws {
         if failing { throw Failure() }
         sent.append(zones)

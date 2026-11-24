@@ -2,8 +2,8 @@ import TrainingWatchKit
 import WatchKit
 
 /// The wrist's side of the zone alerts (WATCH-106): one haptic per kind of alert. Starting values
-/// that already differ clearly, to be tuned on a real watch with the tones (WATCH-117); no sound
-/// yet, so no headphones channel either (WATCH-107).
+/// that already differ clearly, to be tuned on a real watch with the tones (WATCH-117). Whether a
+/// haptic plays at all, or the earbuds do instead, is decided by `CueRouting` (WATCH-107).
 @MainActor
 enum ZoneAlertHaptics {
     /// Plays the haptic for `alert`. The far alerts are the ordinary direction twice, so they stay

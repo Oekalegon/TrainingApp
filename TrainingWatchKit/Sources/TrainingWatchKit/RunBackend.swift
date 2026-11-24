@@ -35,7 +35,8 @@ public enum RunSessionState: Sendable, Hashable {
     case other
 }
 
-/// A signal for the wrist: the backend picks the haptic.
+/// A signal for the athlete: the backend picks the haptic and the sound (``CueRouting`` decides
+/// which channels and what they play).
 public enum RunCue: Sendable, Hashable {
     /// A zone alert (WATCH-106).
     case zoneAlert(ZoneAlert)
@@ -43,6 +44,11 @@ public enum RunCue: Sendable, Hashable {
     case goalReached
     /// A lap was marked in a free run.
     case lapMarked
+    /// One second of the countdown to the next step: a short tone, for each of the last five seconds
+    /// of a step with a time goal (WATCH-107). The step's own, longer tone follows as it starts.
+    case countdownTick
+    /// The words for a step that began, said in earbuds in the speech setting (WATCH-107).
+    case stepAnnouncement(String)
     /// A battery warning of this level (WATCH-110).
     case batteryWarning(BatteryWarning.Level)
 }
@@ -115,6 +121,8 @@ public protocol RunBackend: AnyObject {
     var locationDescription: String { get }
     var locationDiagnostics: String { get }
 
+    /// How the athlete wants to be told, as the phone last sent it (WATCH-107).
+    var cueSettings: CueSettings { get }
     func play(_ cue: RunCue)
     /// Drops a cue that hasn't played yet (a far alert's second tap), for when the workout ends.
     func cancelPendingCues()

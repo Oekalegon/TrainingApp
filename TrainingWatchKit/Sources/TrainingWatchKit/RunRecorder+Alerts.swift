@@ -13,9 +13,13 @@ extension RunRecorder {
     /// A step began (the first one, a goal reached or the lap button): resets the engine for its
     /// target and plays the step's own haptic.
     func alertStepStarted() {
+        lastCountdownSecond = nil
         let alert = alertEngine.beginStep(target: currentTarget, at: elapsed())
         log(alert)
         backend.play(.zoneAlert(alert))
+        if let step = stepEngine?.current, announcedAheadIndex != step.index {
+            backend.play(.stepAnnouncement(StepAnnouncement.text(for: step)))
+        }
     }
 
     /// A heart-rate reading arrived. Alerts only in a planned workout, while running.

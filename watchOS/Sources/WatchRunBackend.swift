@@ -41,11 +41,23 @@ final class WatchRunBackend: RunBackend {
                 reportsReadings: !suppliesSensorReadings))
     }
 
+    /// Plays `cue` on the channels `CueRouting` picks: the wrist, the earbuds, or both. The channel
+    /// is read now, so earbuds put in or taken out mid-run change it.
     func play(_ cue: RunCue) {
+        let route = CueRouting.route(cue, headphonesConnected: audio.headphonesConnected, settings: cueSettings)
+        if route.haptic { playHaptic(cue) }
+        if let sound = route.sound { audio.play(sound, dropIfBusy: route.dropIfBusy) }
+    }
+
+    /// What the phone last sent, read at each cue so a change applies at once.
+    var cueSettings: CueSettings { CueSettings.stored() }
+
+    private func playHaptic(_ cue: RunCue) {
         switch cue {
         case .zoneAlert(let alert): ZoneAlertHaptics.play(alert)
         case .goalReached: WKInterfaceDevice.current().play(.success)
         case .lapMarked: WKInterfaceDevice.current().play(.click)
+        case .stepAnnouncement, .countdownTick: break
         case .batteryWarning(let level):
             switch level {
             case .tight: WKInterfaceDevice.current().play(.notification)
@@ -55,7 +67,12 @@ final class WatchRunBackend: RunBackend {
         }
     }
 
-    func cancelPendingCues() { ZoneAlertHaptics.cancelPending() }
+    private let audio = CueAudioPlayer()
+
+    func cancelPendingCues() {
+        ZoneAlertHaptics.cancelPending()
+        audio.cancel()
+    }
 
     func battery(elapsed: TimeInterval) -> BatteryDisplay { BatteryReader.current(elapsed: elapsed) }
 

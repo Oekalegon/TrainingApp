@@ -22,6 +22,8 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     /// Keeps the Watch app's heart-rate zones in step with the athlete's (WATCH-102); `nil` where
     /// WatchConnectivity isn't available.
     public let watchZoneSync: WatchZoneSync?
+    /// The settings for the watch's sound and haptics (WATCH-107).
+    public let watchCueSync: WatchCueSync?
     private let importer: any ActivityImporting
     private let healthStore: HKHealthStore
     private let athleteReader: HealthKitAthleteReader
@@ -46,6 +48,7 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         self.watchSync = WatchScheduleSync.live(
             model: model, planSync: watchChannel.map { WatchPlanSync(model: model, sender: $0) })
         self.watchZoneSync = watchChannel.map { WatchZoneSync(sender: $0) }
+        self.watchCueSync = watchChannel.map { WatchCueSync(sender: $0) }
         self.importer = importer
         self.healthStore = healthStore
         self.athleteReader = HealthKitAthleteReader(healthStore: healthStore)

@@ -13,19 +13,25 @@ public struct WatchContext: Sendable, Codable, Hashable {
     /// ``WatchPlan`` is "nothing planned", which is different).
     public var plan: WatchPlan?
 
-    public init(zones: WatchZones? = nil, plan: WatchPlan? = nil) {
+    /// How the athlete wants to be told by sound and haptics (WATCH-107); `nil` while the phone
+    /// hasn't sent them, and the watch keeps the ones it has.
+    public var cues: CueSettings?
+
+    public init(zones: WatchZones? = nil, plan: WatchPlan? = nil, cues: CueSettings? = nil) {
         self.zones = zones
         self.plan = plan
+        self.cues = cues
     }
 
     private enum CodingKeys: String, CodingKey {
-        case zones, plan
+        case zones, plan, cues
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         zones = (try? container.decodeIfPresent(WatchZones.self, forKey: .zones)) ?? nil
         plan = (try? container.decodeIfPresent(WatchPlan.self, forKey: .plan)) ?? nil
+        cues = (try? container.decodeIfPresent(CueSettings.self, forKey: .cues)) ?? nil
     }
 }
 

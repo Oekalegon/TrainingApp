@@ -12,6 +12,8 @@ extension RunRecorder {
     ///   - start: When the run started, which is when its first step does.
     func beginSteps(for plan: WatchPlannedWorkout, at start: Date) async {
         stepEngine = WorkoutStepEngine(blocks: plan.blocks)
+        announcedAheadIndex = nil
+        lastCountdownSecond = nil
         stepStartDate = start
         alertStepStarted()
         do {
@@ -20,22 +22,60 @@ extension RunRecorder {
             log.error("workout tag not written: \(error.localizedDescription, privacy: .public)")
         }
         stepTicker?.cancel()
-        // Half a second is fine enough for a step to end on time and cheap enough to leave running.
+        // Half a second is fine enough for a step to end on time and cheap enough to leave running;
+        // the last seconds of a step tick faster (``tickInterval``).
         stepTicker = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Task.sleep(for: self?.tickInterval ?? .milliseconds(500))
                 await self?.tickSteps()
             }
         }
+    }
+
+    /// How long to wait for the next look at the steps: a fifth of a second in the last 6 seconds of
+    /// a timed step, so the countdown tones land on their seconds, and half a second otherwise,
+    /// which costs the watch's battery less.
+    var tickInterval: Duration {
+        let remaining = stepEngine?.progress(elapsed: elapsed(), distance: distanceMeters)?.remainingTime
+        return remaining.map { $0 <= 6 } == true ? .milliseconds(200) : .milliseconds(500)
     }
 
     /// Ends the steps whose time or distance has been reached.
     func tickSteps() async {
         guard phase == .running, var engine = stepEngine, !engine.isFinished else { return }
         let transitions = engine.update(elapsed: elapsed(), distance: distanceMeters)
-        guard !transitions.isEmpty else { return }
+        guard !transitions.isEmpty else {
+            announceNextAhead(engine)
+            countDown(engine)
+            return
+        }
         stepEngine = engine
         await record(transitions)
+    }
+
+    /// Says the next step before it starts when it is a work step and the current one is nearly over
+    /// (WATCH-107), once per step.
+    private func announceNextAhead(_ engine: WorkoutStepEngine) {
+        guard let next = engine.next, announcedAheadIndex != next.index,
+              StepAnnouncement.announcesAhead(
+                next: next, progress: engine.progress(elapsed: elapsed(), distance: distanceMeters),
+                settings: backend.cueSettings)
+        else { return }
+        announcedAheadIndex = next.index
+        backend.play(.stepAnnouncement(StepAnnouncement.text(for: next, ahead: true)))
+    }
+
+    /// The last five seconds of a step with a time goal and a step after it: a short tone each second
+    /// (WATCH-107), then the next step's longer tone as it starts. The tick for a second is sounded
+    /// once, on the first tick of the clock that sees it.
+    private func countDown(_ engine: WorkoutStepEngine) {
+        guard engine.next != nil,
+              let remaining = engine.progress(elapsed: elapsed(), distance: distanceMeters)?.remainingTime
+        else { return }
+        let second = Int(remaining.rounded(.up))
+        guard (1...5).contains(second), lastCountdownSecond != second else { return }
+        lastCountdownSecond = second
+        backend.play(.countdownTick)
     }
 
     /// The lap button. During a planned workout it ends the current step and moves on, marked as a

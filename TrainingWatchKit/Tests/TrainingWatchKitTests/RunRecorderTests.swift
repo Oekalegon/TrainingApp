@@ -354,6 +354,77 @@ struct RunRecorderStepTests {
         #expect(backend.builder.metadata.count == 1)
         #expect(backend.builder.metadata[0][WorkoutMetadata.plannedActivityID] as? String == planned.id.uuidString)
         #expect(backend.cues == [.zoneAlert(.stepStarted)])
+        #expect(backend.announcements == ["Run, 1 minute, 140 to 150 beats per minute"])
+    }
+
+    @Test("a work step is announced ahead, once, and not again as it starts; a recovery is announced as it starts")
+    func announcedAhead() async {
+        let (recorder, backend) = await running(plan: plan([time(60, kind: .recovery), time(60), time(60, kind: .recovery)]))
+        #expect(backend.announcements.count == 1)  // the first step, as it starts
+        backend.builder.elapsed = 40
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 1)  // 20 s left: too early
+        backend.builder.elapsed = 52
+        await recorder.tickSteps()
+        #expect(backend.announcements.last == "Next: work for 1 minute, 140 to 150 beats per minute")
+        backend.builder.elapsed = 55
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 2)  // not twice
+        backend.builder.elapsed = 61
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 2)  // the work step began: already announced
+        backend.builder.elapsed = 115
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 2)  // a recovery isn't announced ahead
+        backend.builder.elapsed = 121
+        await recorder.tickSteps()
+        #expect(backend.announcements.last == "Recovery, 1 minute, 140 to 150 beats per minute")
+    }
+
+    @Test("the last five seconds of a step count down with one tick a second, once each, and not after the last step")
+    func countdown() async {
+        let (recorder, backend) = await running(plan: plan([time(60), time(60)]))
+        for (elapsed, ticks) in [(54.0, 0), (55.2, 1), (55.6, 1), (56.1, 2), (57.0, 3), (58.4, 4), (59.5, 5), (59.9, 5)] {
+            backend.builder.elapsed = elapsed
+            await recorder.tickSteps()
+            #expect(backend.ticks == ticks, "at \(elapsed)")
+        }
+        // The next step starts: its alert (the longer tone) is the cue, and the countdown starts anew.
+        backend.builder.elapsed = 60.1
+        await recorder.tickSteps()
+        #expect(backend.cues.filter { $0 == .zoneAlert(.stepStarted) }.count == 2)
+        backend.builder.elapsed = 115.5
+        await recorder.tickSteps()
+        #expect(backend.ticks == 5)  // the last step has no step after it
+    }
+
+    @Test("no countdown while paused, and the clock ticks faster only in the last seconds of a timed step")
+    func countdownPausedAndInterval() async {
+        let (recorder, backend) = await running(plan: plan([time(60), time(60)]))
+        #expect(recorder.tickInterval == .milliseconds(500))
+        backend.builder.elapsed = 56
+        #expect(recorder.tickInterval == .milliseconds(200))
+        recorder.pause()
+        backend.session.onStateChange?(.paused)
+        await settle()
+        #expect(recorder.phase == .paused)
+        let before = backend.ticks
+        backend.builder.elapsed = 57.5
+        await recorder.tickSteps()
+        #expect(backend.ticks == before)
+    }
+
+    @Test("with announcing ahead off, a work step is announced as it starts")
+    func notAhead() async {
+        let fake = FakeBackend()
+        fake.cueSettings = CueSettings(announceWorkAhead: false)
+        let (recorder, backend) = await running(plan: plan([time(60, kind: .recovery), time(60)]), backend: fake)
+        backend.builder.elapsed = 55
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 1)
+        backend.builder.elapsed = 61
+        await recorder.tickSteps()
+        #expect(backend.announcements.count == 2)
     }
 
     @Test("a free run has no steps and no step alerts")
@@ -375,6 +446,8 @@ struct RunRecorderStepTests {
         #expect(recorder.stepEngine?.current?.index == 2)
         // The first step's alert, then one for the step the run is in, not one for each passed.
         #expect(backend.cues.filter { $0 == .zoneAlert(.stepStarted) }.count == 2)
+        // One announcement for the first step and one for the step the run is in.
+        #expect(backend.announcements.count == 2)
         #expect(!backend.cues.contains(.goalReached))
     }
 
