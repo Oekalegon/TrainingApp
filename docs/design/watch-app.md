@@ -83,7 +83,7 @@ Escalating: the longer HR stays outside the target zone, the more often or the m
 
 ### One signal per meaning (added 2026-11-21)
 
-Every kind of event gets its own haptic pattern and its own tone, so the wrist and the ears tell them apart without looking. Today a step change plays one `.notification` haptic (and `.success` at the end of the workout), made in WATCH-104; WATCH-117 gives each of these its own:
+Every kind of event gets its own haptic pattern and its own tone, so the wrist and the ears tell them apart without looking. A step change played one `.notification` haptic (and `.success` at the end of the workout), made in WATCH-104; WATCH-117 gave each of these its own, and the athlete can change them (see "As built (WATCH-117)" below):
 
 - **Step started** (a new target): its own signal, unlike every zone alert below.
 - **Too low** (below the zone) and **too high** (above it): different from each other.

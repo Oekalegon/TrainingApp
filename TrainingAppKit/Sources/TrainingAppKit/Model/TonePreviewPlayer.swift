@@ -35,4 +35,13 @@ public final class TonePreviewPlayer {
         node.scheduleBuffer(buffer, completionHandler: nil)
         node.play()
     }
+
+    /// Stops the sound and lets go of the audio engine and the session, for when the screen closes.
+    public func stop() {
+        node.stop()
+        engine.stop()
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
+    }
 }

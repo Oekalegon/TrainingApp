@@ -139,8 +139,8 @@ public struct CueSettings: Sendable, Hashable, Codable {
     /// Each kind's tone and speech, by raw value, so it encodes as a plain object.
     private var signals: [String: SignalSound]
     /// Each kind's haptic and tone when the athlete changed it (WATCH-117).
-    private var haptics_: [String: HapticPattern] = [:]
-    private var tones_: [String: TonePattern] = [:]
+    private var hapticPatterns: [String: HapticPattern] = [:]
+    private var tonePatterns: [String: TonePattern] = [:]
 
     public init(
         haptics: Haptics = .automatic, sound: Sound = .automatic, announceWorkAhead: Bool = true,
@@ -168,13 +168,13 @@ public struct CueSettings: Sendable, Hashable, Codable {
     }
 
     /// The haptic a kind taps; the athlete's choice or the kind's default (WATCH-117).
-    public func haptic(of kind: SignalKind) -> HapticPattern { haptics_[kind.rawValue] ?? kind.defaultHaptic }
+    public func haptic(of kind: SignalKind) -> HapticPattern { hapticPatterns[kind.rawValue] ?? kind.defaultHaptic }
 
     /// The tone a kind plays; the athlete's choice or the kind's default (WATCH-117).
-    public func tone(of kind: SignalKind) -> TonePattern { tones_[kind.rawValue] ?? kind.defaultTone }
+    public func tone(of kind: SignalKind) -> TonePattern { tonePatterns[kind.rawValue] ?? kind.defaultTone }
 
-    public mutating func setHaptic(_ pattern: HapticPattern, of kind: SignalKind) { haptics_[kind.rawValue] = pattern }
-    public mutating func setTone(_ pattern: TonePattern, of kind: SignalKind) { tones_[kind.rawValue] = pattern }
+    public mutating func setHaptic(_ pattern: HapticPattern, of kind: SignalKind) { hapticPatterns[kind.rawValue] = pattern }
+    public mutating func setTone(_ pattern: TonePattern, of kind: SignalKind) { tonePatterns[kind.rawValue] = pattern }
 
     private enum CodingKeys: String, CodingKey {
         case haptics, sound, announceWorkAhead, aheadSeconds, signals, hapticPatterns, tonePatterns
@@ -187,8 +187,8 @@ public struct CueSettings: Sendable, Hashable, Codable {
         try container.encode(announceWorkAhead, forKey: .announceWorkAhead)
         try container.encode(aheadSeconds, forKey: .aheadSeconds)
         try container.encode(signals, forKey: .signals)
-        try container.encode(haptics_.mapValues(\.rawValue), forKey: .hapticPatterns)
-        try container.encode(tones_.mapValues(\.rawValue), forKey: .tonePatterns)
+        try container.encode(hapticPatterns.mapValues(\.rawValue), forKey: .hapticPatterns)
+        try container.encode(tonePatterns.mapValues(\.rawValue), forKey: .tonePatterns)
     }
 
     /// Each part is read on its own with its default, so settings from a phone with an older or newer
@@ -203,8 +203,8 @@ public struct CueSettings: Sendable, Hashable, Codable {
         // As raw strings, so a pattern a newer app added falls back to the default, not to a failure.
         let hapticNames = (try? container.decodeIfPresent([String: String].self, forKey: .hapticPatterns)) ?? [:]
         let toneNames = (try? container.decodeIfPresent([String: String].self, forKey: .tonePatterns)) ?? [:]
-        haptics_ = hapticNames.compactMapValues(HapticPattern.init(rawValue:))
-        tones_ = toneNames.compactMapValues(TonePattern.init(rawValue:))
+        hapticPatterns = hapticNames.compactMapValues(HapticPattern.init(rawValue:))
+        tonePatterns = toneNames.compactMapValues(TonePattern.init(rawValue:))
     }
 
     private static let defaultsKey = "cueSettings.v2"

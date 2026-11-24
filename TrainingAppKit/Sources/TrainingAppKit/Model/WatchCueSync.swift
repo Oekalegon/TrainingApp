@@ -3,8 +3,9 @@ import Observation
 import TrainingWatchKit
 
 /// The athlete's choice of how the watch tells them things (WATCH-107): sound through earbuds, the
-/// watch's speaker or not at all, haptics, and for each kind of signal a tone, speech or both. Set on the Apple Watch ▸
-/// Synchronisation screen, kept here in `UserDefaults` and sent to the watch with the zones and
+/// watch's speaker or not at all, haptics, and for each kind of signal a tone, speech or both, and
+/// (WATCH-117) which tone and haptic it uses. Set in Athlete ▸ Connected Services ▸ Apple Watch ▸
+/// Alerts During a Run, kept here in `UserDefaults` and sent to the watch with the zones and
 /// the plan, which keeps the last ones it got.
 ///
 /// `AppTabView` calls ``sync()`` when the app becomes active; a change is sent at once. The
@@ -36,8 +37,9 @@ public final class WatchCueSync {
         sync()
     }
 
-    /// Makes the watch tap `pattern` now (WATCH-117). `false` when the watch app isn't open and
-    /// reachable, so the view can say to open it.
+    /// Makes the watch tap `pattern` once now (WATCH-117), so the athlete can feel it. Repeats, as
+    /// for a far alert, aren't previewed. `false` when the watch app isn't open and reachable, so the
+    /// view can say to open it.
     public func preview(haptic pattern: HapticPattern) -> Bool {
         sender.preview(haptic: HapticPlan(pattern))
     }

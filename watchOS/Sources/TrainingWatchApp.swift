@@ -22,8 +22,12 @@ struct TrainingWatchApp: App {
                         if let plan = context.plan, !SimulatorTestData.replacesPlan { planStore.update(plan) }
                         context.cues?.save()
                     }, onPreview: { plan in
-                        // The phone's "Feel it on the watch" (WATCH-117).
-                        CueHaptics.play(plan)
+                        // The phone's "Feel on Watch" (WATCH-117); not in a run, where it could cut
+                        // a real cue's repeated taps.
+                        switch recorder.phase {
+                        case .running, .paused, .starting, .saving: return
+                        default: CueHaptics.play(plan)
+                        }
                     })
                     #if targetEnvironment(simulator)
                     SimulatorTestData.apply(zoneStore: zoneStore, planStore: planStore)

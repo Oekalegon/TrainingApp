@@ -4,8 +4,10 @@ import TrainingWatchKit
 /// Apple Watch ▸ Alerts During a Run (WATCH-107): how the watch tells the athlete things during a
 /// run. Where sound plays and when the wrist taps are set once; for each kind of signal (a step
 /// starts, below the zone, back in the zone, …) tone and speech are two check boxes, so a signal can
-/// have either, both (the tone first) or neither. Work steps can be announced before they start.
-/// Changes go to the watch at once.
+/// have either, both (the tone first) or neither. Each signal also has its own tone and haptic to
+/// pick (WATCH-117), with Play Tone on the phone and Feel on Watch, which taps the haptic on the open
+/// watch app (once: the repeats of a far alert or a worse battery warning aren't previewed). Work
+/// steps can be announced before they start. Changes go to the watch at once.
 struct WatchAlertsView: View {
     let cues: WatchCueSync
     @State private var tonePlayer = TonePreviewPlayer()
@@ -39,6 +41,7 @@ struct WatchAlertsView: View {
                     Picker("Tone Sound", selection: toneBinding(kind)) {
                         ForEach(TonePattern.allCases) { Text($0.title).tag($0) }
                     }
+                    .accessibilityLabel("\(kind.title), tone sound")
                     Button("Play Tone", systemImage: "speaker.wave.2") {
                         tonePlayer.play(cues.settings.tone(of: kind).notes)
                     }
@@ -46,6 +49,7 @@ struct WatchAlertsView: View {
                     Picker("Haptic", selection: hapticBinding(kind)) {
                         ForEach(HapticPattern.allCases) { Text($0.title).tag($0) }
                     }
+                    .accessibilityLabel("\(kind.title), haptic")
                     Button("Feel on Watch", systemImage: "applewatch.radiowaves.left.and.right") {
                         watchNotReachable = !cues.preview(haptic: cues.settings.haptic(of: kind))
                     }
@@ -81,6 +85,7 @@ struct WatchAlertsView: View {
         } message: {
             Text("Open the Training app on the Apple Watch and try again. A haptic can only be felt on the watch.")
         }
+        .onDisappear { tonePlayer.stop() }
         .navigationTitle(AthleteRoute.watchAlerts.title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
