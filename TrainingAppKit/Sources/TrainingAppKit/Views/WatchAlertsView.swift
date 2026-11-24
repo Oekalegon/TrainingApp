@@ -26,8 +26,8 @@ struct WatchAlertsView: View {
                 }
             } footer: {
                 Text("""
-                    Automatic haptics are for step changes, the end of the workout and the battery. A zone \
-                    alert taps only when it has no sound. Podcasts pause and music is ducked while a sound plays.
+                    Automatic haptics tap only when a signal has no sound, because some haptics make a sound \
+                    of their own. Always taps with the sound as well. Podcasts pause and music is ducked while a sound plays.
                     """)
             }
             ForEach(SignalKind.allCases) { kind in

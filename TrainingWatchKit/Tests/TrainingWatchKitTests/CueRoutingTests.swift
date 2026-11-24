@@ -22,7 +22,7 @@ struct CueRoutingTests {
             == CueRoute(haptic: false, sound: nil))
     }
 
-    @Test("with headphones the zone alerts are sound only, and step start, done and battery keep the haptic")
+    @Test("with headphones every signal is sound only, since a haptic can chime on its own; Always adds the haptic")
     func channels() {
         for alert in zoneAlerts {
             let route = CueRouting.route(.zoneAlert(alert), headphonesConnected: true, settings: settings(bothOn))
@@ -30,7 +30,9 @@ struct CueRoutingTests {
         }
         for cue in [RunCue.zoneAlert(.stepStarted), .goalReached, .batteryWarning(.tight)] {
             let route = CueRouting.route(cue, headphonesConnected: true, settings: settings(bothOn))
-            #expect(route.haptic && route.sound != nil)
+            #expect(!route.haptic && route.sound != nil)
+            let both = CueRouting.route(cue, headphonesConnected: true, settings: settings(bothOn, haptics: .always))
+            #expect(both.haptic && both.sound != nil)
         }
     }
 

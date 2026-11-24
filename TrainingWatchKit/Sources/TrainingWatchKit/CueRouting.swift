@@ -106,7 +106,7 @@ public struct SignalSound: Sendable, Hashable, Codable {
 public struct CueSettings: Sendable, Hashable, Codable {
     /// When the wrist taps.
     public enum Haptics: String, Sendable, CaseIterable, Hashable, Codable {
-        /// A zone alert only when it has no sound; step start, workout done and battery always.
+        /// Only when the cue has no sound, since a haptic can chime on its own.
         case automatic
         /// Every cue taps, with or without sound.
         case always
@@ -223,9 +223,10 @@ public struct CueSettings: Sendable, Hashable, Codable {
 
 /// Which channel a cue uses (`docs/design/watch-app.md`, "One signal per meaning" and "Audio"), by
 /// the athlete's ``CueSettings``. By default, with headphones connected a zone alert is sound only
-/// and without them haptic only, and the watch's own speaker is not used. Step started, workout
-/// done and battery warnings keep the haptic as well. A zone alert whose signal has no tone and no
-/// speech chosen is a haptic, so it isn't lost.
+/// and without them haptic only, and the watch's own speaker is not used. This holds for every
+/// signal (step started, workout done and battery warnings too, since a haptic's own chime would
+/// sound on top of the athlete's tone). A signal with no tone and no speech chosen is a haptic, so
+/// it isn't lost.
 ///
 /// The tones, words and haptics are starting values the athlete can change per signal (WATCH-117).
 public enum CueRouting {
@@ -240,11 +241,12 @@ public enum CueRouting {
         case .never: false
         }
         let sound = soundAllowed ? sound(for: cue, settings: settings) : nil
+        // Several haptics come with a chime of their own that can't be switched off, so a cue that
+        // already has a sound taps only when the athlete chose Always. A lap has no sound.
         let automatic: Bool
         switch cue {
-        case .lapMarked, .goalReached, .batteryWarning, .zoneAlert(.stepStarted): automatic = true
         case .stepAnnouncement, .countdownTick: automatic = false
-        case .zoneAlert: automatic = sound == nil
+        default: automatic = sound == nil
         }
         let haptic: Bool
         switch settings.haptics {
