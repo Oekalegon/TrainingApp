@@ -84,6 +84,24 @@ struct WatchPlanSyncTests {
             blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .time(1800), target: .heartRateZone(2))])])
     }
 
+    @Test("a workout with an open step is sent with its expected duration, one with fixed steps without (WATCH-119)")
+    func sendsDurationForOpenStep() async throws {
+        let (store, model) = try await makeModel()
+        let fixed = workout("Fixed")
+        let open = StructuredWorkout(
+            name: "Open", sport: .running,
+            blocks: [WorkoutBlock(steps: [WorkoutStep(kind: .work, goal: .open, target: .heartRateZone(2))])])
+        try await store.upsert([fixed, open])
+        try await store.upsert([
+            PlannedActivity(workoutID: fixed.id, date: day(0)), PlannedActivity(workoutID: open.id, date: day(1))
+        ])
+        let sender = FakeSender()
+        await WatchPlanSync(model: model, sender: sender).sync(asOf: day(0, hours: 6))
+        let sent = try #require(sender.plans.last)
+        #expect(sent.workouts.first { $0.name == "Fixed" }?.typicalDuration == nil)
+        #expect(sent.workouts.first { $0.name == "Open" }?.typicalDuration != nil)
+    }
+
     @Test("sends the planned runs of the next 7 days, earliest first, with their workouts")
     func sendsWindow() async throws {
         let (store, model) = try await makeModel()

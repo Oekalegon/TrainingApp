@@ -64,7 +64,9 @@ public final class WatchPlanSync {
         } catch {
             return
         }
-        let plan = Self.plan(from: candidates, workouts: workouts, asOf: now, calendar: calendar)
+        let plan = Self.plan(
+            from: candidates, workouts: workouts, asOf: now, calendar: calendar,
+            athlete: model.athlete, paceHistory: model.paceHistory)
         if let lastSent, lastSent.workouts == plan.workouts, now.timeIntervalSince(lastSent.sentAt) < Self.refreshInterval {
             return
         }
@@ -86,15 +88,28 @@ public final class WatchPlanSync {
     ///   - workouts: Each planned activity's workout, by ID; a plan whose workout is missing is left out.
     ///   - now: The current time, which is also when the plan counts as sent.
     ///   - calendar: In the athlete's time zone, so "today" and the window start where the athlete's day does.
+    ///   - athlete: Whose paces the duration of a workout with an open step is forecast from.
+    ///   - paceHistory: The athlete's recent runs, which that forecast is made from.
     static func plan(
-        from plans: [PlannedActivity], workouts: [UUID: StructuredWorkout], asOf now: Date, calendar: Calendar
+        from plans: [PlannedActivity], workouts: [UUID: StructuredWorkout], asOf now: Date, calendar: Calendar,
+        athlete: AthleteProfile? = nil, paceHistory: PaceHistory = .empty
     ) -> WatchPlan {
+        let calculator = StatisticsCalculator()
         let window = WatchSchedulePlanner.window(asOf: now, calendar: calendar)
         return WatchPlan(workouts: plans.compactMap { plan in
             guard window.contains(plan.date), plan.completedActivityID == nil,
                   let workout = workouts[plan.workoutID], workout.sport == .running
             else { return nil }
-            return WatchPlannedWorkout(id: plan.id, date: plan.date, name: workout.name, blocks: workout.blocks)
+            // The same forecast the planned cards show. The watch needs it only for an open step, which has
+            // no end of its own (WATCH-119), so it isn't sent otherwise: it would make the plan change
+            // every time the pace history does.
+            let hasOpenStep = workout.blocks.contains { $0.repetitions > 0 && $0.steps.contains { $0.goal == .open } }
+            let duration = hasOpenStep ? athlete.map {
+                calculator.projection(for: workout, athlete: $0, paceHistory: paceHistory, before: plan.date).duration
+            } : nil
+            return WatchPlannedWorkout(
+                id: plan.id, date: plan.date, name: workout.name, blocks: workout.blocks,
+                typicalDuration: duration.flatMap { $0 > 0 ? $0 : nil })
         }, sentAt: now)
     }
 }

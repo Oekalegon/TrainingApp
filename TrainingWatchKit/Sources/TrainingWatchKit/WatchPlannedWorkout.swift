@@ -15,9 +15,9 @@ public struct WatchPlannedWorkout: Identifiable, Sendable, Codable, Hashable {
     public var name: String
     /// The workout's steps, in blocks that repeat.
     public var blocks: [WorkoutBlock]
-    /// How long earlier runs of the same workout template took, in seconds (the median), when there are
-    /// some: the battery forecast uses it for the part of the workout that has no end of its own (an
-    /// open step). `nil` when there are no earlier runs (WATCH-119).
+    /// How long the phone expects the whole workout to take, in seconds (the forecast from the athlete's
+    /// paces that the planned cards show), sent only for a workout with an open step: the battery
+    /// forecast uses it for the part that has no end of its own. `nil` otherwise (WATCH-119).
     public var typicalDuration: TimeInterval?
     /// The athlete's own battery drain per hour in earlier runs, as a share of the full charge, when the
     /// phone knows it: the forecast starts from it instead of a typical rate (WATCH-119).
