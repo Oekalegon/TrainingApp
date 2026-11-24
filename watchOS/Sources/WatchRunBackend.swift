@@ -53,24 +53,13 @@ final class WatchRunBackend: RunBackend {
     var cueSettings: CueSettings { CueSettings.stored() }
 
     private func playHaptic(_ cue: RunCue) {
-        switch cue {
-        case .zoneAlert(let alert): ZoneAlertHaptics.play(alert)
-        case .goalReached: WKInterfaceDevice.current().play(.success)
-        case .lapMarked: WKInterfaceDevice.current().play(.click)
-        case .stepAnnouncement, .countdownTick: break
-        case .batteryWarning(let level):
-            switch level {
-            case .tight: WKInterfaceDevice.current().play(.notification)
-            case .critical: WKInterfaceDevice.current().play(.retry)
-            case .runsOut: WKInterfaceDevice.current().play(.failure)
-            }
-        }
+        if let plan = CueRouting.hapticPlan(for: cue, settings: cueSettings) { CueHaptics.play(plan) }
     }
 
     private let audio = CueAudioPlayer()
 
     func cancelPendingCues() {
-        ZoneAlertHaptics.cancelPending()
+        CueHaptics.cancelPending()
         audio.cancel()
     }
 

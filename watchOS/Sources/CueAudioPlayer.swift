@@ -104,19 +104,8 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate, CuePlaybackDr
     // MARK: Tones
 
     private func playTones(_ notes: [ToneNote]) {
-        let rate = 22_050.0
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1) else { partEnded(); return }
-        var samples: [Float] = []
-        for note in notes {
-            let count = Int(note.duration * rate)
-            let fade = max(Int(0.01 * rate), 1)
-            for index in 0..<count {
-                let edge = min(index, count - index, fade)
-                let envelope = Float(edge) / Float(fade)
-                samples.append(envelope * 0.5 * Float(sin(2 * .pi * note.frequency * Double(index) / rate)))
-            }
-            samples.append(contentsOf: [Float](repeating: 0, count: Int(0.05 * rate)))
-        }
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: ToneNote.sampleRate, channels: 1) else { partEnded(); return }
+        let samples = ToneNote.samples(notes)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
               let channel = buffer.floatChannelData?[0] else { partEnded(); return }
         buffer.frameLength = AVAudioFrameCount(samples.count)

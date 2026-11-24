@@ -4,10 +4,14 @@ import TrainingWatchKit
 /// Apple Watch ▸ Alerts During a Run (WATCH-107): how the watch tells the athlete things during a
 /// run. Where sound plays and when the wrist taps are set once; for each kind of signal (a step
 /// starts, below the zone, back in the zone, …) tone and speech are two check boxes, so a signal can
-/// have either, both (the tone first) or neither. Work steps can be announced before they start.
-/// Changes go to the watch at once.
+/// have either, both (the tone first) or neither. Each signal also has its own tone and haptic to
+/// pick (WATCH-117), with Play Tone on the phone and Feel on Watch, which taps the haptic on the open
+/// watch app (once: the repeats of a far alert or a worse battery warning aren't previewed). Work
+/// steps can be announced before they start. Changes go to the watch at once.
 struct WatchAlertsView: View {
     let cues: WatchCueSync
+    @State private var tonePlayer = TonePreviewPlayer()
+    @State private var watchNotReachable = false
 
     var body: some View {
         List {
@@ -24,8 +28,8 @@ struct WatchAlertsView: View {
                 }
             } footer: {
                 Text("""
-                    Automatic haptics are for step changes, the end of the workout and the battery. A zone \
-                    alert taps only when it has no sound. Podcasts pause and music is ducked while a sound plays.
+                    Automatic haptics tap only when a signal has no sound, because some haptics make a sound \
+                    of their own. Always taps with the sound as well. Podcasts pause and music is ducked while a sound plays.
                     """)
             }
             ForEach(SignalKind.allCases) { kind in
@@ -34,11 +38,27 @@ struct WatchAlertsView: View {
                         .accessibilityLabel("\(kind.title), tone")
                     Toggle("Speech", isOn: signalBinding(kind, \.speech))
                         .accessibilityLabel("\(kind.title), speech")
+                    Picker("Tone Sound", selection: toneBinding(kind)) {
+                        ForEach(TonePattern.allCases) { Text($0.title).tag($0) }
+                    }
+                    .accessibilityLabel("\(kind.title), tone sound")
+                    Button("Play Tone", systemImage: "speaker.wave.2") {
+                        tonePlayer.play(cues.settings.tone(of: kind).notes)
+                    }
+                    .accessibilityLabel("Play \(kind.title) tone")
+                    Picker("Haptic", selection: hapticBinding(kind)) {
+                        ForEach(HapticPattern.allCases) { Text($0.title).tag($0) }
+                    }
+                    .accessibilityLabel("\(kind.title), haptic")
+                    Button("Feel on Watch", systemImage: "applewatch.radiowaves.left.and.right") {
+                        watchNotReachable = !cues.preview(haptic: cues.settings.haptic(of: kind))
+                    }
+                    .accessibilityLabel("Feel \(kind.title) haptic on the watch")
                 } header: {
                     Text(kind.title)
                 } footer: {
                     if kind == .stepStart {
-                        Text("The tone counts down the last 5 seconds of a step, one short tone a second, and is longer as the next step starts.")
+                        Text("Each signal has its own tone and haptic so they can be told apart without looking. The watch repeats them for a far-off zone alert and a worse battery warning. The tone counts down the last 5 seconds of a step, one short tone a second, and is longer as the next step starts.")
                     }
                 }
                 .toggleStyle(CheckBoxToggleStyle())
@@ -60,6 +80,12 @@ struct WatchAlertsView: View {
                     """)
             }
         }
+        .alert("Watch Not Reachable", isPresented: $watchNotReachable) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Open the Training app on the Apple Watch and try again. A haptic can only be felt on the watch.")
+        }
+        .onDisappear { tonePlayer.stop() }
         .navigationTitle(AthleteRoute.watchAlerts.title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -72,6 +98,26 @@ struct WatchAlertsView: View {
             set: { value in
                 var settings = cues.settings
                 settings[keyPath: keyPath] = value
+                cues.update(settings)
+            })
+    }
+
+    private func toneBinding(_ kind: SignalKind) -> Binding<TonePattern> {
+        Binding(
+            get: { cues.settings.tone(of: kind) },
+            set: { value in
+                var settings = cues.settings
+                settings.setTone(value, of: kind)
+                cues.update(settings)
+            })
+    }
+
+    private func hapticBinding(_ kind: SignalKind) -> Binding<HapticPattern> {
+        Binding(
+            get: { cues.settings.haptic(of: kind) },
+            set: { value in
+                var settings = cues.settings
+                settings.setHaptic(value, of: kind)
                 cues.update(settings)
             })
     }

@@ -13,6 +13,13 @@ public protocol WatchSessionControlling: AnyObject {
     func activate()
     /// Replaces the application context sent to the other device.
     func updateContext(_ context: [String: Any]) throws
+    /// Sends a message the watch app plays at once; `false` when the watch app isn't open and
+    /// reachable, or on the watch (WATCH-117).
+    func sendPreview(_ message: [String: Any]) -> Bool
+}
+
+extension WatchSessionControlling {
+    public func sendPreview(_ message: [String: Any]) -> Bool { false }
 }
 
 /// Something that puts the athlete's zones and plan on the watch: ``WatchSyncChannel`` on the
@@ -28,8 +35,16 @@ public protocol WatchSyncSending: AnyObject {
     /// Sends the sound and haptic settings (WATCH-107), replacing any that haven't been delivered.
     func send(cues: CueSettings) throws
 
+    /// Makes the watch tap a haptic now, so the athlete can feel it (WATCH-117). `false` when the
+    /// watch app isn't open and reachable.
+    func preview(haptic: HapticPlan) -> Bool
+
     /// Why the last attempt to hand the context to the transport failed, or `nil` when it worked.
     var lastSendError: String? { get }
+}
+
+extension WatchSyncSending {
+    public func preview(haptic: HapticPlan) -> Bool { false }
 }
 
 /// Moves what the iPhone knows to the watch (WATCH-102 zones, WATCH-103 plan), over a
@@ -47,6 +62,7 @@ public protocol WatchSyncSending: AnyObject {
 public final class WatchSyncChannel: WatchSyncSending {
     private let session: any WatchSessionControlling
     private var onReceive: ((WatchContext) -> Void)?
+    private var onPreview: ((HapticPlan) -> Void)?
     private var latest = WatchContext()
     /// Whether `latest` still has to go out: set by a new send and by a change in the watch state.
     private var needsSend = false
@@ -70,9 +86,24 @@ public final class WatchSyncChannel: WatchSyncSending {
 
     /// Starts the session. On the watch, `onReceive` gets the context already waiting and each new
     /// one that arrives; on the phone it isn't used.
-    public func activate(onReceive: ((WatchContext) -> Void)? = nil) {
+    public func activate(onReceive: ((WatchContext) -> Void)? = nil, onPreview: ((HapticPlan) -> Void)? = nil) {
         self.onReceive = onReceive
+        self.onPreview = onPreview
         session.activate()
+    }
+
+    public func preview(haptic: HapticPlan) -> Bool {
+        session.sendPreview([Self.previewKey: haptic.pattern.rawValue, Self.previewTapsKey: haptic.taps])
+    }
+
+    static let previewKey = "previewHaptic"
+    static let previewTapsKey = "previewTaps"
+
+    /// A preview message arrived from the phone.
+    func receivedPreview(_ message: [String: Any]) {
+        guard let name = message[Self.previewKey] as? String, let pattern = HapticPattern(rawValue: name) else { return }
+        let taps = min(max(message[Self.previewTapsKey] as? Int ?? 1, 1), 3)
+        onPreview?(HapticPlan(pattern, taps: taps))
     }
 
     /// - Throws: An encoding error.

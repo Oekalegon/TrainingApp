@@ -37,9 +37,24 @@ extension WCSessionAdapter: WatchSessionControlling {
     func updateContext(_ context: [String: Any]) throws {
         try WCSession.default.updateApplicationContext(context)
     }
+
+    func sendPreview(_ message: [String: Any]) -> Bool {
+        #if os(iOS)
+        guard WCSession.default.isReachable else { return false }
+        WCSession.default.sendMessage(message, replyHandler: nil, errorHandler: nil)
+        return true
+        #else
+        false
+        #endif
+    }
 }
 
 extension WCSessionAdapter: WCSessionDelegate {
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        nonisolated(unsafe) let message = message
+        Task { @MainActor in self.channel?.receivedPreview(message) }
+    }
+
     nonisolated func session(
         _ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?
     ) {

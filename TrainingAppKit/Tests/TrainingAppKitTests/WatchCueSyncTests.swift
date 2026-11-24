@@ -9,6 +9,12 @@ private final class CueSender: WatchSyncSending {
     var cues: [CueSettings] = []
     var failing = false
     var lastSendError: String?
+    var previewResult = true
+    var previews: [HapticPlan] = []
+    func preview(haptic: HapticPlan) -> Bool {
+        previews.append(haptic)
+        return previewResult
+    }
     func send(zones: WatchZones) throws {}
     func send(plan: WatchPlan) throws {}
     func send(cues: CueSettings) throws {
@@ -22,6 +28,16 @@ private final class CueSender: WatchSyncSending {
 struct WatchCueSyncTests {
     private func defaults() throws -> UserDefaults {
         try #require(UserDefaults(suiteName: "WatchCueSyncTests-\(UUID().uuidString)"))
+    }
+
+    @Test("a haptic preview is a single tap of the pattern, and says when the watch isn't reachable (WATCH-117)")
+    func hapticPreview() throws {
+        let sender = CueSender()
+        let sync = WatchCueSync(sender: sender, defaults: try defaults())
+        #expect(sync.preview(haptic: .directionUp))
+        sender.previewResult = false
+        #expect(!sync.preview(haptic: .success))
+        #expect(sender.previews == [HapticPlan(.directionUp), HapticPlan(.success)])
     }
 
     @Test("a change is kept and sent at once; an unchanged one is not sent again")

@@ -106,7 +106,7 @@ public struct SignalSound: Sendable, Hashable, Codable {
 public struct CueSettings: Sendable, Hashable, Codable {
     /// When the wrist taps.
     public enum Haptics: String, Sendable, CaseIterable, Hashable, Codable {
-        /// A zone alert only when it has no sound; step start, workout done and battery always.
+        /// Only when the cue has no sound, since a haptic can chime on its own.
         case automatic
         /// Every cue taps, with or without sound.
         case always
@@ -138,6 +138,9 @@ public struct CueSettings: Sendable, Hashable, Codable {
 
     /// Each kind's tone and speech, by raw value, so it encodes as a plain object.
     private var signals: [String: SignalSound]
+    /// Each kind's haptic and tone when the athlete changed it (WATCH-117).
+    private var hapticPatterns: [String: HapticPattern] = [:]
+    private var tonePatterns: [String: TonePattern] = [:]
 
     public init(
         haptics: Haptics = .automatic, sound: Sound = .automatic, announceWorkAhead: Bool = true,
@@ -164,8 +167,28 @@ public struct CueSettings: Sendable, Hashable, Codable {
         set { signals[kind.rawValue] = newValue }
     }
 
+    /// The haptic a kind taps; the athlete's choice or the kind's default (WATCH-117).
+    public func haptic(of kind: SignalKind) -> HapticPattern { hapticPatterns[kind.rawValue] ?? kind.defaultHaptic }
+
+    /// The tone a kind plays; the athlete's choice or the kind's default (WATCH-117).
+    public func tone(of kind: SignalKind) -> TonePattern { tonePatterns[kind.rawValue] ?? kind.defaultTone }
+
+    public mutating func setHaptic(_ pattern: HapticPattern, of kind: SignalKind) { hapticPatterns[kind.rawValue] = pattern }
+    public mutating func setTone(_ pattern: TonePattern, of kind: SignalKind) { tonePatterns[kind.rawValue] = pattern }
+
     private enum CodingKeys: String, CodingKey {
-        case haptics, sound, announceWorkAhead, aheadSeconds, signals
+        case haptics, sound, announceWorkAhead, aheadSeconds, signals, hapticPatterns, tonePatterns
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(haptics, forKey: .haptics)
+        try container.encode(sound, forKey: .sound)
+        try container.encode(announceWorkAhead, forKey: .announceWorkAhead)
+        try container.encode(aheadSeconds, forKey: .aheadSeconds)
+        try container.encode(signals, forKey: .signals)
+        try container.encode(hapticPatterns.mapValues(\.rawValue), forKey: .hapticPatterns)
+        try container.encode(tonePatterns.mapValues(\.rawValue), forKey: .tonePatterns)
     }
 
     /// Each part is read on its own with its default, so settings from a phone with an older or newer
@@ -177,6 +200,11 @@ public struct CueSettings: Sendable, Hashable, Codable {
         announceWorkAhead = (try? container.decodeIfPresent(Bool.self, forKey: .announceWorkAhead)) ?? true
         aheadSeconds = Self.aheadRange.clamp((try? container.decodeIfPresent(Int.self, forKey: .aheadSeconds)) ?? 10)
         signals = (try? container.decodeIfPresent([String: SignalSound].self, forKey: .signals)) ?? [:]
+        // As raw strings, so a pattern a newer app added falls back to the default, not to a failure.
+        let hapticNames = (try? container.decodeIfPresent([String: String].self, forKey: .hapticPatterns)) ?? [:]
+        let toneNames = (try? container.decodeIfPresent([String: String].self, forKey: .tonePatterns)) ?? [:]
+        hapticPatterns = hapticNames.compactMapValues(HapticPattern.init(rawValue:))
+        tonePatterns = toneNames.compactMapValues(TonePattern.init(rawValue:))
     }
 
     private static let defaultsKey = "cueSettings.v2"
@@ -195,11 +223,12 @@ public struct CueSettings: Sendable, Hashable, Codable {
 
 /// Which channel a cue uses (`docs/design/watch-app.md`, "One signal per meaning" and "Audio"), by
 /// the athlete's ``CueSettings``. By default, with headphones connected a zone alert is sound only
-/// and without them haptic only, and the watch's own speaker is not used. Step started, workout
-/// done and battery warnings keep the haptic as well. A zone alert whose signal has no tone and no
-/// speech chosen is a haptic, so it isn't lost.
+/// and without them haptic only, and the watch's own speaker is not used. This holds for every
+/// signal (step started, workout done and battery warnings too, since a haptic's own chime would
+/// sound on top of the athlete's tone). A signal with no tone and no speech chosen is a haptic, so
+/// it isn't lost.
 ///
-/// The tones and words are starting values; their final shape is WATCH-117.
+/// The tones, words and haptics are starting values the athlete can change per signal (WATCH-117).
 public enum CueRouting {
     /// - Parameters:
     ///   - cue: What happened.
@@ -212,11 +241,12 @@ public enum CueRouting {
         case .never: false
         }
         let sound = soundAllowed ? sound(for: cue, settings: settings) : nil
+        // Several haptics come with a chime of their own that can't be switched off, so a cue that
+        // already has a sound taps only when the athlete chose Always. A lap has no sound.
         let automatic: Bool
         switch cue {
-        case .lapMarked, .goalReached, .batteryWarning, .zoneAlert(.stepStarted): automatic = true
         case .stepAnnouncement, .countdownTick: automatic = false
-        case .zoneAlert: automatic = sound == nil
+        default: automatic = sound == nil
         }
         let haptic: Bool
         switch settings.haptics {
@@ -238,50 +268,63 @@ public enum CueRouting {
 
     /// What the cue sounds like with the athlete's choice for its signal: its tones if the tone is
     /// on, then its words if speech is on; `nil` when neither is, or for a cue with no sound (a lap).
-    /// One table of tones and words, so the two can't drift apart and WATCH-117 can tune it without
-    /// touching the channel rules.
+    /// One table of tones and words, so the two can't drift apart.
     public static func sound(for cue: RunCue, settings: CueSettings) -> CueSound? {
         guard let kind = SignalKind(cue) else { return nil }
         let choice = settings[kind]
-        let (tones, words) = material(for: cue)
+        let (tones, words) = material(for: cue, settings: settings)
         let sound = CueSound(tones: choice.tone ? tones : [], words: choice.speech ? words : nil)
         return sound.tones.isEmpty && sound.words == nil ? nil : sound
     }
 
     /// A cue's tones and its words. The step-start alert has only its tone and the announcement
     /// only its words (the text is the step's), so the two together are the step's signal.
-    private static func material(for cue: RunCue) -> (tones: [ToneNote], words: String?) {
+    private static func material(for cue: RunCue, settings: CueSettings) -> (tones: [ToneNote], words: String?) {
+        func tones(_ kind: SignalKind, times: Int = 1) -> [ToneNote] {
+            Array(repeating: settings.tone(of: kind).notes, count: times).flatMap { $0 }
+        }
         switch cue {
         case .zoneAlert(let alert):
             switch alert {
-            case .stepStarted: return (stepTones, nil)
-            case .tooLow: return (tooLowTones, "Speed up")
-            case .tooHigh: return (tooHighTones, "Slow down")
-            case .farBelow: return (tooLowTones + tooLowTones, "Speed up now")
-            case .farAbove: return (tooHighTones + tooHighTones, "Slow down now")
-            case .backInZone: return (backTones, "In zone")
+            case .stepStarted: return (tones(.stepStart), nil)
+            case .tooLow: return (tones(.belowZone), "Speed up")
+            case .tooHigh: return (tones(.aboveZone), "Slow down")
+            case .farBelow: return (tones(.belowZone, times: 2), "Speed up now")
+            case .farAbove: return (tones(.aboveZone, times: 2), "Slow down now")
+            case .backInZone: return (tones(.backInZone), "In zone")
             }
         case .stepAnnouncement(let text): return ([], text)
         case .countdownTick: return (tickTones, nil)
-        case .goalReached: return (doneTones, "Workout done")
+        case .goalReached: return (tones(.workoutDone), "Workout done")
         case .lapMarked: return ([], nil)
         case .batteryWarning(let level):
             switch level {
-            case .tight: return (batteryTones, "Battery low")
-            case .critical: return (batteryTones, "Battery critical")
-            case .runsOut: return (batteryTones, "Battery won't last")
+            case .tight: return (tones(.battery), "Battery low")
+            case .critical: return (tones(.battery, times: 2), "Battery critical")
+            case .runsOut: return (tones(.battery, times: 3), "Battery won't last")
             }
+        }
+    }
+
+    /// The haptic of a cue, with the athlete's pattern for its signal; `nil` for the announcement and
+    /// the countdown, which have none. A lap is always a click.
+    public static func hapticPlan(for cue: RunCue, settings: CueSettings) -> HapticPlan? {
+        switch cue {
+        case .stepAnnouncement, .countdownTick: return nil
+        case .lapMarked: return HapticPlan(.click)
+        default: break
+        }
+        guard let kind = SignalKind(cue) else { return nil }
+        let pattern = settings.haptic(of: kind)
+        switch cue {
+        case .zoneAlert(.farBelow), .zoneAlert(.farAbove), .batteryWarning(.critical): return HapticPlan(pattern, taps: 2)
+        case .batteryWarning(.runsOut): return HapticPlan(pattern, taps: 3)
+        default: return HapticPlan(pattern)
         }
     }
 
     /// A short tone for each second of the countdown, and a longer, lower one as the step starts.
     private static let tickTones = [ToneNote(1000, 0.08)]
-    private static let stepTones = [ToneNote(660, 0.6)]
-    private static let tooLowTones = [ToneNote(440, 0.15), ToneNote(660, 0.15)]
-    private static let tooHighTones = [ToneNote(660, 0.15), ToneNote(440, 0.15)]
-    private static let backTones = [ToneNote(880, 0.2)]
-    private static let doneTones = [ToneNote(523, 0.15), ToneNote(659, 0.15), ToneNote(784, 0.3)]
-    private static let batteryTones = [ToneNote(330, 0.3), ToneNote(330, 0.3)]
 }
 
 private extension ClosedRange where Bound == Int {

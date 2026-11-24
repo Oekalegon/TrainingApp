@@ -66,7 +66,7 @@ extension RunRecorder {
         }
     }
 
-    /// Starting values, one a level: WATCH-117 gives every signal its own pattern and tone.
+    /// Plays the warning; `CueRouting` picks the haptic and tone for its level.
     private func playHaptic(for warning: BatteryWarning) {
         backend.play(.batteryWarning(warning.level))
     }

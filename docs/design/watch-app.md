@@ -83,7 +83,7 @@ Escalating: the longer HR stays outside the target zone, the more often or the m
 
 ### One signal per meaning (added 2026-11-21)
 
-Every kind of event gets its own haptic pattern and its own tone, so the wrist and the ears tell them apart without looking. Today a step change plays one `.notification` haptic (and `.success` at the end of the workout), made in WATCH-104; WATCH-117 gives each of these its own:
+Every kind of event gets its own haptic pattern and its own tone, so the wrist and the ears tell them apart without looking. A step change played one `.notification` haptic (and `.success` at the end of the workout), made in WATCH-104; WATCH-117 gave each of these its own, and the athlete can change them (see "As built (WATCH-117)" below):
 
 - **Step started** (a new target): its own signal, unlike every zone alert below.
 - **Too low** (below the zone) and **too high** (above it): different from each other.
@@ -94,10 +94,12 @@ Every kind of event gets its own haptic pattern and its own tone, so the wrist a
 **Which channel (decided 2026-11-21):**
 - **Headphones or earbuds connected:** zone alerts (below, above, back in, far out) are **sound only**, as a tone or speech by the WATCH-107 setting, with no haptic. That also keeps the wrist still for the heart-rate sensor.
 - **No headphones:** zone alerts are **haptic only**. The watch speaker is never used.
-- **Step started** and **workout done** may use the haptic as well as the sound, with or without headphones, since they are rare and the wrist is a good place to feel a step change.
+- **Step started**, **workout done** and the battery warning follow the same rule (changed 2026-11-24, WATCH-117): several `WKHapticType` haptics play a chime of their own that can't be switched off, which sounded on top of the athlete's tone, so the automatic setting taps only when no sound plays. Haptics set to Always tap with the sound.
 - Whether headphones are connected is read when an alert fires, not once at the start, so putting them in or taking them out mid-run changes the channel.
 
 The haptic and the tone for an event are chosen together from one table (event to haptic pattern and tone), so they can't drift apart, and speech (the WATCH-107 setting) says the same thing in words. WATCH-106 decides when each event fires; WATCH-117 decides what each sounds and feels like. Haptic patterns can only be judged on a real watch, which is a few months away, so start with `WKHapticType` values that already differ clearly and tune later.
+
+**As built (WATCH-117):** `HapticPattern` and `TonePattern` (`TrainingWatchKit`) list the nine haptics and seven tones on offer; `SignalKind.defaultHaptic` and `defaultTone` give each of the six kinds (step starts, below, above, back in, done, battery) its own. The athlete can change either per kind in the iPhone app (Alerts During a Run), kept in `CueSettings` and sent to the watch. A far alert plays its direction's signal twice, and the battery warning's levels once, twice and three times. The lap is always a click. In the same screen, Play Tone plays a tone on the phone and Feel on Watch makes the open watch app tap the haptic (a WatchConnectivity message; it needs the watch app in the foreground).
 
 ### Audio
 
