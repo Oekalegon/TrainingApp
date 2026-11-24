@@ -398,6 +398,22 @@ struct RunRecorderStepTests {
         #expect(backend.ticks == 5)  // the last step has no step after it
     }
 
+    @Test("no countdown while paused, and the clock ticks faster only in the last seconds of a timed step")
+    func countdownPausedAndInterval() async {
+        let (recorder, backend) = await running(plan: plan([time(60), time(60)]))
+        #expect(recorder.tickInterval == .milliseconds(500))
+        backend.builder.elapsed = 56
+        #expect(recorder.tickInterval == .milliseconds(200))
+        recorder.pause()
+        backend.session.onStateChange?(.paused)
+        await settle()
+        #expect(recorder.phase == .paused)
+        let before = backend.ticks
+        backend.builder.elapsed = 57.5
+        await recorder.tickSteps()
+        #expect(backend.ticks == before)
+    }
+
     @Test("with announcing ahead off, a work step is announced as it starts")
     func notAhead() async {
         let fake = FakeBackend()

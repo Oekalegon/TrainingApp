@@ -19,14 +19,10 @@ public struct CueSound: Sendable, Hashable {
     public var tones: [ToneNote]
     /// The words to say after the tones; `nil` for none.
     public var words: String?
-    /// Whether to skip it when something else is still playing, instead of waiting its turn: a
-    /// countdown tick that comes late is worse than none.
-    public var dropIfBusy: Bool
 
-    public init(tones: [ToneNote] = [], words: String? = nil, dropIfBusy: Bool = false) {
+    public init(tones: [ToneNote] = [], words: String? = nil) {
         self.tones = tones
         self.words = words
-        self.dropIfBusy = dropIfBusy
     }
 }
 
@@ -34,6 +30,15 @@ public struct CueSound: Sendable, Hashable {
 public struct CueRoute: Sendable, Hashable {
     public let haptic: Bool
     public let sound: CueSound?
+    /// Whether to skip the sound when something is playing, instead of waiting its turn: a
+    /// countdown tick that comes late is worse than none.
+    public let dropIfBusy: Bool
+
+    public init(haptic: Bool, sound: CueSound?, dropIfBusy: Bool = false) {
+        self.haptic = haptic
+        self.sound = sound
+        self.dropIfBusy = dropIfBusy
+    }
 }
 
 /// A kind of signal the athlete can set the sound of (WATCH-107): each has its own choice of tone
@@ -123,8 +128,13 @@ public struct CueSettings: Sendable, Hashable, Codable {
     /// it; other steps are announced as they start. A step that can't be foreseen (after an open
     /// step, or one with a distance goal) is announced as it starts.
     public var announceWorkAhead: Bool
-    /// How long before a work step starts it is announced, in seconds.
-    public var aheadSeconds: Int
+    /// How long before a work step starts it is announced, in seconds (``aheadRange``).
+    public var aheadSeconds: Int {
+        didSet { aheadSeconds = Self.aheadRange.clamp(aheadSeconds) }
+    }
+
+    /// The lead times the athlete can choose, which also bounds what the watch accepts from the phone.
+    public static let aheadRange = 5...30
 
     /// Each kind's tone and speech, by raw value, so it encodes as a plain object.
     private var signals: [String: SignalSound]
@@ -136,7 +146,7 @@ public struct CueSettings: Sendable, Hashable, Codable {
         self.haptics = haptics
         self.sound = sound
         self.announceWorkAhead = announceWorkAhead
-        self.aheadSeconds = aheadSeconds
+        self.aheadSeconds = Self.aheadRange.clamp(aheadSeconds)
         self.signals = Dictionary(uniqueKeysWithValues: signals.map { ($0.key.rawValue, $0.value) })
     }
 
@@ -165,7 +175,7 @@ public struct CueSettings: Sendable, Hashable, Codable {
         haptics = (try? container.decodeIfPresent(Haptics.self, forKey: .haptics)) ?? .automatic
         sound = (try? container.decodeIfPresent(Sound.self, forKey: .sound)) ?? .automatic
         announceWorkAhead = (try? container.decodeIfPresent(Bool.self, forKey: .announceWorkAhead)) ?? true
-        aheadSeconds = (try? container.decodeIfPresent(Int.self, forKey: .aheadSeconds)) ?? 10
+        aheadSeconds = Self.aheadRange.clamp((try? container.decodeIfPresent(Int.self, forKey: .aheadSeconds)) ?? 10)
         signals = (try? container.decodeIfPresent([String: SignalSound].self, forKey: .signals)) ?? [:]
     }
 
@@ -214,6 +224,7 @@ public enum CueRouting {
         case .always: haptic = hapticCue(cue)
         case .automatic: haptic = automatic
         }
+        if case .countdownTick = cue { return CueRoute(haptic: haptic, sound: sound, dropIfBusy: true) }
         return CueRoute(haptic: haptic, sound: sound)
     }
 
@@ -233,8 +244,7 @@ public enum CueRouting {
         guard let kind = SignalKind(cue) else { return nil }
         let choice = settings[kind]
         let (tones, words) = material(for: cue)
-        var sound = CueSound(tones: choice.tone ? tones : [], words: choice.speech ? words : nil)
-        if case .countdownTick = cue { sound.dropIfBusy = true }
+        let sound = CueSound(tones: choice.tone ? tones : [], words: choice.speech ? words : nil)
         return sound.tones.isEmpty && sound.words == nil ? nil : sound
     }
 
@@ -272,4 +282,8 @@ public enum CueRouting {
     private static let backTones = [ToneNote(880, 0.2)]
     private static let doneTones = [ToneNote(523, 0.15), ToneNote(659, 0.15), ToneNote(784, 0.3)]
     private static let batteryTones = [ToneNote(330, 0.3), ToneNote(330, 0.3)]
+}
+
+private extension ClosedRange where Bound == Int {
+    func clamp(_ value: Int) -> Int { Swift.min(Swift.max(value, lowerBound), upperBound) }
 }

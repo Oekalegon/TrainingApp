@@ -3,7 +3,7 @@ import Observation
 import TrainingWatchKit
 
 /// The athlete's choice of how the watch tells them things (WATCH-107): sound through earbuds, the
-/// watch's speaker or not at all, haptics, and speech or tones. Set on the Apple Watch ▸
+/// watch's speaker or not at all, haptics, and for each kind of signal a tone, speech or both. Set on the Apple Watch ▸
 /// Synchronisation screen, kept here in `UserDefaults` and sent to the watch with the zones and
 /// the plan, which keeps the last ones it got.
 ///

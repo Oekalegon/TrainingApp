@@ -22,13 +22,22 @@ extension RunRecorder {
             log.error("workout tag not written: \(error.localizedDescription, privacy: .public)")
         }
         stepTicker?.cancel()
-        // A fifth of a second keeps the countdown tones on their seconds and is cheap enough to leave running.
+        // Half a second is fine enough for a step to end on time and cheap enough to leave running;
+        // the last seconds of a step tick faster (``tickInterval``).
         stepTicker = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(200))
+                try? await Task.sleep(for: self?.tickInterval ?? .milliseconds(500))
                 await self?.tickSteps()
             }
         }
+    }
+
+    /// How long to wait for the next look at the steps: a fifth of a second in the last 6 seconds of
+    /// a timed step, so the countdown tones land on their seconds, and half a second otherwise,
+    /// which costs the watch's battery less.
+    var tickInterval: Duration {
+        let remaining = stepEngine?.progress(elapsed: elapsed(), distance: distanceMeters)?.remainingTime
+        return remaining.map { $0 <= 6 } == true ? .milliseconds(200) : .milliseconds(500)
     }
 
     /// Ends the steps whose time or distance has been reached.

@@ -61,11 +61,22 @@ struct CueRoutingTests {
     @Test("the countdown tick is the step-start tone only, dropped if busy, and never a haptic or speech")
     func countdownTick() {
         let both = CueRouting.route(.countdownTick, headphonesConnected: true, settings: settings(bothOn, haptics: .always))
-        #expect(both.sound?.words == nil && both.sound?.tones.isEmpty == false && both.sound?.dropIfBusy == true && !both.haptic)
+        #expect(both.sound?.words == nil && both.sound?.tones.isEmpty == false && both.dropIfBusy && !both.haptic)
         var speechOnly = CueSettings()
         speechOnly[.stepStart] = SignalSound(tone: false, speech: true)
         #expect(CueRouting.route(.countdownTick, headphonesConnected: true, settings: speechOnly).sound == nil)
         #expect(!CueRouting.route(.countdownTick, headphonesConnected: false, settings: CueSettings()).haptic)
+    }
+
+    @Test("the lead time is kept between 5 and 30 seconds, also from the phone")
+    func aheadClamped() throws {
+        #expect(CueSettings(aheadSeconds: 0).aheadSeconds == 5)
+        #expect(CueSettings(aheadSeconds: 3600).aheadSeconds == 30)
+        var settings = CueSettings()
+        settings.aheadSeconds = -4
+        #expect(settings.aheadSeconds == 5)
+        let json = #"{"aheadSeconds":900}"#.data(using: .utf8)!
+        #expect(try JSONDecoder().decode(CueSettings.self, from: json).aheadSeconds == 30)
     }
 
     @Test("the step-start tone is longer than a countdown tick")

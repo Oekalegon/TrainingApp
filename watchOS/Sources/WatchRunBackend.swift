@@ -46,7 +46,7 @@ final class WatchRunBackend: RunBackend {
     func play(_ cue: RunCue) {
         let route = CueRouting.route(cue, headphonesConnected: audio.headphonesConnected, settings: cueSettings)
         if route.haptic { playHaptic(cue) }
-        if let sound = route.sound { audio.play(sound) }
+        if let sound = route.sound { audio.play(sound, dropIfBusy: route.dropIfBusy) }
     }
 
     /// What the phone last sent, read at each cue so a change applies at once.

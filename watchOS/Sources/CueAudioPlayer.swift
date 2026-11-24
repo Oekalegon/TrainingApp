@@ -1,35 +1,25 @@
 import AVFoundation
 import TrainingWatchKit
 
-/// The ears' side of the cues (WATCH-107): tones and speech through earbuds, or the
-/// watch speaker when the athlete allows it (`CueSettings.sound`).
+/// The audio system under the cues (WATCH-107): speech from `AVSpeechSynthesizer` and generated
+/// tones, through earbuds, or the watch speaker when the athlete allows it (`CueSettings.sound`).
 ///
-/// While a cue plays the audio session interrupts spoken audio (a podcast pauses) and ducks music;
-/// it is let go when the cue is done, so they carry on at once. Which cue goes where is
-/// `CueRouting` (tested); this only plays what it is told. Not tried on a real watch: whether
-/// `currentRoute` shows earbuds before our session is active is to be checked (WATCH-122).
+/// The order, the holding of the session and the cancelling are `CuePlaybackQueue`'s (tested); this
+/// only does what the queue asks. While the session is active it interrupts spoken audio (a podcast
+/// pauses) and ducks music. Not tried on a real watch: whether `currentRoute` shows earbuds before
+/// our session is active is to be checked (WATCH-122).
 @MainActor
-final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
-    private enum Part {
-        case speech(String)
-        case tones([ToneNote])
-    }
-
+final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate, CuePlaybackDriver {
     private let synthesizer = AVSpeechSynthesizer()
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
-    /// What is still to play, in order: a cue's tones, then its words, then the next cue's.
-    private var queue: [Part] = []
-    /// Whether a part is playing, and the audio session is ours.
-    private var busy = false
-    /// Whether the session is active, so parts can play; false while it is being activated.
-    private var sessionActive = false
-    private var activating = false
-    /// The session being let go, which a new activation waits for, so the two can't cross.
-    private var deactivation: Task<Void, Never>?
-    /// Counts the cancels, so the completion of a part that was cancelled can't carry on with
-    /// the queue of a newer cue.
-    private var generation = 0
+    /// What to call when the part now playing ends; one call, then it is forgotten.
+    private var finished: (@MainActor () -> Void)?
+    /// Counts the parts started, so the end of a part that was stopped (a buffer's completion, a
+    /// speech that finishes late) can't end the one that replaced it.
+    private var token = 0
+    private var utterance: AVSpeechUtterance?
+    private lazy var queue = CuePlaybackQueue(driver: self)
 
     override init() {
         super.init()
@@ -43,83 +33,14 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
         return AVAudioSession.sharedInstance().currentRoute.outputs.contains { wanted.contains($0.portType) }
     }
 
-    /// Plays `sound` after whatever is playing, so a step's tone and its announcement don't talk
-    /// over each other. A long backlog (cues piling up in a stalled session) is dropped.
-    func play(_ sound: CueSound) {
-        var parts: [Part] = []
-        if !sound.tones.isEmpty { parts.append(.tones(sound.tones)) }
-        if let words = sound.words { parts.append(.speech(words)) }
-        // A countdown tick that would have to wait for speech to finish would come late: drop it.
-        if sound.dropIfBusy, busy { return }
-        guard queue.count < 6 else { return }
-        queue += parts
-        if !busy { startNext() }
-    }
+    func play(_ sound: CueSound, dropIfBusy: Bool = false) { queue.play(sound, dropIfBusy: dropIfBusy) }
 
     /// Stops what is playing and forgets what is waiting, for when the workout ends.
-    func cancel() {
-        generation += 1
-        queue = []
-        synthesizer.stopSpeaking(at: .immediate)
-        node.stop()
-        engine.stop()
-        finish()
-    }
+    func cancel() { queue.cancel() }
 
-    // MARK: Queue
+    // MARK: CuePlaybackDriver
 
-    /// Carries on with the queue: the next part, or, when it is empty, lets the session go. The
-    /// first part waits for the session to be activated, which is asynchronous so the main thread
-    /// never blocks on it.
-    private func startNext() {
-        guard !queue.isEmpty else { finish(); return }
-        guard sessionActive else {
-            guard !activating else { return }
-            activating = true
-            busy = true
-            let generation = generation
-            Task {
-                let activated = await activateSession()
-                activating = false
-                guard generation == self.generation else {
-                    // Cancelled while activating: nobody wants the session now.
-                    if activated, !busy { await deactivateSession() }
-                    return
-                }
-                guard activated else {
-                    queue = []
-                    busy = false
-                    return
-                }
-                sessionActive = true
-                startNext()
-            }
-            return
-        }
-        switch queue.removeFirst() {
-        case .speech(let words):
-            let utterance = AVSpeechUtterance(string: words)
-            // The words are English until they are localised (WATCH-123), so the voice is too: a
-            // Dutch voice reading English is unintelligible.
-            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-            synthesizer.speak(utterance)
-        case .tones(let notes):
-            playTones(notes, generation: generation)
-        }
-    }
-
-    /// The queue is empty: let the session go, so podcasts resume and music comes back up.
-    private func finish() {
-        guard busy else { return }
-        busy = false
-        sessionActive = false
-        deactivation = Task { await deactivateSession() }
-    }
-
-    // MARK: Session
-
-    private func activateSession() async -> Bool {
-        await deactivation?.value
+    func activate() async -> Bool {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(
@@ -134,24 +55,57 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
 
     /// Off the main thread: `setActive(false)` blocks, and the asynchronous `deactivate` needs
     /// watchOS 27.
-    private func deactivateSession() async {
+    func deactivate() async {
         await Task.detached {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }.value
     }
 
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.startNext() }
+    func play(_ part: CuePart, finished: @escaping @MainActor () -> Void) {
+        self.finished = finished
+        token += 1
+        switch part {
+        case .speech(let words):
+            let utterance = AVSpeechUtterance(string: words)
+            // The words are English until they are localised (WATCH-123), so the voice is too: a
+            // Dutch voice reading English is unintelligible.
+            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+            self.utterance = utterance
+            synthesizer.speak(utterance)
+        case .tones(let notes):
+            playTones(notes)
+        }
     }
 
-    /// A cancel (`cancel()`) has already let the session go, so there is nothing to carry on with.
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {}
+    func stop() {
+        finished = nil
+        token += 1
+        utterance = nil
+        synthesizer.stopSpeaking(at: .immediate)
+        node.stop()
+        engine.stop()
+    }
+
+    private func partEnded() {
+        let call = finished
+        finished = nil
+        call?()
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        let ended = ObjectIdentifier(utterance)
+        Task { @MainActor in
+            guard let current = self.utterance, ObjectIdentifier(current) == ended else { return }
+            self.utterance = nil
+            self.partEnded()
+        }
+    }
 
     // MARK: Tones
 
-    private func playTones(_ notes: [ToneNote], generation: Int) {
+    private func playTones(_ notes: [ToneNote]) {
         let rate = 22_050.0
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1) else { startNext(); return }
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1) else { partEnded(); return }
         var samples: [Float] = []
         for note in notes {
             let count = Int(note.duration * rate)
@@ -164,7 +118,7 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
             samples.append(contentsOf: [Float](repeating: 0, count: Int(0.05 * rate)))
         }
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
-              let channel = buffer.floatChannelData?[0] else { startNext(); return }
+              let channel = buffer.floatChannelData?[0] else { partEnded(); return }
         buffer.frameLength = AVAudioFrameCount(samples.count)
         samples.withUnsafeBufferPointer { channel.update(from: $0.baseAddress!, count: samples.count) }
 
@@ -172,13 +126,15 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
         do {
             if !engine.isRunning { try engine.start() }
         } catch {
-            startNext()
+            partEnded()
             return
         }
+        // A stopped node also calls this; the token has moved on by then, so it does nothing.
+        let token = token
         node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.generation == generation else { return }
-                self.startNext()
+                guard let self, self.token == token else { return }
+                self.partEnded()
             }
         }
         node.play()

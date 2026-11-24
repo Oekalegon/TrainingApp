@@ -31,7 +31,9 @@ struct WatchAlertsView: View {
             ForEach(SignalKind.allCases) { kind in
                 Section {
                     Toggle("Tone", isOn: signalBinding(kind, \.tone))
+                        .accessibilityLabel("\(kind.title), tone")
                     Toggle("Speech", isOn: signalBinding(kind, \.speech))
+                        .accessibilityLabel("\(kind.title), speech")
                 } header: {
                     Text(kind.title)
                 } footer: {
@@ -102,6 +104,7 @@ private struct CheckBoxToggleStyle: ToggleStyle {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
         .accessibilityValue(configuration.isOn ? "On" : "Off")
         .accessibilityAddTraits(.isToggle)
     }
