@@ -57,7 +57,7 @@ final class WatchRunBackend: RunBackend {
         case .zoneAlert(let alert): ZoneAlertHaptics.play(alert)
         case .goalReached: WKInterfaceDevice.current().play(.success)
         case .lapMarked: WKInterfaceDevice.current().play(.click)
-        case .stepAnnouncement: break
+        case .stepAnnouncement, .countdownTick: break
         case .batteryWarning(let level):
             switch level {
             case .tight: WKInterfaceDevice.current().play(.notification)
