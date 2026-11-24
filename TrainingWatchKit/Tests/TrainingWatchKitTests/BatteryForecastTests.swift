@@ -154,4 +154,49 @@ struct BatteryProjectionTests {
         #expect(projection(level: 0.8, seconds: 3600, complete: false) == nil)
         #expect(BatteryProjection(battery: BatteryDisplay(level: 0.8, isCharging: false), readings: [], remaining: nil) == nil)
     }
+
+    private let battery = BatteryDisplay(level: 0.8, isCharging: false)
+
+    @Test("an open step is counted by the duration of earlier runs, less what has been run")
+    func openStepUsesTypicalDuration() throws {
+        let open = RemainingEstimate(seconds: 600, isComplete: false)
+        // Earlier runs took 2 hours, 1 hour is done: 1 hour left at 12% an hour -> 68%.
+        let result = try #require(BatteryProjection(
+            battery: battery, readings: [], remaining: open, elapsed: 3600, typicalDuration: 7200))
+        #expect(result.text == "~68% AT END")
+        // Never less than the steps known to be left.
+        let long = RemainingEstimate(seconds: 7200, isComplete: false)
+        let floor = try #require(BatteryProjection(
+            battery: battery, readings: [], remaining: long, elapsed: 3600, typicalDuration: 3700))
+        #expect(floor.text == "~56% AT END")
+    }
+
+    @Test("the athlete's own drain replaces the typical one until the run has shown its own")
+    func ownDrain() throws {
+        let remaining = RemainingEstimate(seconds: 3600, isComplete: true)
+        let result = try #require(BatteryProjection(
+            battery: battery, readings: [], remaining: remaining, drainPerHour: 0.2))
+        #expect(result.text == "~60% AT END")
+    }
+}
+
+@Suite("Battery metadata (WATCH-119)")
+struct BatteryMetadataTests {
+    @Test("the first and last reading become the start and end level")
+    func startAndEnd() throws {
+        let readings = [
+            BatteryForecast.Reading(time: 0, level: 0.9),
+            BatteryForecast.Reading(time: 1800, level: 0.8),
+            BatteryForecast.Reading(time: 3600, level: 0.7)
+        ]
+        let metadata = try #require(WorkoutMetadata.battery(readings: readings))
+        #expect(metadata[WorkoutMetadata.batteryStart] as? Double == 0.9)
+        #expect(metadata[WorkoutMetadata.batteryEnd] as? Double == 0.7)
+    }
+
+    @Test("too few readings give no metadata")
+    func tooFew() {
+        #expect(WorkoutMetadata.battery(readings: []) == nil)
+        #expect(WorkoutMetadata.battery(readings: [.init(time: 0, level: 0.9)]) == nil)
+    }
 }

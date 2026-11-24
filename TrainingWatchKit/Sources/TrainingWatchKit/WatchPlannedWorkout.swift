@@ -15,11 +15,23 @@ public struct WatchPlannedWorkout: Identifiable, Sendable, Codable, Hashable {
     public var name: String
     /// The workout's steps, in blocks that repeat.
     public var blocks: [WorkoutBlock]
+    /// How long earlier runs of the same workout template took, in seconds (the median), when there are
+    /// some: the battery forecast uses it for the part of the workout that has no end of its own (an
+    /// open step). `nil` when there are no earlier runs (WATCH-119).
+    public var typicalDuration: TimeInterval?
+    /// The athlete's own battery drain per hour in earlier runs, as a share of the full charge, when the
+    /// phone knows it: the forecast starts from it instead of a typical rate (WATCH-119).
+    public var drainPerHour: Double?
 
-    public init(id: UUID, date: Date, name: String, blocks: [WorkoutBlock]) {
+    public init(
+        id: UUID, date: Date, name: String, blocks: [WorkoutBlock],
+        typicalDuration: TimeInterval? = nil, drainPerHour: Double? = nil
+    ) {
         self.id = id
         self.date = date
         self.name = name
         self.blocks = blocks
+        self.typicalDuration = typicalDuration
+        self.drainPerHour = drainPerHour
     }
 }

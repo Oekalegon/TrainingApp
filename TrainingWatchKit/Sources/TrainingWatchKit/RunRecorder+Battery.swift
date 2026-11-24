@@ -16,6 +16,8 @@ extension RunRecorder {
     /// Starts reading and checking the battery for a new run.
     func startBatteryWatch() {
         batteryReadings = []
+        plannedTypicalDuration = nil
+        plannedDrainPerHour = nil
         batteryWarningTracker = BatteryWarningTracker()
         batteryWarning = nil
         batteryTicker?.cancel()
@@ -45,7 +47,8 @@ extension RunRecorder {
         }
         let projection = BatteryProjection(
             battery: battery, readings: batteryReadings,
-            remaining: stepEngine?.remaining(progress: stepProgress(), secondsPerMeter: secondsPerMeter))
+            remaining: stepEngine?.remaining(progress: stepProgress(), secondsPerMeter: secondsPerMeter),
+            elapsed: time, typicalDuration: plannedTypicalDuration, drainPerHour: plannedDrainPerHour)
         if let warning = batteryWarningTracker.update(battery: battery, projection: projection, at: time) {
             show(warning)
         }
@@ -69,6 +72,17 @@ extension RunRecorder {
     /// Plays the warning; `CueRouting` picks the haptic and tone for its level.
     private func playHaptic(for warning: BatteryWarning) {
         backend.play(.batteryWarning(warning.level))
+    }
+
+    /// Writes the battery at the start and the end of the run into the workout, when the readings show
+    /// both, so the phone can learn the athlete's own drain.
+    func writeBatteryMetadata() async {
+        guard let metadata = WorkoutMetadata.battery(readings: batteryReadings) else { return }
+        do {
+            try await builder?.addMetadata(metadata)
+        } catch {
+            log.error("battery metadata not written: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Takes the warning screen away: the athlete tapped it.

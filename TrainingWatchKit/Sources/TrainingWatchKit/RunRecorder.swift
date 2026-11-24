@@ -44,6 +44,9 @@ public final class RunRecorder {
     /// The battery readings of a planned workout so far, for the forecast (WATCH-119). Set by
     /// `RunRecorder+Battery.swift`.
     public internal(set) var batteryReadings: [BatteryForecast.Reading] = []
+    /// From the plan being run: how long earlier runs took, and the athlete's own drain (WATCH-119).
+    var plannedTypicalDuration: TimeInterval?
+    var plannedDrainPerHour: Double?
     /// The temporary battery warning screen, or `nil` when none shows (WATCH-110). Set and cleared by
     /// `RunRecorder+Battery.swift`; the run view shows it.
     public internal(set) var batteryWarning: BatteryWarning?
@@ -311,6 +314,7 @@ public final class RunRecorder {
                 try await builder.endCollection(at: .now)
                 collectionEnded = true
             }
+            await writeBatteryMetadata()
             try await builder.finishWorkout()
         } catch {
             canRetrySave = true
