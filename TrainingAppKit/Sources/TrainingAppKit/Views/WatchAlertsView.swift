@@ -29,9 +29,15 @@ struct WatchAlertsView: View {
                     """)
             }
             ForEach(SignalKind.allCases) { kind in
-                Section(kind.title) {
+                Section {
                     Toggle("Tone", isOn: signalBinding(kind, \.tone))
                     Toggle("Speech", isOn: signalBinding(kind, \.speech))
+                } header: {
+                    Text(kind.title)
+                } footer: {
+                    if kind == .stepStart {
+                        Text("The tone counts down the last 5 seconds of a step, one short tone a second, and is longer as the next step starts.")
+                    }
                 }
                 .toggleStyle(CheckBoxToggleStyle())
             }

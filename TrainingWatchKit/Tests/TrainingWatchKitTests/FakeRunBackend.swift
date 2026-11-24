@@ -115,8 +115,14 @@ final class FakeBackend: RunBackend {
     func stopSensors() { sensorCalls.append("stop") }
     /// The spoken step announcements, kept apart so `cues` stays the haptic cues.
     private(set) var announcements: [String] = []
+    /// How many countdown tones played.
+    private(set) var ticks = 0
     func play(_ cue: RunCue) {
-        if case .stepAnnouncement(let text) = cue { announcements.append(text) } else { cues.append(cue) }
+        switch cue {
+        case .stepAnnouncement(let text): announcements.append(text)
+        case .countdownTick: ticks += 1
+        default: cues.append(cue)
+        }
     }
     func cancelPendingCues() { cancelledCues += 1 }
     func battery(elapsed: TimeInterval) -> BatteryDisplay { BatteryDisplay(level: batteryLevel, isCharging: false) }

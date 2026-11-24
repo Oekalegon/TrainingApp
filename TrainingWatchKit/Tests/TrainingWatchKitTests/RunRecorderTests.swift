@@ -381,6 +381,23 @@ struct RunRecorderStepTests {
         #expect(backend.announcements.last == "Recovery, 1 minute, 140 to 150 beats per minute")
     }
 
+    @Test("the last five seconds of a step count down with one tick a second, once each, and not after the last step")
+    func countdown() async {
+        let (recorder, backend) = await running(plan: plan([time(60), time(60)]))
+        for (elapsed, ticks) in [(54.0, 0), (55.2, 1), (55.6, 1), (56.1, 2), (57.0, 3), (58.4, 4), (59.5, 5), (59.9, 5)] {
+            backend.builder.elapsed = elapsed
+            await recorder.tickSteps()
+            #expect(backend.ticks == ticks, "at \(elapsed)")
+        }
+        // The next step starts: its alert (the longer tone) is the cue, and the countdown starts anew.
+        backend.builder.elapsed = 60.1
+        await recorder.tickSteps()
+        #expect(backend.cues.filter { $0 == .zoneAlert(.stepStarted) }.count == 2)
+        backend.builder.elapsed = 115.5
+        await recorder.tickSteps()
+        #expect(backend.ticks == 5)  // the last step has no step after it
+    }
+
     @Test("with announcing ahead off, a work step is announced as it starts")
     func notAhead() async {
         let fake = FakeBackend()

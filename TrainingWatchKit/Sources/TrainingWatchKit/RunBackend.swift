@@ -44,6 +44,9 @@ public enum RunCue: Sendable, Hashable {
     case goalReached
     /// A lap was marked in a free run.
     case lapMarked
+    /// One second of the countdown to the next step: a short tone, for each of the last five seconds
+    /// of a step with a time goal (WATCH-107). The step's own, longer tone follows as it starts.
+    case countdownTick
     /// The words for a step that began, said in earbuds in the speech setting (WATCH-107).
     case stepAnnouncement(String)
     /// A battery warning of this level (WATCH-110).

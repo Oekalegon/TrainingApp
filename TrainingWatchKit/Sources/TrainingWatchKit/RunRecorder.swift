@@ -59,6 +59,8 @@ public final class RunRecorder {
     var stepStartDate = Date.now
     /// The step announced before it started (WATCH-107), so it isn't announced again as it starts.
     var announcedAheadIndex: Int?
+    /// The last second of the countdown that was sounded (5 to 1), so each is sounded once.
+    var lastCountdownSecond: Int?
     /// Watches the clock and the distance for the end of a step. Set by `RunRecorder+Steps.swift`.
     var stepTicker: Task<Void, Never>?
     /// Events that couldn't be written yet. Set by `RunRecorder+Steps.swift`.

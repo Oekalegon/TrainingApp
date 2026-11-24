@@ -19,10 +19,14 @@ public struct CueSound: Sendable, Hashable {
     public var tones: [ToneNote]
     /// The words to say after the tones; `nil` for none.
     public var words: String?
+    /// Whether to skip it when something else is still playing, instead of waiting its turn: a
+    /// countdown tick that comes late is worse than none.
+    public var dropIfBusy: Bool
 
-    public init(tones: [ToneNote] = [], words: String? = nil) {
+    public init(tones: [ToneNote] = [], words: String? = nil, dropIfBusy: Bool = false) {
         self.tones = tones
         self.words = words
+        self.dropIfBusy = dropIfBusy
     }
 }
 
@@ -72,7 +76,7 @@ public enum SignalKind: String, Sendable, CaseIterable, Hashable, Codable, Ident
             case .tooHigh, .farAbove: self = .aboveZone
             case .backInZone: self = .backInZone
             }
-        case .stepAnnouncement: self = .stepStart
+        case .stepAnnouncement, .countdownTick: self = .stepStart
         case .goalReached: self = .workoutDone
         case .batteryWarning: self = .battery
         case .lapMarked: return nil
@@ -201,7 +205,7 @@ public enum CueRouting {
         let automatic: Bool
         switch cue {
         case .lapMarked, .goalReached, .batteryWarning, .zoneAlert(.stepStarted): automatic = true
-        case .stepAnnouncement: automatic = false
+        case .stepAnnouncement, .countdownTick: automatic = false
         case .zoneAlert: automatic = sound == nil
         }
         let haptic: Bool
@@ -213,10 +217,12 @@ public enum CueRouting {
         return CueRoute(haptic: haptic, sound: sound)
     }
 
-    /// Cues that have a haptic at all (the announcement is words only).
+    /// Cues that have a haptic at all (the announcement is words only, the countdown tones only).
     private static func hapticCue(_ cue: RunCue) -> Bool {
-        if case .stepAnnouncement = cue { return false }
-        return true
+        switch cue {
+        case .stepAnnouncement, .countdownTick: return false
+        default: return true
+        }
     }
 
     /// What the cue sounds like with the athlete's choice for its signal: its tones if the tone is
@@ -227,7 +233,8 @@ public enum CueRouting {
         guard let kind = SignalKind(cue) else { return nil }
         let choice = settings[kind]
         let (tones, words) = material(for: cue)
-        let sound = CueSound(tones: choice.tone ? tones : [], words: choice.speech ? words : nil)
+        var sound = CueSound(tones: choice.tone ? tones : [], words: choice.speech ? words : nil)
+        if case .countdownTick = cue { sound.dropIfBusy = true }
         return sound.tones.isEmpty && sound.words == nil ? nil : sound
     }
 
@@ -245,6 +252,7 @@ public enum CueRouting {
             case .backInZone: return (backTones, "In zone")
             }
         case .stepAnnouncement(let text): return ([], text)
+        case .countdownTick: return (tickTones, nil)
         case .goalReached: return (doneTones, "Workout done")
         case .lapMarked: return ([], nil)
         case .batteryWarning(let level):
@@ -256,7 +264,9 @@ public enum CueRouting {
         }
     }
 
-    private static let stepTones = [ToneNote(660, 0.12), ToneNote(660, 0.12)]
+    /// A short tone for each second of the countdown, and a longer, lower one as the step starts.
+    private static let tickTones = [ToneNote(1000, 0.08)]
+    private static let stepTones = [ToneNote(660, 0.6)]
     private static let tooLowTones = [ToneNote(440, 0.15), ToneNote(660, 0.15)]
     private static let tooHighTones = [ToneNote(660, 0.15), ToneNote(440, 0.15)]
     private static let backTones = [ToneNote(880, 0.2)]

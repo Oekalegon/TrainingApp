@@ -44,6 +44,8 @@ final class CueAudioPlayer: NSObject, AVSpeechSynthesizerDelegate {
         var parts: [Part] = []
         if !sound.tones.isEmpty { parts.append(.tones(sound.tones)) }
         if let words = sound.words { parts.append(.speech(words)) }
+        // A countdown tick that would have to wait for speech to finish would come late: drop it.
+        if sound.dropIfBusy, busy { return }
         guard queue.count < 6 else { return }
         queue += parts
         if !busy { startNext() }

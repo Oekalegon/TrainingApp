@@ -58,6 +58,24 @@ struct CueRoutingTests {
         #expect(CueRouting.route(.zoneAlert(.backInZone), headphonesConnected: true, settings: custom).sound?.words == nil)
     }
 
+    @Test("the countdown tick is the step-start tone only, dropped if busy, and never a haptic or speech")
+    func countdownTick() {
+        let both = CueRouting.route(.countdownTick, headphonesConnected: true, settings: settings(bothOn, haptics: .always))
+        #expect(both.sound?.words == nil && both.sound?.tones.isEmpty == false && both.sound?.dropIfBusy == true && !both.haptic)
+        var speechOnly = CueSettings()
+        speechOnly[.stepStart] = SignalSound(tone: false, speech: true)
+        #expect(CueRouting.route(.countdownTick, headphonesConnected: true, settings: speechOnly).sound == nil)
+        #expect(!CueRouting.route(.countdownTick, headphonesConnected: false, settings: CueSettings()).haptic)
+    }
+
+    @Test("the step-start tone is longer than a countdown tick")
+    func startToneLonger() {
+        func length(_ cue: RunCue) -> TimeInterval {
+            CueRouting.route(cue, headphonesConnected: true, settings: CueSettings()).sound?.tones.map(\.duration).reduce(0, +) ?? 0
+        }
+        #expect(length(.zoneAlert(.stepStarted)) > 3 * length(.countdownTick))
+    }
+
     @Test("a step announcement is silent when speech is off for step starts")
     func announcementNeedsSpeech() {
         var custom = CueSettings()
@@ -100,7 +118,7 @@ struct CueRoutingTests {
 
     @Test("every cue but a lap belongs to a signal, and far alerts to their direction's")
     func kinds() {
-        #expect(SignalKind(.lapMarked) == nil)
+        #expect(SignalKind(.lapMarked) == nil && SignalKind(.countdownTick) == .stepStart)
         #expect(SignalKind(.zoneAlert(.farBelow)) == .belowZone && SignalKind(.zoneAlert(.farAbove)) == .aboveZone)
         #expect(SignalKind(.stepAnnouncement("x")) == .stepStart && SignalKind(.zoneAlert(.stepStarted)) == .stepStart)
     }

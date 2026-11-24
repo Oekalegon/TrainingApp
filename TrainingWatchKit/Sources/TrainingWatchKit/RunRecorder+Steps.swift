@@ -13,6 +13,7 @@ extension RunRecorder {
     func beginSteps(for plan: WatchPlannedWorkout, at start: Date) async {
         stepEngine = WorkoutStepEngine(blocks: plan.blocks)
         announcedAheadIndex = nil
+        lastCountdownSecond = nil
         stepStartDate = start
         alertStepStarted()
         do {
@@ -21,10 +22,10 @@ extension RunRecorder {
             log.error("workout tag not written: \(error.localizedDescription, privacy: .public)")
         }
         stepTicker?.cancel()
-        // Half a second is fine enough for a step to end on time and cheap enough to leave running.
+        // A fifth of a second keeps the countdown tones on their seconds and is cheap enough to leave running.
         stepTicker = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Task.sleep(for: .milliseconds(200))
                 await self?.tickSteps()
             }
         }
@@ -36,6 +37,7 @@ extension RunRecorder {
         let transitions = engine.update(elapsed: elapsed(), distance: distanceMeters)
         guard !transitions.isEmpty else {
             announceNextAhead(engine)
+            countDown(engine)
             return
         }
         stepEngine = engine
@@ -52,6 +54,19 @@ extension RunRecorder {
         else { return }
         announcedAheadIndex = next.index
         backend.play(.stepAnnouncement(StepAnnouncement.text(for: next, ahead: true)))
+    }
+
+    /// The last five seconds of a step with a time goal and a step after it: a short tone each second
+    /// (WATCH-107), then the next step's longer tone as it starts. The tick for a second is sounded
+    /// once, on the first tick of the clock that sees it.
+    private func countDown(_ engine: WorkoutStepEngine) {
+        guard engine.next != nil,
+              let remaining = engine.progress(elapsed: elapsed(), distance: distanceMeters)?.remainingTime
+        else { return }
+        let second = Int(remaining.rounded(.up))
+        guard (1...5).contains(second), lastCountdownSecond != second else { return }
+        lastCountdownSecond = second
+        backend.play(.countdownTick)
     }
 
     /// The lap button. During a planned workout it ends the current step and moves on, marked as a
