@@ -34,11 +34,17 @@ struct WatchAlertsView: View {
                         .accessibilityLabel("\(kind.title), tone")
                     Toggle("Speech", isOn: signalBinding(kind, \.speech))
                         .accessibilityLabel("\(kind.title), speech")
+                    Picker("Tone Sound", selection: toneBinding(kind)) {
+                        ForEach(TonePattern.allCases) { Text($0.title).tag($0) }
+                    }
+                    Picker("Haptic", selection: hapticBinding(kind)) {
+                        ForEach(HapticPattern.allCases) { Text($0.title).tag($0) }
+                    }
                 } header: {
                     Text(kind.title)
                 } footer: {
                     if kind == .stepStart {
-                        Text("The tone counts down the last 5 seconds of a step, one short tone a second, and is longer as the next step starts.")
+                        Text("Each signal has its own tone and haptic so they can be told apart without looking. The watch repeats them for a far-off zone alert and a worse battery warning. The tone counts down the last 5 seconds of a step, one short tone a second, and is longer as the next step starts.")
                     }
                 }
                 .toggleStyle(CheckBoxToggleStyle())
@@ -72,6 +78,26 @@ struct WatchAlertsView: View {
             set: { value in
                 var settings = cues.settings
                 settings[keyPath: keyPath] = value
+                cues.update(settings)
+            })
+    }
+
+    private func toneBinding(_ kind: SignalKind) -> Binding<TonePattern> {
+        Binding(
+            get: { cues.settings.tone(of: kind) },
+            set: { value in
+                var settings = cues.settings
+                settings.setTone(value, of: kind)
+                cues.update(settings)
+            })
+    }
+
+    private func hapticBinding(_ kind: SignalKind) -> Binding<HapticPattern> {
+        Binding(
+            get: { cues.settings.haptic(of: kind) },
+            set: { value in
+                var settings = cues.settings
+                settings.setHaptic(value, of: kind)
                 cues.update(settings)
             })
     }

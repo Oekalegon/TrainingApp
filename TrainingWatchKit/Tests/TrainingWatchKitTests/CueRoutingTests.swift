@@ -127,6 +127,44 @@ struct CueRoutingTests {
         #expect(Set(sounds.compactMap { $0 }).count == zoneAlerts.count)
     }
 
+    @Test("each signal has its own haptic and its own tone by default (WATCH-117)")
+    func distinctDefaults() {
+        let settings = CueSettings()
+        #expect(Set(SignalKind.allCases.map { settings.haptic(of: $0) }).count == SignalKind.allCases.count)
+        #expect(Set(SignalKind.allCases.map { settings.tone(of: $0) }).count == SignalKind.allCases.count)
+    }
+
+    @Test("a chosen tone and haptic are used, and far alerts and worse battery levels repeat them")
+    func chosenStyle() {
+        var settings = CueSettings()
+        settings.setTone(.fanfare, of: .belowZone)
+        settings.setHaptic(.failure, of: .belowZone)
+        settings.setHaptic(.click, of: .battery)
+        #expect(CueRouting.sound(for: .zoneAlert(.tooLow), settings: settings)?.tones == TonePattern.fanfare.notes)
+        #expect(CueRouting.sound(for: .zoneAlert(.farBelow), settings: settings)?.tones == TonePattern.fanfare.notes + TonePattern.fanfare.notes)
+        #expect(CueRouting.hapticPlan(for: .zoneAlert(.tooLow), settings: settings) == HapticPlan(.failure))
+        #expect(CueRouting.hapticPlan(for: .zoneAlert(.farBelow), settings: settings) == HapticPlan(.failure, taps: 2))
+        #expect(CueRouting.hapticPlan(for: .zoneAlert(.farAbove), settings: settings) == HapticPlan(.directionDown, taps: 2))
+        #expect(CueRouting.hapticPlan(for: .batteryWarning(.tight), settings: settings) == HapticPlan(.click))
+        #expect(CueRouting.hapticPlan(for: .batteryWarning(.runsOut), settings: settings) == HapticPlan(.click, taps: 3))
+        #expect(CueRouting.hapticPlan(for: .lapMarked, settings: settings) == HapticPlan(.click))
+        #expect(CueRouting.hapticPlan(for: .countdownTick, settings: settings) == nil)
+        #expect(CueRouting.hapticPlan(for: .stepAnnouncement("x"), settings: settings) == nil)
+    }
+
+    @Test("the style survives encoding, and a pattern from a newer app falls back to the default")
+    func styleCoding() throws {
+        var settings = CueSettings()
+        settings.setTone(.doubleBeep, of: .workoutDone)
+        settings.setHaptic(.stop, of: .stepStart)
+        let decoded = try JSONDecoder().decode(CueSettings.self, from: JSONEncoder().encode(settings))
+        #expect(decoded == settings)
+        let future = Data(#"{"hapticPatterns":{"stepStart":"buzzSaw"},"tonePatterns":{"battery":"siren"}}"#.utf8)
+        let fallback = try JSONDecoder().decode(CueSettings.self, from: future)
+        #expect(fallback.haptic(of: .stepStart) == SignalKind.stepStart.defaultHaptic)
+        #expect(fallback.tone(of: .battery) == SignalKind.battery.defaultTone)
+    }
+
     @Test("every cue but a lap belongs to a signal, and far alerts to their direction's")
     func kinds() {
         #expect(SignalKind(.lapMarked) == nil && SignalKind(.countdownTick) == .stepStart)
