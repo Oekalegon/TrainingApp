@@ -81,6 +81,9 @@ public final class RunRecorder {
     /// Set while a failed start or run is being torn down, so the session's `.ended` callback
     /// doesn't try to finish a workout that is being thrown away.
     private var abandoned = false
+    /// Whether the session was asked to end: the phase only changes when the session reports it, so a
+    /// second End before that would end the session again, which HealthKit refuses.
+    private var endRequested = false
     private var locationAllowedAtStart = false
     private var collectionEnded = false
     private var lastLocation: CLLocation?
@@ -104,6 +107,7 @@ public final class RunRecorder {
         guard phase == .idle else { return }
         phase = .starting
         abandoned = false
+        endRequested = false
         routeNote = nil
         locationAllowedAtStart = false
         do {
@@ -215,7 +219,8 @@ public final class RunRecorder {
     }
 
     public func end() {
-        guard phase == .running || phase == .paused else { return }
+        guard phase == .running || phase == .paused, !endRequested else { return }
+        endRequested = true
         session?.end()
     }
 

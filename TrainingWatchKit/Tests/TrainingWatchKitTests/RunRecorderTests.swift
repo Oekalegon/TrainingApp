@@ -130,6 +130,18 @@ struct RunRecorderPhaseTests {
         #expect(backend.builder.calls == ["begin", "endCollection", "finishWorkout"])
     }
 
+    @Test("ending twice before the session reports ends it once, and the run is saved once")
+    func endTwice() async {
+        let (recorder, backend) = await running()
+        recorder.end()
+        recorder.end()
+        #expect(backend.session.calls.filter { $0 == "end" }.count == 1)
+        backend.session.onStateChange?(.ended)
+        await settle()
+        #expect(recorder.phase == .saved)
+        #expect(backend.builder.calls.filter { $0 == "finishWorkout" }.count == 1)
+    }
+
     @Test("end does nothing before a run or after it")
     func endOutsideRun() async {
         let (recorder, backend) = makeRecorder()
