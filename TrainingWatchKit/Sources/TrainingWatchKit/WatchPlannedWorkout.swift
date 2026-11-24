@@ -20,7 +20,8 @@ public struct WatchPlannedWorkout: Identifiable, Sendable, Codable, Hashable {
     /// forecast uses it for the part that has no end of its own. `nil` otherwise (WATCH-119).
     public var typicalDuration: TimeInterval?
     /// The athlete's own battery drain per hour in earlier runs, as a share of the full charge, when the
-    /// phone knows it: the forecast starts from it instead of a typical rate (WATCH-119).
+    /// phone knows it (from the battery levels the watch wrote into those workouts): the forecast starts
+    /// from it instead of a typical rate when the watch has no runs of its own to go by (WATCH-119).
     public var drainPerHour: Double?
 
     public init(

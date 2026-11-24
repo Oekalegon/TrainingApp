@@ -64,9 +64,10 @@ public final class WatchPlanSync {
         } catch {
             return
         }
+        let drain = await athleteDrainPerHour(asOf: now)
         let plan = Self.plan(
             from: candidates, workouts: workouts, asOf: now, calendar: calendar,
-            athlete: model.athlete, paceHistory: model.paceHistory)
+            athlete: model.athlete, paceHistory: model.paceHistory, drainPerHour: drain)
         if let lastSent, lastSent.workouts == plan.workouts, now.timeIntervalSince(lastSent.sentAt) < Self.refreshInterval {
             return
         }
@@ -77,6 +78,35 @@ public final class WatchPlanSync {
         } catch {
             rejectedError = error.localizedDescription
         }
+    }
+
+    /// How far back the watch's battery drain is learned from, in days.
+    static let drainDays = 90
+    /// How many runs it takes before the drain is sent, and the most that count.
+    static let drainRuns = 2...10
+
+    private var drainRead: (date: Date, value: Double?)?
+
+    /// The athlete's typical battery drain per hour on the watch, from the runs the watch app recorded
+    /// the battery for, or `nil` while there are too few. Read from the store at most once per
+    /// ``refreshInterval``, since it loads whole activities.
+    private func athleteDrainPerHour(asOf now: Date) async -> Double? {
+        if let drainRead, now.timeIntervalSince(drainRead.date) < Self.refreshInterval { return drainRead.value }
+        let start = now.addingTimeInterval(-Double(Self.drainDays) * 86400)
+        guard let activities = try? await model.stores.activityStore.activities(in: start...now) else { return nil }
+        let value = Self.drainPerHour(from: activities)
+        drainRead = (now, value)
+        return value
+    }
+
+    /// The median drain per hour of the latest runs that have one (see `Activity.batteryDrainPerHour`),
+    /// `nil` with fewer than ``drainRuns``' lower bound.
+    static func drainPerHour(from activities: [Activity]) -> Double? {
+        let drains = activities.sorted { $0.start > $1.start }.compactMap(\.batteryDrainPerHour)
+            .prefix(drainRuns.upperBound).sorted()
+        guard drains.count >= drainRuns.lowerBound else { return nil }
+        let middle = drains.count / 2
+        return drains.count % 2 == 1 ? drains[middle] : (drains[middle - 1] + drains[middle]) / 2
     }
 
     /// The plan the Watch should have: the planned runs in the next 7 days (today included) that
@@ -90,9 +120,11 @@ public final class WatchPlanSync {
     ///   - calendar: In the athlete's time zone, so "today" and the window start where the athlete's day does.
     ///   - athlete: Whose paces the duration of a workout with an open step is forecast from.
     ///   - paceHistory: The athlete's recent runs, which that forecast is made from.
+    ///   - drainPerHour: The athlete's typical battery drain, which the watch starts its battery forecast
+    ///     from when it has no runs of its own to go by (WATCH-119).
     static func plan(
         from plans: [PlannedActivity], workouts: [UUID: StructuredWorkout], asOf now: Date, calendar: Calendar,
-        athlete: AthleteProfile? = nil, paceHistory: PaceHistory = .empty
+        athlete: AthleteProfile? = nil, paceHistory: PaceHistory = .empty, drainPerHour: Double? = nil
     ) -> WatchPlan {
         let calculator = StatisticsCalculator()
         let window = WatchSchedulePlanner.window(asOf: now, calendar: calendar)
@@ -109,7 +141,7 @@ public final class WatchPlanSync {
             } : nil
             return WatchPlannedWorkout(
                 id: plan.id, date: plan.date, name: workout.name, blocks: workout.blocks,
-                typicalDuration: duration.flatMap { $0 > 0 ? $0 : nil })
+                typicalDuration: duration.flatMap { $0 > 0 ? $0 : nil }, drainPerHour: drainPerHour)
         }, sentAt: now)
     }
 }

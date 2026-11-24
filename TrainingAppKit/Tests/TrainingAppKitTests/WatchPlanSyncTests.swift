@@ -102,6 +102,19 @@ struct WatchPlanSyncTests {
         #expect(sent.workouts.first { $0.name == "Open" }?.typicalDuration != nil)
     }
 
+    @Test("the athlete's drain is the median of their latest watch runs' battery drain, and none with fewer than two (WATCH-119)")
+    func drainFromActivities() {
+        func run(_ day: Int, drop: Double) -> Activity {
+            Activity(
+                source: .manual, sport: .running, start: self.day(day), duration: 3600,
+                batteryStart: 0.9, batteryEnd: 0.9 - drop)
+        }
+        let plain = Activity(source: .manual, sport: .running, start: day(-4), duration: 3600)
+        #expect(WatchPlanSync.drainPerHour(from: [plain, run(-1, drop: 0.1)]) == nil)
+        let median = WatchPlanSync.drainPerHour(from: [run(-1, drop: 0.1), plain, run(-2, drop: 0.2), run(-3, drop: 0.15)])
+        #expect(abs((median ?? 0) - 0.15) < 1e-9)
+    }
+
     @Test("sends the planned runs of the next 7 days, earliest first, with their workouts")
     func sendsWindow() async throws {
         let (store, model) = try await makeModel()
