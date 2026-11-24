@@ -1,6 +1,6 @@
 # Watch app: requirements
 
-Status: WATCH-101 to WATCH-107 are built (WATCH-106's alerts are unit-tested, not yet run in the simulator or on a watch) (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-108 onwards are open: see `TODO.md`.
+Status: WATCH-101 to WATCH-108 are built (WATCH-106's alerts are unit-tested, not yet run in the simulator or on a watch) (a run saves to Health with its route; the real-watch check is deferred until a watch is available). WATCH-109 onwards are open: see `TODO.md`.
 
 ## Why
 
@@ -20,7 +20,7 @@ The Workout app on the Apple Watch cannot use the athlete's own heart-rate zones
 
 - Several workout pages, configurable from the iOS app (which pages, and which metrics each holds).
 - A map page, with workout metrics on it.
-- Free recording (a run with no plan) and other activity types (cycling, swimming, strength).
+- Other activity types (cycling, swimming, strength): WATCH-126. Free recording of a run with no plan is built (WATCH-108).
 
 ## Data in
 
