@@ -10,6 +10,8 @@ private final class FakeSession: WatchSessionControlling {
     var canReceiveContext = false
     var failing = false
     var activateCalls = 0
+    var reachable = false
+    var previews: [[String: Any]] = []
     var contexts: [[String: Any]] = []
 
     func activate() { activateCalls += 1 }
@@ -19,12 +21,44 @@ private final class FakeSession: WatchSessionControlling {
         contexts.append(context)
     }
 
+    func sendPreview(_ message: [String: Any]) -> Bool {
+        guard reachable else { return false }
+        previews.append(message)
+        return true
+    }
+
     var sent: [WatchContext] { contexts.compactMap { WatchContext(applicationContext: $0) } }
 }
 
 @MainActor
 @Suite("WatchSyncChannel (WATCH-102, WATCH-103)")
 struct WatchSyncChannelTests {
+    @Test("a haptic preview reaches the watch's closure, and is refused when the watch isn't reachable (WATCH-117)")
+    func hapticPreview() {
+        let phoneSession = FakeSession()
+        let phone = WatchSyncChannel(session: phoneSession)
+        #expect(!phone.preview(haptic: HapticPlan(.success)))
+        phoneSession.reachable = true
+        #expect(phone.preview(haptic: HapticPlan(.directionUp, taps: 2)))
+
+        var played: [HapticPlan] = []
+        let watch = WatchSyncChannel(session: FakeSession())
+        watch.activate(onPreview: { played.append($0) })
+        watch.receivedPreview(phoneSession.previews[0])
+        watch.receivedPreview(["previewHaptic": "buzzSaw"])
+        watch.receivedPreview(["previewHaptic": "click", "previewTaps": 99])
+        #expect(played == [HapticPlan(.directionUp, taps: 2), HapticPlan(.click, taps: 3)])
+    }
+
+    @Test("tone samples cover each note and a short pause, and stay within range (WATCH-117)")
+    func toneSamples() {
+        let samples = ToneNote.samples([ToneNote(440, 0.1), ToneNote(660, 0.2)])
+        let expected = Int(0.1 * ToneNote.sampleRate) + Int(0.2 * ToneNote.sampleRate) + 2 * Int(0.05 * ToneNote.sampleRate)
+        #expect(samples.count == expected)
+        #expect(samples.allSatisfy { abs($0) <= 0.5 })
+        #expect(samples.contains { abs($0) > 0.3 })
+    }
+
     private func zones(max: Double = 190) -> WatchZones {
         WatchZones(settings: HeartRateZoneSettings(
             effectiveDate: Date(timeIntervalSince1970: 0), restingHeartRateBPM: 50, maxHeartRateBPM: max))

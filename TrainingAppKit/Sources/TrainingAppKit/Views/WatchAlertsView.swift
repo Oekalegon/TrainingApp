@@ -8,6 +8,8 @@ import TrainingWatchKit
 /// Changes go to the watch at once.
 struct WatchAlertsView: View {
     let cues: WatchCueSync
+    @State private var tonePlayer = TonePreviewPlayer()
+    @State private var watchNotReachable = false
 
     var body: some View {
         List {
@@ -37,9 +39,17 @@ struct WatchAlertsView: View {
                     Picker("Tone Sound", selection: toneBinding(kind)) {
                         ForEach(TonePattern.allCases) { Text($0.title).tag($0) }
                     }
+                    Button("Play Tone", systemImage: "speaker.wave.2") {
+                        tonePlayer.play(cues.settings.tone(of: kind).notes)
+                    }
+                    .accessibilityLabel("Play \(kind.title) tone")
                     Picker("Haptic", selection: hapticBinding(kind)) {
                         ForEach(HapticPattern.allCases) { Text($0.title).tag($0) }
                     }
+                    Button("Feel on Watch", systemImage: "applewatch.radiowaves.left.and.right") {
+                        watchNotReachable = !cues.preview(haptic: cues.settings.haptic(of: kind))
+                    }
+                    .accessibilityLabel("Feel \(kind.title) haptic on the watch")
                 } header: {
                     Text(kind.title)
                 } footer: {
@@ -65,6 +75,11 @@ struct WatchAlertsView: View {
                     are announced as they start, if Speech is on for Step Starts.
                     """)
             }
+        }
+        .alert("Watch Not Reachable", isPresented: $watchNotReachable) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Open the Training app on the Apple Watch and try again. A haptic can only be felt on the watch.")
         }
         .navigationTitle(AthleteRoute.watchAlerts.title)
         #if os(iOS)

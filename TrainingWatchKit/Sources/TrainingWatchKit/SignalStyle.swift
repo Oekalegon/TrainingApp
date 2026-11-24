@@ -95,3 +95,27 @@ extension SignalKind {
         }
     }
 }
+
+extension ToneNote {
+    /// The sample rate the tones are made at.
+    public static let sampleRate = 22_050.0
+
+    /// The notes as mono samples, each with a short fade at both ends so it doesn't click, and a
+    /// short silence after it. The watch plays them as a cue and the phone as a preview (WATCH-117),
+    /// so the two sound the same.
+    public static func samples(_ notes: [ToneNote]) -> [Float] {
+        let rate = sampleRate
+        var samples: [Float] = []
+        for note in notes {
+            let count = Int(note.duration * rate)
+            let fade = max(Int(0.01 * rate), 1)
+            for index in 0..<count {
+                let edge = min(index, count - index, fade)
+                let envelope = Float(edge) / Float(fade)
+                samples.append(envelope * 0.5 * Float(sin(2 * .pi * note.frequency * Double(index) / rate)))
+            }
+            samples.append(contentsOf: [Float](repeating: 0, count: Int(0.05 * rate)))
+        }
+        return samples
+    }
+}

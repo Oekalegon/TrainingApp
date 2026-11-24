@@ -36,6 +36,12 @@ public final class WatchCueSync {
         sync()
     }
 
+    /// Makes the watch tap `pattern` now (WATCH-117). `false` when the watch app isn't open and
+    /// reachable, so the view can say to open it.
+    public func preview(haptic pattern: HapticPattern) -> Bool {
+        sender.preview(haptic: HapticPlan(pattern))
+    }
+
     /// Sends the settings if they weren't sent yet in this run of the app, or changed since.
     public func sync() {
         guard settings != lastSent else { return }

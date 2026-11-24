@@ -15,13 +15,16 @@ struct TrainingWatchApp: App {
             RunView(recorder: recorder, zoneStore: zoneStore, planStore: planStore)
                 .task {
                     recorder.zoneStore = zoneStore
-                    syncChannel?.activate { context in
+                    syncChannel?.activate(onReceive: { context in
                         // A part the phone hasn't sent yet is `nil`: keep what the watch has.
                         // In the simulator, test data wins over anything a paired phone sends.
                         if let zones = context.zones, !SimulatorTestData.replacesZones { zoneStore.update(zones) }
                         if let plan = context.plan, !SimulatorTestData.replacesPlan { planStore.update(plan) }
                         context.cues?.save()
-                    }
+                    }, onPreview: { plan in
+                        // The phone's "Feel it on the watch" (WATCH-117).
+                        CueHaptics.play(plan)
+                    })
                     #if targetEnvironment(simulator)
                     SimulatorTestData.apply(zoneStore: zoneStore, planStore: planStore)
                     #endif
