@@ -27,14 +27,14 @@ struct RunMetricsPage: View {
 }
 
 /// A distance for the run screen, in the system's road units.
-private func runDistanceText(_ meters: Double) -> String {
+func runDistanceText(_ meters: Double) -> String {
     Measurement(value: meters, unit: UnitLength.meters)
         .formatted(.measurement(width: .abbreviated, usage: .road, numberFormatStyle: .number.precision(.fractionLength(2))))
 }
 
 /// A time as VoiceOver should say it ("1 hour, 2 minutes, 5 seconds"), so a label can name the
 /// value without replacing it.
-private func spokenDuration(_ seconds: TimeInterval) -> String {
+func spokenDuration(_ seconds: TimeInterval) -> String {
     Duration.seconds(seconds.rounded(.down)).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
 }
 

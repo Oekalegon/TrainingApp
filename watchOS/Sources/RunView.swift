@@ -67,14 +67,17 @@ struct RunView: View {
 }
 
 /// The pages of a run in progress. Like the Workout app, the controls (pause or resume, end, later
-/// next step) sit one swipe to the side of the main page: the zone dial in a planned workout (WATCH-118),
-/// otherwise the metrics.
+/// next step) sit one swipe to the side of the data screens. The data screens are a stack the Digital
+/// Crown turns through: the zone dial in a planned workout (WATCH-118) and the standard metrics
+/// screen. The step-based metrics page is one more swipe to the other side.
 private struct RunPages: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
-    @State private var page = Page.metrics
+    @State private var page = Page.data
+    @State private var dataScreen = DataScreen.standard
 
-    private enum Page { case controls, zones, metrics }
+    private enum Page { case controls, data, metrics }
+    private enum DataScreen { case zones, standard }
 
     /// Whether a planned workout still has steps to run: the zone dial is for those.
     private var hasSteps: Bool { recorder.stepEngine.map { !$0.isFinished } ?? false }
@@ -83,22 +86,29 @@ private struct RunPages: View {
         TabView(selection: $page) {
             RunControlsPage(recorder: recorder)
                 .tag(Page.controls)
-            // The target-zone dial is for a planned workout, and is the page it opens on (WATCH-118).
-            if hasSteps {
-                ZoneDialPage(recorder: recorder, zoneStore: zoneStore)
-                    .tag(Page.zones)
+            // The crown turns between these (WATCH-109); the planned workout opens on the dial (WATCH-118).
+            TabView(selection: $dataScreen) {
+                if hasSteps {
+                    ZoneDialPage(recorder: recorder, zoneStore: zoneStore)
+                        .tag(DataScreen.zones)
+                }
+                StandardMetricsPage(recorder: recorder, zoneStore: zoneStore)
+                    .tag(DataScreen.standard)
             }
+            .tabViewStyle(.verticalPage)
+            .tag(Page.data)
             RunMetricsPage(recorder: recorder, zoneStore: zoneStore)
                 .tag(Page.metrics)
         }
         .tabViewStyle(.page)
-        .onAppear { if hasSteps { page = .zones } }
+        .onAppear { if hasSteps { dataScreen = .zones } }
         .onChange(of: hasSteps) { _, hasSteps in
             // The steps are set a moment after the run starts, and are used up when the last one ends.
-            // Only a page that is going away, or the default one, is moved off: someone on the
+            // Only a screen that is going away, or the default one, is moved off: someone on the
             // controls page to pause or end the run stays there.
-            if hasSteps, page == .metrics { page = .zones }
-            if !hasSteps, page == .zones { page = .metrics }
+            if hasSteps, dataScreen == .standard, page != .controls { dataScreen = .zones }
+            if hasSteps, page == .metrics { page = .data }
+            if !hasSteps, dataScreen == .zones { dataScreen = .standard }
         }
     }
 }
