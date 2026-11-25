@@ -1,9 +1,10 @@
 import Foundation
 
-/// Which run screen set the athlete linked to which workout template (WATCH-133): a sprint interval
-/// session gets other screens than a long run. Kept here, in `UserDefaults`, by the template's id, since
-/// the template itself belongs to TrainingKit; a workout made from a template with a link is sent to the
-/// watch with the set's id (``WatchPlanSync``), and one with none runs with the workout default.
+/// Which run screen set the athlete linked to which built-in workout template (WATCH-133): a sprint
+/// interval session gets other screens than a long run. A custom template carries its own link
+/// (`WorkoutTemplate.watchScreenSetID`, which wins); the built-in templates are constants and can't, so their
+/// links are kept here, in `UserDefaults`, by the template's id. A workout made from a template with a link is
+/// sent to the watch with the set's id (``WatchPlanSync``), and one with none runs with the workout default.
 ///
 /// The editor that sets the links is WATCH-134, which also sends the sets themselves. A link to a set that
 /// no longer exists is harmless: the watch falls back to the default.

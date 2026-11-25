@@ -128,6 +128,36 @@ struct WatchPlanSyncTests {
         #expect(sent.workouts.first { $0.name == "Linked" }?.screenSetID == "long")
     }
 
+    @Test("a custom template's own screen set wins over the app's link, and a template that names none keeps the link (WATCH-133)")
+    func templateSetWins() async throws {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store, cycleStore: store,
+            raceStore: store, athleteStore: store, templateStore: store)
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        try await store.save(athlete)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let own = WorkoutTemplate(name: "Own", sport: .running, parameters: [], blocks: [], watchScreenSetID: "own")
+        let bare = WorkoutTemplate(name: "Bare", sport: .running, parameters: [], blocks: [])
+        try await store.upsert([own, bare])
+        var fromOwn = workout("FromOwn")
+        fromOwn.templateID = own.id
+        var fromBare = workout("FromBare")
+        fromBare.templateID = bare.id
+        try await store.upsert([fromOwn, fromBare])
+        try await store.upsert([
+            PlannedActivity(workoutID: fromOwn.id, date: day(0)), PlannedActivity(workoutID: fromBare.id, date: day(1))
+        ])
+        let links = WatchScreenLinks(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        links.link(template: own.id, to: "link")
+        links.link(template: bare.id, to: "link")
+        let sender = FakeSender()
+        await WatchPlanSync(model: model, sender: sender, links: links).sync(asOf: day(0, hours: 6))
+        let sent = try #require(sender.plans.last)
+        #expect(sent.workouts.first { $0.name == "FromOwn" }?.screenSetID == "own")
+        #expect(sent.workouts.first { $0.name == "FromBare" }?.screenSetID == "link")
+    }
+
     @Test("the links keep a set per template, list a set's templates and forget a deleted set")
     func links() {
         let links = WatchScreenLinks(defaults: UserDefaults(suiteName: UUID().uuidString)!)

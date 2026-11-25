@@ -25,6 +25,16 @@ struct WorkoutTemplateEditorTests {
         }
     }
 
+    @Test("editing a template keeps its watch screen set link (WATCH-133)")
+    func keepsTheScreenSet() throws {
+        var template = BuiltInWorkoutTemplates.easyRun
+        template.watchScreenSetID = "sprint"
+        var draft = WorkoutTemplateDraft(template)
+        draft.name = "Renamed"
+        #expect(try #require(draft.build()).watchScreenSetID == "sprint")
+        #expect(try #require(WorkoutTemplateDraft(template, duplicating: true).build()).watchScreenSetID == "sprint")
+    }
+
     @Test("a duplicate gets a new id and a Copy name, titled after the original until it is renamed")
     func duplicateIsANewTemplate() throws {
         let original = BuiltInWorkoutTemplates.easyRun

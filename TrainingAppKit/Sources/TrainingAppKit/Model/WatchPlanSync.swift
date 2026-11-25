@@ -59,10 +59,15 @@ public final class WatchPlanSync {
         let stores = model.stores
         let candidates: [PlannedActivity]
         var workouts: [UUID: StructuredWorkout] = [:]
+        var templateSetIDs: [UUID: String] = [:]
         do {
             candidates = try await stores.activePlannedActivities(in: window.lowerBound...window.upperBound)
             for id in Set(candidates.map(\.workoutID)) {
                 workouts[id] = try await stores.workoutStore.workout(id: id)
+            }
+            // The screen set a custom template names (WATCH-133); a built-in template has none, and a template that can't be read leaves its workouts on the app's own links.
+            for id in Set(workouts.values.compactMap(\.templateID)) {
+                if let setID = (try? await stores.templateStore?.template(id: id))??.watchScreenSetID { templateSetIDs[id] = setID }
             }
         } catch {
             return
@@ -70,7 +75,7 @@ public final class WatchPlanSync {
         let drain = await athleteDrainPerHour(asOf: now)
         let plan = Self.plan(
             from: candidates, workouts: workouts, asOf: now, calendar: calendar,
-            athlete: model.athlete, paceHistory: model.paceHistory, drainPerHour: drain, links: links)
+            athlete: model.athlete, paceHistory: model.paceHistory, drainPerHour: drain, links: links, templateSetIDs: templateSetIDs)
         if let lastSent, lastSent.workouts == plan.workouts, now.timeIntervalSince(lastSent.sentAt) < Self.refreshInterval {
             return
         }
@@ -127,11 +132,12 @@ public final class WatchPlanSync {
     ///   - paceHistory: The athlete's recent runs, which that forecast is made from.
     ///   - drainPerHour: The athlete's typical battery drain, which the watch starts its battery forecast
     ///     from when it has no runs of its own to go by (WATCH-119).
-    ///   - links: The screen set linked to a workout's template, sent with the workout (WATCH-133).
+    ///   - links: The app's own links from a template to a screen set, for the built-in templates, which can't carry one (WATCH-133).
+    ///   - templateSetIDs: The screen set each custom template names (`WorkoutTemplate.watchScreenSetID`), by template id; it wins over `links`.
     static func plan(
         from plans: [PlannedActivity], workouts: [UUID: StructuredWorkout], asOf now: Date, calendar: Calendar,
         athlete: AthleteProfile? = nil, paceHistory: PaceHistory = .empty, drainPerHour: Double? = nil,
-        links: WatchScreenLinks = WatchScreenLinks()
+        links: WatchScreenLinks = WatchScreenLinks(), templateSetIDs: [UUID: String] = [:]
     ) -> WatchPlan {
         let calculator = StatisticsCalculator()
         let window = WatchSchedulePlanner.window(asOf: now, calendar: calendar)
@@ -149,7 +155,7 @@ public final class WatchPlanSync {
             return WatchPlannedWorkout(
                 id: plan.id, date: plan.date, name: workout.name, blocks: workout.blocks,
                 typicalDuration: duration.flatMap { $0 > 0 ? $0 : nil }, drainPerHour: drainPerHour,
-                screenSetID: links.setID(forTemplate: workout.templateID))
+                screenSetID: workout.templateID.flatMap { templateSetIDs[$0] } ?? links.setID(forTemplate: workout.templateID))
         }, sentAt: now)
     }
 }

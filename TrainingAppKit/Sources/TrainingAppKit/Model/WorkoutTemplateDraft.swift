@@ -131,6 +131,9 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     /// The days the template wants free around it (MVP5-147). The editor doesn't offer it either; it is kept so editing a
     /// template doesn't drop it for the plan generator.
     public var recoveryDays: RecoveryDays?
+    /// The watch screen set to run the template's workouts with (WATCH-133). The template editor doesn't offer it
+    /// (the screen set editor does, WATCH-134); it is kept so editing a template doesn't unlink it.
+    public var watchScreenSetID: String?
     /// The template's parameters.
     public var parameters: [Parameter]
     /// The template's blocks.
@@ -140,7 +143,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     public init(
         id: UUID = UUID(), name: String = "", titleName: String? = nil, titleNameAppliesTo: String? = nil,
         sport: Sport = .running, venue: Venue? = nil, purpose: WorkoutPurpose = .general,
-        sessionType: SessionType? = nil, recoveryDays: RecoveryDays? = nil, parameters: [Parameter] = [], blocks: [Block] = []
+        sessionType: SessionType? = nil, recoveryDays: RecoveryDays? = nil, watchScreenSetID: String? = nil,
+        parameters: [Parameter] = [], blocks: [Block] = []
     ) {
         self.titleNameAppliesTo = titleNameAppliesTo
         self.id = id
@@ -151,6 +155,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         self.purpose = purpose
         self.sessionType = sessionType
         self.recoveryDays = recoveryDays
+        self.watchScreenSetID = watchScreenSetID
         self.parameters = parameters
         self.blocks = blocks
     }
@@ -301,7 +306,8 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
             titleName: duplicating ? (template.titleName ?? template.name) : template.titleName,
             titleNameAppliesTo: duplicating ? "\(template.name) Copy" : nil,
             sport: template.sport, venue: template.venue, purpose: template.purpose,
-            sessionType: template.sessionType, recoveryDays: template.recoveryDays, parameters: parameters, blocks: blocks
+            sessionType: template.sessionType, recoveryDays: template.recoveryDays,
+            watchScreenSetID: template.watchScreenSetID, parameters: parameters, blocks: blocks
         )
     }
 
@@ -450,7 +456,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
         return WorkoutTemplate(
             id: id, name: trimmedName, titleName: keepsTitleName ? titleName : nil,
             sport: sport, venue: venue, parameters: templateParameters, blocks: templateBlocks,
-            purpose: purpose, sessionType: sessionType, recoveryDays: recoveryDays
+            purpose: purpose, sessionType: sessionType, recoveryDays: recoveryDays, watchScreenSetID: watchScreenSetID
         )
     }
 }
