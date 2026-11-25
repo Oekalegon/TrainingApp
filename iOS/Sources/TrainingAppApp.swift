@@ -30,6 +30,7 @@ struct TrainingAppApp: App {
                     model: environment.model, refresher: environment, watchSync: environment.watchSync,
                     watchZoneSync: environment.watchZoneSync,
                     watchCues: environment.watchCueSync,
+                    watchScreens: environment.watchScreenSync,
                     iCloud: CloudKitAccountChecker(containerIdentifier: TrainingAppEnvironment.cloudKitContainerIdentifier),
                     workoutInspector: environment.workoutInspector
                 )

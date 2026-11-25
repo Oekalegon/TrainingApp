@@ -42,6 +42,7 @@ public struct AppTabView: View {
     private let watchSync: WatchScheduleSync?
     private let watchZoneSync: WatchZoneSync?
     private let watchCues: WatchCueSync?
+    private let watchScreens: WatchScreenSetSync?
     private let workoutInspector: (any WorkoutInspecting)?
 
     /// - Parameters:
@@ -52,13 +53,15 @@ public struct AppTabView: View {
     ///     active and when they change (WATCH-102); `nil` skips it.
     ///   - watchCues: The settings for the watch's sound and haptics (WATCH-107), sent when the app
     ///     becomes active and when changed; `nil` hides them.
+    ///   - watchScreens: The athlete's run screens for the watch (WATCH-109), sent when the app becomes
+    ///     active and when changed; `nil` skips it.
     ///   - iCloud: Looks up the iCloud account, for the first-run introduction and the warning banner
     ///     (MVP2-147); `nil` never warns.
     ///   - workoutInspector: Reads what HealthKit recorded for recent workouts, for the Developer
     ///     screen (MVP2-146 spike); `nil` hides it.
     public init(
         model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil,
-        watchZoneSync: WatchZoneSync? = nil, watchCues: WatchCueSync? = nil, iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
+        watchZoneSync: WatchZoneSync? = nil, watchCues: WatchCueSync? = nil, watchScreens: WatchScreenSetSync? = nil, iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
     ) {
         let viewModel = MicroCycleViewModel(model: model, refresher: refresher, watchSync: watchSync, iCloud: iCloud)
         _viewModel = State(initialValue: viewModel)
@@ -68,6 +71,7 @@ public struct AppTabView: View {
         self.watchSync = watchSync
         self.watchZoneSync = watchZoneSync
         self.watchCues = watchCues
+        self.watchScreens = watchScreens
         self.workoutInspector = workoutInspector
     }
 
@@ -144,6 +148,7 @@ public struct AppTabView: View {
             guard phase == .active else { return }
             watchSync?.requestSync()
             watchCues?.sync()
+            watchScreens?.sync()
             watchZoneSync?.sync(settings: viewModel.currentHeartRateZoneSettings)
             // The athlete may have signed in to iCloud in Settings meanwhile (MVP2-147).
             Task { await viewModel.onboarding.refreshICloudStatus() }
