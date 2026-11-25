@@ -7,28 +7,64 @@ public enum RunMetric: String, Sendable, Codable, CaseIterable, Hashable {
     case totalTime, distance, heartRate, currentPace, averagePace
 }
 
-/// One thing on a run screen: today a metric, later widgets such as the zone bar (WATCH-132). Each
-/// has a ``height`` in units, and a screen holds ``RunScreen/capacity`` of them.
+/// A widget a run screen can hold (WATCH-132): something taller or richer than a metric's value.
+public enum RunWidget: String, Sendable, Codable, CaseIterable, Hashable {
+    /// The zones on one line with the heart rate's place (`ZoneDialBar`); height 2.
+    case zoneBar
+    /// The battery's charge and forecast with its bar; height 1.
+    case battery
+    /// The step's time or distance left, with which step it is; only for a planned workout; height 1.
+    case stepCountdown
+    /// The time spent in each zone so far, as bars; height 2.
+    case zoneHistogram
+
+    /// The height in units.
+    public var height: Int {
+        switch self {
+        case .zoneBar, .zoneHistogram: 2
+        case .battery, .stepCountdown: 1
+        }
+    }
+
+    /// Whether the widget means something only in a planned workout's steps.
+    public var requiresSteps: Bool { self == .stepCountdown }
+}
+
+/// One thing on a run screen: a metric or a widget. Each has a ``height`` in units, and a screen holds
+/// ``RunScreen/capacity`` of them.
 public enum RunScreenItem: Sendable, Hashable, Codable {
     case metric(RunMetric)
+    case widget(RunWidget)
 
     /// The height in units: a plain metric is 1, which is a row of the standard screen.
     public var height: Int {
         switch self {
         case .metric: 1
+        case .widget(let widget): widget.height
         }
+    }
+
+    /// Whether the item means something only in a planned workout's steps.
+    public var requiresSteps: Bool {
+        if case .widget(let widget) = self { widget.requiresSteps } else { false }
     }
 
     private enum CodingKeys: String, CodingKey { case kind, id }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decode(String.self, forKey: .id)
         switch try container.decode(String.self, forKey: .kind) {
         case "metric":
-            guard let metric = RunMetric(rawValue: try container.decode(String.self, forKey: .id)) else {
+            guard let metric = RunMetric(rawValue: id) else {
                 throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "unknown metric")
             }
             self = .metric(metric)
+        case "widget":
+            guard let widget = RunWidget(rawValue: id) else {
+                throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "unknown widget")
+            }
+            self = .widget(widget)
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "unknown item")
         }
@@ -40,6 +76,9 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
         case .metric(let metric):
             try container.encode("metric", forKey: .kind)
             try container.encode(metric.rawValue, forKey: .id)
+        case .widget(let widget):
+            try container.encode("widget", forKey: .kind)
+            try container.encode(widget.rawValue, forKey: .id)
         }
     }
 }
@@ -58,10 +97,9 @@ public struct RunScreen: Sendable, Hashable, Codable, Identifiable {
         self.items = items
     }
 
-    /// The metrics among the items, in order.
-    public var metrics: [RunMetric] {
-        items.compactMap { if case .metric(let metric) = $0 { metric } else { nil } }
-    }
+    /// Whether a screen means something only in a planned workout's steps: it has a step widget. Left
+    /// out of a run with no steps (a free run, or a workout whose steps are used up).
+    public var requiresSteps: Bool { items.contains { $0.requiresSteps } }
 
     /// The units the items take.
     public var units: Int { items.reduce(0) { $0 + $1.height } }
@@ -126,11 +164,17 @@ public struct RunScreenSet: Sendable, Hashable, Codable, Identifiable {
         id: "default.freeRun", name: "Free run",
         screens: [RunScreen(id: "standard", items: RunMetric.allCases.map(RunScreenItem.metric))])
 
-    /// The default for a workout. For now the same screen; the zone dial is added under it by the
-    /// watch app until it is a set of widgets (WATCH-132).
+    /// The default for a workout: the standard screen and, opening first, the zone dial (WATCH-118),
+    /// which is the step's countdown, the heart rate, the zone bar, the total time and the battery.
     public static let workoutDefault = RunScreenSet(
         id: "default.workout", name: "Workout",
-        screens: [RunScreen(id: "standard", items: RunMetric.allCases.map(RunScreenItem.metric))])
+        screens: [
+            RunScreen(id: "standard", items: RunMetric.allCases.map(RunScreenItem.metric)),
+            RunScreen(id: "dial", items: [
+                .widget(.stepCountdown), .metric(.heartRate), .widget(.zoneBar), .metric(.totalTime), .widget(.battery),
+            ]),
+        ],
+        startScreenID: "dial")
 }
 
 /// What the phone sends: the set for a free run and the set for a workout. Sets linked to workout
@@ -204,36 +248,49 @@ public final class RunScreenStore {
     }
 }
 
-/// Which data screen of a run is showing, and when it moves by itself (WATCH-109): a run opens on the
-/// set's start screen, a planned workout on the zone dial (WATCH-118; until the dial is a set of
-/// widgets, WATCH-132), and the screen follows the steps starting and ending. Only a screen that is going
-/// away, or the start screen, is moved off, so the athlete's own turn of the crown stays.
+/// Which data screen of a run is showing, and when it moves by itself (WATCH-109, WATCH-132): a run
+/// opens on the set's start screen (the zone dial of a planned workout, by default) and the screens
+/// that need a workout's steps are left out of a run that has none, so the run moves off one when the
+/// steps are used up, and onto the start screen when they begin, unless the athlete has turned to a
+/// screen of their own since.
 public struct RunScreenSelection: Sendable, Equatable {
-    public enum Screen: Sendable, Hashable {
-        /// A screen of the set, by id.
-        case screen(String)
-        /// The zone dial, which a planned workout has under the set's screens.
-        case zones
-    }
-
     public let set: RunScreenSet
-    public var current: Screen
+    /// The id of the screen showing.
+    public private(set) var current: String
+    private var athleteMoved = false
 
     public init(set: RunScreenSet, hasSteps: Bool) {
         self.set = set
-        current = hasSteps ? .zones : Self.start(of: set)
+        current = ""
+        current = openingScreen(hasSteps: hasSteps)
     }
 
-    /// The set's start screen.
-    public var start: Screen { Self.start(of: set) }
+    /// The screens to show: all of them, or those that need no steps when the run has none.
+    public func screens(hasSteps: Bool) -> [RunScreen] {
+        hasSteps ? set.screens : set.screens.filter { !$0.requiresSteps }
+    }
 
-    private static func start(of set: RunScreenSet) -> Screen {
-        .screen(set.screens.indices.contains(set.startIndex) ? set.screens[set.startIndex].id : "")
+    /// The athlete turned to a screen.
+    public mutating func select(_ id: String) {
+        guard id != current else { return }
+        current = id
+        athleteMoved = true
     }
 
     /// The steps started or were used up.
     public mutating func stepsChanged(hasSteps: Bool) {
-        if hasSteps, current == start { current = .zones }
-        if !hasSteps, current == .zones { current = start }
+        if hasSteps, !athleteMoved {
+            current = openingScreen(hasSteps: true)
+        } else if !screens(hasSteps: hasSteps).contains(where: { $0.id == current }) {
+            current = openingScreen(hasSteps: hasSteps)
+        }
+    }
+
+    /// The start screen when it can show, otherwise the first screen that can.
+    private func openingScreen(hasSteps: Bool) -> String {
+        let shown = screens(hasSteps: hasSteps)
+        let start = set.screens.indices.contains(set.startIndex) ? set.screens[set.startIndex].id : nil
+        if let start, shown.contains(where: { $0.id == start }) { return start }
+        return shown.first?.id ?? start ?? ""
     }
 }

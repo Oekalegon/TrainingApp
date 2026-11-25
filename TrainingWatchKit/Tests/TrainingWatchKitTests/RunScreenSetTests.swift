@@ -89,22 +89,60 @@ struct RunScreenSetTests {
         #expect(set.screens.first?.items == [.metric(.distance)])
     }
 
-    @Test("the selection opens on the start screen or the dial, and follows the steps without taking the athlete's own screen")
-    func selection() {
-        let set = RunScreenSet(id: "x", name: "X", screens: [
-            RunScreen(id: "a", items: [.metric(.distance)]), RunScreen(id: "b", items: [.metric(.heartRate)])], startScreenID: "b")
-        #expect(RunScreenSelection(set: set, hasSteps: false).current == .screen("b"))
-        #expect(RunScreenSelection(set: set, hasSteps: true).current == .zones)
-
+    @Test("the selection opens on the start screen, and the screens of steps are left out of a run with none")
+    func selectionOpening() {
+        let set = RunScreenSet.workoutDefault
+        #expect(RunScreenSelection(set: set, hasSteps: true).current == "dial")
+        // The steps arrive a moment after the run starts: until then the dial can't show.
         var selection = RunScreenSelection(set: set, hasSteps: false)
+        #expect(selection.current == "standard")
+        #expect(selection.screens(hasSteps: false).map(\.id) == ["standard"])
         selection.stepsChanged(hasSteps: true)
-        #expect(selection.current == .zones)
+        #expect(selection.current == "dial")
         selection.stepsChanged(hasSteps: false)
-        #expect(selection.current == .screen("b"))
+        #expect(selection.current == "standard")
 
-        // The athlete is on another screen: the steps starting leave them there.
-        selection.current = .screen("a")
+        let free = RunScreenSelection(set: .freeRunDefault, hasSteps: false)
+        #expect(free.current == "standard")
+    }
+
+    @Test("a screen the athlete turned to stays when the steps start, but one that needs the steps goes when they are used up")
+    func selectionKeepsTheAthletesScreen() {
+        var selection = RunScreenSelection(set: .workoutDefault, hasSteps: true)
+        selection.select("standard")
         selection.stepsChanged(hasSteps: true)
-        #expect(selection.current == .screen("a"))
+        #expect(selection.current == "standard")
+        selection.stepsChanged(hasSteps: false)
+        #expect(selection.current == "standard")
+
+        var onDial = RunScreenSelection(set: .workoutDefault, hasSteps: true)
+        onDial.stepsChanged(hasSteps: false)
+        #expect(onDial.current == "standard")
+    }
+
+    @Test("a set with a start screen that does not exist opens on the first screen")
+    func selectionUnknownStart() {
+        let set = RunScreenSet(id: "x", name: "X", screens: [RunScreen(id: "a", items: [.metric(.distance)])], startScreenID: "zz")
+        #expect(RunScreenSelection(set: set, hasSteps: false).current == "a")
+    }
+
+    @Test("widgets travel with their id, an unknown one is dropped, and they have heights")
+    func widgets() throws {
+        let screen = try decode(RunScreen.self, """
+        {"id":"s","items":[{"kind":"widget","id":"zoneBar"},{"kind":"widget","id":"hologram"},{"kind":"widget","id":"battery"}]}
+        """)
+        #expect(screen.items == [.widget(.zoneBar), .widget(.battery)])
+        #expect(screen.units == 3)
+        let data = try JSONEncoder().encode(screen)
+        #expect(try JSONDecoder().decode(RunScreen.self, from: data) == screen)
+        #expect(RunScreen(id: "d", items: [.widget(.stepCountdown)]).requiresSteps)
+        #expect(!RunScreen(id: "d", items: [.widget(.zoneBar), .metric(.distance)]).requiresSteps)
+    }
+
+    @Test("the workout default holds the dial in six units and opens on it")
+    func workoutDefault() throws {
+        let dial = try #require(RunScreenSet.workoutDefault.screens.first { $0.id == "dial" })
+        #expect(dial.units == RunScreen.capacity)
+        #expect(RunScreenSet.workoutDefault.startIndex == 1)
     }
 }

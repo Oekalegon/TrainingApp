@@ -1,4 +1,5 @@
 import SwiftUI
+import TrainingWatchKit
 
 /// How often a run screen redraws (WATCH-125): every second, or with the wrist down on the minute
 /// (not a minute from when the wrist went down, so the time shown is never nearly a minute behind).
@@ -82,5 +83,17 @@ enum RunMetricStyle {
         .minimumScaleFactor(shrinks ? 0.7 : 1)
         // A caption that may not shrink isn't cut either: whatever is beside it gives way.
         .fixedSize(horizontal: !shrinks, vertical: false)
+    }
+}
+
+extension StepHeartRateTarget.Status {
+    /// The colour of the heart rate and its zone against the step's target: blue under it, red over it,
+    /// white in it (and without a target), so a glance says whether to speed up or slow down.
+    static func displayColor(_ status: StepHeartRateTarget.Status?) -> Color {
+        switch status {
+        case .below: Color(red: 0.35, green: 0.65, blue: 1.0)
+        case .above: Color(red: 1.0, green: 0.4, blue: 0.4)
+        case .inside, nil: .white
+        }
     }
 }

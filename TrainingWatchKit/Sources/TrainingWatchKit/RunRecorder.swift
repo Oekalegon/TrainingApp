@@ -42,6 +42,9 @@ public final class RunRecorder {
     /// Whether the run was started from a planned workout. Known from the moment it starts, unlike
     /// ``stepEngine``, which is set a moment later, so the run's screens can be chosen once (WATCH-109).
     public private(set) var isPlannedRun = false
+
+    /// The time in each zone so far, for the zone histogram (WATCH-132).
+    var zoneTime = ZoneTimeTracker()
     /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
     public var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
@@ -120,6 +123,7 @@ public final class RunRecorder {
     public func start(plan: WatchPlannedWorkout? = nil) async {
         guard phase == .idle else { return }
         isPlannedRun = plan != nil
+        zoneTime.reset()
         phase = .starting
         abandoned = false
         routeNote = nil
@@ -187,6 +191,9 @@ public final class RunRecorder {
         stopBatteryWatch()
         backend.stopSensors()
     }
+
+    /// The share of the run's time in zones 0 to 5, or `nil` before any heart rate was measured.
+    public var zoneTimeFractions: [Double]? { zoneTime.fractions }
 
     private func releaseRun() {
         stepEngine = nil
@@ -289,6 +296,7 @@ public final class RunRecorder {
     /// A heart-rate reading from the builder.
     func heartRateArrived(_ bpm: Double) {
         heartRate = bpm
+        if let zone = zoneStore?.bands?.zone(forHeartRate: bpm) { zoneTime.add(zone: zone, atElapsed: elapsed()) }
         alertHeartRate(bpm)
     }
 
