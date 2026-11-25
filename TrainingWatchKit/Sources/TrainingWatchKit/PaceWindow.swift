@@ -35,19 +35,34 @@ public struct PaceWindow: Equatable, Sendable {
     /// Forgets everything: a new run.
     public mutating func reset() { samples = [] }
 
+    /// How long after the last reading the window still ends at that reading. Distance arrives in
+    /// jumps a second or two apart, and measuring up to the clock in between makes the pace rise and
+    /// fall with each one; a longer silence is the athlete standing still and does count.
+    public static let staleAfter: TimeInterval = 3
+
     /// The pace in seconds per metre over the last ``length`` seconds up to `elapsed`, or `nil`
-    /// when there isn't a window yet or the athlete is standing still. Measured up to `elapsed` and
-    /// not up to the last reading, so a stop shows as a slowing pace and then none.
+    /// when there isn't a window yet or the athlete is standing still. Measured up to the last
+    /// reading while it is recent, and up to `elapsed` after ``staleAfter`` seconds without one,
+    /// so a stop shows as a slowing pace and then none.
     public func secondsPerMeter(at elapsed: TimeInterval) -> Double? {
         guard let latest = samples.last else { return nil }
-        let start = elapsed - Self.length
+        let end = elapsed - latest.time <= Self.staleAfter ? latest.time : elapsed
+        let start = end - Self.length
         // The last reading at or before the start of the window, else the first one there is.
         let anchor = samples.last(where: { $0.time <= start }) ?? samples[0]
-        let span = elapsed - anchor.time
+        let span = end - anchor.time
         guard span >= Self.minimumSpan else { return nil }
         let meters = latest.meters - anchor.meters
         guard meters / span >= Self.minimumSpeed else { return nil }
         return span / meters
+    }
+
+    /// The pace of the whole run in seconds per metre, from the last reading's distance and the time
+    /// it was read at (not the clock's time, which runs on between readings and makes the average
+    /// rise and fall), or `nil` before 50 m.
+    public var averageSecondsPerMeter: Double? {
+        guard let latest = samples.last, latest.meters >= 50, latest.time > 0 else { return nil }
+        return latest.time / latest.meters
     }
 }
 
@@ -75,11 +90,5 @@ public enum PaceText {
         let total = Int(perUnit.rounded())
         guard total < 3600 else { return "--" }
         return String(format: "%d:%02d", total / 60, total % 60)
-    }
-
-    /// The average pace of the run so far, in seconds per metre, or `nil` before it has gone far
-    /// enough to mean anything (50 m).
-    public static func averageSecondsPerMeter(elapsed: TimeInterval, meters: Double) -> Double? {
-        meters >= 50 && elapsed > 0 ? elapsed / meters : nil
     }
 }

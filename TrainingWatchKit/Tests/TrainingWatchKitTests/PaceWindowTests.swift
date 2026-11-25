@@ -67,10 +67,22 @@ struct PaceWindowTests {
         #expect(PaceText.unit(us) == "/mi")
     }
 
-    @Test("the average is the whole run's, and none in the first 50 m")
+    @Test("the average is the last reading's, so it holds still between readings and none in the first 50 m")
     func average() {
-        #expect(PaceText.averageSecondsPerMeter(elapsed: 600, meters: 2000) == 0.3)
-        #expect(PaceText.averageSecondsPerMeter(elapsed: 10, meters: 20) == nil)
-        #expect(PaceText.averageSecondsPerMeter(elapsed: 0, meters: 100) == nil)
+        var window = PaceWindow()
+        window.add(meters: 20, at: 10)
+        #expect(window.averageSecondsPerMeter == nil)
+        window.add(meters: 2000, at: 600)
+        #expect(window.averageSecondsPerMeter == 0.3)
+    }
+
+    @Test("distance in jumps a second apart doesn't make the current pace swing")
+    func jumpsDoNotSwing() throws {
+        // 3 m/s in jumps every 2 s.
+        var window = PaceWindow()
+        for second in stride(from: 0, through: 40, by: 2) { window.add(meters: Double(second) * 3, at: TimeInterval(second)) }
+        let even = try #require(window.secondsPerMeter(at: 40))
+        let odd = try #require(window.secondsPerMeter(at: 41))
+        #expect(abs(even - odd) < 0.0001)
     }
 }

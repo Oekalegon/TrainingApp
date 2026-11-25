@@ -247,9 +247,9 @@ public final class RunRecorder {
     }
 
     /// The pace of the whole run so far in seconds per metre, paused time left out, or `nil` in the
-    /// first 50 metres.
-    public func averageSecondsPerMeter(at date: Date = .now) -> Double? {
-        PaceText.averageSecondsPerMeter(elapsed: elapsed(at: date), meters: distanceMeters)
+    /// first 50 metres. It moves only when the distance does.
+    public var averageSecondsPerMeter: Double? {
+        paceWindow.averageSecondsPerMeter
     }
 
     /// The session changed state, whoever caused it: the button or the system.

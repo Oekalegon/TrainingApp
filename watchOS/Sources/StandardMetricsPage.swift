@@ -57,7 +57,7 @@ struct StandardMetricsPage: View {
         case .currentPace:
             paceLine(recorder.currentSecondsPerMeter(at: date), label: "Current pace", note: "now")
         case .averagePace:
-            paceLine(recorder.averageSecondsPerMeter(at: date), label: "Average pace", note: "avg")
+            paceLine(recorder.averageSecondsPerMeter, label: "Average pace", note: "avg")
         }
     }
 
