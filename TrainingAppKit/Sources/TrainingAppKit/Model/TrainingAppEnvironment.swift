@@ -24,6 +24,8 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
     public let watchZoneSync: WatchZoneSync?
     /// The settings for the watch's sound and haptics (WATCH-107).
     public let watchCueSync: WatchCueSync?
+    /// The athlete's run screens for the watch (WATCH-109, WATCH-134), sent with the zones and the plan.
+    public let watchScreenSync: WatchScreenSetSync?
     private let importer: any ActivityImporting
     private let healthStore: HKHealthStore
     private let athleteReader: HealthKitAthleteReader
@@ -45,8 +47,9 @@ public final class TrainingAppEnvironment: ActivityRefreshing {
         // One channel carries both the zones and the plan to the Watch app (WATCH-102, WATCH-103).
         let watchChannel = WatchSyncChannel.live()
         watchChannel?.activate()
-        self.watchSync = WatchScheduleSync.live(
-            model: model, planSync: watchChannel.map { WatchPlanSync(model: model, sender: $0) })
+        let planSync = watchChannel.map { WatchPlanSync(model: model, sender: $0) }
+        self.watchSync = WatchScheduleSync.live(model: model, planSync: planSync)
+        self.watchScreenSync = watchChannel.map { WatchScreenSetSync(sender: $0, planSync: planSync) }
         self.watchZoneSync = watchChannel.map { WatchZoneSync(sender: $0) }
         self.watchCueSync = watchChannel.map { WatchCueSync(sender: $0) }
         self.importer = importer
