@@ -20,10 +20,10 @@ struct ZoneDialCountdown: View {
                 // The digits have no descenders: the row is shorter than the text's own line.
                 .padding(.vertical, -RunMetricStyle.valueSize * 0.14)
             if let remainingKind {
-                RunMetricStyle.caption("REMAINING", remainingKind)
+                RunMetricStyle.caption("REMAINING", remainingKind, shrinks: false)
                     .accessibilityHidden(true)
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: 2)
             if let interval {
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                     if isRepeat {
@@ -32,8 +32,9 @@ struct ZoneDialCountdown: View {
                     Text(interval)
                         .font(.system(size: 20, weight: .semibold, design: .rounded).monospacedDigit())
                 }
-                .lineLimit(1).minimumScaleFactor(0.7)
-                // The place keeps its size: the countdown and its caption give way first.
+                .lineLimit(1)
+                // The place and its captions keep their size, the same as the captions of the other metrics:
+                // only the countdown gives way when the row is short of room.
                 .layoutPriority(1)
             }
         }

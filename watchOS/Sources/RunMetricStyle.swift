@@ -26,7 +26,9 @@ enum RunMetricStyle {
     }
 
     /// A caption of two lines, such as "REMAINING" over "TIME".
-    static func caption(_ top: String, _ bottom: String) -> some View {
+    /// - Parameter shrinks: Whether the caption may shrink to fit; off where it must stay the size of the
+    ///   other captions ("REP" beside it).
+    static func caption(_ top: String, _ bottom: String, shrinks: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: -2) {
             Text(top)
             Text(bottom)
@@ -34,6 +36,8 @@ enum RunMetricStyle {
         .font(captionFont)
         .foregroundStyle(.secondary)
         .lineLimit(1)
-        .minimumScaleFactor(0.7)
+        .minimumScaleFactor(shrinks ? 0.7 : 1)
+        // A caption that may not shrink isn't cut either: whatever is beside it gives way.
+        .fixedSize(horizontal: !shrinks, vertical: false)
     }
 }
