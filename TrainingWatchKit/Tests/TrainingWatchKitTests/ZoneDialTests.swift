@@ -172,5 +172,8 @@ struct ZoneDialTests {
         let single = WorkoutStepEngine(blocks: [WorkoutBlock(steps: [work])])
         #expect(ZoneDialText.placeLine(single.current!, of: 1) == "STEP 1 of 1")
         #expect(ZoneDialText.intervalFraction(single.current!) == nil)
+        // Every step has a number: the interval in a repeat, the step's place otherwise.
+        #expect(ZoneDialText.placeFraction(engine.current!, of: engine.steps.count) == "1/12")
+        #expect(ZoneDialText.placeFraction(single.current!, of: 1) == "1/1")
     }
 }

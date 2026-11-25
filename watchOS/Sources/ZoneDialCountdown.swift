@@ -1,11 +1,11 @@
 import SwiftUI
 
 /// The top row of the zone dial (WATCH-118): the time or distance left in the step in white, and to
-/// the right of it which interval it is, such as "5/12", when the step is in a repeat.
+/// the right of it which interval or step it is, such as "5/12" or "2/6".
 struct ZoneDialCountdown: View {
     /// What is left of the step, such as "0:52", or "Open".
     let remaining: String
-    /// "5/12", or `nil` outside a repeat, when nothing is shown.
+    /// "5/12" in a repeat or "2/6", the step's place, outside one (`ZoneDialText.placeFraction`).
     let interval: String?
     /// What the countdown counts, "STEP TIME" or "STEP DISTANCE", set under "REMAINING" beside it; `nil` for an open step, which has none.
     let remainingKind: String?

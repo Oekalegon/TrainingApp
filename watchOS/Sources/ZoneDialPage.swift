@@ -4,7 +4,7 @@ import TrainingCore
 import TrainingWatchKit
 
 /// The target-zone screen of a planned workout (WATCH-118): the step's countdown with the interval
-/// number (5/12, in a repeat) to the right, the heart rate in bpm and its place in the zones, a bar
+/// number (5/12 in a repeat, otherwise the step's place, 2/6) to the right, the heart rate in bpm and its place in the zones, a bar
 /// with all the zones on one line (the target three times as wide as the others and bright, and a
 /// triangle where the heart rate is), the total time, and the watch's battery at the bottom. The rows sit together at the
 /// bottom of the screen, with the room above them left empty.
@@ -71,7 +71,7 @@ private struct Dial: View {
         return VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
             ZoneDialCountdown(
                 remaining: remaining ?? "Open",
-                interval: ZoneDialText.intervalFraction(current),
+                interval: ZoneDialText.placeFraction(current, of: engine.steps.count),
                 remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "STEP TIME" : "STEP DISTANCE"))
             ZoneDialHeartRate(
                 heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
