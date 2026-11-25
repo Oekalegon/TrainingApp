@@ -102,7 +102,7 @@ private struct Dial: View {
     }
 
     /// The small line above the countdown, only for an open step, which has no end of its own: how to go
-    /// on. In the simulator, which plays no haptics, the last alerts follow it, newest first.
+    /// on.
     @ViewBuilder
     private func stepHint(isOpen: Bool) -> some View {
         if isOpen {
@@ -110,10 +110,6 @@ private struct Dial: View {
                 .font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
-        #if targetEnvironment(simulator)
-        Text(recorder.alertLogText)
-            .font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.6).foregroundStyle(.secondary)
-        #endif
     }
 
     /// What the battery will be at the end of the workout (WATCH-119), or `nil` when that isn't known.
