@@ -130,6 +130,22 @@ struct RunRecorderPhaseTests {
         #expect(backend.builder.calls == ["begin", "endCollection", "finishWorkout"])
     }
 
+    @Test("ending leaves the running phase at once, so the controls can't be used twice (WATCH-130)")
+    func endLeavesControlsAtOnce() async {
+        let (recorder, backend) = await running()
+        recorder.end()
+        #expect(recorder.phase == .saving)
+        recorder.end()
+        #expect(backend.session.calls.filter { $0 == "end" }.count == 1)
+        // A late state change from the session doesn't bring the controls back.
+        backend.session.onStateChange?(.running)
+        await settle()
+        #expect(recorder.phase == .saving)
+        backend.session.onStateChange?(.ended)
+        await settle()
+        #expect(recorder.phase == .saved)
+    }
+
     @Test("end does nothing before a run or after it")
     func endOutsideRun() async {
         let (recorder, backend) = makeRecorder()

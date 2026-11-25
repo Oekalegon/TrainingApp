@@ -227,6 +227,9 @@ public final class RunRecorder {
 
     public func end() {
         guard phase == .running || phase == .paused else { return }
+        // The session says it has ended a moment later; until then the controls would still be on
+        // screen and End could be tapped again (WATCH-130), so the run is "saving" from now on.
+        phase = .saving
         session?.end()
     }
 
@@ -238,6 +241,8 @@ public final class RunRecorder {
     /// The session changed state, whoever caused it: the button or the system.
     func sessionChanged(to state: RunSessionState) async {
         switch state {
+        case .running where phase == .saving, .paused where phase == .saving:
+            break
         case .running:
             phase = .running
             backend.resumeSensors()
