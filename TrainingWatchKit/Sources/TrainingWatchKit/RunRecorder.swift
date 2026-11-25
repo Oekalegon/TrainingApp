@@ -30,7 +30,8 @@ public final class RunRecorder {
     /// The latest heart rate in beats per minute.
     public private(set) var heartRate: Double?
     public private(set) var distanceMeters: Double = 0 {
-        didSet { paceWindow.add(meters: distanceMeters, at: elapsed()) }
+        // Only with a run going: with no builder `elapsed()` is 0, which the window would take as a new run.
+        didSet { if let builder { paceWindow.add(meters: distanceMeters, at: builder.elapsedTime(at: .now)) } }
     }
     /// The last seconds of distance, for the current pace.
     @ObservationIgnored private var paceWindow = PaceWindow()

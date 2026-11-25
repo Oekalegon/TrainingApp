@@ -69,10 +69,10 @@ private struct Dial: View {
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         // Values to the left, the interval to the right.
         return VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
+            stepHint(isOpen: remaining == nil)
             ZoneDialCountdown(
                 remaining: remaining ?? "Open",
-                interval: ZoneDialText.placeFraction(current, of: engine.steps.count),
-                isRepeat: current.repetitions > 1,
+                place: ZoneDialText.place(of: current, in: engine.steps.count),
                 remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "STEP TIME" : "STEP DISTANCE"))
             ZoneDialHeartRate(
                 heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
@@ -94,6 +94,23 @@ private struct Dial: View {
         // the room above the countdown is left empty (`contentTop` is the least it keeps for the clock).
         .padding(.top, Self.contentTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    /// The small line above the countdown: what comes next ("Next: Recovery 20 s Z2", "Last step"), or for an
+    /// open step, which has no end of its own, how to go on. In the simulator, which plays no haptics, the
+    /// last alerts follow it, newest first.
+    @ViewBuilder
+    private func stepHint(isOpen: Bool) -> some View {
+        let text = isOpen ? "Press Next step to move on" : WatchWorkoutSummary.nextText(engine)
+        if let text {
+            Text(text)
+                .font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        #if targetEnvironment(simulator)
+        Text(recorder.alertLogText)
+            .font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.6).foregroundStyle(.secondary)
+        #endif
     }
 
     /// What the battery will be at the end of the workout (WATCH-119), or `nil` when that isn't known.
@@ -123,8 +140,14 @@ private struct Dial: View {
                 parts.append(text)
             }
         }
+        if recorder.phase == .paused { parts.insert("Paused", at: 0) }
         parts.append(ZoneDialText.placeLine(current, of: engine.steps.count).lowercased())
         parts.append(ZoneDialText.stepLine(current.step).lowercased())
+        if recorder.stepProgress(at: at).flatMap({ WatchWorkoutSummary.remainingValue($0) }) == nil {
+            parts.append("press Next step to move on")
+        } else if let next = WatchWorkoutSummary.nextText(engine) {
+            parts.append(next.lowercased())
+        }
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         parts.append(battery.spokenText.lowercased())
         if let projection = projection(for: battery, progress: recorder.stepProgress(at: at)) {

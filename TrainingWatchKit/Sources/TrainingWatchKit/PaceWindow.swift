@@ -13,32 +13,31 @@ public struct PaceWindow: Equatable, Sendable {
     public static let minimumSpan: TimeInterval = 5
     /// Slower than this (about 55 minutes per kilometre) is standing still, and has no pace.
     public static let minimumSpeed = 0.3
+    /// How long after the last reading the window still ends at that reading. Distance arrives in
+    /// jumps a second or two apart, and measuring up to the clock in between makes the pace rise and
+    /// fall with each one; a longer silence is the athlete standing still and does count.
+    public static let staleAfter: TimeInterval = 3
 
-    private var samples: [(time: TimeInterval, meters: Double)] = []
+    private struct Sample: Equatable, Sendable {
+        var time: TimeInterval
+        var meters: Double
+    }
+
+    private var samples: [Sample] = []
 
     public init() {}
-
-    public static func == (lhs: PaceWindow, rhs: PaceWindow) -> Bool {
-        lhs.samples.count == rhs.samples.count
-            && zip(lhs.samples, rhs.samples).allSatisfy { $0.time == $1.time && $0.meters == $1.meters }
-    }
 
     /// Adds the total distance so far, read at `elapsed` seconds into the run.
     public mutating func add(meters: Double, at elapsed: TimeInterval) {
         // A reading from before the last one is out of order: the run started again.
         if let last = samples.last, elapsed < last.time { samples = [] }
-        samples.append((elapsed, meters))
+        samples.append(Sample(time: elapsed, meters: meters))
         // Keep one reading from before the window, so the window's start has a distance to measure from.
         while samples.count > 2, samples[1].time <= elapsed - Self.length { samples.removeFirst() }
     }
 
     /// Forgets everything: a new run.
     public mutating func reset() { samples = [] }
-
-    /// How long after the last reading the window still ends at that reading. Distance arrives in
-    /// jumps a second or two apart, and measuring up to the clock in between makes the pace rise and
-    /// fall with each one; a longer silence is the athlete standing still and does count.
-    public static let staleAfter: TimeInterval = 3
 
     /// The pace in seconds per metre over the last ``length`` seconds up to `elapsed`, or `nil`
     /// when there isn't a window yet or the athlete is standing still. Measured up to the last

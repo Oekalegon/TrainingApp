@@ -1,14 +1,13 @@
 import SwiftUI
+import TrainingWatchKit
 
 /// The top row of the zone dial (WATCH-118): the time or distance left in the step in white, and to
 /// the right of it which interval or step it is, such as "REP 5/12" or "2/6", in the primary colour.
 struct ZoneDialCountdown: View {
     /// What is left of the step, such as "0:52", or "Open".
     let remaining: String
-    /// "5/12" in a repeat or "2/6", the step's place, outside one (`ZoneDialText.placeFraction`).
-    let interval: String?
-    /// Whether `interval` is an interval of a repeat: "REP" is then set small before it.
-    let isRepeat: Bool
+    /// Where the step is: "REP 5/12" in a repeat, "2/6" outside one.
+    let place: ZoneDialText.Place
     /// What the countdown counts, "STEP TIME" or "STEP DISTANCE", set under "REMAINING" beside it; `nil` for an open step, which has none.
     let remainingKind: String?
 
@@ -24,19 +23,17 @@ struct ZoneDialCountdown: View {
                     .accessibilityHidden(true)
             }
             Spacer(minLength: 2)
-            if let interval {
-                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
-                    if isRepeat {
-                        Text("REP").font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
-                    }
-                    Text(interval)
-                        .font(.system(size: 20, weight: .semibold, design: .rounded).monospacedDigit())
+            HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                if place.isRepeat {
+                    Text("REP").font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
                 }
-                .lineLimit(1)
-                // The place and its captions keep their size, the same as the captions of the other metrics:
-                // only the countdown gives way when the row is short of room.
-                .layoutPriority(1)
+                Text(place.text)
+                    .font(.system(size: 20, weight: .semibold, design: .rounded).monospacedDigit())
             }
+            .lineLimit(1)
+            // The place and its captions keep their size, the same as the captions of the other metrics:
+            // only the countdown gives way when the row is short of room.
+            .layoutPriority(1)
         }
     }
 }

@@ -2,7 +2,7 @@ import SwiftUI
 import TrainingCore
 import TrainingWatchKit
 
-/// The recording screen (WATCH-101): start, then pages for the metrics (`RunMetricsPage`, WATCH-105) and the controls. Today's
+/// The recording screen (WATCH-101): start, then the run's pages (`RunPages`: the metrics screens and the controls). Today's
 /// planned workouts are on the start screen and tapping one runs its steps (WATCH-104).
 struct RunView: View {
     let recorder: RunRecorder
@@ -95,6 +95,15 @@ private struct RunPages: View {
                 }
             }
             .tabViewStyle(.verticalPage)
+            // A paused run says so on every data screen, at the top left, clear of the clock at the right.
+            .overlay(alignment: .topLeading) {
+                if recorder.phase == .paused {
+                    Text("PAUSED")
+                        .font(RunMetricStyle.captionFont).foregroundStyle(.orange)
+                        .padding(.leading, 8).padding(.top, 6)
+                        .accessibilityHidden(true)
+                }
+            }
             .tag(Page.data)
         }
         .tabViewStyle(.page)

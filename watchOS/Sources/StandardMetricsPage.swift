@@ -8,9 +8,9 @@ enum RunMetric: CaseIterable {
 }
 
 /// The standard metrics screen of a run, a list of values with no dial: total time, distance, the
-/// heart rate with its zone (blue under the step's target, red over it, white in it or with no target) on the same line, the current pace and the average
-/// pace. Every value is aligned to the leading edge, except the zone, which is at the trailing edge
-/// of the heart-rate line. The lines sit together at the bottom of the screen and the screen does not
+/// heart rate with its zone on the same line (blue under the step's target, red over it, white in it or
+/// with no target), the current pace and the average pace. Every value is aligned to the leading edge,
+/// except the zone, which is at the trailing edge of the heart-rate line. The lines sit together at the bottom of the screen and the screen does not
 /// fill up: with fewer ``metrics`` (one day they are the athlete's choice, WATCH-109) the ones left
 /// stay at the bottom.
 ///
@@ -31,8 +31,9 @@ struct StandardMetricsPage: View {
                 ForEach(metrics, id: \.self) { metric in
                     row(metric, at: date)
                 }
-                if recorder.phase == .paused {
-                    Text("Paused").font(.system(size: 12)).foregroundStyle(.yellow)
+                if recorder.stepEngine?.isFinished == true {
+                    // The steps are used up and the run goes on as a free run.
+                    Text("Workout done").font(RunMetricStyle.captionFont).foregroundStyle(.green)
                 }
             }
             .padding(.horizontal, Self.sidePadding)
@@ -52,7 +53,7 @@ struct StandardMetricsPage: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Total time")
-                .accessibilityValue(spokenDuration(elapsed))
+                .accessibilityValue(spokenDuration(elapsed) + (recorder.phase == .paused ? ", paused" : ""))
         case .distance:
             let amount = PaceText.distanceValue(meters: recorder.distanceMeters)
             HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
@@ -129,13 +130,23 @@ struct StandardMetricsPage: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate")
-        .accessibilityValue(spokenHeartRate(bpm: bpm, position: position))
+        .accessibilityValue(spokenHeartRate(bpm: bpm, position: position, target: target))
     }
 
-    private func spokenHeartRate(bpm: Double?, position: Double?) -> String {
+    /// "152 beats per minute, zone 2.3, 8 bpm below the target": the colour says the last part to the eye.
+    private func spokenHeartRate(bpm: Double?, position: Double?, target: StepHeartRateTarget?) -> String {
         guard let bpm else { return "no reading" }
-        let rate = "\(Int(bpm.rounded())) beats per minute"
-        guard let position else { return rate }
-        return rate + ", " + ZoneDialText.positionText(position).replacingOccurrences(of: "Z ", with: "zone ")
+        var parts = ["\(Int(bpm.rounded())) beats per minute"]
+        if let position {
+            parts.append(ZoneDialText.positionText(position).replacingOccurrences(of: "Z ", with: "zone "))
+        }
+        if let target { parts.append(target.position(forHeartRate: bpm).text.lowercased()) }
+        return parts.joined(separator: ", ")
     }
+}
+
+/// A time as VoiceOver should say it ("1 hour, 2 minutes, 5 seconds"), so a label can name the
+/// value without replacing it.
+private func spokenDuration(_ seconds: TimeInterval) -> String {
+    Duration.seconds(seconds.rounded(.down)).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
 }

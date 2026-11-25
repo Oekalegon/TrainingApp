@@ -1,10 +1,10 @@
 import Foundation
 import TrainingCore
 
-/// The words of the zone dial (WATCH-118): the heart rate's position as "Z 2.3" and the step lines
+/// The words of the zone dial (WATCH-118): the heart rate's position as "2.3" and the step lines
 /// VoiceOver reads.
 public enum ZoneDialText {
-    /// The heart rate's place along the zones, such as "Z 2.3": one decimal, rounded down so it
+    /// The heart rate's place along the zones, such as "Z 2.3" (the screens set the "ZONE" apart and use ``positionValue(_:)``; VoiceOver reads this): one decimal, rounded down so it
     /// never shows a zone before the heart rate has reached it, and "Z <1" below zone 1.
     ///
     /// - Parameter position: ``ZoneBands/position(forHeartRate:)``.
@@ -37,21 +37,34 @@ public enum ZoneDialText {
         return line
     }
 
-    /// Which interval this is, for the dial: "5/12" for the fifth of a block repeated 12 times, and
-    /// `nil` for a step that isn't in a repeat (a warm-up, a cool-down, a single run), which has no
-    /// interval number.
-    public static func intervalFraction(_ step: PlannedStep) -> String? {
-        step.repetitions > 1 ? "\(step.repetition)/\(step.repetitions)" : nil
+    /// Where a step is, for the dial: the interval of a repeated block ("REP 5/12") or, outside a
+    /// repeat, the step's place among all the steps ("2/6"), so every step has a number.
+    public enum Place: Equatable, Sendable {
+        /// The `number`th pass of a block repeated `count` times.
+        case interval(_ number: Int, of: Int)
+        /// The `number`th of `count` steps, for a step that isn't in a repeat.
+        case step(_ number: Int, of: Int)
+
+        /// "5/12" or "2/6".
+        public var text: String {
+            switch self {
+            case .interval(let number, let count), .step(let number, let count): "\(number)/\(count)"
+            }
+        }
+
+        /// Whether it is an interval of a repeat, which the dial marks with "REP".
+        public var isRepeat: Bool {
+            if case .interval = self { true } else { false }
+        }
     }
 
-    /// Where the step is, for the dial: the interval ("5/12") in a repeated block, otherwise the
-    /// step's place among all the steps ("2/6"), so every step has a number.
+    /// Where `step` is, for the dial.
     ///
     /// - Parameters:
     ///   - step: The step.
     ///   - count: How many steps the workout has.
-    public static func placeFraction(_ step: PlannedStep, of count: Int) -> String {
-        intervalFraction(step) ?? "\(step.index + 1)/\(count)"
+    public static func place(of step: PlannedStep, in count: Int) -> Place {
+        step.repetitions > 1 ? .interval(step.repetition, of: step.repetitions) : .step(step.index + 1, of: count)
     }
 
     /// The line above the step: "INTERVAL 5 of 12" for a repeated block, otherwise "STEP 2 of 6".

@@ -95,4 +95,20 @@ struct PaceWindowTests {
         #expect(PaceText.distanceUnit(metric) == "KM")
         #expect(PaceText.distanceUnit(us) == "MI")
     }
+
+    @Test("a reading just inside staleAfter still ends the window, one just past it doesn't")
+    func staleBoundary() throws {
+        var window = PaceWindow()
+        for second in 0...30 { window.add(meters: Double(second) * 3, at: TimeInterval(second)) }
+        let fresh = try #require(window.secondsPerMeter(at: 30 + PaceWindow.staleAfter))
+        #expect(abs(fresh - 1.0 / 3) < 0.0001)
+        let stale = try #require(window.secondsPerMeter(at: 30 + PaceWindow.staleAfter + 1))
+        #expect(stale > fresh)
+    }
+
+    @Test("a pace of an hour a unit or more is no pace")
+    func slowPaceText() {
+        #expect(PaceText.markedText(secondsPerMeter: 4, locale: metric) == "--")
+        #expect(PaceText.markedText(secondsPerMeter: 0.9, locale: metric) == "15'00\"")
+    }
 }
