@@ -8,6 +8,7 @@ struct RunView: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
     let planStore: WatchPlanStore
+    let screenStore: RunScreenStore
 
     var body: some View {
         #if targetEnvironment(simulator)
@@ -31,7 +32,7 @@ struct RunView: View {
         case .starting, .saving:
             ProgressView()
         case .running, .paused:
-            RunPages(recorder: recorder, zoneStore: zoneStore)
+            RunPages(recorder: recorder, zoneStore: zoneStore, set: screenStore.set(forWorkout: recorder.stepEngine != nil))
                 // For the battery warning below. The pages need it on themselves too: the pager hands
                 // each one the system's own value.
                 .fakeDimmable()
@@ -76,22 +77,32 @@ struct RunView: View {
 private struct RunPages: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
+    /// The athlete's screens for this run, read when the run starts (a change reaches the next run).
+    let set: RunScreenSet
     @State private var page = Page.data
-    @State private var dataScreen = DataScreen.standard
+    @State private var dataScreen: DataScreen?
 
-    private enum Page { case controls, data }
-    private enum DataScreen { case standard, zones }
+    /// A screen of the set, or the zone dial, which a planned workout adds under them until it is a
+    /// set of widgets (WATCH-132).
+    private enum DataScreen: Hashable { case screen(String), zones }
 
     /// Whether a planned workout still has steps to run: the zone dial is for those.
     private var hasSteps: Bool { recorder.stepEngine.map { !$0.isFinished } ?? false }
+
+    /// The screen the run opens on and goes back to: the set's start screen.
+    private var startScreen: DataScreen {
+        .screen(set.screens.indices.contains(set.startIndex) ? set.screens[set.startIndex].id : "")
+    }
 
     var body: some View {
         TabView(selection: $page) {
             RunControlsPage(recorder: recorder)
                 .tag(Page.controls)
-            TabView(selection: $dataScreen) {
-                StandardMetricsPage(recorder: recorder, zoneStore: zoneStore).fakeDimmable()
-                    .tag(DataScreen.standard)
+            TabView(selection: Binding(get: { dataScreen ?? startScreen }, set: { dataScreen = $0 })) {
+                ForEach(set.screens) { screen in
+                    StandardMetricsPage(recorder: recorder, zoneStore: zoneStore, metrics: screen.metrics).fakeDimmable()
+                        .tag(DataScreen.screen(screen.id))
+                }
                 if hasSteps {
                     ZoneDialPage(recorder: recorder, zoneStore: zoneStore).fakeDimmable()
                         .tag(DataScreen.zones)
@@ -114,12 +125,14 @@ private struct RunPages: View {
         .onAppear { if hasSteps { dataScreen = .zones } }
         .onChange(of: hasSteps) { _, hasSteps in
             // The steps are set a moment after the run starts, and are used up when the last one ends.
-            // Only a screen that is going away, or the default one, is moved off: someone on the
+            // Only a screen that is going away, or the start screen, is moved off: someone on the
             // controls page to pause or end the run stays there.
-            if hasSteps, dataScreen == .standard { dataScreen = .zones }
-            if !hasSteps, dataScreen == .zones { dataScreen = .standard }
+            if hasSteps, dataScreen == nil || dataScreen == startScreen { dataScreen = .zones }
+            if !hasSteps, dataScreen == .zones { dataScreen = startScreen }
         }
     }
+
+    private enum Page { case controls, data }
 }
 
 /// The controls page, one swipe to the side of the data screens. Ending asks first, since a mis-tap

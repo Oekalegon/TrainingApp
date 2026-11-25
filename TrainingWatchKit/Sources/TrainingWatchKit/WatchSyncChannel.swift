@@ -35,6 +35,9 @@ public protocol WatchSyncSending: AnyObject {
     /// Sends the sound and haptic settings (WATCH-107), replacing any that haven't been delivered.
     func send(cues: CueSettings) throws
 
+    /// Sends the run screens (WATCH-109), replacing any that haven't been delivered.
+    func send(screens: RunScreenConfig) throws
+
     /// Makes the watch tap a haptic now, so the athlete can feel it (WATCH-117). `false` when the
     /// watch app isn't open and reachable.
     func preview(haptic: HapticPlan) -> Bool
@@ -44,6 +47,7 @@ public protocol WatchSyncSending: AnyObject {
 }
 
 extension WatchSyncSending {
+    public func send(screens: RunScreenConfig) throws {}
     public func preview(haptic: HapticPlan) -> Bool { false }
 }
 
@@ -124,6 +128,13 @@ public final class WatchSyncChannel: WatchSyncSending {
     public func send(cues: CueSettings) throws {
         var context = latest
         context.cues = cues
+        try hold(context)
+    }
+
+    /// - Throws: An encoding error.
+    public func send(screens: RunScreenConfig) throws {
+        var context = latest
+        context.screens = screens
         try hold(context)
     }
 
