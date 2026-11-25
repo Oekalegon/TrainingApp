@@ -82,8 +82,10 @@ public final class WatchPlanSync {
 
     /// How far back the watch's battery drain is learned from, in days.
     static let drainDays = 90
-    /// How many runs it takes before the drain is sent, and the most that count.
-    static let drainRuns = 2...10
+    /// How many runs it takes before the drain is sent.
+    static let minimumDrainRuns = 2
+    /// How many of the latest runs count.
+    static let maximumDrainRuns = 10
 
     private var drainRead: (date: Date, value: Double?)?
 
@@ -100,11 +102,11 @@ public final class WatchPlanSync {
     }
 
     /// The median drain per hour of the latest runs that have one (see `Activity.batteryDrainPerHour`),
-    /// `nil` with fewer than ``drainRuns``' lower bound.
+    /// `nil` with fewer than ``minimumDrainRuns``.
     static func drainPerHour(from activities: [Activity]) -> Double? {
         let drains = activities.sorted { $0.start > $1.start }.compactMap(\.batteryDrainPerHour)
-            .prefix(drainRuns.upperBound).sorted()
-        guard drains.count >= drainRuns.lowerBound else { return nil }
+            .prefix(maximumDrainRuns).sorted()
+        guard drains.count >= minimumDrainRuns else { return nil }
         let middle = drains.count / 2
         return drains.count % 2 == 1 ? drains[middle] : (drains[middle - 1] + drains[middle]) / 2
     }
