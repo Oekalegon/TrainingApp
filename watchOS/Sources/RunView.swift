@@ -66,54 +66,47 @@ struct RunView: View {
     }
 }
 
-/// The pages of a run in progress. Like the Workout app, the controls (pause or resume, end, later
-/// next step) sit one swipe to the side of the data screens. The data screens are a stack the Digital
-/// Crown turns through: the zone dial in a planned workout (WATCH-118) and the standard metrics
-/// screen. The step-based metrics page is one more swipe to the other side.
+/// The pages of a run in progress, one vertical stack the Digital Crown turns through (WATCH-109):
+/// the zone dial in a planned workout (WATCH-118), the standard metrics screen, the step metrics page
+/// and the controls (pause or resume, end, next step) last. One stack at the top, not pages inside
+/// pages: a stack nested in another is not given the crown.
 private struct RunPages: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
-    @State private var page = Page.data
-    @State private var dataScreen = DataScreen.standard
+    @State private var page = Page.standard
 
-    private enum Page { case controls, data, metrics }
-    private enum DataScreen { case zones, standard }
+    private enum Page { case zones, standard, metrics, controls }
 
     /// Whether a planned workout still has steps to run: the zone dial is for those.
     private var hasSteps: Bool { recorder.stepEngine.map { !$0.isFinished } ?? false }
 
     var body: some View {
         TabView(selection: $page) {
-            RunControlsPage(recorder: recorder)
-                .tag(Page.controls)
-            // The crown turns between these (WATCH-109); the planned workout opens on the dial (WATCH-118).
-            TabView(selection: $dataScreen) {
-                if hasSteps {
-                    ZoneDialPage(recorder: recorder, zoneStore: zoneStore)
-                        .tag(DataScreen.zones)
-                }
-                StandardMetricsPage(recorder: recorder, zoneStore: zoneStore)
-                    .tag(DataScreen.standard)
+            // A planned workout opens on the dial (WATCH-118).
+            if hasSteps {
+                ZoneDialPage(recorder: recorder, zoneStore: zoneStore)
+                    .tag(Page.zones)
             }
-            .tabViewStyle(.verticalPage)
-            .tag(Page.data)
+            StandardMetricsPage(recorder: recorder, zoneStore: zoneStore)
+                .tag(Page.standard)
             RunMetricsPage(recorder: recorder, zoneStore: zoneStore)
                 .tag(Page.metrics)
+            RunControlsPage(recorder: recorder)
+                .tag(Page.controls)
         }
-        .tabViewStyle(.page)
-        .onAppear { if hasSteps { dataScreen = .zones } }
+        .tabViewStyle(.verticalPage)
+        .onAppear { if hasSteps { page = .zones } }
         .onChange(of: hasSteps) { _, hasSteps in
             // The steps are set a moment after the run starts, and are used up when the last one ends.
-            // Only a screen that is going away, or the default one, is moved off: someone on the
+            // Only a page that is going away, or the default one, is moved off: someone on the
             // controls page to pause or end the run stays there.
-            if hasSteps, dataScreen == .standard, page != .controls { dataScreen = .zones }
-            if hasSteps, page == .metrics { page = .data }
-            if !hasSteps, dataScreen == .zones { dataScreen = .standard }
+            if hasSteps, page == .standard { page = .zones }
+            if !hasSteps, page == .zones { page = .standard }
         }
     }
 }
 
-/// The controls page, one swipe to the right of the metrics. Ending asks first, since a mis-tap
+/// The controls page, the last of the run's pages. Ending asks first, since a mis-tap
 /// would end and save the run.
 private struct RunControlsPage: View {
     let recorder: RunRecorder
