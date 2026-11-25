@@ -58,8 +58,8 @@ private struct Dial: View {
     private static let batteryInset = 10.0
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
     private static let pageIndicatorHeight = 22.0
-    /// The gap between the dial's rows.
-    private static let rowSpacing = 6.0
+    /// The gap between the dial's rows: none, as on the standard screen (the values' own line height is trimmed).
+    private static let rowSpacing = 0.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
 

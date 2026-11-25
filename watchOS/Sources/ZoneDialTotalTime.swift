@@ -9,6 +9,8 @@ struct ZoneDialTotalTime: View {
     var body: some View {
         Text(text)
             .font(RunMetricStyle.valueFont)
+            // Yellow is the total time, on every screen.
+            .foregroundStyle(.yellow)
             .lineLimit(1).minimumScaleFactor(0.5)
             // The digits have no descenders: the row is shorter than the text's own line.
             .padding(.vertical, -RunMetricStyle.valueSize * 0.14)

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The top row of the zone dial (WATCH-118): the time or distance left in the step in yellow, and to
+/// The top row of the zone dial (WATCH-118): the time or distance left in the step in white, and to
 /// the right of it which interval it is, such as "5/12", when the step is in a repeat.
 struct ZoneDialCountdown: View {
     /// What is left of the step, such as "0:52", or "Open".
@@ -14,7 +14,6 @@ struct ZoneDialCountdown: View {
         HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             Text(remaining)
                 .font(RunMetricStyle.valueFont)
-                .foregroundStyle(.yellow)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 // The digits have no descenders: the row is shorter than the text's own line.
                 .padding(.vertical, -RunMetricStyle.valueSize * 0.14)

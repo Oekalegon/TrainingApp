@@ -28,5 +28,7 @@ struct ZoneDialHeartRate: View {
             }
         }
         .lineLimit(1).minimumScaleFactor(0.7)
+        // The digits have no descenders: the row is shorter than the text's own line, as on the standard screen.
+        .padding(.vertical, -RunMetricStyle.valueSize * 0.14)
     }
 }
