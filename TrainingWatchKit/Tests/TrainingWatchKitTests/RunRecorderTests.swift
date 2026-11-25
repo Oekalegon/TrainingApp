@@ -123,7 +123,12 @@ struct RunRecorderPhaseTests {
         backend.session.onStateChange?(.paused)
         await settle()
         recorder.end()
+        #expect(recorder.phase == .saving)
         #expect(backend.session.calls.last == "end")
+        // A late report from the session doesn't bring the controls back.
+        backend.session.onStateChange?(.paused)
+        await settle()
+        #expect(recorder.phase == .saving)
         backend.session.onStateChange?(.ended)
         await settle()
         #expect(recorder.phase == .saved)
@@ -137,6 +142,10 @@ struct RunRecorderPhaseTests {
         #expect(recorder.phase == .saving)
         recorder.end()
         #expect(backend.session.calls.filter { $0 == "end" }.count == 1)
+        // A fix that arrives before the session reports the end is still part of the route.
+        backend.sendLocations?([fix(52)])
+        await settle()
+        #expect(backend.builder.routePoints == 1)
         // A late state change from the session doesn't bring the controls back.
         backend.session.onStateChange?(.running)
         await settle()
