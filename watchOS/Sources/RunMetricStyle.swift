@@ -16,4 +16,21 @@ enum RunMetricStyle {
     static var unitFont: Font {
         .system(size: 17, weight: .semibold, design: .rounded)
     }
+
+    /// The two small lines beside a value, such as "AVERAGE" over "PACE": together no taller than the value.
+    static var captionFont: Font {
+        .system(size: 12, weight: .semibold, design: .rounded)
+    }
+
+    /// A caption of two lines, such as "REMAINING" over "TIME".
+    static func caption(_ top: String, _ bottom: String) -> some View {
+        VStack(alignment: .leading, spacing: -2) {
+            Text(top)
+            Text(bottom)
+        }
+        .font(captionFont)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
 }

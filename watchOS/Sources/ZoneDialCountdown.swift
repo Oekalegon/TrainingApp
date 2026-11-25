@@ -7,15 +7,21 @@ struct ZoneDialCountdown: View {
     let remaining: String
     /// "5/12", or `nil` outside a repeat, when nothing is shown.
     let interval: String?
+    /// What the countdown counts, "TIME" or "DISTANCE", set under "REMAINING" beside it; `nil` for an open step, which has none.
+    let remainingKind: String?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
+        HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             Text(remaining)
                 .font(RunMetricStyle.valueFont)
                 .foregroundStyle(.yellow)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 // The digits have no descenders: the row is shorter than the text's own line.
                 .padding(.vertical, -RunMetricStyle.valueSize * 0.14)
+            if let remainingKind {
+                RunMetricStyle.caption("REMAINING", remainingKind)
+                    .accessibilityHidden(true)
+            }
             Spacer(minLength: 8)
             if let interval {
                 Text(interval)

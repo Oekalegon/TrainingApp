@@ -67,12 +67,14 @@ private struct Dial: View {
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
+        let remaining = progress.flatMap { WatchWorkoutSummary.remainingValue($0) }
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         // Values to the left, the interval to the right.
         return VStack(alignment: .leading, spacing: Self.rowSpacing) {
             ZoneDialCountdown(
-                remaining: progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open",
-                interval: ZoneDialText.intervalFraction(current))
+                remaining: remaining ?? "Open",
+                interval: ZoneDialText.intervalFraction(current),
+                remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "TIME" : "DISTANCE"))
             ZoneDialHeartRate(
                 heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
                 color: StepHeartRateTarget.Status.displayColor(status))

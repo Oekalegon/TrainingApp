@@ -93,12 +93,7 @@ struct StandardMetricsPage: View {
     private func paceLine(_ secondsPerMeter: Double?, label: String, caption: String) -> some View {
         HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             value(PaceText.markedText(secondsPerMeter: secondsPerMeter))
-            VStack(alignment: .leading, spacing: -2) {
-                Text(caption)
-                Text("PACE")
-            }
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
+            RunMetricStyle.caption(caption, "PACE")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
