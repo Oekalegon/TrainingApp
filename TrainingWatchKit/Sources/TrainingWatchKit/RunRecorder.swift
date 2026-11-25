@@ -225,8 +225,16 @@ public final class RunRecorder {
         session?.resume()
     }
 
+    /// Whether readings still go to the builder: while running, and in the moment between the End
+    /// tap (the phase is `.saving` at once, WATCH-130) and the session reporting it has ended, so
+    /// the last seconds of the route aren't lost.
+    private var isCollecting: Bool { phase == .running || (phase == .saving && !collectionEnded) }
+
     public func end() {
         guard phase == .running || phase == .paused else { return }
+        // The session says it has ended a moment later; until then the controls would still be on
+        // screen and End could be tapped again (WATCH-130), so the run is "saving" from now on.
+        phase = .saving
         session?.end()
     }
 
@@ -238,6 +246,8 @@ public final class RunRecorder {
     /// The session changed state, whoever caused it: the button or the system.
     func sessionChanged(to state: RunSessionState) async {
         switch state {
+        case .running where phase == .saving, .paused where phase == .saving:
+            break
         case .running:
             phase = .running
             backend.resumeSensors()
@@ -266,7 +276,7 @@ public final class RunRecorder {
     /// A heart-rate reading from a backend that supplies its own (the simulator): shows it and gives
     /// it to the builder, as a real watch's sensor would. Only while running.
     private func simulatedHeartRateArrived(_ bpm: Double) async {
-        guard phase == .running, let builder else { return }
+        guard isCollecting, let builder else { return }
         // Shown before the await, so readings land in the order they were taken and one still in
         // flight when the run ends can't show up on the next run.
         heartRateArrived(bpm)
@@ -280,7 +290,7 @@ public final class RunRecorder {
     /// Sends a batch of GPS fixes to the route and, for a backend that supplies the sensors, turns
     /// them into distance. Ignored while paused, so the route has no points from the pause.
     func handle(_ locations: [CLLocation]) async {
-        guard phase == .running else { return }
+        guard isCollecting else { return }
         do {
             try await builder?.insertRoute(locations)
         } catch {
