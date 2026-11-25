@@ -63,16 +63,6 @@ private struct Dial: View {
     /// time fits with its hours.
     private static let timerSize = 46.0
 
-    /// The colour of the zone and the heart rate: blue under the target, red over it, white in it
-    /// (and without a target), so a glance says whether to speed up or slow down.
-    private static func color(for status: StepHeartRateTarget.Status?) -> Color {
-        switch status {
-        case .below: Color(red: 0.35, green: 0.65, blue: 1.0)
-        case .above: Color(red: 1.0, green: 0.4, blue: 0.4)
-        case .inside, nil: .white
-        }
-    }
-
     private func content(
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?
     ) -> some View {
@@ -88,7 +78,7 @@ private struct Dial: View {
             Spacer(minLength: 0)
             ZoneDialHeartRate(
                 heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
-                color: Self.color(for: status))
+                color: StepHeartRateTarget.Status.displayColor(status))
                 .animation(.easeInOut(duration: 0.4), value: status)
             ZoneDialBar(
                 target: Double(topZone), position: position ?? Double(topZone) + 0.5,
@@ -142,5 +132,18 @@ private struct Dial: View {
             parts.append(projection.spoken)
         }
         return parts.joined(separator: ", ")
+    }
+}
+
+extension StepHeartRateTarget.Status {
+    /// The colour of the heart rate and its zone against the step's target: blue under it, red over it,
+    /// white in it (and without a target), so a glance says whether to speed up or slow down. Shared
+    /// by the zone dial and the standard metrics screen.
+    static func displayColor(_ status: StepHeartRateTarget.Status?) -> Color {
+        switch status {
+        case .below: Color(red: 0.35, green: 0.65, blue: 1.0)
+        case .above: Color(red: 1.0, green: 0.4, blue: 0.4)
+        case .inside, nil: .white
+        }
     }
 }

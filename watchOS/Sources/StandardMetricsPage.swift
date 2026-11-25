@@ -8,7 +8,7 @@ enum RunMetric: CaseIterable {
 }
 
 /// The standard metrics screen of a run, a list of values with no dial: total time, distance, the
-/// heart rate with its zone (in the zone's colour) on the same line, the current pace and the average
+/// heart rate with its zone (blue under the step's target, red over it, white in it or with no target) on the same line, the current pace and the average
 /// pace. Every value is aligned to the leading edge, except the zone, which is at the trailing edge
 /// of the heart-rate line. The lines sit together at the bottom of the screen and the screen does not
 /// fill up: with fewer ``metrics`` (one day they are the athlete's choice, WATCH-109) the ones left
@@ -95,16 +95,18 @@ struct StandardMetricsPage: View {
         return "\(parts[0]) minutes \(parts[1]) seconds per \(PaceText.usesKilometres() ? "kilometre" : "mile")"
     }
 
-    /// The heart rate at the leading edge and its place in the zones at the trailing edge, both in the
-    /// zone's colour; grey with no reading or no zones.
+    /// The heart rate at the leading edge and its place in the zones at the trailing edge, both coloured
+    /// by the target; the value is grey with no reading.
     private var heartRateLine: some View {
         let bands = zoneStore.bands
         let bpm = recorder.heartRate
-        let zone = bpm.flatMap { bpm in bands?.zone(forHeartRate: bpm) }
-        let color = zone.flatMap { HeartRateZone(rawValue: $0) }?.zoneColor ?? .secondary
+        // Blue under the step's heart-rate target, red over it, white in it or with no target, as on the dial.
+        let target = recorder.stepEngine?.current.flatMap { StepHeartRateTarget(step: $0.step, bands: bands) }
+        let status = bpm.flatMap { bpm in target?.status(forHeartRate: bpm) }
+        let color = StepHeartRateTarget.Status.displayColor(status)
         let position = bpm.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
         return HStack(alignment: .firstTextBaseline, spacing: 4) {
-            value(bpm.map { "\(Int($0.rounded()))" } ?? "--").foregroundStyle(bpm == nil ? .secondary : color)
+            value(bpm.map { "\(Int($0.rounded()))" } ?? "--").foregroundStyle(bpm == nil ? Color.secondary : color)
             Text("bpm").font(.system(size: 12)).foregroundStyle(.secondary)
             Spacer(minLength: 4)
             Text(position.map(ZoneDialText.positionText) ?? "Z --")
