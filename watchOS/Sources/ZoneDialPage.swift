@@ -6,7 +6,8 @@ import TrainingWatchKit
 /// The target-zone screen of a planned workout (WATCH-118): the step's countdown with the interval
 /// number (5/12, in a repeat) to the right, the heart rate in bpm and its place in the zones, a bar
 /// with all the zones on one line (the target three times as wide as the others and bright, and a
-/// triangle where the heart rate is), the total time, and the watch's battery at the bottom.
+/// triangle where the heart rate is), the total time, and the watch's battery at the bottom. The rows sit together at the
+/// bottom of the screen, with the room above them left empty.
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
@@ -57,6 +58,8 @@ private struct Dial: View {
     private static let batteryInset = 10.0
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
     private static let pageIndicatorHeight = 22.0
+    /// The gap between the dial's rows.
+    private static let rowSpacing = 6.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
 
@@ -66,13 +69,10 @@ private struct Dial: View {
         let progress = recorder.stepProgress(at: at)
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         // Values to the left, the interval to the right.
-        return VStack(alignment: .leading, spacing: 2) {
+        return VStack(alignment: .leading, spacing: Self.rowSpacing) {
             ZoneDialCountdown(
                 remaining: progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open",
                 interval: ZoneDialText.intervalFraction(current))
-            // The room left over is shared equally by the gap under the countdown and the one above
-            // the total time, so the heart rate and the bar have the same space above and below.
-            Spacer(minLength: 0)
             ZoneDialHeartRate(
                 heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
                 color: StepHeartRateTarget.Status.displayColor(status))
@@ -83,15 +83,16 @@ private struct Dial: View {
                 targetRange: bands.flatMap { target?.positions(in: $0) })
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
-            Spacer(minLength: 0)
             ZoneDialTotalTime(text: ZoneDialText.totalTimeText(recorder.elapsed(at: at)))
             ZoneDialBattery(
                 battery: battery, projection: projection(for: battery, progress: progress),
                 inset: Self.batteryInset, bottomInset: Self.pageIndicatorHeight)
         }
         .padding(.horizontal, Self.sidePadding)
+        // At the bottom of the screen, like the standard screen: it needn't fill it up to the top, and
+        // the room above the countdown is left empty (`contentTop` is the least it keeps for the clock).
         .padding(.top, Self.contentTop)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     /// What the battery will be at the end of the workout (WATCH-119), or `nil` when that isn't known.
