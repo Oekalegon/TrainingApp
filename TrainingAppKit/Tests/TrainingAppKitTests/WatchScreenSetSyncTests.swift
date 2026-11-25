@@ -19,6 +19,14 @@ private final class ScreenSender: WatchSyncSending {
     }
 }
 
+private struct BrokenTemplateStore: WorkoutTemplateStore {
+    struct Failure: Error {}
+    func templates() async throws -> [WorkoutTemplate] { [] }
+    func template(id: UUID) async throws -> WorkoutTemplate? { nil }
+    func upsert(_ templates: [WorkoutTemplate]) async throws { throw Failure() }
+    func deleteTemplate(id: UUID) async throws {}
+}
+
 @MainActor
 @Suite("WatchScreenSetSync (WATCH-134)")
 struct WatchScreenSetSyncTests {
@@ -151,5 +159,59 @@ struct WatchScreenSetSyncTests {
 
         try await sync.link(builtIn, isCustom: false, to: nil, model: model)
         #expect(sync.linkedSetID(for: builtIn, isCustom: false) == nil)
+    }
+
+    private func model(templates: (any WorkoutTemplateStore)?, store: InMemoryStore) async throws -> TrainingModel {
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        try await store.save(athlete)
+        return TrainingModel(
+            stores: StoreSet(
+                activityStore: store, planStore: store, workoutStore: store, cycleStore: store,
+                raceStore: store, athleteStore: store, templateStore: templates),
+            athlete: athlete)
+    }
+
+    @Test("linking an existing custom template changes only its screen set, and moves it from one set to another (WATCH-134)")
+    func linkExistingTemplate() async throws {
+        let store = InMemoryStore()
+        let model = try await model(templates: store, store: store)
+        let defaults = try defaults()
+        let sync = WatchScreenSetSync(sender: ScreenSender(), defaults: defaults, links: WatchScreenLinks(defaults: defaults))
+        let template = BuiltInWorkoutTemplates.easyRun
+        var custom = WorkoutTemplate(
+            name: "Mine", sport: template.sport, venue: template.venue, parameters: template.parameters,
+            blocks: template.blocks, sessionType: .long)
+        try await store.upsert([custom])
+
+        try await sync.link(custom, isCustom: true, to: "a", model: model)
+        custom.watchScreenSetID = "a"
+        #expect(try await store.template(id: custom.id) == custom)
+        try await sync.link(custom, isCustom: true, to: "b", model: model)
+        custom.watchScreenSetID = "b"
+        #expect(try await store.template(id: custom.id) == custom)
+        #expect(try await store.templates().count == 1)
+    }
+
+    @Test("a template store that fails, or none, makes the link throw and changes nothing")
+    func linkFailures() async throws {
+        let defaults = try defaults()
+        let sync = WatchScreenSetSync(sender: ScreenSender(), defaults: defaults, links: WatchScreenLinks(defaults: defaults))
+        let custom = WorkoutTemplate(name: "Mine", sport: .running, parameters: [], blocks: [])
+        for templates in [BrokenTemplateStore() as any WorkoutTemplateStore, nil] {
+            let model = try await model(templates: templates, store: InMemoryStore())
+            await #expect(throws: (any Error).self) {
+                try await sync.link(custom, isCustom: true, to: "a", model: model)
+            }
+        }
+        #expect(sync.linkedSetID(for: custom, isCustom: true) == nil)
+    }
+
+    @Test("every reason a set can't be saved has words for the athlete")
+    func messages() {
+        let errors: [ScreenSetError] = [
+            .emptyName, .noScreens, .emptyScreen(id: "a"), .overCapacity(screenID: "a"), .duplicateScreenID("a"), .reservedID,
+        ]
+        #expect(errors.allSatisfy { !$0.userMessage.isEmpty })
+        #expect(Set(errors.map(\.userMessage)).count == errors.count)
     }
 }

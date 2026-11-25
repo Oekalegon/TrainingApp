@@ -52,7 +52,7 @@ struct WatchScreenSetEditorView: View {
                     set: { draft.startScreenID = $0 })
                 ) {
                     ForEach(Array(draft.screens.enumerated()), id: \.element.id) { index, screen in
-                        Text("Screen \(index + 1)").tag(screen.id)
+                        Text("Screen \(index + 1): \(screen.items.map(\.title).joined(separator: ", "))").tag(screen.id)
                     }
                 }
             }
@@ -61,25 +61,35 @@ struct WatchScreenSetEditorView: View {
                     NavigationLink("Workout Templates") {
                         WatchScreenTemplateLinksView(screens: screens, model: model, setID: draft.id)
                     }
-                    .disabled(!screens.config.sets.contains { $0.id == draft.id })
+                    .disabled(!isSaved)
                 } footer: {
-                    Text("Save the set first, then choose the templates that use it.")
+                    Text(isSaved
+                        ? "Choose the workout templates that run with this set."
+                        : "Save the set first, then choose the templates that use it.")
                 }
             }
-            if let errorText {
-                Section { Text(errorText).foregroundStyle(.red) }
+            if let message = errorText ?? problem?.userMessage {
+                Section {
+                    Text(message).foregroundStyle(problem == .emptyName && errorText == nil ? Color.secondary : Color.red)
+                }
             }
         }
         .navigationTitle(title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        .environment(\.editMode, .constant(.active))
+        .toolbar { ToolbarItem(placement: .primaryAction) { EditButton() } }
         #endif
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-            ToolbarItem(placement: .confirmationAction) { Button("Save", action: save) }
+            ToolbarItem(placement: .cancellationAction) { Button(isSaved ? "Close" : "Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(problem != nil) }
         }
     }
+
+    /// Whether the set is already one of the athlete's saved sets (a new one is, after its first Save).
+    private var isSaved: Bool { screens.config.sets.contains { $0.id == draft.id } }
+
+    /// What keeps the set from being saved now, shown under the list as the athlete edits.
+    private var problem: ScreenSetError? { draft.validationError(checksName: kind == .custom) }
 
     private var title: String {
         switch kind {
@@ -100,29 +110,20 @@ struct WatchScreenSetEditorView: View {
     }
 
     private func save() {
+        // A new set stays open after its first Save, so templates can be linked to it at once.
+        let isFirstSave = kind == .custom && !isSaved
         do {
             switch kind {
             case .freeRun: try screens.updateFreeRun(draft.set)
             case .workout: try screens.updateWorkout(draft.set)
             case .custom: try screens.save(draft.set)
             }
-            dismiss()
+            errorText = nil
+            if !isFirstSave { dismiss() }
         } catch let error as ScreenSetError {
-            errorText = Self.message(for: error)
+            errorText = error.userMessage
         } catch {
             errorText = error.localizedDescription
-        }
-    }
-
-    /// What to tell the athlete about a set that can't be saved.
-    static func message(for error: ScreenSetError) -> String {
-        switch error {
-        case .emptyName: "Give the set a name."
-        case .noScreens: "A set needs at least one screen."
-        case .emptyScreen: "A screen needs at least one item. Add one or delete the screen."
-        case .overCapacity: "A screen holds at most \(RunScreen.capacity) units. Remove an item."
-        case .duplicateScreenID: "Two screens have the same identifier."
-        case .reservedID: "That identifier belongs to a built-in set."
         }
     }
 }

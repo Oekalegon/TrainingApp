@@ -9,8 +9,6 @@ struct WatchScreenTemplateLinksView: View {
     let model: TrainingModel
     let setID: String
     @State private var errorText: String?
-    /// The templates whose link was changed here, so the check marks follow at once.
-    @State private var changed: [UUID: String?] = [:]
 
     private var builtInIDs: Set<UUID> { Set(BuiltInWorkoutTemplates.all.map(\.id)) }
 
@@ -18,7 +16,7 @@ struct WatchScreenTemplateLinksView: View {
         List {
             ForEach(model.libraryTemplates) { template in
                 let isCustom = !builtInIDs.contains(template.id)
-                let current = changed[template.id] ?? screens.linkedSetID(for: template, isCustom: isCustom)
+                let current = screens.linkedSetID(for: template, isCustom: isCustom)
                 Button {
                     toggle(template, isCustom: isCustom, current: current)
                 } label: {
@@ -49,7 +47,6 @@ struct WatchScreenTemplateLinksView: View {
         Task {
             do {
                 try await screens.link(template, isCustom: isCustom, to: new, model: model)
-                changed[template.id] = .some(new)
                 errorText = nil
             } catch {
                 errorText = error.localizedDescription

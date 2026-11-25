@@ -38,7 +38,7 @@ struct WatchScreenItemsView: View {
         .navigationTitle("Screen")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        .environment(\.editMode, .constant(.active))
+        .toolbar { ToolbarItem(placement: .primaryAction) { EditButton() } }
         #endif
         .sheet(isPresented: $isAdding) {
             NavigationStack {

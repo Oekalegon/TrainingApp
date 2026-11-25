@@ -19,6 +19,20 @@ public enum ScreenSetError: Error, Equatable {
     case reservedID
 }
 
+extension ScreenSetError {
+    /// What to tell the athlete about a set that can't be saved.
+    public var userMessage: String {
+        switch self {
+        case .emptyName: "Give the set a name."
+        case .noScreens: "A set needs at least one screen."
+        case .emptyScreen: "A screen needs at least one item. Add one or delete the screen."
+        case .overCapacity: "A screen holds at most \(RunScreen.capacity) units. Remove an item."
+        case .duplicateScreenID: "Two screens have the same identifier."
+        case .reservedID: "That identifier belongs to a built-in set."
+        }
+    }
+}
+
 /// The athlete's run screens for the watch (WATCH-109, WATCH-134): the set for a free run, the one for a
 /// workout and their own other sets, which a workout template can be linked to. Kept here in
 /// `UserDefaults` and sent to the watch with the zones and the plan (``WatchSyncChannel``), which keeps
@@ -33,6 +47,9 @@ public enum ScreenSetError: Error, Equatable {
 public final class WatchScreenSetSync {
     /// The current screens; change them with the methods below.
     public private(set) var config: RunScreenConfig
+    /// Counts the changes to the app's links for built-in templates, which `UserDefaults` doesn't announce: a view
+    /// that reads ``linkedSetID(for:isCustom:)`` follows them through it.
+    private var linksVersion = 0
     /// Why the screens couldn't be handed to the watch, or `nil`.
     public var lastError: String? { rejectedError ?? sender.lastSendError }
 
@@ -127,6 +144,7 @@ public final class WatchScreenSetSync {
         var config = config
         config.sets.removeAll { $0.id == id }
         links.removeLinks(to: id)
+        linksVersion += 1
         apply(config)
         replanAfterLinkChange()
     }
@@ -134,6 +152,7 @@ public final class WatchScreenSetSync {
     /// Goes back to the built-in screens and removes every custom set and the app's links to them.
     public func resetToDefaults() {
         for set in config.sets { links.removeLinks(to: set.id) }
+        linksVersion += 1
         apply(.default)
         replanAfterLinkChange()
     }
@@ -143,13 +162,15 @@ public final class WatchScreenSetSync {
     /// store saves.
     public func link(builtInTemplate template: UUID, to setID: String?) {
         links.link(template: template, to: setID)
+        linksVersion += 1
         replanAfterLinkChange()
     }
 
     /// The set a workout template is linked to: its own `watchScreenSetID` for a custom template, the app's link
     /// for a built-in one; `nil` for the workout default.
     public func linkedSetID(for template: WorkoutTemplate, isCustom: Bool) -> String? {
-        isCustom ? template.watchScreenSetID : links.setID(forTemplate: template.id)
+        _ = linksVersion
+        return isCustom ? template.watchScreenSetID : links.setID(forTemplate: template.id)
     }
 
     /// Links `template` to the set `setID`, or unlinks it with `nil`, and sends the plan again. A custom template is
