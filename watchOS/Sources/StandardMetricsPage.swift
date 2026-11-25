@@ -81,18 +81,18 @@ struct StandardMetricsPage: View {
 
     /// A unit in small capitals beside a value.
     private func unit(_ text: String) -> some View {
-        Text(text).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
+        Text(text).font(.system(size: 17, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
     }
 
-    /// A pace such as `9'24"`, with its caption in two small lines beside it: "CURRENT" over "/KM".
+    /// A pace such as `9'24"`, with its caption in two lines beside it, together as tall as the value: "CURRENT" over "/KM".
     private func paceLine(_ secondsPerMeter: Double?, label: String, caption: String) -> some View {
         HStack(alignment: .lastTextBaseline, spacing: 3) {
             value(PaceText.markedText(secondsPerMeter: secondsPerMeter))
-            VStack(alignment: .leading, spacing: -1) {
+            VStack(alignment: .leading, spacing: -2) {
                 Text(caption)
                 Text(PaceText.unit().uppercased())
             }
-            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
