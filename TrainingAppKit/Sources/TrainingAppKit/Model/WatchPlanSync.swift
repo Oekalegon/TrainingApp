@@ -65,9 +65,13 @@ public final class WatchPlanSync {
             for id in Set(candidates.map(\.workoutID)) {
                 workouts[id] = try await stores.workoutStore.workout(id: id)
             }
-            // The screen set a custom template names (WATCH-133); a built-in template has none, and a template that can't be read leaves its workouts on the app's own links.
-            for id in Set(workouts.values.compactMap(\.templateID)) {
-                if let setID = (try? await stores.templateStore?.template(id: id))??.watchScreenSetID { templateSetIDs[id] = setID }
+            // The screen set a custom template names (WATCH-133). A built-in template isn't in the store and has none.
+            // A store that can't be read skips this send, as an unreadable workout library does: sending the plan
+            // without the links would put the default screens on the watch until the next send.
+            if let templateStore = stores.templateStore {
+                for id in Set(workouts.values.compactMap(\.templateID)) {
+                    if let setID = try await templateStore.template(id: id)?.watchScreenSetID { templateSetIDs[id] = setID }
+                }
             }
         } catch {
             return

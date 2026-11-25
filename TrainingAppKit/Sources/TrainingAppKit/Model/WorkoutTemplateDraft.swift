@@ -132,7 +132,7 @@ public struct WorkoutTemplateDraft: Equatable, Sendable {
     /// template doesn't drop it for the plan generator.
     public var recoveryDays: RecoveryDays?
     /// The watch screen set to run the template's workouts with (WATCH-133). The template editor doesn't offer it
-    /// (the screen set editor does, WATCH-134); it is kept so editing a template doesn't unlink it.
+    /// (the screen set editor does, WATCH-134); it is kept so editing a template doesn't unlink it, and a copy of a template keeps it too.
     public var watchScreenSetID: String?
     /// The template's parameters.
     public var parameters: [Parameter]

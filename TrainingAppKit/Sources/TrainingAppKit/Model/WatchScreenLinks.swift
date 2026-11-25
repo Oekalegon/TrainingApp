@@ -6,7 +6,9 @@ import Foundation
 /// links are kept here, in `UserDefaults`, by the template's id. A workout made from a template with a link is
 /// sent to the watch with the set's id (``WatchPlanSync``), and one with none runs with the workout default.
 ///
-/// The editor that sets the links is WATCH-134, which also sends the sets themselves. A link to a set that
+/// The editor that sets the links is WATCH-134, which also sends the sets themselves, uses ``templates(linkedTo:)`` and
+/// ``removeLinks(to:)``, and calls ``WatchPlanSync/sync(asOf:)`` after a link changes: nothing sends the plan on its
+/// own when a link changes, only when the app becomes active, a plan changes or the last send is old. A link to a set that
 /// no longer exists is harmless: the watch falls back to the default.
 public struct WatchScreenLinks: @unchecked Sendable {
     private let defaults: UserDefaults
