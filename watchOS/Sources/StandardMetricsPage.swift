@@ -23,9 +23,11 @@ struct StandardMetricsPage: View {
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
     private static let bottomInset = 22.0
     private static let sidePadding = 8.0
+    /// True with the wrist down (WATCH-125): redrawn once a minute, with no seconds.
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.periodic(from: .now, by: dimmed ? 60 : 1)) { context in
             let date = context.date
             VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
                 ForEach(metrics, id: \.self) { metric in
@@ -36,6 +38,7 @@ struct StandardMetricsPage: View {
                     Text("Workout done").font(RunMetricStyle.captionFont).foregroundStyle(.green)
                 }
             }
+            .opacity(dimmed ? RunMetricStyle.dimmedOpacity : 1)
             .padding(.horizontal, Self.sidePadding)
             .padding(.bottom, Self.bottomInset)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -49,7 +52,7 @@ struct StandardMetricsPage: View {
         case .totalTime:
             let elapsed = recorder.elapsed(at: date)
             // Yellow, as the elapsed time is in the Workout app.
-            value(ZoneDialText.totalTimeText(elapsed)).foregroundStyle(.yellow)
+            value(ZoneDialText.totalTimeText(elapsed, showsSeconds: !dimmed)).foregroundStyle(.yellow)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Total time")

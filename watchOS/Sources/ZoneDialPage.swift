@@ -11,9 +11,11 @@ import TrainingWatchKit
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
+    /// True with the wrist down (WATCH-125): redrawn once a minute, with no seconds.
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.periodic(from: .now, by: dimmed ? 60 : 1)) { context in
             if let engine = recorder.stepEngine, let current = engine.current {
                 Dial(recorder: recorder, bands: zoneStore.bands, engine: engine, current: current, at: context.date)
             }
@@ -29,6 +31,8 @@ private struct Dial: View {
     let engine: WorkoutStepEngine
     let current: PlannedStep
     let at: Date
+    /// True with the wrist down (WATCH-125): no seconds, no animation and a dimmer screen.
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
         let target = StepHeartRateTarget(step: current.step, bands: bands)
@@ -65,7 +69,7 @@ private struct Dial: View {
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
-        let remaining = progress.flatMap { WatchWorkoutSummary.remainingValue($0) }
+        let remaining = progress.flatMap { WatchWorkoutSummary.remainingValue($0, showsSeconds: !dimmed) }
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         // Values to the left, the interval to the right.
         return VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
@@ -77,18 +81,19 @@ private struct Dial: View {
             ZoneDialHeartRate(
                 heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
                 color: StepHeartRateTarget.Status.displayColor(status))
-                .animation(.easeInOut(duration: 0.4), value: status)
+                .animation(dimmed ? nil : .easeInOut(duration: 0.4), value: status)
             ZoneDialBar(
                 target: Double(topZone), position: position ?? Double(topZone) + 0.5,
                 showsMarker: position != nil, highlightsTarget: target != nil,
                 targetRange: bands.flatMap { target?.positions(in: $0) })
-                .animation(.easeInOut(duration: 0.6), value: topZone)
-                .animation(.easeOut(duration: 0.8), value: position)
-            ZoneDialTotalTime(text: ZoneDialText.totalTimeText(recorder.elapsed(at: at)))
+                .animation(dimmed ? nil : .easeInOut(duration: 0.6), value: topZone)
+                .animation(dimmed ? nil : .easeOut(duration: 0.8), value: position)
+            ZoneDialTotalTime(text: ZoneDialText.totalTimeText(recorder.elapsed(at: at), showsSeconds: !dimmed))
             ZoneDialBattery(
                 battery: battery, projection: projection(for: battery, progress: progress),
                 inset: Self.batteryInset, bottomInset: Self.pageIndicatorHeight)
         }
+        .opacity(dimmed ? RunMetricStyle.dimmedOpacity : 1)
         .padding(.horizontal, Self.sidePadding)
         // At the bottom of the screen, like the standard screen: it needn't fill it up to the top, and
         // the room above the countdown is left empty (`contentTop` is the least it keeps for the clock).

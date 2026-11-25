@@ -130,9 +130,17 @@ public enum WatchWorkoutSummary {
     /// - Parameters:
     ///   - progress: How far into the step the run is.
     ///   - locale: Decides whether distances are in kilometres or miles.
-    public static func remainingValue(_ progress: StepProgress, locale: Locale = .current) -> String? {
+    ///   - showsSeconds: `false` with the wrist down (WATCH-125): a time is then rounded up to whole
+    ///     minutes, "2 min" (or "1h05" from an hour), so the screen needn't redraw each second.
+    public static func remainingValue(
+        _ progress: StepProgress, locale: Locale = .current, showsSeconds: Bool = true
+    ) -> String? {
         if let seconds = progress.remainingTime {
             let total = Int(seconds.rounded(.up))
+            if !showsSeconds {
+                let minutes = (total + 59) / 60
+                return minutes >= 60 ? String(format: "%dh%02d", minutes / 60, minutes % 60) : "\(minutes) min"
+            }
             return total >= 3600
                 ? String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
                 : String(format: "%d:%02d", total / 60, total % 60)

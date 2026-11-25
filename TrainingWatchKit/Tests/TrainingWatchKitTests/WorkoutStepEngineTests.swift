@@ -190,6 +190,22 @@ struct StepTextTests {
         #expect(text(3725) == "1:02:05 left")
     }
 
+    @Test("with the wrist down a time left is whole minutes, rounded up")
+    func remainingValueWithoutSeconds() {
+        func value(_ seconds: Double) -> String? {
+            WatchWorkoutSummary.remainingValue(
+                StepProgress(remainingTime: seconds, remainingDistance: nil, fraction: 0), locale: metric, showsSeconds: false)
+        }
+        #expect(value(0.4) == "1 min")
+        #expect(value(60) == "1 min")
+        #expect(value(61) == "2 min")
+        #expect(value(59 * 60) == "59 min")
+        #expect(value(3600 + 5 * 60 - 10) == "1h05")
+        let distance = StepProgress(remainingTime: nil, remainingDistance: 400, fraction: 0)
+        #expect(WatchWorkoutSummary.remainingValue(distance, locale: metric, showsSeconds: false)
+            == WatchWorkoutSummary.remainingValue(distance, locale: metric))
+    }
+
     @Test("the bare value has no 'left', and remainingText is that value plus ' left'")
     func bareValue() {
         let time = StepProgress(remainingTime: 83, remainingDistance: nil, fraction: 0)

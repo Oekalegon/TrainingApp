@@ -96,6 +96,7 @@ schemes:
         "-fakeShortPlan": false
         "-fakeAlertPlan": true
         "-fakeBattery": false
+        "-fakeDimmed": false
         "-batteryLevel 0.25": true
         "-batteryDrainPerHour 3.0": true
         "-autostartPlan": true
