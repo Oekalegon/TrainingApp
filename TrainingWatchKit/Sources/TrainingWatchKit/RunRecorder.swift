@@ -29,7 +29,12 @@ public final class RunRecorder {
     public private(set) var phase: Phase = .idle
     /// The latest heart rate in beats per minute.
     public private(set) var heartRate: Double?
-    public private(set) var distanceMeters: Double = 0
+    public private(set) var distanceMeters: Double = 0 {
+        // Only with a run going: with no builder `elapsed()` is 0, which the window would take as a new run.
+        didSet { if let builder { paceWindow.add(meters: distanceMeters, at: builder.elapsedTime(at: .now)) } }
+    }
+    /// The last seconds of distance, for the current pace.
+    @ObservationIgnored private var paceWindow = PaceWindow()
     /// The steps of the planned workout being run, or `nil` in a free run. Set and changed by
     /// `RunRecorder+Steps.swift`; views only read it.
     public var stepEngine: WorkoutStepEngine?
@@ -202,6 +207,7 @@ public final class RunRecorder {
         }
         heartRate = nil
         distanceMeters = 0
+        paceWindow.reset()
         routePointCount = 0
         alertLog = []
         phase = .idle
@@ -241,6 +247,18 @@ public final class RunRecorder {
     /// Elapsed workout time at `date`, from the builder so paused time is excluded.
     public func elapsed(at date: Date = .now) -> TimeInterval {
         builder?.elapsedTime(at: date) ?? 0
+    }
+
+    /// The pace over the last 20 seconds in seconds per metre, or `nil` when standing still or
+    /// before there is a window to measure.
+    public func currentSecondsPerMeter(at date: Date = .now) -> Double? {
+        paceWindow.secondsPerMeter(at: elapsed(at: date))
+    }
+
+    /// The pace of the whole run so far in seconds per metre, paused time left out, or `nil` in the
+    /// first 50 metres. It moves only when the distance does.
+    public var averageSecondsPerMeter: Double? {
+        paceWindow.averageSecondsPerMeter
     }
 
     /// The session changed state, whoever caused it: the button or the system.

@@ -4,9 +4,10 @@ import TrainingCore
 import TrainingWatchKit
 
 /// The target-zone screen of a planned workout (WATCH-118): the step's countdown with the interval
-/// number (5/12, in a repeat) to the right, the heart rate in bpm and its place in the zones, a bar
+/// number (5/12 in a repeat, otherwise the step's place, 2/6) to the right, the heart rate in bpm and its place in the zones, a bar
 /// with all the zones on one line (the target three times as wide as the others and bright, and a
-/// triangle where the heart rate is), the total time, and the watch's battery at the bottom.
+/// triangle where the heart rate is), the total time, and the watch's battery at the bottom. The rows sit together at the
+/// bottom of the screen, with the room above them left empty.
 struct ZoneDialPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
@@ -59,36 +60,23 @@ private struct Dial: View {
     private static let pageIndicatorHeight = 22.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
-    /// The size of the two timers, in points: the same for both, in a condensed font so the total
-    /// time fits with its hours.
-    private static let timerSize = 46.0
-
-    /// The colour of the zone and the heart rate: blue under the target, red over it, white in it
-    /// (and without a target), so a glance says whether to speed up or slow down.
-    private static func color(for status: StepHeartRateTarget.Status?) -> Color {
-        switch status {
-        case .below: Color(red: 0.35, green: 0.65, blue: 1.0)
-        case .above: Color(red: 1.0, green: 0.4, blue: 0.4)
-        case .inside, nil: .white
-        }
-    }
 
     private func content(
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?
     ) -> some View {
         let progress = recorder.stepProgress(at: at)
+        let remaining = progress.flatMap { WatchWorkoutSummary.remainingValue($0) }
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         // Values to the left, the interval to the right.
-        return VStack(alignment: .leading, spacing: 2) {
+        return VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
+            stepHint(isOpen: remaining == nil)
             ZoneDialCountdown(
-                remaining: progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open",
-                interval: ZoneDialText.intervalFraction(current), timerSize: Self.timerSize)
-            // The room left over is shared equally by the gap under the countdown and the one above
-            // the total time, so the heart rate and the bar have the same space above and below.
-            Spacer(minLength: 0)
+                remaining: remaining ?? "Open",
+                place: ZoneDialText.place(of: current, in: engine.steps.count),
+                remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "STEP TIME" : "STEP DISTANCE"))
             ZoneDialHeartRate(
                 heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
-                color: Self.color(for: status))
+                color: StepHeartRateTarget.Status.displayColor(status))
                 .animation(.easeInOut(duration: 0.4), value: status)
             ZoneDialBar(
                 target: Double(topZone), position: position ?? Double(topZone) + 0.5,
@@ -96,15 +84,33 @@ private struct Dial: View {
                 targetRange: bands.flatMap { target?.positions(in: $0) })
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
-            Spacer(minLength: 0)
-            ZoneDialTotalTime(text: ZoneDialText.totalTimeText(recorder.elapsed(at: at)), timerSize: Self.timerSize)
+            ZoneDialTotalTime(text: ZoneDialText.totalTimeText(recorder.elapsed(at: at)))
             ZoneDialBattery(
                 battery: battery, projection: projection(for: battery, progress: progress),
                 inset: Self.batteryInset, bottomInset: Self.pageIndicatorHeight)
         }
         .padding(.horizontal, Self.sidePadding)
+        // At the bottom of the screen, like the standard screen: it needn't fill it up to the top, and
+        // the room above the countdown is left empty (`contentTop` is the least it keeps for the clock).
         .padding(.top, Self.contentTop)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    /// The small line above the countdown: what comes next ("Next: Recovery 20 s Z2", "Last step"), or for an
+    /// open step, which has no end of its own, how to go on. In the simulator, which plays no haptics, the
+    /// last alerts follow it, newest first.
+    @ViewBuilder
+    private func stepHint(isOpen: Bool) -> some View {
+        let text = isOpen ? "Press Next step to move on" : WatchWorkoutSummary.nextText(engine)
+        if let text {
+            Text(text)
+                .font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        #if targetEnvironment(simulator)
+        Text(recorder.alertLogText)
+            .font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.6).foregroundStyle(.secondary)
+        #endif
     }
 
     /// What the battery will be at the end of the workout (WATCH-119), or `nil` when that isn't known.
@@ -134,13 +140,32 @@ private struct Dial: View {
                 parts.append(text)
             }
         }
+        if recorder.phase == .paused { parts.insert("Paused", at: 0) }
         parts.append(ZoneDialText.placeLine(current, of: engine.steps.count).lowercased())
         parts.append(ZoneDialText.stepLine(current.step).lowercased())
+        if recorder.stepProgress(at: at).flatMap({ WatchWorkoutSummary.remainingValue($0) }) == nil {
+            parts.append("press Next step to move on")
+        } else if let next = WatchWorkoutSummary.nextText(engine) {
+            parts.append(next.lowercased())
+        }
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         parts.append(battery.spokenText.lowercased())
         if let projection = projection(for: battery, progress: recorder.stepProgress(at: at)) {
             parts.append(projection.spoken)
         }
         return parts.joined(separator: ", ")
+    }
+}
+
+extension StepHeartRateTarget.Status {
+    /// The colour of the heart rate and its zone against the step's target: blue under it, red over it,
+    /// white in it (and without a target), so a glance says whether to speed up or slow down. Shared
+    /// by the zone dial and the standard metrics screen.
+    static func displayColor(_ status: StepHeartRateTarget.Status?) -> Color {
+        switch status {
+        case .below: Color(red: 0.35, green: 0.65, blue: 1.0)
+        case .above: Color(red: 1.0, green: 0.4, blue: 0.4)
+        case .inside, nil: .white
+        }
     }
 }

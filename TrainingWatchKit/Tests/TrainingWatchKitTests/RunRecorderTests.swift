@@ -668,3 +668,54 @@ struct RunRecorderBatteryTests {
         #expect(recorder.batteryWarning == nil)
     }
 }
+
+@MainActor
+@Suite("RunRecorder pace")
+struct RunRecorderPaceTests {
+    /// Feeds the builder's total distance at 3 m/s, one reading a second, for `seconds`.
+    private func feed(_ backend: FakeBackend, seconds: Int) async {
+        for second in 1...seconds {
+            backend.builder.elapsed = TimeInterval(second)
+            backend.builder.onDistance?(Double(second) * 3)
+            await settle()
+        }
+    }
+
+    @Test("the pace follows the builder's distance and elapsed time")
+    func paceFromDistance() async throws {
+        let (recorder, backend) = await running()
+        #expect(recorder.currentSecondsPerMeter() == nil)
+        #expect(recorder.averageSecondsPerMeter == nil)
+        await feed(backend, seconds: 30)
+        let current = try #require(recorder.currentSecondsPerMeter())
+        let average = try #require(recorder.averageSecondsPerMeter)
+        #expect(abs(current - 1.0 / 3) < 0.0001)
+        #expect(abs(average - 1.0 / 3) < 0.0001)
+    }
+
+    @Test("reset forgets the pace of the run before")
+    func resetForgets() async {
+        let (recorder, backend) = await running()
+        await feed(backend, seconds: 30)
+        backend.session.onStateChange?(.ended)
+        await settle()
+        recorder.reset()
+        #expect(recorder.currentSecondsPerMeter() == nil)
+        #expect(recorder.averageSecondsPerMeter == nil)
+    }
+
+    @Test("a distance reading that arrives after the run is released starts no pace")
+    func lateReading() async {
+        let (recorder, backend) = await running()
+        await feed(backend, seconds: 30)
+        backend.session.onStateChange?(.ended)
+        await settle()
+        recorder.reset()
+        // With no builder `elapsed()` would be 0 and the window would take the reading as a new run.
+        backend.builder.onDistance?(9999)
+        await settle()
+        #expect(recorder.averageSecondsPerMeter == nil)
+        #expect(recorder.currentSecondsPerMeter() == nil)
+    }
+}
+

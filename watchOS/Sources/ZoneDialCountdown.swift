@@ -1,29 +1,39 @@
 import SwiftUI
+import TrainingWatchKit
 
-/// The top row of the zone dial (WATCH-118): the time or distance left in the step in yellow, and to
-/// the right of it which interval it is, such as "5/12", when the step is in a repeat.
+/// The top row of the zone dial (WATCH-118): the time or distance left in the step in white, and to
+/// the right of it which interval or step it is, such as "REP 5/12" or "2/6", in the primary colour.
 struct ZoneDialCountdown: View {
     /// What is left of the step, such as "0:52", or "Open".
     let remaining: String
-    /// "5/12", or `nil` outside a repeat, when nothing is shown.
-    let interval: String?
-    let timerSize: Double
+    /// Where the step is: "REP 5/12" in a repeat, "2/6" outside one.
+    let place: ZoneDialText.Place
+    /// What the countdown counts, "STEP TIME" or "STEP DISTANCE", set under "REMAINING" beside it; `nil` for an open step, which has none.
+    let remainingKind: String?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
+        HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             Text(remaining)
-                .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
-                .foregroundStyle(.yellow)
+                .font(RunMetricStyle.valueFont)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 // The digits have no descenders: the row is shorter than the text's own line.
-                .padding(.vertical, -timerSize * 0.23)
-            Spacer(minLength: 8)
-            if let interval {
-                Text(interval)
-                    .font(.system(size: 20, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                .padding(.vertical, -RunMetricStyle.valueSize * 0.14)
+            if let remainingKind {
+                RunMetricStyle.caption("REMAINING", remainingKind, shrinks: false)
+                    .accessibilityHidden(true)
             }
+            Spacer(minLength: 2)
+            HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                if place.isRepeat {
+                    Text("REP").font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
+                }
+                Text(place.text)
+                    .font(.system(size: 20, weight: .semibold, design: .rounded).monospacedDigit())
+            }
+            .lineLimit(1)
+            // The place and its captions keep their size, the same as the captions of the other metrics:
+            // only the countdown gives way when the row is short of room.
+            .layoutPriority(1)
         }
     }
 }
