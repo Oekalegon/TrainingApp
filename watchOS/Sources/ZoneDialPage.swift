@@ -59,9 +59,6 @@ private struct Dial: View {
     private static let pageIndicatorHeight = 22.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
-    /// The size of the two timers, in points: the same for both, in a condensed font so the total
-    /// time fits with its hours.
-    private static let timerSize = 46.0
 
     private func content(
         target: StepHeartRateTarget?, topZone: Int, position: Double?, status: StepHeartRateTarget.Status?
@@ -72,7 +69,7 @@ private struct Dial: View {
         return VStack(alignment: .leading, spacing: 2) {
             ZoneDialCountdown(
                 remaining: progress.flatMap { WatchWorkoutSummary.remainingValue($0) } ?? "Open",
-                interval: ZoneDialText.intervalFraction(current), timerSize: Self.timerSize)
+                interval: ZoneDialText.intervalFraction(current))
             // The room left over is shared equally by the gap under the countdown and the one above
             // the total time, so the heart rate and the bar have the same space above and below.
             Spacer(minLength: 0)
@@ -87,7 +84,7 @@ private struct Dial: View {
                 .animation(.easeInOut(duration: 0.6), value: topZone)
                 .animation(.easeOut(duration: 0.8), value: position)
             Spacer(minLength: 0)
-            ZoneDialTotalTime(text: ZoneDialText.totalTimeText(recorder.elapsed(at: at)), timerSize: Self.timerSize)
+            ZoneDialTotalTime(text: ZoneDialText.totalTimeText(recorder.elapsed(at: at)))
             ZoneDialBattery(
                 battery: battery, projection: projection(for: battery, progress: progress),
                 inset: Self.batteryInset, bottomInset: Self.pageIndicatorHeight)

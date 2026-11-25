@@ -7,16 +7,15 @@ struct ZoneDialCountdown: View {
     let remaining: String
     /// "5/12", or `nil` outside a repeat, when nothing is shown.
     let interval: String?
-    let timerSize: Double
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text(remaining)
-                .font(.system(size: timerSize, weight: .semibold).width(.condensed).monospacedDigit())
+                .font(RunMetricStyle.valueFont)
                 .foregroundStyle(.yellow)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 // The digits have no descenders: the row is shorter than the text's own line.
-                .padding(.vertical, -timerSize * 0.23)
+                .padding(.vertical, -RunMetricStyle.valueSize * 0.14)
             Spacer(minLength: 8)
             if let interval {
                 Text(interval)
