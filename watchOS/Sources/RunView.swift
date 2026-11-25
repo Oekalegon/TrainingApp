@@ -32,6 +32,8 @@ struct RunView: View {
             ProgressView()
         case .running, .paused:
             RunPages(recorder: recorder, zoneStore: zoneStore)
+                // For the battery warning below. The pages need it on themselves too: the pager hands
+                // each one the system's own value.
                 .fakeDimmable()
                 // The temporary battery warning, over everything, in the battery's colour (WATCH-110).
                 .overlay {

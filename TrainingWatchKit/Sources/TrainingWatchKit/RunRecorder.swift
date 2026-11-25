@@ -43,9 +43,6 @@ public final class RunRecorder {
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
     /// `RunRecorder+Alerts.swift`.
     var alertEngine = ZoneAlertEngine(settings: .heartRate)
-    /// The last few alerts with the run time they came at, newest last, for the simulator's debug
-    /// line. Kept on a real watch too: it is three small entries. Set by `RunRecorder+Alerts.swift`.
-    var alertLog: [(time: TimeInterval, alert: ZoneAlert)] = []
     /// The battery readings of a planned workout so far, for the forecast (WATCH-119). Set by
     /// `RunRecorder+Battery.swift`.
     public internal(set) var batteryReadings: [BatteryForecast.Reading] = []
@@ -209,7 +206,6 @@ public final class RunRecorder {
         distanceMeters = 0
         paceWindow.reset()
         routePointCount = 0
-        alertLog = []
         phase = .idle
     }
 

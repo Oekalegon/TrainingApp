@@ -1,5 +1,28 @@
 import SwiftUI
 
+/// How often a run screen redraws (WATCH-125): every second, or with the wrist down on the minute
+/// (not a minute from when the wrist went down, so the time shown is never nearly a minute behind).
+struct RunScreenSchedule: TimelineSchedule {
+    let dimmed: Bool
+
+    func entries(from start: Date, mode: Mode) -> AnySequence<Date> {
+        let calendar = Calendar.current
+        let step: (Date) -> Date? = { date in
+            if dimmed {
+                // The start of the next minute.
+                calendar.nextDate(after: date, matching: DateComponents(second: 0), matchingPolicy: .nextTime)
+            } else {
+                date.addingTimeInterval(1)
+            }
+        }
+        return AnySequence(sequence(first: start, next: step))
+    }
+}
+
+extension TimelineSchedule where Self == RunScreenSchedule {
+    static func runScreen(dimmed: Bool) -> RunScreenSchedule { RunScreenSchedule(dimmed: dimmed) }
+}
+
 extension View {
     /// The simulator can't put the wrist down: with `-fakeDimmed` the view and what is in it see
     /// `isLuminanceReduced` as true (WATCH-125, WATCH-129). Does nothing on a real watch. The run's pages

@@ -196,7 +196,8 @@ struct StepTextTests {
             WatchWorkoutSummary.remainingValue(
                 StepProgress(remainingTime: seconds, remainingDistance: nil, fraction: 0), locale: metric, showsSeconds: false)
         }
-        #expect(value(0.4) == "1 min")
+        #expect(value(0.4) == "<1 min")
+        #expect(value(59) == "<1 min")
         #expect(value(60) == "1 min")
         #expect(value(61) == "2 min")
         #expect(value(59 * 60) == "59 min")

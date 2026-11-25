@@ -15,7 +15,7 @@ struct ZoneDialPage: View {
     @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: dimmed ? 60 : 1)) { context in
+        TimelineView(.runScreen(dimmed: dimmed)) { context in
             if let engine = recorder.stepEngine, let current = engine.current {
                 Dial(recorder: recorder, bands: zoneStore.bands, engine: engine, current: current, at: context.date)
             }

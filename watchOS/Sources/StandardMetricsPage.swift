@@ -27,7 +27,7 @@ struct StandardMetricsPage: View {
     @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: dimmed ? 60 : 1)) { context in
+        TimelineView(.runScreen(dimmed: dimmed)) { context in
             let date = context.date
             VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
                 ForEach(metrics, id: \.self) { metric in

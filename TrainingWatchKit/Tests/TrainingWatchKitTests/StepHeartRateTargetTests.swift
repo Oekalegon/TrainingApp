@@ -94,21 +94,3 @@ struct StepHeartRateTargetTests {
         #expect(target.gaugePosition(forHeartRate: 220) == 1)
     }
 }
-
-@Suite("Next step text (WATCH-105)")
-struct NextStepTextTests {
-    private let metric = Locale(identifier: "en_NL")
-
-    @Test("says what comes next, then 'Last step', then nothing once done")
-    func next() {
-        var engine = WorkoutStepEngine(blocks: [WorkoutBlock(steps: [
-            WorkoutStep(kind: .work, goal: .time(60), target: .heartRateZone(4)),
-            WorkoutStep(kind: .recovery, goal: .time(30), target: .heartRateZone(2))
-        ])])
-        #expect(WatchWorkoutSummary.nextText(engine, locale: metric) == "Next: Recovery 30 s Z2")
-        _ = engine.lap(elapsed: 5, distance: 0)
-        #expect(WatchWorkoutSummary.nextText(engine, locale: metric) == "Last step")
-        _ = engine.lap(elapsed: 9, distance: 0)
-        #expect(WatchWorkoutSummary.nextText(engine, locale: metric) == nil)
-    }
-}

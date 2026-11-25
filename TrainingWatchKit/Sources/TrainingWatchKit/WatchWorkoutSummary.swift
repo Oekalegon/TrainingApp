@@ -103,18 +103,6 @@ public enum WatchWorkoutSummary {
         return nil
     }
 
-    /// The step after the current one as a line for the run screen: "Next: Recovery 20 s Z2", "Last
-    /// step", or `nil` once the workout is done.
-    ///
-    /// - Parameters:
-    ///   - engine: The workout being run.
-    ///   - locale: Decides whether distances are in kilometres or miles.
-    public static func nextText(_ engine: WorkoutStepEngine, locale: Locale = .current) -> String? {
-        guard engine.current != nil else { return nil }
-        guard let next = engine.next else { return "Last step" }
-        return "Next: " + stepText(next.step, locale: locale)
-    }
-
     /// What is left of a step, such as "1:23 left" or "0.4 km left"; `nil` for an open step.
     ///
     /// - Parameters:
@@ -138,6 +126,7 @@ public enum WatchWorkoutSummary {
         if let seconds = progress.remainingTime {
             let total = Int(seconds.rounded(.up))
             if !showsSeconds {
+                if total < 60 { return "<1 min" }
                 let minutes = (total + 59) / 60
                 return minutes >= 60 ? String(format: "%dh%02d", minutes / 60, minutes % 60) : "\(minutes) min"
             }
