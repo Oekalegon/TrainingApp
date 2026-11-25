@@ -72,7 +72,7 @@ private struct Dial: View {
             ZoneDialCountdown(
                 remaining: remaining ?? "Open",
                 interval: ZoneDialText.intervalFraction(current),
-                remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "TIME" : "DISTANCE"))
+                remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "STEP TIME" : "STEP DISTANCE"))
             ZoneDialHeartRate(
                 heartRate: recorder.heartRate, zoneValue: position.map(ZoneDialText.positionValue),
                 color: StepHeartRateTarget.Status.displayColor(status))

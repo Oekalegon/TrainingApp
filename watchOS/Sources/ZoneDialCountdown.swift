@@ -7,7 +7,7 @@ struct ZoneDialCountdown: View {
     let remaining: String
     /// "5/12", or `nil` outside a repeat, when nothing is shown.
     let interval: String?
-    /// What the countdown counts, "TIME" or "DISTANCE", set under "REMAINING" beside it; `nil` for an open step, which has none.
+    /// What the countdown counts, "STEP TIME" or "STEP DISTANCE", set under "REMAINING" beside it; `nil` for an open step, which has none.
     let remainingKind: String?
 
     var body: some View {
