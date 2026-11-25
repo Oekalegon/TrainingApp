@@ -9,6 +9,12 @@ public enum WorkoutMetadata {
     /// On the `HKWorkout`: the planned workout's name.
     public static let workoutName = "TrainingAppWorkoutName"
 
+    /// On the `HKWorkout`: the battery level (0 to 1) when the run started, so the phone can work out the
+    /// athlete's own drain per hour (WATCH-119).
+    public static let batteryStart = "TrainingAppBatteryStart"
+    /// On the `HKWorkout`: the battery level (0 to 1) when the run ended.
+    public static let batteryEnd = "TrainingAppBatteryEnd"
+
     /// On a step's segment event: the step's place in the workout, from 0.
     public static let stepIndex = "TrainingAppStepIndex"
     /// On a step's segment event: "warmup", "work", "recovery" or "cooldown".
@@ -49,6 +55,14 @@ public enum WorkoutMetadata {
     ///   - name: The workout's name.
     public static func workout(plannedActivityID: UUID, name: String) -> [String: Any] {
         [Self.plannedActivityID: plannedActivityID.uuidString, workoutName: name]
+    }
+
+    /// The metadata for the battery over a run, or `nil` when there are too few readings to say anything.
+    ///
+    /// - Parameter readings: The battery readings of the run, oldest first.
+    public static func battery(readings: [BatteryForecast.Reading]) -> [String: Any]? {
+        guard let first = readings.first, let last = readings.last, last.time > first.time else { return nil }
+        return [batteryStart: first.level, batteryEnd: last.level]
     }
 
     /// The metadata for a step's segment event.

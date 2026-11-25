@@ -12,6 +12,8 @@ extension RunRecorder {
     ///   - start: When the run started, which is when its first step does.
     func beginSteps(for plan: WatchPlannedWorkout, at start: Date) async {
         stepEngine = WorkoutStepEngine(blocks: plan.blocks)
+        plannedTypicalDuration = plan.typicalDuration
+        plannedDrainPerHour = plan.drainPerHour
         announcedAheadIndex = nil
         lastCountdownSecond = nil
         stepStartDate = start

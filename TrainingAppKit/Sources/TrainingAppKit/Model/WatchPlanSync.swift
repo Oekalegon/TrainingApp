@@ -64,7 +64,10 @@ public final class WatchPlanSync {
         } catch {
             return
         }
-        let plan = Self.plan(from: candidates, workouts: workouts, asOf: now, calendar: calendar)
+        let drain = await athleteDrainPerHour(asOf: now)
+        let plan = Self.plan(
+            from: candidates, workouts: workouts, asOf: now, calendar: calendar,
+            athlete: model.athlete, paceHistory: model.paceHistory, drainPerHour: drain)
         if let lastSent, lastSent.workouts == plan.workouts, now.timeIntervalSince(lastSent.sentAt) < Self.refreshInterval {
             return
         }
@@ -77,6 +80,37 @@ public final class WatchPlanSync {
         }
     }
 
+    /// How far back the watch's battery drain is learned from, in days.
+    static let drainDays = 90
+    /// How many runs it takes before the drain is sent.
+    static let minimumDrainRuns = 2
+    /// How many of the latest runs count.
+    static let maximumDrainRuns = 10
+
+    private var drainRead: (date: Date, value: Double?)?
+
+    /// The athlete's typical battery drain per hour on the watch, from the runs the watch app recorded
+    /// the battery for, or `nil` while there are too few. Read from the store at most once per
+    /// ``refreshInterval``, since it loads whole activities.
+    private func athleteDrainPerHour(asOf now: Date) async -> Double? {
+        if let drainRead, now.timeIntervalSince(drainRead.date) < Self.refreshInterval { return drainRead.value }
+        let start = now.addingTimeInterval(-Double(Self.drainDays) * 86400)
+        guard let activities = try? await model.stores.activityStore.activities(in: start...now) else { return nil }
+        let value = Self.drainPerHour(from: activities)
+        drainRead = (now, value)
+        return value
+    }
+
+    /// The median drain per hour of the latest runs that have one (see `Activity.batteryDrainPerHour`),
+    /// `nil` with fewer than ``minimumDrainRuns``.
+    static func drainPerHour(from activities: [Activity]) -> Double? {
+        let drains = activities.sorted { $0.start > $1.start }.compactMap(\.batteryDrainPerHour)
+            .prefix(maximumDrainRuns).sorted()
+        guard drains.count >= minimumDrainRuns else { return nil }
+        let middle = drains.count / 2
+        return drains.count % 2 == 1 ? drains[middle] : (drains[middle - 1] + drains[middle]) / 2
+    }
+
     /// The plan the Watch should have: the planned runs in the next 7 days (today included) that
     /// have a workout and aren't completed. Only runs, because the watch app records runs (WATCH-101);
     /// other sports stay on the Workout app's schedule. Also what the tests use to pin that choice.
@@ -86,15 +120,30 @@ public final class WatchPlanSync {
     ///   - workouts: Each planned activity's workout, by ID; a plan whose workout is missing is left out.
     ///   - now: The current time, which is also when the plan counts as sent.
     ///   - calendar: In the athlete's time zone, so "today" and the window start where the athlete's day does.
+    ///   - athlete: Whose paces the duration of a workout with an open step is forecast from.
+    ///   - paceHistory: The athlete's recent runs, which that forecast is made from.
+    ///   - drainPerHour: The athlete's typical battery drain, which the watch starts its battery forecast
+    ///     from when it has no runs of its own to go by (WATCH-119).
     static func plan(
-        from plans: [PlannedActivity], workouts: [UUID: StructuredWorkout], asOf now: Date, calendar: Calendar
+        from plans: [PlannedActivity], workouts: [UUID: StructuredWorkout], asOf now: Date, calendar: Calendar,
+        athlete: AthleteProfile? = nil, paceHistory: PaceHistory = .empty, drainPerHour: Double? = nil
     ) -> WatchPlan {
+        let calculator = StatisticsCalculator()
         let window = WatchSchedulePlanner.window(asOf: now, calendar: calendar)
         return WatchPlan(workouts: plans.compactMap { plan in
             guard window.contains(plan.date), plan.completedActivityID == nil,
                   let workout = workouts[plan.workoutID], workout.sport == .running
             else { return nil }
-            return WatchPlannedWorkout(id: plan.id, date: plan.date, name: workout.name, blocks: workout.blocks)
+            // The same forecast the planned cards show. The watch needs it only for an open step, which has
+            // no end of its own (WATCH-119), so it isn't sent otherwise: it would make the plan change
+            // every time the pace history does.
+            let hasOpenStep = workout.blocks.contains { $0.repetitions > 0 && $0.steps.contains { $0.goal == .open } }
+            let duration = hasOpenStep ? athlete.map {
+                calculator.projection(for: workout, athlete: $0, paceHistory: paceHistory, before: plan.date).duration
+            } : nil
+            return WatchPlannedWorkout(
+                id: plan.id, date: plan.date, name: workout.name, blocks: workout.blocks,
+                typicalDuration: duration.flatMap { $0 > 0 ? $0 : nil }, drainPerHour: drainPerHour)
         }, sentAt: now)
     }
 }

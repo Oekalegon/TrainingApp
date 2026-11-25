@@ -154,4 +154,119 @@ struct BatteryProjectionTests {
         #expect(projection(level: 0.8, seconds: 3600, complete: false) == nil)
         #expect(BatteryProjection(battery: BatteryDisplay(level: 0.8, isCharging: false), readings: [], remaining: nil) == nil)
     }
+
+    private let battery = BatteryDisplay(level: 0.8, isCharging: false)
+
+    @Test("an open step is counted by the duration of earlier runs, less what has been run")
+    func openStepUsesTypicalDuration() throws {
+        let open = RemainingEstimate(seconds: 600, isComplete: false)
+        // Earlier runs took 2 hours, 1 hour is done: 1 hour left at 12% an hour -> 68%.
+        let result = try #require(BatteryProjection(
+            battery: battery, readings: [], remaining: open, elapsed: 3600, typicalDuration: 7200))
+        #expect(result.text == "~68% AT END")
+        // Never less than the steps known to be left.
+        let long = RemainingEstimate(seconds: 7200, isComplete: false)
+        let floor = try #require(BatteryProjection(
+            battery: battery, readings: [], remaining: long, elapsed: 3600, typicalDuration: 3700))
+        #expect(floor.text == "~56% AT END")
+    }
+
+    @Test("the athlete's own drain replaces the typical one until the run has shown its own")
+    func ownDrain() throws {
+        let remaining = RemainingEstimate(seconds: 3600, isComplete: true)
+        let result = try #require(BatteryProjection(
+            battery: battery, readings: [], remaining: remaining, drainPerHour: 0.2))
+        #expect(result.text == "~60% AT END")
+        let rough = try #require(BatteryProjection(
+            battery: battery, readings: [], remaining: remaining, drainPerHour: 0.2, isRough: true))
+        #expect(rough.spoken == "about 60 percent at the end, a rough estimate")
+    }
+}
+
+@Suite("Battery metadata (WATCH-119)")
+struct BatteryMetadataTests {
+    @Test("the first and last reading become the start and end level")
+    func startAndEnd() throws {
+        let readings = [
+            BatteryForecast.Reading(time: 0, level: 0.9),
+            BatteryForecast.Reading(time: 1800, level: 0.8),
+            BatteryForecast.Reading(time: 3600, level: 0.7)
+        ]
+        let metadata = try #require(WorkoutMetadata.battery(readings: readings))
+        #expect(metadata[WorkoutMetadata.batteryStart] as? Double == 0.9)
+        #expect(metadata[WorkoutMetadata.batteryEnd] as? Double == 0.7)
+    }
+
+    @Test("too few readings give no metadata")
+    func tooFew() {
+        #expect(WorkoutMetadata.battery(readings: []) == nil)
+        #expect(WorkoutMetadata.battery(readings: [.init(time: 0, level: 0.9)]) == nil)
+    }
+}
+
+@Suite("BatteryDrainHistory (WATCH-119)")
+struct BatteryDrainHistoryTests {
+    private func run(from start: Double, to end: Double, hours: Double = 1) -> [BatteryForecast.Reading] {
+        [.init(time: 0, level: start), .init(time: hours * 3600, level: end)]
+    }
+
+    private let normal = BatteryDrainFactors()
+    private let lowPower = BatteryDrainFactors(lowPowerMode: true)
+
+    private func history(_ drops: [(Double, BatteryDrainFactors)]) -> BatteryDrainHistory {
+        var history = BatteryDrainHistory()
+        for (drop, factors) in drops { history.add(readings: run(from: 0.9, to: 0.9 - drop), factors: factors) }
+        return history
+    }
+
+    @Test("a run's drain is its drop over its time; short runs, flat runs and charging give none")
+    func drainOfRun() {
+        #expect(abs(BatteryDrainHistory.drain(of: run(from: 0.9, to: 0.78))! - 0.12) < 1e-9)
+        #expect(BatteryDrainHistory.drain(of: run(from: 0.9, to: 0.6, hours: 0.1)) == nil)
+        #expect(BatteryDrainHistory.drain(of: run(from: 0.9, to: 0.895)) == nil)
+        #expect(BatteryDrainHistory.drain(of: run(from: 0.5, to: 0.8)) == nil)
+        #expect(BatteryDrainHistory.drain(of: []) == nil)
+    }
+
+    @Test("the estimate is the median and needs two runs")
+    func median() throws {
+        #expect(history([(0.1, normal)]).estimate(for: normal) == nil)
+        #expect(abs(try #require(history([(0.1, normal), (0.2, normal)]).estimate(for: normal)).drainPerHour - 0.15) < 1e-9)
+        let three = try #require(history([(0.1, normal), (0.2, normal), (0.4, normal)]).estimate(for: normal))
+        #expect(abs(three.drainPerHour - 0.2) < 1e-9)
+    }
+
+    @Test("runs with the same factors are used when there are enough, and all runs, less sure, otherwise")
+    func factors() throws {
+        let mixed = history([(0.1, normal), (0.1, normal), (0.3, lowPower), (0.3, lowPower)])
+        let same = try #require(mixed.estimate(for: lowPower))
+        #expect(abs(same.drainPerHour - 0.3) < 1e-9)
+        let other = try #require(mixed.estimate(for: BatteryDrainFactors(speakerSound: true)))
+        #expect(abs(other.drainPerHour - 0.2) < 1e-9)
+        #expect(other.confidence == .low)
+    }
+
+    @Test("confidence grows with the number of alike runs and shrinks with their spread")
+    func confidence() throws {
+        let steady = history(Array(repeating: (0.12, normal), count: 5))
+        #expect(try #require(steady.estimate(for: normal)).confidence == .high)
+        let few = history([(0.12, normal), (0.12, normal)])
+        #expect(try #require(few.estimate(for: normal)).confidence == .low)
+        let wild = history([(0.05, normal), (0.12, normal), (0.3, normal), (0.1, normal), (0.2, normal)])
+        #expect(try #require(wild.estimate(for: normal)).confidence == .low)
+    }
+
+    @Test("only the last ten runs are kept")
+    func capacity() {
+        let many = history(Array(repeating: (0.1, normal), count: 15))
+        #expect(many.runs.count == BatteryDrainHistory.capacity)
+    }
+
+    @Test("the store keeps the history between launches")
+    func store() throws {
+        let defaults = try #require(UserDefaults(suiteName: "BatteryDrainStoreTests-\(UUID().uuidString)"))
+        BatteryDrainStore(defaults: defaults).record(readings: run(from: 0.9, to: 0.8), factors: normal)
+        BatteryDrainStore(defaults: defaults).record(readings: run(from: 0.9, to: 0.7), factors: lowPower)
+        #expect(BatteryDrainStore(defaults: defaults).load().runs.count == 2)
+    }
 }

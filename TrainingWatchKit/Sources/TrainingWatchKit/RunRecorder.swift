@@ -44,6 +44,9 @@ public final class RunRecorder {
     /// The battery readings of a planned workout so far, for the forecast (WATCH-119). Set by
     /// `RunRecorder+Battery.swift`.
     public internal(set) var batteryReadings: [BatteryForecast.Reading] = []
+    /// From the plan being run: how long earlier runs took, and the athlete's own drain (WATCH-119).
+    var plannedTypicalDuration: TimeInterval?
+    var plannedDrainPerHour: Double?
     /// The temporary battery warning screen, or `nil` when none shows (WATCH-110). Set and cleared by
     /// `RunRecorder+Battery.swift`; the run view shows it.
     public internal(set) var batteryWarning: BatteryWarning?
@@ -86,8 +89,16 @@ public final class RunRecorder {
     private var lastLocation: CLLocation?
     private var lastDistanceSampleEnd = Date.now
 
-    public init(backend: any RunBackend) {
+    /// Where the drain of finished runs is kept for the next run's forecast; `nil` keeps nothing (tests).
+    let drainStore: BatteryDrainStore?
+    /// The athlete's typical drain from earlier runs, read when a run starts (WATCH-119).
+    var learnedDrain: BatteryDrainHistory.Estimate?
+    /// What could explain this run's drain, read when it starts.
+    var drainFactors = BatteryDrainFactors()
+
+    public init(backend: any RunBackend, drainStore: BatteryDrainStore? = nil) {
         self.backend = backend
+        self.drainStore = drainStore
     }
 
     /// The location permission, for the simulator's debug line.
@@ -311,7 +322,9 @@ public final class RunRecorder {
                 try await builder.endCollection(at: .now)
                 collectionEnded = true
             }
+            await writeBatteryMetadata()
             try await builder.finishWorkout()
+            drainStore?.record(readings: batteryReadings, factors: drainFactors)
         } catch {
             canRetrySave = true
             phase = .failed("The run couldn't be saved: \(error.localizedDescription)")
