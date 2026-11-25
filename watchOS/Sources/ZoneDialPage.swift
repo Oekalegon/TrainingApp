@@ -101,14 +101,12 @@ private struct Dial: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
-    /// The small line above the countdown: what comes next ("Next: Recovery 20 s Z2", "Last step"), or for an
-    /// open step, which has no end of its own, how to go on. In the simulator, which plays no haptics, the
-    /// last alerts follow it, newest first.
+    /// The small line above the countdown, only for an open step, which has no end of its own: how to go
+    /// on. In the simulator, which plays no haptics, the last alerts follow it, newest first.
     @ViewBuilder
     private func stepHint(isOpen: Bool) -> some View {
-        let text = isOpen ? "Press Next step to move on" : WatchWorkoutSummary.nextText(engine)
-        if let text {
-            Text(text)
+        if isOpen {
+            Text("Press Next step to move on")
                 .font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
@@ -150,8 +148,6 @@ private struct Dial: View {
         parts.append(ZoneDialText.stepLine(current.step).lowercased())
         if recorder.stepProgress(at: at).flatMap({ WatchWorkoutSummary.remainingValue($0) }) == nil {
             parts.append("press Next step to move on")
-        } else if let next = WatchWorkoutSummary.nextText(engine) {
-            parts.append(next.lowercased())
         }
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         parts.append(battery.spokenText.lowercased())
