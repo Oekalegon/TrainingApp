@@ -101,6 +101,14 @@ public struct RunScreen: Sendable, Hashable, Codable, Identifiable {
     /// out of a run with no steps (a free run, or a workout whose steps are used up).
     public var requiresSteps: Bool { items.contains { $0.requiresSteps } }
 
+    /// The items that fit `units`: the first ones are left out until they do, so the last, the most
+    /// important, stay (a smaller watch has room for fewer rows than the 6 of ``capacity``).
+    public func items(fittingUnits units: Int) -> [RunScreenItem] {
+        var items = self.items
+        while items.reduce(0, { $0 + $1.height }) > units, items.count > 1 { items.removeFirst() }
+        return items
+    }
+
     /// The units the items take.
     public var units: Int { items.reduce(0) { $0 + $1.height } }
 
@@ -179,6 +187,10 @@ public struct RunScreenSet: Sendable, Hashable, Codable, Identifiable {
 
 /// What the phone sends: the set for a free run and the set for a workout. Sets linked to workout
 /// templates are added by WATCH-133.
+///
+/// A set is kept by value, defaults included, so a default that changes in a later version doesn't
+/// reach a watch that cached the old one. The phone's sender (WATCH-134) should send "use the built-in"
+/// for a default instead of the set itself.
 public struct RunScreenConfig: Sendable, Hashable, Codable {
     public var freeRun: RunScreenSet
     public var workout: RunScreenSet

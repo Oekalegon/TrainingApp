@@ -88,13 +88,18 @@ private struct RunPages: View {
         _selection = State(initialValue: RunScreenSelection(set: set, hasSteps: recorder.hasSteps))
     }
 
+    /// The screens to show now: those that need steps only while the workout has some. The binding below
+    /// answers with a screen that is shown, also for the moment between the steps ending and the
+    /// selection moving off the dial.
+    private var shown: [RunScreen] { selection.screens(hasSteps: recorder.hasSteps) }
+
     var body: some View {
         TabView(selection: $page) {
             RunControlsPage(recorder: recorder)
                 .tag(Page.controls)
-            TabView(selection: Binding(get: { selection.current }, set: { selection.select($0) })) {
-                ForEach(selection.screens(hasSteps: recorder.hasSteps)) { screen in
-                    RunScreenPage(recorder: recorder, zoneStore: zoneStore, items: screen.items).fakeDimmable()
+            TabView(selection: Binding(get: { shown.contains { $0.id == selection.current } ? selection.current : (shown.first?.id ?? "") }, set: { selection.select($0) })) {
+                ForEach(shown) { screen in
+                    RunScreenPage(recorder: recorder, zoneStore: zoneStore, screen: screen, showsDoneNote: screen.id == shown.first?.id).fakeDimmable()
                         .tag(screen.id)
                 }
             }
@@ -105,7 +110,6 @@ private struct RunPages: View {
                     Text("PAUSED")
                         .font(RunMetricStyle.captionFont).foregroundStyle(.orange)
                         .padding(.leading, 8).padding(.top, 6)
-                        .accessibilityHidden(true)
                 }
             }
             .tag(Page.data)

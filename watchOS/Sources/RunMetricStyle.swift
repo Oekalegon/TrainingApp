@@ -43,7 +43,7 @@ extension View {
 }
 
 /// The fonts and spacing of a value with its unit ("169 BPM", "ZONE 4.4"), shared by the standard
-/// metrics screen and the zone dial's heart-rate row so they look alike.
+/// screens' metric rows so they look alike.
 enum RunMetricStyle {
     /// The size of a value, in points.
     static let valueSize = 30.0

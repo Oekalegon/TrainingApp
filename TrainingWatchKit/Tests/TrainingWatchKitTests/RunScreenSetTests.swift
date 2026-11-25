@@ -145,4 +145,13 @@ struct RunScreenSetTests {
         #expect(dial.units == RunScreen.capacity)
         #expect(RunScreenSet.workoutDefault.startIndex == 1)
     }
+
+    @Test("a screen too tall for a small watch loses its first items and keeps the last")
+    func fitting() {
+        let screen = RunScreen(id: "d", items: [.widget(.stepCountdown), .metric(.heartRate), .widget(.zoneBar), .metric(.totalTime), .widget(.battery)])
+        #expect(screen.items(fittingUnits: 6) == screen.items)
+        #expect(screen.items(fittingUnits: 5) == Array(screen.items.dropFirst()))
+        #expect(screen.items(fittingUnits: 3) == [.metric(.totalTime), .widget(.battery)])
+        #expect(screen.items(fittingUnits: 0) == [.widget(.battery)])
+    }
 }

@@ -35,4 +35,11 @@ struct ZoneTimeTrackerTests {
         tracker.add(zone: 2, atElapsed: 50)
         #expect(tracker.fractions == nil)
     }
+
+    @Test("the spoken histogram names the zones with time and rounds to whole percents")
+    func spoken() {
+        #expect(ZoneTimeText.spoken(nil) == "no time measured yet")
+        #expect(ZoneTimeText.spoken([0.1, 0.0, 0.6, 0.3004, 0.0, 0.0]) == "below zone 1 10 percent, zone 2 60 percent, zone 3 30 percent")
+        #expect(ZoneTimeText.spoken([0.001, 0, 0, 0, 0, 0]) == "no time measured yet")
+    }
 }

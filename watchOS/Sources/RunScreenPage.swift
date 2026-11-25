@@ -14,7 +14,9 @@ import WatchKit
 struct RunScreenPage: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
-    let items: [RunScreenItem]
+    let screen: RunScreen
+    /// Whether this screen says "Workout done" once the steps are used up: one screen does, not each.
+    var showsDoneNote = true
 
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
     private static let bottomInset = 22.0
@@ -24,6 +26,14 @@ struct RunScreenPage: View {
     /// How far down the content starts at the least: the clock sits at the top right and can't be hidden
     /// without private API. A guess to check on a watch.
     private static let contentTop = 34.0
+    /// The height of one unit, a metric's row with the gap under it (a guess to check on a watch).
+    private static let unitHeight = 28.0
+    /// How many units fit this watch under the clock and over the page indicator: 6 on the largest
+    /// watches and 5 on the others, where the first items of a full screen are left out.
+    private static var fittingUnits: Int {
+        let height = WKInterfaceDevice.current().screenBounds.height
+        return min(max(Int((height - contentTop - bottomInset) / unitHeight), 3), RunScreen.capacity)
+    }
     /// True with the wrist down (WATCH-125): redrawn once a minute, with no seconds.
     @Environment(\.isLuminanceReduced) private var dimmed
 
@@ -31,13 +41,13 @@ struct RunScreenPage: View {
         TimelineView(.runScreen(dimmed: dimmed)) { context in
             let date = context.date
             VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                ForEach(Array(screen.items(fittingUnits: Self.fittingUnits).enumerated()), id: \.offset) { _, item in
                     switch item {
                     case .metric(let metric): row(metric, at: date)
                     case .widget(let widget): widgetView(widget, at: date)
                     }
                 }
-                if recorder.stepEngine?.isFinished == true {
+                if showsDoneNote, recorder.stepEngine?.isFinished == true {
                     // The steps are used up and the run goes on as a free run.
                     Text("Workout done").font(RunMetricStyle.captionFont).foregroundStyle(.green)
                 }
@@ -184,7 +194,7 @@ struct RunScreenPage: View {
                         .font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
-                ZoneDialCountdown(
+                StepCountdownRow(
                     remaining: remaining ?? "Open",
                     place: ZoneDialText.place(of: current, in: engine.steps.count),
                     remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "STEP TIME" : "STEP DISTANCE"))
@@ -222,7 +232,7 @@ struct RunScreenPage: View {
                 battery: battery, readings: recorder.batteryReadings,
                 remaining: engine.remaining(progress: recorder.stepProgress(at: date), secondsPerMeter: recorder.secondsPerMeter))
         }
-        return ZoneDialBattery(battery: battery, projection: projection, inset: Self.batteryInset, bottomInset: 0)
+        return BatteryRow(battery: battery, projection: projection, inset: Self.batteryInset, bottomInset: 0)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Battery")
             .accessibilityValue([battery.spokenText.lowercased(), projection?.spoken].compactMap { $0 }.joined(separator: ", "))
@@ -233,7 +243,7 @@ struct RunScreenPage: View {
         ZoneHistogram(fractions: recorder.zoneTimeFractions)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Time in zones")
-            .accessibilityValue(ZoneHistogram.spoken(recorder.zoneTimeFractions))
+            .accessibilityValue(ZoneTimeText.spoken(recorder.zoneTimeFractions))
     }
 
     private func spokenStep(_ current: PlannedStep, of count: Int, progress: StepProgress?, isOpen: Bool) -> String {
@@ -287,15 +297,6 @@ struct ZoneHistogram: View {
 
     private static func color(zone: Int) -> Color {
         HeartRateZone(rawValue: zone)?.zoneColor ?? .gray
-    }
-
-    /// "zone 2 45 percent, zone 3 30 percent ..." for the zones with time, or that there is none yet.
-    static func spoken(_ fractions: [Double]?) -> String {
-        guard let fractions else { return "no time measured yet" }
-        let parts = fractions.enumerated().filter { $0.element >= 0.005 }.map { zone, fraction in
-            "\(zone == 0 ? "below zone 1" : "zone \(zone)") \(Int((fraction * 100).rounded())) percent"
-        }
-        return parts.joined(separator: ", ")
     }
 }
 
