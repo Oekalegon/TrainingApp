@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import TrainingCore
 import TrainingWatchKit
 @testable import TrainingAppKit
 
@@ -122,5 +123,33 @@ struct WatchScreenSetSyncTests {
         let a = WatchScreenSetSync.newSet(named: "A"), b = WatchScreenSetSync.newSet(named: "B")
         #expect(a.id != b.id)
         try WatchScreenSetSync.validate(a)
+    }
+
+    @Test("a custom template is saved with the set, a built-in one is linked in the app, and the links are read back (WATCH-134)")
+    func linkTemplates() async throws {
+        let store = InMemoryStore()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        try await store.save(athlete)
+        let model = TrainingModel(
+            stores: StoreSet(
+                activityStore: store, planStore: store, workoutStore: store, cycleStore: store,
+                raceStore: store, athleteStore: store, templateStore: store),
+            athlete: athlete)
+        let defaults = try defaults()
+        let sync = WatchScreenSetSync(sender: ScreenSender(), defaults: defaults, links: WatchScreenLinks(defaults: defaults))
+        let custom = WorkoutTemplate(name: "Mine", sport: .running, parameters: [], blocks: [])
+        let builtIn = BuiltInWorkoutTemplates.easyRun
+
+        try await sync.link(custom, isCustom: true, to: "sprint", model: model)
+        let saved = try #require(try await store.template(id: custom.id))
+        #expect(saved.watchScreenSetID == "sprint")
+        #expect(sync.linkedSetID(for: saved, isCustom: true) == "sprint")
+
+        try await sync.link(builtIn, isCustom: false, to: "sprint", model: model)
+        #expect(sync.linkedSetID(for: builtIn, isCustom: false) == "sprint")
+        #expect(try await store.template(id: builtIn.id) == nil)
+
+        try await sync.link(builtIn, isCustom: false, to: nil, model: model)
+        #expect(sync.linkedSetID(for: builtIn, isCustom: false) == nil)
     }
 }

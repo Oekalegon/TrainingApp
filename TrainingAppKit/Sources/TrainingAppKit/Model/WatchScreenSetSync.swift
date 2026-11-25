@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import TrainingCore
 import TrainingWatchKit
 
 /// Why a screen set can't be saved (WATCH-134).
@@ -61,13 +62,16 @@ public final class WatchScreenSetSync {
     /// Checks that `set` can be saved.
     ///
     /// - Throws: A ``ScreenSetError`` for the first problem found.
-    public static func validate(_ set: RunScreenSet) throws {
+    public nonisolated static func validate(_ set: RunScreenSet) throws {
         guard !set.id.hasPrefix("default.") else { throw ScreenSetError.reservedID }
         guard !set.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ScreenSetError.emptyName }
         try validateScreens(set)
     }
 
-    private static func validateScreens(_ set: RunScreenSet) throws {
+    /// Checks the screens of `set`, not its name or id: what the built-in sets are held to.
+    ///
+    /// - Throws: A ``ScreenSetError`` for the first problem found.
+    nonisolated static func validateScreens(_ set: RunScreenSet) throws {
         guard !set.screens.isEmpty else { throw ScreenSetError.noScreens }
         var seen = Set<String>()
         for screen in set.screens {
@@ -140,6 +144,27 @@ public final class WatchScreenSetSync {
     public func link(builtInTemplate template: UUID, to setID: String?) {
         links.link(template: template, to: setID)
         replanAfterLinkChange()
+    }
+
+    /// The set a workout template is linked to: its own `watchScreenSetID` for a custom template, the app's link
+    /// for a built-in one; `nil` for the workout default.
+    public func linkedSetID(for template: WorkoutTemplate, isCustom: Bool) -> String? {
+        isCustom ? template.watchScreenSetID : links.setID(forTemplate: template.id)
+    }
+
+    /// Links `template` to the set `setID`, or unlinks it with `nil`, and sends the plan again. A custom template is
+    /// saved with the id; a built-in one can't change, so the app keeps the link.
+    ///
+    /// - Throws: What saving the custom template throws; nothing changes then.
+    public func link(_ template: WorkoutTemplate, isCustom: Bool, to setID: String?, model: TrainingModel) async throws {
+        if isCustom {
+            var template = template
+            template.watchScreenSetID = setID
+            try await model.add(template)
+            await planSync?.sync()
+        } else {
+            link(builtInTemplate: template.id, to: setID)
+        }
     }
 
     /// Sends the screens if they weren't sent yet in this run of the app, or changed since.
