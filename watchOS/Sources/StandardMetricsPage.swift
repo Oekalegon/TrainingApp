@@ -72,10 +72,12 @@ struct StandardMetricsPage: View {
         }
     }
 
-    private func value(_ text: String) -> some View {
+    /// A value in the shared font. It shrinks only when it can't fit and `shrinks` allows it; the heart-rate
+    /// line gives it `false`, so the zone's value and the heart rate are always the size of the other metrics.
+    private func value(_ text: String, shrinks: Bool = true) -> some View {
         Text(text)
             .font(RunMetricStyle.valueFont)
-            .lineLimit(1).minimumScaleFactor(0.5)
+            .lineLimit(1).minimumScaleFactor(shrinks ? 0.5 : 1)
             // The digits have no descenders: the row is shorter than the text's own line, so the rows sit
             // close together, as in the Workout app.
             .padding(.vertical, -RunMetricStyle.valueSize * 0.14)
@@ -84,6 +86,7 @@ struct StandardMetricsPage: View {
     /// A unit in small capitals beside a value.
     private func unit(_ text: String) -> some View {
         Text(text).font(RunMetricStyle.unitFont).foregroundStyle(.secondary)
+            .lineLimit(1).minimumScaleFactor(0.6)
     }
 
     /// A pace such as `9'24"`, with its caption in two lines beside it, together no taller than the value: "CURRENT" over "PACE".
@@ -121,12 +124,12 @@ struct StandardMetricsPage: View {
         let color = StepHeartRateTarget.Status.displayColor(status)
         let position = bpm.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
-            value(bpm.map { "\(Int($0.rounded()))" } ?? "--").foregroundStyle(bpm == nil ? Color.secondary : color)
+            value(bpm.map { "\(Int($0.rounded()))" } ?? "--", shrinks: false).foregroundStyle(bpm == nil ? Color.secondary : color)
             unit("BPM")
             Spacer(minLength: 2)
             HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                 unit("ZONE")
-                value(position.map(ZoneDialText.positionValue) ?? "--").foregroundStyle(color)
+                value(position.map(ZoneDialText.positionValue) ?? "--", shrinks: false).foregroundStyle(color)
             }
         }
         .accessibilityElement(children: .ignore)
