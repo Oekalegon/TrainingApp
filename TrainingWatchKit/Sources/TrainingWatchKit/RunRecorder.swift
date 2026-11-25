@@ -39,9 +39,12 @@ public final class RunRecorder {
     /// `RunRecorder+Steps.swift`; views only read it.
     public var stepEngine: WorkoutStepEngine?
 
-    /// Whether the run was started from a planned workout. Known from the moment it starts, unlike
+    /// The planned workout the run was started from, or `nil` for a free run. Known from the moment it starts, unlike
     /// ``stepEngine``, which is set a moment later, so the run's screens can be chosen once (WATCH-109).
-    public private(set) var isPlannedRun = false
+    public private(set) var runPlan: WatchPlannedWorkout?
+
+    /// Whether the run was started from a planned workout.
+    public var isPlannedRun: Bool { runPlan != nil }
 
     /// The time in each zone so far, for the zone histogram (WATCH-132).
     var zoneTime = ZoneTimeTracker()
@@ -122,7 +125,7 @@ public final class RunRecorder {
     ///   `nil` for a free run.
     public func start(plan: WatchPlannedWorkout? = nil) async {
         guard phase == .idle else { return }
-        isPlannedRun = plan != nil
+        runPlan = plan
         zoneTime.reset()
         phase = .starting
         abandoned = false

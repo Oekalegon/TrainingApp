@@ -31,6 +31,16 @@ private struct FailingWorkoutStore: WorkoutLibraryStore {
     func deleteWorkout(id: UUID) async throws {}
 }
 
+/// A template store whose reads fail.
+private struct FailingTemplateStore: WorkoutTemplateStore {
+    struct Failure: Error {}
+
+    func templates() async throws -> [WorkoutTemplate] { throw Failure() }
+    func template(id: UUID) async throws -> WorkoutTemplate? { throw Failure() }
+    func upsert(_ templates: [WorkoutTemplate]) async throws {}
+    func deleteTemplate(id: UUID) async throws {}
+}
+
 /// A workout library that records which workouts were read, to pin that a sync reads only the
 /// ones the next 7 days use and never the whole library.
 private final class RecordingWorkoutStore: WorkoutLibraryStore, @unchecked Sendable {
@@ -100,6 +110,110 @@ struct WatchPlanSyncTests {
         let sent = try #require(sender.plans.last)
         #expect(sent.workouts.first { $0.name == "Fixed" }?.typicalDuration == nil)
         #expect(sent.workouts.first { $0.name == "Open" }?.typicalDuration != nil)
+    }
+
+    @Test("a workout made from a linked template is sent with the screen set of the link, and a change of link is sent again (WATCH-133)")
+    func sendsScreenSet() async throws {
+        let (store, model) = try await makeModel()
+        let template = UUID()
+        var linked = workout("Linked")
+        linked.templateID = template
+        let plain = workout("Plain")
+        try await store.upsert([linked, plain])
+        try await store.upsert([
+            PlannedActivity(workoutID: linked.id, date: day(0)), PlannedActivity(workoutID: plain.id, date: day(1))
+        ])
+        let links = WatchScreenLinks(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        links.link(template: template, to: "sprint")
+        let sender = FakeSender()
+        let sync = WatchPlanSync(model: model, sender: sender, links: links)
+        await sync.sync(asOf: day(0, hours: 6))
+        var sent = try #require(sender.plans.last)
+        #expect(sent.workouts.first { $0.name == "Linked" }?.screenSetID == "sprint")
+        #expect(sent.workouts.first { $0.name == "Plain" }?.screenSetID == nil)
+        links.link(template: template, to: "long")
+        await sync.sync(asOf: day(0, hours: 7))
+        sent = try #require(sender.plans.last)
+        #expect(sender.plans.count == 2)
+        #expect(sent.workouts.first { $0.name == "Linked" }?.screenSetID == "long")
+    }
+
+    @Test("a custom template's own screen set wins over the app's link, and a template that names none keeps the link (WATCH-133)")
+    func templateSetWins() async throws {
+        let store = InMemoryStore()
+        let stores = StoreSet(
+            activityStore: store, planStore: store, workoutStore: store, cycleStore: store,
+            raceStore: store, athleteStore: store, templateStore: store)
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        try await store.save(athlete)
+        let model = TrainingModel(stores: stores, athlete: athlete)
+        let own = WorkoutTemplate(name: "Own", sport: .running, parameters: [], blocks: [], watchScreenSetID: "own")
+        let bare = WorkoutTemplate(name: "Bare", sport: .running, parameters: [], blocks: [])
+        try await store.upsert([own, bare])
+        var fromOwn = workout("FromOwn")
+        fromOwn.templateID = own.id
+        var fromBare = workout("FromBare")
+        fromBare.templateID = bare.id
+        try await store.upsert([fromOwn, fromBare])
+        try await store.upsert([
+            PlannedActivity(workoutID: fromOwn.id, date: day(0)), PlannedActivity(workoutID: fromBare.id, date: day(1))
+        ])
+        let links = WatchScreenLinks(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        links.link(template: own.id, to: "link")
+        links.link(template: bare.id, to: "link")
+        let sender = FakeSender()
+        await WatchPlanSync(model: model, sender: sender, links: links).sync(asOf: day(0, hours: 6))
+        let sent = try #require(sender.plans.last)
+        #expect(sent.workouts.first { $0.name == "FromOwn" }?.screenSetID == "own")
+        #expect(sent.workouts.first { $0.name == "FromBare" }?.screenSetID == "link")
+    }
+
+    @Test("a template store that can't be read skips the send, and a workout whose template is gone or no store keeps the app's link (WATCH-133)")
+    func templateStoreFailures() async throws {
+        let store = InMemoryStore()
+        let athlete = AthleteProfile.fixture(timeZoneIdentifier: "UTC")
+        try await store.save(athlete)
+        func model(_ templates: (any WorkoutTemplateStore)?) -> TrainingModel {
+            TrainingModel(
+                stores: StoreSet(
+                    activityStore: store, planStore: store, workoutStore: store, cycleStore: store,
+                    raceStore: store, athleteStore: store, templateStore: templates),
+                athlete: athlete)
+        }
+        let gone = UUID()
+        var workout = workout("Gone")
+        workout.templateID = gone
+        try await store.upsert([workout])
+        try await store.upsert([PlannedActivity(workoutID: workout.id, date: day(0))])
+        let links = WatchScreenLinks(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        links.link(template: gone, to: "link")
+
+        // Unreadable: nothing is sent, so the watch keeps the plan it has.
+        let failing = FakeSender()
+        await WatchPlanSync(model: model(FailingTemplateStore()), sender: failing, links: links).sync(asOf: day(0, hours: 6))
+        #expect(failing.plans.isEmpty)
+
+        // A template that no longer exists, and a store set with no template store, keep the app's link.
+        for templates in [store as any WorkoutTemplateStore, nil] {
+            let sender = FakeSender()
+            await WatchPlanSync(model: model(templates), sender: sender, links: links).sync(asOf: day(0, hours: 6))
+            #expect(sender.plans.last?.workouts.first?.screenSetID == "link")
+        }
+    }
+
+    @Test("the links keep a set per template, list a set's templates and forget a deleted set")
+    func links() {
+        let links = WatchScreenLinks(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let a = UUID(), b = UUID()
+        #expect(links.setID(forTemplate: a) == nil)
+        #expect(links.setID(forTemplate: nil) == nil)
+        links.link(template: a, to: "x")
+        links.link(template: b, to: "x")
+        #expect(Set(links.templates(linkedTo: "x")) == [a, b])
+        links.link(template: a, to: nil)
+        #expect(links.setID(forTemplate: a) == nil)
+        links.removeLinks(to: "x")
+        #expect(links.setID(forTemplate: b) == nil)
     }
 
     @Test("the athlete's drain is the median of their latest watch runs' battery drain, and none with fewer than two (WATCH-119)")

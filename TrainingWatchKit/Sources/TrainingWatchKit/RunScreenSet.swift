@@ -194,21 +194,34 @@ public struct RunScreenSet: Sendable, Hashable, Codable, Identifiable {
 public struct RunScreenConfig: Sendable, Hashable, Codable {
     public var freeRun: RunScreenSet
     public var workout: RunScreenSet
+    /// The athlete's other sets (WATCH-133), which a planned workout names by id (``WatchPlannedWorkout/screenSetID``).
+    public var sets: [RunScreenSet]
 
-    public init(freeRun: RunScreenSet = .freeRunDefault, workout: RunScreenSet = .workoutDefault) {
+    public init(freeRun: RunScreenSet = .freeRunDefault, workout: RunScreenSet = .workoutDefault, sets: [RunScreenSet] = []) {
         self.freeRun = freeRun
         self.workout = workout
+        self.sets = sets
+    }
+
+    /// The set a planned workout runs with: the one it names, or the workout default when it names none
+    /// or one the watch doesn't have (a set deleted on the phone, or not sent yet).
+    public func set(withID id: String?) -> RunScreenSet {
+        id.flatMap { id in sets.first { $0.id == id } } ?? workout
     }
 
     public static let `default` = RunScreenConfig()
 
-    private enum CodingKeys: String, CodingKey { case freeRun, workout }
+    private enum CodingKeys: String, CodingKey { case freeRun, workout, sets }
 
     /// A set that is missing or empty after decoding is the default one.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         freeRun = Self.usable((try? container.decodeIfPresent(RunScreenSet.self, forKey: .freeRun)) ?? nil, or: .freeRunDefault)
         workout = Self.usable((try? container.decodeIfPresent(RunScreenSet.self, forKey: .workout)) ?? nil, or: .workoutDefault)
+        // An unreadable or empty set is left out and a repeated id keeps the first, as for screens.
+        var seen = Set<String>()
+        sets = ((try? container.decodeIfPresent([Lossy<RunScreenSet>].self, forKey: .sets)) ?? nil ?? [])
+            .compactMap(\.value).filter { !$0.screens.isEmpty && seen.insert($0.id).inserted }
     }
 
     private static func usable(_ set: RunScreenSet?, or fallback: RunScreenSet) -> RunScreenSet {
@@ -248,9 +261,11 @@ public final class RunScreenStore {
         config = cache.load() ?? .default
     }
 
-    /// The set for a run: a planned workout's or a free run's.
-    public func set(forWorkout isWorkout: Bool) -> RunScreenSet {
-        isWorkout ? config.workout : config.freeRun
+    /// The set for a run: the planned workout's own (WATCH-133), the workout default when it names none,
+    /// or the free run's for a run with no plan.
+    public func set(for plan: WatchPlannedWorkout?) -> RunScreenSet {
+        guard let plan else { return config.freeRun }
+        return config.set(withID: plan.screenSetID)
     }
 
     public func update(_ config: RunScreenConfig) {
