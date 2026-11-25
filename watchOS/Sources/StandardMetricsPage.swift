@@ -23,7 +23,6 @@ struct StandardMetricsPage: View {
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
     private static let bottomInset = 22.0
     private static let sidePadding = 8.0
-    private static let valueSize = 30.0
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -56,7 +55,7 @@ struct StandardMetricsPage: View {
                 .accessibilityValue(spokenDuration(elapsed))
         case .distance:
             let amount = PaceText.distanceValue(meters: recorder.distanceMeters)
-            HStack(alignment: .lastTextBaseline, spacing: 3) {
+            HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                 value(amount)
                 unit(PaceText.distanceUnit())
             }
@@ -75,21 +74,21 @@ struct StandardMetricsPage: View {
 
     private func value(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: Self.valueSize, weight: .medium, design: .rounded).monospacedDigit())
+            .font(RunMetricStyle.valueFont)
             .lineLimit(1).minimumScaleFactor(0.5)
             // The digits have no descenders: the row is shorter than the text's own line, so the rows sit
             // close together, as in the Workout app.
-            .padding(.vertical, -Self.valueSize * 0.14)
+            .padding(.vertical, -RunMetricStyle.valueSize * 0.14)
     }
 
     /// A unit in small capitals beside a value.
     private func unit(_ text: String) -> some View {
-        Text(text).font(.system(size: 17, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
+        Text(text).font(RunMetricStyle.unitFont).foregroundStyle(.secondary)
     }
 
     /// A pace such as `9'24"`, with its caption in two lines beside it, together no taller than the value: "CURRENT" over "PACE".
     private func paceLine(_ secondsPerMeter: Double?, label: String, caption: String) -> some View {
-        HStack(alignment: .lastTextBaseline, spacing: 3) {
+        HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             value(PaceText.markedText(secondsPerMeter: secondsPerMeter))
             VStack(alignment: .leading, spacing: -2) {
                 Text(caption)
@@ -121,14 +120,14 @@ struct StandardMetricsPage: View {
         let status = bpm.flatMap { bpm in target?.status(forHeartRate: bpm) }
         let color = StepHeartRateTarget.Status.displayColor(status)
         let position = bpm.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
-        return HStack(alignment: .lastTextBaseline, spacing: 3) {
+        return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             value(bpm.map { "\(Int($0.rounded()))" } ?? "--").foregroundStyle(bpm == nil ? Color.secondary : color)
             unit("BPM")
-            Spacer(minLength: 4)
-            Text(position.map(ZoneDialText.positionText) ?? "Z --")
-                .font(.system(size: 20, weight: .semibold).monospacedDigit())
-                .foregroundStyle(color)
-                .lineLimit(1).minimumScaleFactor(0.7)
+            Spacer(minLength: 2)
+            HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                unit("ZONE")
+                value(position.map(ZoneDialText.positionValue) ?? "--").foregroundStyle(color)
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Heart rate")
