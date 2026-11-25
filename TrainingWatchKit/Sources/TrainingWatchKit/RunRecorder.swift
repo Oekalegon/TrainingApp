@@ -38,6 +38,10 @@ public final class RunRecorder {
     /// The steps of the planned workout being run, or `nil` in a free run. Set and changed by
     /// `RunRecorder+Steps.swift`; views only read it.
     public var stepEngine: WorkoutStepEngine?
+
+    /// Whether the run was started from a planned workout. Known from the moment it starts, unlike
+    /// ``stepEngine``, which is set a moment later, so the run's screens can be chosen once (WATCH-109).
+    public private(set) var isPlannedRun = false
     /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
     public var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
@@ -115,6 +119,7 @@ public final class RunRecorder {
     ///   `nil` for a free run.
     public func start(plan: WatchPlannedWorkout? = nil) async {
         guard phase == .idle else { return }
+        isPlannedRun = plan != nil
         phase = .starting
         abandoned = false
         routeNote = nil

@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// One value a run screen can show (WATCH-109). The raw value is what travels between the phone and
-/// the watch, so it stays stable.
+/// the watch, so it never changes and is never reused.
 public enum RunMetric: String, Sendable, Codable, CaseIterable, Hashable {
     case totalTime, distance, heartRate, currentPace, averagePace
 }
@@ -114,7 +114,10 @@ public struct RunScreenSet: Sendable, Hashable, Codable, Identifiable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
-        screens = try container.decode([Lossy<RunScreen>].self, forKey: .screens).compactMap(\.value).filter { !$0.items.isEmpty }
+        var seen = Set<String>()
+        // A screen with no items left, or an id already used, is dropped: the id is the screen's tag in the stack.
+        screens = try container.decode([Lossy<RunScreen>].self, forKey: .screens).compactMap(\.value)
+            .filter { !$0.items.isEmpty && seen.insert($0.id).inserted }
         startScreenID = try container.decodeIfPresent(String.self, forKey: .startScreenID)
     }
 
@@ -198,5 +201,39 @@ public final class RunScreenStore {
         guard config != self.config else { return }
         self.config = config
         cache.save(config)
+    }
+}
+
+/// Which data screen of a run is showing, and when it moves by itself (WATCH-109): a run opens on the
+/// set's start screen, a planned workout on the zone dial (WATCH-118; until the dial is a set of
+/// widgets, WATCH-132), and the screen follows the steps starting and ending. Only a screen that is going
+/// away, or the start screen, is moved off, so the athlete's own turn of the crown stays.
+public struct RunScreenSelection: Sendable, Equatable {
+    public enum Screen: Sendable, Hashable {
+        /// A screen of the set, by id.
+        case screen(String)
+        /// The zone dial, which a planned workout has under the set's screens.
+        case zones
+    }
+
+    public let set: RunScreenSet
+    public var current: Screen
+
+    public init(set: RunScreenSet, hasSteps: Bool) {
+        self.set = set
+        current = hasSteps ? .zones : Self.start(of: set)
+    }
+
+    /// The set's start screen.
+    public var start: Screen { Self.start(of: set) }
+
+    private static func start(of set: RunScreenSet) -> Screen {
+        .screen(set.screens.indices.contains(set.startIndex) ? set.screens[set.startIndex].id : "")
+    }
+
+    /// The steps started or were used up.
+    public mutating func stepsChanged(hasSteps: Bool) {
+        if hasSteps, current == start { current = .zones }
+        if !hasSteps, current == .zones { current = start }
     }
 }

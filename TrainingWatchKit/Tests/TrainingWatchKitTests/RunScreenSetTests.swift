@@ -76,4 +76,35 @@ struct RunScreenSetTests {
         #expect(store.set(forWorkout: true) == custom.workout)
         #expect(store.set(forWorkout: false) == custom.freeRun)
     }
+
+    @Test("a repeated screen id keeps the first screen")
+    func duplicateIDs() throws {
+        let set = try decode(RunScreenSet.self, """
+        {"id":"a","name":"A","screens":[
+        {"id":"s","items":[{"kind":"metric","id":"distance"}]},
+        {"id":"s","items":[{"kind":"metric","id":"heartRate"}]},
+        {"id":"t","items":[{"kind":"metric","id":"totalTime"}]}]}
+        """)
+        #expect(set.screens.map(\.id) == ["s", "t"])
+        #expect(set.screens.first?.items == [.metric(.distance)])
+    }
+
+    @Test("the selection opens on the start screen or the dial, and follows the steps without taking the athlete's own screen")
+    func selection() {
+        let set = RunScreenSet(id: "x", name: "X", screens: [
+            RunScreen(id: "a", items: [.metric(.distance)]), RunScreen(id: "b", items: [.metric(.heartRate)])], startScreenID: "b")
+        #expect(RunScreenSelection(set: set, hasSteps: false).current == .screen("b"))
+        #expect(RunScreenSelection(set: set, hasSteps: true).current == .zones)
+
+        var selection = RunScreenSelection(set: set, hasSteps: false)
+        selection.stepsChanged(hasSteps: true)
+        #expect(selection.current == .zones)
+        selection.stepsChanged(hasSteps: false)
+        #expect(selection.current == .screen("b"))
+
+        // The athlete is on another screen: the steps starting leave them there.
+        selection.current = .screen("a")
+        selection.stepsChanged(hasSteps: true)
+        #expect(selection.current == .screen("a"))
+    }
 }
