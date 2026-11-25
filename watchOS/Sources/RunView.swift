@@ -72,10 +72,10 @@ struct RunView: View {
 
 /// The pages of a run in progress. Like the Workout app, the controls (pause or resume, end, next
 /// step) sit one swipe to the side of the data screens. The data screens are a vertical stack the
-/// Digital Crown turns through: the screens of the athlete's `RunScreenSet` (WATCH-109) and, in a
-/// planned workout, the zone dial (WATCH-118) under them. The set is taken once, when the run's pages
-/// are built, so a set that arrives mid-run reaches the next run; the pages of a run are built anew
-/// for each run. Which screen shows and when it moves is `RunScreenSelection`.
+/// Digital Crown turns through: the screens of the athlete's `RunScreenSet` (WATCH-109), drawn by
+/// `RunScreenPage`; a planned workout's default has the zone dial (WATCH-118) as its second screen. The
+/// set is taken once, when the run's pages are built, so a set that arrives mid-run reaches the next
+/// run. Which screen shows and when it moves is `RunScreenSelection`.
 private struct RunPages: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
@@ -88,18 +88,19 @@ private struct RunPages: View {
         _selection = State(initialValue: RunScreenSelection(set: set, hasSteps: recorder.hasSteps))
     }
 
+    /// The screens to show now: those that need steps only while the workout has some. The binding below
+    /// answers with a screen that is shown, also for the moment between the steps ending and the
+    /// selection moving off the dial.
+    private var shown: [RunScreen] { selection.screens(hasSteps: recorder.hasSteps) }
+
     var body: some View {
         TabView(selection: $page) {
             RunControlsPage(recorder: recorder)
                 .tag(Page.controls)
-            TabView(selection: $selection.current) {
-                ForEach(selection.set.screens) { screen in
-                    StandardMetricsPage(recorder: recorder, zoneStore: zoneStore, metrics: screen.metrics).fakeDimmable()
-                        .tag(RunScreenSelection.Screen.screen(screen.id))
-                }
-                if recorder.hasSteps {
-                    ZoneDialPage(recorder: recorder, zoneStore: zoneStore).fakeDimmable()
-                        .tag(RunScreenSelection.Screen.zones)
+            TabView(selection: Binding(get: { shown.contains { $0.id == selection.current } ? selection.current : (shown.first?.id ?? "") }, set: { selection.select($0) })) {
+                ForEach(shown) { screen in
+                    RunScreenPage(recorder: recorder, zoneStore: zoneStore, screen: screen, showsDoneNote: screen.id == shown.first?.id).fakeDimmable()
+                        .tag(screen.id)
                 }
             }
             .tabViewStyle(.verticalPage)
@@ -109,7 +110,6 @@ private struct RunPages: View {
                     Text("PAUSED")
                         .font(RunMetricStyle.captionFont).foregroundStyle(.orange)
                         .padding(.leading, 8).padding(.top, 6)
-                        .accessibilityHidden(true)
                 }
             }
             .tag(Page.data)

@@ -5,7 +5,7 @@ import TrainingWatchKit
 /// in a planned workout the forecast after it ("~44% AT END", coloured by how that rates), and under it
 /// the bar, which takes the colour of the forecast when there is one. Both are in from the sides, where
 /// the screen's corners round off.
-struct ZoneDialBattery: View {
+struct BatteryRow: View {
     let battery: BatteryDisplay
     /// What the battery will be at the end of the workout, or `nil` when that isn't known.
     let projection: BatteryProjection?

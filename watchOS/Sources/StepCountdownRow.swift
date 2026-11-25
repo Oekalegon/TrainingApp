@@ -3,7 +3,7 @@ import TrainingWatchKit
 
 /// The top row of the zone dial (WATCH-118): the time or distance left in the step in white, and to
 /// the right of it which interval or step it is, such as "REP 5/12" or "2/6", in the primary colour.
-struct ZoneDialCountdown: View {
+struct StepCountdownRow: View {
     /// What is left of the step, such as "0:52", or "Open".
     let remaining: String
     /// Where the step is: "REP 5/12" in a repeat, "2/6" outside one.

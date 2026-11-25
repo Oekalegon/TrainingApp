@@ -604,6 +604,30 @@ struct RunRecorderStepTests {
         #expect(backend.cues.count > 1)
     }
 
+    @Test("the time in each zone follows the heart-rate readings on the run clock, and nothing is counted without zones (WATCH-132)")
+    func zoneTime() async throws {
+        let zones = WatchZones(settings: .init(effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190))
+        let bands = try #require(ZoneBands(zones: zones))
+        let zone2 = try #require(bands.range(of: 2))
+        let zone4 = try #require(bands.range(of: 4))
+        let (recorder, backend) = await running()
+        // No zones yet: nothing to count.
+        backend.builder.elapsed = 100
+        recorder.heartRateArrived(zone2.lowerBound + 1)
+        #expect(recorder.zoneTimeFractions == nil)
+        let store = WatchZoneStore(cache: WatchZonesCache(defaults: UserDefaults(suiteName: UUID().uuidString)!))
+        store.update(zones, persist: false)
+        recorder.zoneStore = store
+        for (elapsed, bpm) in [(110.0, zone2.lowerBound + 1), (114, zone2.lowerBound + 1), (120, zone4.lowerBound + 1), (124, zone4.lowerBound + 1)] {
+            backend.builder.elapsed = elapsed
+            recorder.heartRateArrived(bpm)
+        }
+        // Zone 2 held 110 to 120 (10 s), zone 4 from 120 to 124 (4 s).
+        let fractions = try #require(recorder.zoneTimeFractions)
+        #expect(abs(fractions[2] - 10.0 / 14) < 0.001)
+        #expect(abs(fractions[4] - 4.0 / 14) < 0.001)
+    }
+
     @Test("a second retry while one is saving does nothing")
     func doubleRetry() async {
         let (recorder, backend) = await running()
