@@ -27,7 +27,7 @@ struct StandardMetricsPage: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let date = context.date
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
                 ForEach(metrics, id: \.self) { metric in
                     row(metric, at: date)
                 }

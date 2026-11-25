@@ -5,6 +5,9 @@ import SwiftUI
 enum RunMetricStyle {
     /// The size of a value, in points.
     static let valueSize = 30.0
+    /// The gap between two rows of metrics, on top of the values' trimmed line height. Meant to leave room for
+    /// six rows on an Ultra and five on the other watches (worked out from the screen heights, not checked on them).
+    static let rowSpacing = 3.0
     /// The gap between a value and its unit or word.
     static let unitSpacing = 3.0
 

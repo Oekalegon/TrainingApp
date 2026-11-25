@@ -58,8 +58,6 @@ private struct Dial: View {
     private static let batteryInset = 10.0
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
     private static let pageIndicatorHeight = 22.0
-    /// The gap between the dial's rows: none, as on the standard screen (the values' own line height is trimmed).
-    private static let rowSpacing = 0.0
     /// The room on each side of the content.
     private static let sidePadding = 8.0
 
@@ -70,7 +68,7 @@ private struct Dial: View {
         let remaining = progress.flatMap { WatchWorkoutSummary.remainingValue($0) }
         let battery = BatteryReader.current(elapsed: recorder.elapsed(at: at))
         // Values to the left, the interval to the right.
-        return VStack(alignment: .leading, spacing: Self.rowSpacing) {
+        return VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
             ZoneDialCountdown(
                 remaining: remaining ?? "Open",
                 interval: ZoneDialText.intervalFraction(current),

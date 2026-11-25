@@ -30,7 +30,7 @@ struct ZoneDialBattery: View {
             BatteryBar(battery, tint: projection?.verdict.color)
         }
         .padding(.horizontal, inset)
-        .padding(.top, 12)
+        .padding(.top, 2)
         .padding(.bottom, bottomInset)
     }
 }
