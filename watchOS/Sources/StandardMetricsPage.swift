@@ -48,44 +48,57 @@ struct StandardMetricsPage: View {
         switch metric {
         case .totalTime:
             let elapsed = recorder.elapsed(at: date)
-            line(ZoneDialText.totalTimeText(elapsed), label: "Total time", spoken: spokenDuration(elapsed))
+            // Yellow, as the elapsed time is in the Workout app.
+            value(ZoneDialText.totalTimeText(elapsed)).foregroundStyle(.yellow)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Total time")
+                .accessibilityValue(spokenDuration(elapsed))
         case .distance:
-            let text = runDistanceText(recorder.distanceMeters)
-            line(text, label: "Distance", spoken: text)
+            let amount = PaceText.distanceValue(meters: recorder.distanceMeters)
+            HStack(alignment: .lastTextBaseline, spacing: 3) {
+                value(amount)
+                unit(PaceText.distanceUnit())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Distance")
+            .accessibilityValue("\(amount) \(PaceText.usesKilometres() ? "kilometres" : "miles")")
         case .heartRate:
             heartRateLine
         case .currentPace:
-            paceLine(recorder.currentSecondsPerMeter(at: date), label: "Current pace", note: "now")
+            paceLine(recorder.currentSecondsPerMeter(at: date), label: "Current pace", caption: "CURRENT")
         case .averagePace:
-            paceLine(recorder.averageSecondsPerMeter, label: "Average pace", note: "avg")
+            paceLine(recorder.averageSecondsPerMeter, label: "Average pace", caption: "AVERAGE")
         }
-    }
-
-    /// A value at the leading edge, shrunk rather than cut when it is too wide.
-    private func line(_ text: String, label: String, spoken: String) -> some View {
-        value(text)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(label)
-            .accessibilityValue(spoken)
     }
 
     private func value(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: Self.valueSize, weight: .semibold).width(.condensed).monospacedDigit())
+            .font(.system(size: Self.valueSize, weight: .medium, design: .rounded).monospacedDigit())
             .lineLimit(1).minimumScaleFactor(0.5)
     }
 
-    private func paceLine(_ secondsPerMeter: Double?, label: String, note: String) -> some View {
-        let text = PaceText.text(secondsPerMeter: secondsPerMeter)
-        return HStack(alignment: .firstTextBaseline, spacing: 4) {
-            value(text)
-            Text("\(PaceText.unit()) \(note)").font(.system(size: 12)).foregroundStyle(.secondary)
+    /// A unit in small capitals beside a value.
+    private func unit(_ text: String) -> some View {
+        Text(text).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
+    }
+
+    /// A pace such as `9'24"`, with its caption in two small lines beside it: "CURRENT" over "/KM".
+    private func paceLine(_ secondsPerMeter: Double?, label: String, caption: String) -> some View {
+        HStack(alignment: .lastTextBaseline, spacing: 3) {
+            value(PaceText.markedText(secondsPerMeter: secondsPerMeter))
+            VStack(alignment: .leading, spacing: -1) {
+                Text(caption)
+                Text(PaceText.unit().uppercased())
+            }
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(secondsPerMeter == nil ? "no pace yet" : Self.spokenPace(text))
+        .accessibilityValue(secondsPerMeter == nil ? "no pace yet" : Self.spokenPace(PaceText.text(secondsPerMeter: secondsPerMeter)))
     }
 
     /// "5 minutes 32 seconds per kilometre", for "5:32".
@@ -105,9 +118,9 @@ struct StandardMetricsPage: View {
         let status = bpm.flatMap { bpm in target?.status(forHeartRate: bpm) }
         let color = StepHeartRateTarget.Status.displayColor(status)
         let position = bpm.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
-        return HStack(alignment: .firstTextBaseline, spacing: 4) {
+        return HStack(alignment: .lastTextBaseline, spacing: 3) {
             value(bpm.map { "\(Int($0.rounded()))" } ?? "--").foregroundStyle(bpm == nil ? Color.secondary : color)
-            Text("bpm").font(.system(size: 12)).foregroundStyle(.secondary)
+            unit("BPM")
             Spacer(minLength: 4)
             Text(position.map(ZoneDialText.positionText) ?? "Z --")
                 .font(.system(size: 20, weight: .semibold).monospacedDigit())

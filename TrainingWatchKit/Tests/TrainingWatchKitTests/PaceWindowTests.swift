@@ -85,4 +85,14 @@ struct PaceWindowTests {
         let odd = try #require(window.secondsPerMeter(at: 41))
         #expect(abs(even - odd) < 0.0001)
     }
+
+    @Test("marked pace and the split distance")
+    func marked() {
+        #expect(PaceText.markedText(secondsPerMeter: 0.332, locale: metric) == "5'32\"")
+        #expect(PaceText.markedText(secondsPerMeter: nil, locale: metric) == "--")
+        #expect(PaceText.distanceValue(meters: 1210, locale: metric) == "1.21")
+        #expect(PaceText.distanceValue(meters: 1609.344, locale: us) == "1.00")
+        #expect(PaceText.distanceUnit(metric) == "KM")
+        #expect(PaceText.distanceUnit(us) == "MI")
+    }
 }

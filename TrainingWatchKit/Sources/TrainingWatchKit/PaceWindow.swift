@@ -91,4 +91,23 @@ public enum PaceText {
         guard total < 3600 else { return "--" }
         return String(format: "%d:%02d", total / 60, total % 60)
     }
+
+    /// Pace written with minute and second marks, such as `5'32"`, or "--" for no pace. Same rules as
+    /// ``text(secondsPerMeter:locale:)``.
+    public static func markedText(secondsPerMeter: Double?, locale: Locale = .current) -> String {
+        let plain = text(secondsPerMeter: secondsPerMeter, locale: locale)
+        let parts = plain.split(separator: ":")
+        return parts.count == 2 ? "\(parts[0])'\(parts[1])\"" : plain
+    }
+
+    /// A distance in kilometres or miles with two decimals, such as "1.21", for a screen that sets the
+    /// unit apart (``distanceUnit(_:)``).
+    public static func distanceValue(meters: Double, locale: Locale = .current) -> String {
+        String(format: "%.2f", max(meters, 0) / (usesKilometres(locale) ? 1000 : 1609.344))
+    }
+
+    /// "KM" or "MI".
+    public static func distanceUnit(_ locale: Locale = .current) -> String {
+        usesKilometres(locale) ? "KM" : "MI"
+    }
 }
