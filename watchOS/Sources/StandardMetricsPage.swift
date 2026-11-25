@@ -77,6 +77,9 @@ struct StandardMetricsPage: View {
         Text(text)
             .font(.system(size: Self.valueSize, weight: .medium, design: .rounded).monospacedDigit())
             .lineLimit(1).minimumScaleFactor(0.5)
+            // The digits have no descenders: the row is shorter than the text's own line, so the rows sit
+            // close together, as in the Workout app.
+            .padding(.vertical, -Self.valueSize * 0.14)
     }
 
     /// A unit in small capitals beside a value.
