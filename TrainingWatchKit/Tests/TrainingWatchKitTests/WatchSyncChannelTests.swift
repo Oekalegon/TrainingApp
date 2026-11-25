@@ -120,6 +120,16 @@ struct WatchSyncChannelTests {
         #expect(session.sent.last == WatchContext(zones: zones(max: 185), plan: plan()))
     }
 
+    @Test("the run screens go out in the same context as the zones (WATCH-109)")
+    func screensWithZones() throws {
+        let session = FakeSession()
+        ready(session)
+        let channel = WatchSyncChannel(session: session)
+        try channel.send(zones: zones())
+        try channel.send(screens: .default)
+        #expect(session.sent.last == WatchContext(zones: zones(), screens: .default))
+    }
+
     @Test("a watch added after the context was sent gets it again, in the same session")
     func resentForANewWatch() throws {
         let session = FakeSession()

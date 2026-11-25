@@ -8,6 +8,7 @@ struct RunView: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
     let planStore: WatchPlanStore
+    let screenStore: RunScreenStore
 
     var body: some View {
         #if targetEnvironment(simulator)
@@ -31,7 +32,7 @@ struct RunView: View {
         case .starting, .saving:
             ProgressView()
         case .running, .paused:
-            RunPages(recorder: recorder, zoneStore: zoneStore)
+            RunPages(recorder: recorder, zoneStore: zoneStore, set: screenStore.set(forWorkout: recorder.isPlannedRun))
                 // For the battery warning below. The pages need it on themselves too: the pager hands
                 // each one the system's own value.
                 .fakeDimmable()
@@ -71,30 +72,34 @@ struct RunView: View {
 
 /// The pages of a run in progress. Like the Workout app, the controls (pause or resume, end, next
 /// step) sit one swipe to the side of the data screens. The data screens are a vertical stack the
-/// Digital Crown turns through (WATCH-109): the standard metrics screen on top and, in a planned
-/// workout, the zone dial (WATCH-118) under it.
+/// Digital Crown turns through: the screens of the athlete's `RunScreenSet` (WATCH-109) and, in a
+/// planned workout, the zone dial (WATCH-118) under them. The set is taken once, when the run's pages
+/// are built, so a set that arrives mid-run reaches the next run; the pages of a run are built anew
+/// for each run. Which screen shows and when it moves is `RunScreenSelection`.
 private struct RunPages: View {
     let recorder: RunRecorder
     let zoneStore: WatchZoneStore
     @State private var page = Page.data
-    @State private var dataScreen = DataScreen.standard
+    @State private var selection: RunScreenSelection
 
-    private enum Page { case controls, data }
-    private enum DataScreen { case standard, zones }
-
-    /// Whether a planned workout still has steps to run: the zone dial is for those.
-    private var hasSteps: Bool { recorder.stepEngine.map { !$0.isFinished } ?? false }
+    init(recorder: RunRecorder, zoneStore: WatchZoneStore, set: RunScreenSet) {
+        self.recorder = recorder
+        self.zoneStore = zoneStore
+        _selection = State(initialValue: RunScreenSelection(set: set, hasSteps: recorder.hasSteps))
+    }
 
     var body: some View {
         TabView(selection: $page) {
             RunControlsPage(recorder: recorder)
                 .tag(Page.controls)
-            TabView(selection: $dataScreen) {
-                StandardMetricsPage(recorder: recorder, zoneStore: zoneStore).fakeDimmable()
-                    .tag(DataScreen.standard)
-                if hasSteps {
+            TabView(selection: $selection.current) {
+                ForEach(selection.set.screens) { screen in
+                    StandardMetricsPage(recorder: recorder, zoneStore: zoneStore, metrics: screen.metrics).fakeDimmable()
+                        .tag(RunScreenSelection.Screen.screen(screen.id))
+                }
+                if recorder.hasSteps {
                     ZoneDialPage(recorder: recorder, zoneStore: zoneStore).fakeDimmable()
-                        .tag(DataScreen.zones)
+                        .tag(RunScreenSelection.Screen.zones)
                 }
             }
             .tabViewStyle(.verticalPage)
@@ -110,16 +115,11 @@ private struct RunPages: View {
             .tag(Page.data)
         }
         .tabViewStyle(.page)
-        // A planned workout opens on the dial (WATCH-118).
-        .onAppear { if hasSteps { dataScreen = .zones } }
-        .onChange(of: hasSteps) { _, hasSteps in
-            // The steps are set a moment after the run starts, and are used up when the last one ends.
-            // Only a screen that is going away, or the default one, is moved off: someone on the
-            // controls page to pause or end the run stays there.
-            if hasSteps, dataScreen == .standard { dataScreen = .zones }
-            if !hasSteps, dataScreen == .zones { dataScreen = .standard }
-        }
+        // The steps are set a moment after the run starts, and are used up when the last one ends.
+        .onChange(of: recorder.hasSteps) { _, hasSteps in selection.stepsChanged(hasSteps: hasSteps) }
     }
+
+    private enum Page { case controls, data }
 }
 
 /// The controls page, one swipe to the side of the data screens. Ending asks first, since a mis-tap

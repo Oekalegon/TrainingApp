@@ -17,14 +17,18 @@ public struct WatchContext: Sendable, Codable, Hashable {
     /// hasn't sent them, and the watch keeps the ones it has.
     public var cues: CueSettings?
 
-    public init(zones: WatchZones? = nil, plan: WatchPlan? = nil, cues: CueSettings? = nil) {
+    /// The run screens the athlete set up (WATCH-109); `nil` while the phone hasn't sent any.
+    public var screens: RunScreenConfig?
+
+    public init(zones: WatchZones? = nil, plan: WatchPlan? = nil, cues: CueSettings? = nil, screens: RunScreenConfig? = nil) {
         self.zones = zones
         self.plan = plan
         self.cues = cues
+        self.screens = screens
     }
 
     private enum CodingKeys: String, CodingKey {
-        case zones, plan, cues
+        case zones, plan, cues, screens
     }
 
     public init(from decoder: Decoder) throws {
@@ -32,6 +36,7 @@ public struct WatchContext: Sendable, Codable, Hashable {
         zones = (try? container.decodeIfPresent(WatchZones.self, forKey: .zones)) ?? nil
         plan = (try? container.decodeIfPresent(WatchPlan.self, forKey: .plan)) ?? nil
         cues = (try? container.decodeIfPresent(CueSettings.self, forKey: .cues)) ?? nil
+        screens = (try? container.decodeIfPresent(RunScreenConfig.self, forKey: .screens)) ?? nil
     }
 }
 

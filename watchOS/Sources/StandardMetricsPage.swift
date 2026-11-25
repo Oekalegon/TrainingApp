@@ -2,16 +2,11 @@ import SwiftUI
 import TrainingCore
 import TrainingWatchKit
 
-/// One value of the standard metrics screen.
-enum RunMetric: CaseIterable {
-    case totalTime, distance, heartRate, currentPace, averagePace
-}
-
 /// The standard metrics screen of a run, a list of values with no dial: total time, distance, the
 /// heart rate with its zone on the same line (blue under the step's target, red over it, white in it or
 /// with no target), the current pace and the average pace. Every value is aligned to the leading edge,
 /// except the zone, which is at the trailing edge of the heart-rate line. The lines sit together at the bottom of the screen and the screen does not
-/// fill up: with fewer ``metrics`` (one day they are the athlete's choice, WATCH-109) the ones left
+/// fill up: with fewer ``metrics`` (the athlete's choice, from a `RunScreenSet`, WATCH-109) the ones left
 /// stay at the bottom.
 ///
 /// Units follow the system's region for now; the athlete's own setting comes later (WATCH-115).

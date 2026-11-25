@@ -4,6 +4,9 @@ import TrainingCore
 /// Running a planned workout's steps (WATCH-104): the `WorkoutStepEngine` decides when a step ends,
 /// this writes what happened into the saved workout and has the backend tap the wrist.
 extension RunRecorder {
+    /// Whether a planned workout still has steps to run: the zone dial is for those.
+    public var hasSteps: Bool { stepEngine.map { !$0.isFinished } ?? false }
+
     /// Starts the steps of `plan`: tags the workout with the planned activity's ID, so TrainingApp
     /// can match the run to its plan exactly, and starts watching the clock and the distance.
     ///
