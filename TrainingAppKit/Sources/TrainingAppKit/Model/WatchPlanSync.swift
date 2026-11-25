@@ -22,6 +22,7 @@ import TrainingWatchKit
 public final class WatchPlanSync {
     private let model: TrainingModel
     private let sender: any WatchSyncSending
+    private let links: WatchScreenLinks
     private var lastSent: WatchPlan?
     private var rejectedError: String?
 
@@ -37,9 +38,11 @@ public final class WatchPlanSync {
     /// - Parameters:
     ///   - model: Where the plans and the athlete's time zone come from.
     ///   - sender: What puts the plan on the watch.
-    public init(model: TrainingModel, sender: any WatchSyncSending) {
+    ///   - links: Which screen set each workout template runs with (WATCH-133).
+    public init(model: TrainingModel, sender: any WatchSyncSending, links: WatchScreenLinks = WatchScreenLinks()) {
         self.model = model
         self.sender = sender
+        self.links = links
     }
 
     /// Sends the upcoming planned runs to the Watch if they changed since the last send, or the
@@ -67,7 +70,7 @@ public final class WatchPlanSync {
         let drain = await athleteDrainPerHour(asOf: now)
         let plan = Self.plan(
             from: candidates, workouts: workouts, asOf: now, calendar: calendar,
-            athlete: model.athlete, paceHistory: model.paceHistory, drainPerHour: drain)
+            athlete: model.athlete, paceHistory: model.paceHistory, drainPerHour: drain, links: links)
         if let lastSent, lastSent.workouts == plan.workouts, now.timeIntervalSince(lastSent.sentAt) < Self.refreshInterval {
             return
         }
@@ -124,9 +127,11 @@ public final class WatchPlanSync {
     ///   - paceHistory: The athlete's recent runs, which that forecast is made from.
     ///   - drainPerHour: The athlete's typical battery drain, which the watch starts its battery forecast
     ///     from when it has no runs of its own to go by (WATCH-119).
+    ///   - links: The screen set linked to a workout's template, sent with the workout (WATCH-133).
     static func plan(
         from plans: [PlannedActivity], workouts: [UUID: StructuredWorkout], asOf now: Date, calendar: Calendar,
-        athlete: AthleteProfile? = nil, paceHistory: PaceHistory = .empty, drainPerHour: Double? = nil
+        athlete: AthleteProfile? = nil, paceHistory: PaceHistory = .empty, drainPerHour: Double? = nil,
+        links: WatchScreenLinks = WatchScreenLinks()
     ) -> WatchPlan {
         let calculator = StatisticsCalculator()
         let window = WatchSchedulePlanner.window(asOf: now, calendar: calendar)
@@ -143,7 +148,8 @@ public final class WatchPlanSync {
             } : nil
             return WatchPlannedWorkout(
                 id: plan.id, date: plan.date, name: workout.name, blocks: workout.blocks,
-                typicalDuration: duration.flatMap { $0 > 0 ? $0 : nil }, drainPerHour: drainPerHour)
+                typicalDuration: duration.flatMap { $0 > 0 ? $0 : nil }, drainPerHour: drainPerHour,
+                screenSetID: links.setID(forTemplate: workout.templateID))
         }, sentAt: now)
     }
 }

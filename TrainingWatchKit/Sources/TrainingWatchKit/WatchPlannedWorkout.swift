@@ -23,10 +23,13 @@ public struct WatchPlannedWorkout: Identifiable, Sendable, Codable, Hashable {
     /// phone knows it (from the battery levels the watch wrote into those workouts): the forecast starts
     /// from it instead of a typical rate when the watch has no runs of its own to go by (WATCH-119).
     public var drainPerHour: Double?
+    /// The id of the run screen set the athlete linked to this workout's template (WATCH-133), or `nil`
+    /// for the workout default.
+    public var screenSetID: String?
 
     public init(
         id: UUID, date: Date, name: String, blocks: [WorkoutBlock],
-        typicalDuration: TimeInterval? = nil, drainPerHour: Double? = nil
+        typicalDuration: TimeInterval? = nil, drainPerHour: Double? = nil, screenSetID: String? = nil
     ) {
         self.id = id
         self.date = date
@@ -34,5 +37,6 @@ public struct WatchPlannedWorkout: Identifiable, Sendable, Codable, Hashable {
         self.blocks = blocks
         self.typicalDuration = typicalDuration
         self.drainPerHour = drainPerHour
+        self.screenSetID = screenSetID
     }
 }

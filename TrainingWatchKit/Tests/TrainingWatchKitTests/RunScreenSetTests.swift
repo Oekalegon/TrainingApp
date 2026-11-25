@@ -73,8 +73,8 @@ struct RunScreenSetTests {
         custom.workout = RunScreenSet(id: "w", name: "W", screens: [RunScreen(id: "s", items: [.metric(.heartRate)])])
         store.update(custom)
         #expect(RunScreenStore(cache: RunScreenCache(defaults: defaults)).config == custom)
-        #expect(store.set(forWorkout: true) == custom.workout)
-        #expect(store.set(forWorkout: false) == custom.freeRun)
+        #expect(store.set(for: WatchPlannedWorkout(id: UUID(), date: .now, name: "W", blocks: [])) == custom.workout)
+        #expect(store.set(for: nil) == custom.freeRun)
     }
 
     @Test("a repeated screen id keeps the first screen")
@@ -153,5 +153,50 @@ struct RunScreenSetTests {
         #expect(screen.items(fittingUnits: 5) == Array(screen.items.dropFirst()))
         #expect(screen.items(fittingUnits: 3) == [.metric(.totalTime), .widget(.battery)])
         #expect(screen.items(fittingUnits: 0) == [.widget(.battery)])
+    }
+
+    private func plan(setID: String?) -> WatchPlannedWorkout {
+        WatchPlannedWorkout(id: UUID(), date: .now, name: "W", blocks: [], screenSetID: setID)
+    }
+
+    @MainActor
+    @Test("a workout runs with the set it names, and with the workout default when it names none or one the watch lacks (WATCH-133)")
+    func setForWorkout() {
+        let sprint = RunScreenSet(id: "sprint", name: "Sprint", screens: [RunScreen(id: "s", items: [.metric(.currentPace)])])
+        let config = RunScreenConfig(sets: [sprint])
+        #expect(config.set(withID: "sprint") == sprint)
+        #expect(config.set(withID: nil) == config.workout)
+        #expect(config.set(withID: "gone") == config.workout)
+        let defaults = UserDefaults(suiteName: "RunScreenSetTests.\(UUID())")!
+        let cache = RunScreenCache(defaults: defaults)
+        cache.save(config)
+        let store = RunScreenStore(cache: cache)
+        #expect(store.set(for: plan(setID: "sprint")) == sprint)
+        #expect(store.set(for: plan(setID: "gone")) == config.workout)
+        #expect(store.set(for: nil) == config.freeRun)
+    }
+
+    @Test("the sets decode leniently: an unreadable, empty or repeated one is left out")
+    func setsDecoding() throws {
+        let config = try decode(RunScreenConfig.self, """
+        {"sets":[
+        {"id":"a","name":"A","screens":[{"id":"s","items":[{"kind":"metric","id":"distance"}]}]},
+        {"id":"a","name":"Again","screens":[{"id":"s","items":[{"kind":"metric","id":"distance"}]}]},
+        {"id":"b","name":"B","screens":[]},
+        "junk"]}
+        """)
+        #expect(config.sets.map(\.id) == ["a"])
+        #expect(config.sets.first?.name == "A")
+        // A config from before sets existed still decodes.
+        #expect(try decode(RunScreenConfig.self, "{}").sets.isEmpty)
+    }
+
+    @Test("the screen set of a workout travels in the plan, and a plan without it still decodes")
+    func planCarriesTheSet() throws {
+        let workout = plan(setID: "sprint")
+        let data = try JSONEncoder().encode(workout)
+        #expect(try JSONDecoder().decode(WatchPlannedWorkout.self, from: data).screenSetID == "sprint")
+        let old = try JSONEncoder().encode(plan(setID: nil))
+        #expect(try JSONDecoder().decode(WatchPlannedWorkout.self, from: old).screenSetID == nil)
     }
 }

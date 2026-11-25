@@ -102,6 +102,47 @@ struct WatchPlanSyncTests {
         #expect(sent.workouts.first { $0.name == "Open" }?.typicalDuration != nil)
     }
 
+    @Test("a workout made from a linked template is sent with the screen set of the link, and a change of link is sent again (WATCH-133)")
+    func sendsScreenSet() async throws {
+        let (store, model) = try await makeModel()
+        let template = UUID()
+        var linked = workout("Linked")
+        linked.templateID = template
+        let plain = workout("Plain")
+        try await store.upsert([linked, plain])
+        try await store.upsert([
+            PlannedActivity(workoutID: linked.id, date: day(0)), PlannedActivity(workoutID: plain.id, date: day(1))
+        ])
+        let links = WatchScreenLinks(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        links.link(template: template, to: "sprint")
+        let sender = FakeSender()
+        let sync = WatchPlanSync(model: model, sender: sender, links: links)
+        await sync.sync(asOf: day(0, hours: 6))
+        var sent = try #require(sender.plans.last)
+        #expect(sent.workouts.first { $0.name == "Linked" }?.screenSetID == "sprint")
+        #expect(sent.workouts.first { $0.name == "Plain" }?.screenSetID == nil)
+        links.link(template: template, to: "long")
+        await sync.sync(asOf: day(0, hours: 7))
+        sent = try #require(sender.plans.last)
+        #expect(sender.plans.count == 2)
+        #expect(sent.workouts.first { $0.name == "Linked" }?.screenSetID == "long")
+    }
+
+    @Test("the links keep a set per template, list a set's templates and forget a deleted set")
+    func links() {
+        let links = WatchScreenLinks(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let a = UUID(), b = UUID()
+        #expect(links.setID(forTemplate: a) == nil)
+        #expect(links.setID(forTemplate: nil) == nil)
+        links.link(template: a, to: "x")
+        links.link(template: b, to: "x")
+        #expect(Set(links.templates(linkedTo: "x")) == [a, b])
+        links.link(template: a, to: nil)
+        #expect(links.setID(forTemplate: a) == nil)
+        links.removeLinks(to: "x")
+        #expect(links.setID(forTemplate: b) == nil)
+    }
+
     @Test("the athlete's drain is the median of their latest watch runs' battery drain, and none with fewer than two (WATCH-119)")
     func drainFromActivities() {
         func run(_ day: Int, drop: Double) -> Activity {
