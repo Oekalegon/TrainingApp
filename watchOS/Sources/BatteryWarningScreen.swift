@@ -11,6 +11,9 @@ struct BatteryWarningScreen: View {
     /// When the screen appeared: a tap in its first moment is not an answer to it, but the athlete's last
     /// tap, meant for what was on screen, so it doesn't dismiss the warning.
     @State private var shownAt = Date.now
+    /// True with the wrist down (WATCH-129): the colours are reversed, the warning's colour on black, so
+    /// the screen isn't a field of lit pixels while the warning waits to be tapped.
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     /// How long after it appears the screen ignores taps, in seconds.
     private static let grace = 1.0
@@ -22,7 +25,7 @@ struct BatteryWarningScreen: View {
 
     var body: some View {
         ZStack {
-            warning.color.ignoresSafeArea()
+            (dimmed ? Color.black : warning.color).ignoresSafeArea()
             VStack(spacing: 6) {
                 Image(systemName: "battery.25percent")
                     .font(.system(size: 30, weight: .semibold))
@@ -38,7 +41,7 @@ struct BatteryWarningScreen: View {
                 Text("Tap to dismiss").font(.system(size: 11)).opacity(0.7)
                     .multilineTextAlignment(.center)
             }
-            .foregroundStyle(warning.textColor)
+            .foregroundStyle(dimmed ? warning.color : warning.textColor)
             .padding(.horizontal, 12)
         }
         .contentShape(Rectangle())

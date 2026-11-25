@@ -8,6 +8,7 @@ import TrainingWatchKit
 /// - `-autostartPlan`: start the first workout planned for today.
 /// - `-autopause <after>,<for>`: pause after that many seconds, for that many seconds.
 /// - `-autolap <after>`: press the lap button after that many seconds.
+/// - `-fakeDimmed`: show the run screens as with the wrist down (`isLuminanceReduced`), see `RunView`.
 /// - `-autoend <seconds>`: end the run after that long.
 private struct SimulatorTestHooks: ViewModifier {
     let recorder: RunRecorder

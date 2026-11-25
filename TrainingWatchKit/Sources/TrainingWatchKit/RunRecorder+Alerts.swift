@@ -15,7 +15,6 @@ extension RunRecorder {
     func alertStepStarted() {
         lastCountdownSecond = nil
         let alert = alertEngine.beginStep(target: currentTarget, at: elapsed())
-        log(alert)
         backend.play(.zoneAlert(alert))
         if let step = stepEngine?.current, announcedAheadIndex != step.index {
             backend.play(.stepAnnouncement(StepAnnouncement.text(for: step)))
@@ -28,21 +27,7 @@ extension RunRecorder {
         // Zones can arrive in the middle of a step; a step already running picks them up here.
         alertEngine.updateTarget(currentTarget)
         if let alert = alertEngine.add(bpm, at: elapsed()) {
-            log(alert)
             backend.play(.zoneAlert(alert))
         }
-    }
-
-    /// The last alerts as one line for the simulator's metrics page, newest first, as "1:12 tooLow".
-    public var alertLogText: String {
-        alertLog.reversed().map { entry in
-            let seconds = Int(entry.time)
-            return "\(seconds / 60):\(String(format: "%02d", seconds % 60)) \(entry.alert)"
-        }.joined(separator: "  ")
-    }
-
-    /// Keeps the last few alerts for the simulator's debug line.
-    private func log(_ alert: ZoneAlert) {
-        alertLog = Array((alertLog + [(elapsed(), alert)]).suffix(3))
     }
 }

@@ -157,6 +157,13 @@ struct ZoneDialTests {
         #expect(ZoneDialText.totalTimeText(-3) == "0:00:00")
     }
 
+    @Test("with the wrist down the total time has no seconds")
+    func totalTimeWithoutSeconds() {
+        #expect(ZoneDialText.totalTimeText(59.9, showsSeconds: false) == "0:00")
+        #expect(ZoneDialText.totalTimeText(24 * 60 + 15, showsSeconds: false) == "0:24")
+        #expect(ZoneDialText.totalTimeText(3600 + 24 * 60 + 59, showsSeconds: false) == "1:24")
+    }
+
     @Test("the step lines read as VoiceOver should say them")
     func lines() {
         let work = WorkoutStep(kind: .work, goal: .time(90), target: .heartRateZone(2))

@@ -32,6 +32,9 @@ struct RunView: View {
             ProgressView()
         case .running, .paused:
             RunPages(recorder: recorder, zoneStore: zoneStore)
+                // For the battery warning below. The pages need it on themselves too: the pager hands
+                // each one the system's own value.
+                .fakeDimmable()
                 // The temporary battery warning, over everything, in the battery's colour (WATCH-110).
                 .overlay {
                     if let warning = recorder.batteryWarning {
@@ -87,10 +90,10 @@ private struct RunPages: View {
             RunControlsPage(recorder: recorder)
                 .tag(Page.controls)
             TabView(selection: $dataScreen) {
-                StandardMetricsPage(recorder: recorder, zoneStore: zoneStore)
+                StandardMetricsPage(recorder: recorder, zoneStore: zoneStore).fakeDimmable()
                     .tag(DataScreen.standard)
                 if hasSteps {
-                    ZoneDialPage(recorder: recorder, zoneStore: zoneStore)
+                    ZoneDialPage(recorder: recorder, zoneStore: zoneStore).fakeDimmable()
                         .tag(DataScreen.zones)
                 }
             }

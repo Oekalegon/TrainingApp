@@ -102,8 +102,11 @@ public enum ZoneDialText {
     /// The total workout time for the dial, with the hours: "0:24:15" or "1:24:15".
     ///
     /// - Parameter seconds: The workout time, paused time left out.
-    public static func totalTimeText(_ seconds: TimeInterval) -> String {
+    ///
+    /// - Parameter showsSeconds: `false` with the wrist down (WATCH-125): the time to the minute, "0:24".
+    public static func totalTimeText(_ seconds: TimeInterval, showsSeconds: Bool = true) -> String {
         let total = max(Int(seconds.rounded(.down)), 0)
+        guard showsSeconds else { return String(format: "%d:%02d", total / 3600, (total % 3600) / 60) }
         return String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
     }
 
