@@ -1,7 +1,5 @@
 import SwiftUI
 import TrainingCore
-import TrainingWatchKit
-import WatchKit
 
 /// One data screen of a run (WATCH-109, WATCH-132), drawn from a ``RunScreen``'s items: metrics (a value
 /// with its unit, every value aligned to the leading edge, the heart-rate line with its zone at the
@@ -11,37 +9,49 @@ import WatchKit
 /// (WATCH-118) are two default screens of this kind.
 ///
 /// Units follow the system's region for now; the athlete's own setting comes later (WATCH-115).
-struct RunScreenPage: View {
-    let recorder: RunRecorder
-    let zoneStore: WatchZoneStore
+public struct RunScreenPage: View {
+    let source: any RunScreenSource
     let screen: RunScreen
+    /// How many units fit the screen: 6 on the largest watches and 5 on the others, where the first items of a
+    /// full screen are left out. See ``fittingUnits(forScreenHeight:)``.
+    let fittingUnits: Int
     /// Whether this screen says "Workout done" once the steps are used up: one screen does, not each.
-    var showsDoneNote = true
+    let showsDoneNote: Bool
+
+    /// - Parameters:
+    ///   - source: Where the readings come from: the recorder on the watch, sample values in the editor.
+    ///   - screen: The items to draw.
+    ///   - fittingUnits: How many units of height fit; the first items of a fuller screen are left out.
+    ///   - showsDoneNote: Whether to say "Workout done" when the steps are used up.
+    public init(source: any RunScreenSource, screen: RunScreen, fittingUnits: Int = RunScreen.capacity, showsDoneNote: Bool = true) {
+        self.source = source
+        self.screen = screen
+        self.fittingUnits = fittingUnits
+        self.showsDoneNote = showsDoneNote
+    }
 
     /// The room kept free at the bottom for the page indicator (a guess to check on a watch).
-    private static let bottomInset = 22.0
+    static let bottomInset = 22.0
     private static let sidePadding = 8.0
     /// How far the battery line and bar are kept in from each side: the screen's corners are rounded.
     private static let batteryInset = 10.0
     /// How far down the content starts at the least: the clock sits at the top right and can't be hidden
     /// without private API. A guess to check on a watch.
-    private static let contentTop = 34.0
+    static let contentTop = 34.0
     /// The height of one unit, a metric's row with the gap under it (a guess to check on a watch).
-    private static let unitHeight = 28.0
-    /// How many units fit this watch under the clock and over the page indicator: 6 on the largest
-    /// watches and 5 on the others, where the first items of a full screen are left out.
-    private static var fittingUnits: Int {
-        let height = WKInterfaceDevice.current().screenBounds.height
-        return min(max(Int((height - contentTop - bottomInset) / unitHeight), 3), RunScreen.capacity)
+    static let unitHeight = 28.0
+    /// How many units fit a watch whose screen is `height` points tall, under the clock and over the page indicator.
+    public static func fittingUnits(forScreenHeight height: Double) -> Int {
+        min(max(Int((height - contentTop - bottomInset) / unitHeight), 3), RunScreen.capacity)
     }
     /// True with the wrist down (WATCH-125): redrawn once a minute, with no seconds.
     @Environment(\.isLuminanceReduced) private var dimmed
 
-    var body: some View {
+    public var body: some View {
         TimelineView(.runScreen(dimmed: dimmed)) { context in
             let date = context.date
             VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
-                ForEach(Array(screen.items(fittingUnits: Self.fittingUnits).enumerated()), id: \.offset) { _, item in
+                ForEach(Array(screen.items(fittingUnits: fittingUnits).enumerated()), id: \.offset) { _, item in
                     switch item {
                     case .metric(let metric): row(metric, at: date)
                     case .widget(let widget): widgetView(widget, at: date)
@@ -49,7 +59,7 @@ struct RunScreenPage: View {
                     case .span(let kind, let scope): spanRow(kind, scope, at: date)
                     }
                 }
-                if showsDoneNote, recorder.stepEngine?.isFinished == true {
+                if showsDoneNote, source.stepEngine?.isFinished == true {
                     // The steps are used up and the run goes on as a free run.
                     Text("Workout done").font(RunMetricStyle.captionFont).foregroundStyle(.green)
                 }
@@ -61,23 +71,21 @@ struct RunScreenPage: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
         .ignoresSafeArea(.container, edges: [.top, .bottom])
-        // The battery level can only be read once monitoring is on; once is enough.
-        .onAppear { WKInterfaceDevice.current().isBatteryMonitoringEnabled = true }
     }
 
     @ViewBuilder
     private func row(_ metric: RunMetric, at date: Date) -> some View {
         switch metric {
         case .totalTime:
-            let elapsed = recorder.elapsed(at: date)
+            let elapsed = source.elapsed(at: date)
             // Yellow, as the elapsed time is in the Workout app.
             value(ZoneDialText.totalTimeText(elapsed, showsSeconds: !dimmed)).foregroundStyle(.yellow)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Total time")
-                .accessibilityValue(spokenDuration(elapsed) + (recorder.phase == .paused ? ", paused" : ""))
+                .accessibilityValue(spokenDuration(elapsed) + (source.isPaused ? ", paused" : ""))
         case .distance:
-            let amount = PaceText.distanceValue(meters: recorder.distanceMeters)
+            let amount = PaceText.distanceValue(meters: source.distanceMeters)
             HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                 value(amount)
                 unit(PaceText.distanceUnit())
@@ -89,23 +97,23 @@ struct RunScreenPage: View {
         case .heartRate:
             heartRateLine
         case .currentPace:
-            paceLine(recorder.currentSecondsPerMeter(at: date), label: "Current pace", caption: "CURRENT")
+            paceLine(source.currentSecondsPerMeter(at: date), label: "Current pace", caption: "CURRENT")
         case .averagePace:
-            paceLine(recorder.averageSecondsPerMeter, label: "Average pace", caption: "AVERAGE")
+            paceLine(source.averageSecondsPerMeter, label: "Average pace", caption: "AVERAGE")
         case .averageHeartRate:
-            numberLine(recorder.stats.averageHeartRate, unit: "AVG BPM", label: "Average heart rate", spokenUnit: "beats per minute")
+            numberLine(source.stats.averageHeartRate, unit: "AVG BPM", label: "Average heart rate", spokenUnit: "beats per minute")
         case .maxHeartRate:
-            numberLine(recorder.stats.maxHeartRate, unit: "MAX BPM", label: "Highest heart rate", spokenUnit: "beats per minute")
+            numberLine(source.stats.maxHeartRate, unit: "MAX BPM", label: "Highest heart rate", spokenUnit: "beats per minute")
         case .altitude:
             let metric = PaceText.usesKilometres()
-            numberLine(recorder.stats.altitude.map { metric ? $0 : $0 * 3.28084 },
+            numberLine(source.stats.altitude.map { metric ? $0 : $0 * 3.28084 },
                        unit: metric ? "M ALT" : "FT ALT", label: "Altitude", spokenUnit: metric ? "metres" : "feet")
         case .elevationGain:
             let metric = PaceText.usesKilometres()
-            numberLine(recorder.stats.altitude == nil ? nil : (metric ? recorder.stats.elevationGain : recorder.stats.elevationGain * 3.28084),
+            numberLine(source.stats.altitude == nil ? nil : (metric ? source.stats.elevationGain : source.stats.elevationGain * 3.28084),
                        unit: metric ? "M UP" : "FT UP", label: "Elevation gain", spokenUnit: metric ? "metres" : "feet")
         case .grade:
-            numberLine(recorder.stats.grade, unit: "% GRADE", label: "Grade", spokenUnit: "percent", decimals: 1)
+            numberLine(source.stats.grade, unit: "% GRADE", label: "Grade", spokenUnit: "percent", decimals: 1)
         case .timeRemaining:
             if let estimate = remainingEstimate(at: date) {
                 let text = ZoneDialText.totalTimeText(estimate.seconds, showsSeconds: !dimmed)
@@ -119,7 +127,7 @@ struct RunScreenPage: View {
                 .accessibilityValue((estimate.isComplete ? "" : "at least ") + spokenDuration(estimate.seconds))
             }
         case .stepNumber:
-            if let engine = recorder.stepEngine, let current = engine.current {
+            if let engine = source.stepEngine, let current = engine.current {
                 let place = ZoneDialText.place(of: current, in: engine.steps.count)
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                     value(place.text)
@@ -130,7 +138,7 @@ struct RunScreenPage: View {
                 .accessibilityLabel("Step").accessibilityValue(ZoneDialText.placeLine(current, of: engine.steps.count).lowercased())
             }
         case .stepTime:
-            if let seconds = recorder.stepEngine?.stepElapsed(at: recorder.elapsed(at: date)) {
+            if let seconds = source.stepEngine?.stepElapsed(at: source.elapsed(at: date)) {
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                     value(ZoneDialText.totalTimeText(seconds, showsSeconds: !dimmed))
                     RunMetricStyle.caption("STEP", "TIME")
@@ -140,7 +148,7 @@ struct RunScreenPage: View {
                 .accessibilityLabel("Step time").accessibilityValue(spokenDuration(seconds))
             }
         case .stepDistance:
-            if let meters = recorder.stepEngine?.stepDistance(at: recorder.distanceMeters) {
+            if let meters = source.stepEngine?.stepDistance(at: source.distanceMeters) {
                 let amount = PaceText.distanceValue(meters: meters)
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                     value(amount)
@@ -152,7 +160,7 @@ struct RunScreenPage: View {
                 .accessibilityValue("\(amount) \(PaceText.usesKilometres() ? "kilometres" : "miles")")
             }
         case .timeInZone:
-            if let seconds = recorder.secondsInCurrentZone {
+            if let seconds = source.secondsInCurrentZone {
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                     value(ZoneDialText.totalTimeText(seconds, showsSeconds: !dimmed))
                     RunMetricStyle.caption("IN", "ZONE")
@@ -164,7 +172,7 @@ struct RunScreenPage: View {
                 numberLine(nil, unit: "IN ZONE", label: "Time in current zone", spokenUnit: "")
             }
         case .timeSinceZoneEntry:
-            if let seconds = recorder.secondsSinceEnteringZone {
+            if let seconds = source.secondsSinceEnteringZone {
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
                     value(ZoneDialText.totalTimeText(seconds, showsSeconds: !dimmed))
                     RunMetricStyle.caption("SINCE", "ENTRY")
@@ -192,7 +200,7 @@ struct RunScreenPage: View {
     /// A collected reading with one of its statistics: the number, its unit and, for a statistic, "AVG" and so on.
     private func measureRow(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope, at date: Date) -> some View {
         let metric = PaceText.usesKilometres()
-        let reading = recorder.reading(quantity, statistic, scope, at: date)
+        let reading = source.reading(quantity, statistic, scope, at: date)
         let shown = reading.map { quantity.display($0, metric: metric) }
         let unitName = shown?.unit ?? quantity.display(0, metric: metric).unit
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
@@ -213,7 +221,7 @@ struct RunScreenPage: View {
 
     /// The time, distance or climb of a step or a split.
     private func spanRow(_ kind: RunSpanKind, _ scope: RunScope, at date: Date) -> some View {
-        let reading = recorder.spans.value(kind, scope, now: recorder.spanMark(at: date))
+        let reading = source.spans.value(kind, scope, now: source.spanMark(at: date))
         let metric = PaceText.usesKilometres()
         let number: String
         let unitName: String
@@ -229,7 +237,7 @@ struct RunScreenPage: View {
             spoken = "\(number) \(metric ? "kilometres" : "miles")"
         case .climb:
             let climb = reading.map { metric ? $0 : $0 * 3.28084 }
-            number = climb.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "--"
+            number = climb.map { String(format: "%.0f", $0) } ?? "--"
             unitName = metric ? "M UP" : "FT UP"
             spoken = "\(number) \(metric ? "metres" : "feet")"
         }
@@ -246,15 +254,15 @@ struct RunScreenPage: View {
 
     /// What is left of the planned workout, counting distances at the pace so far.
     private func remainingEstimate(at date: Date) -> RemainingEstimate? {
-        recorder.stepEngine?.remaining(
-            progress: recorder.stepProgress(at: date),
+        source.stepEngine?.remaining(
+            progress: source.stepProgress(at: date),
             secondsPerMeter: RemainingEstimate.estimatePace(
-                current: recorder.currentSecondsPerMeter(at: date), average: recorder.averageSecondsPerMeter))
+                current: source.currentSecondsPerMeter(at: date), average: source.averageSecondsPerMeter))
     }
 
     /// A number with its unit in small capitals, "--" with no reading.
     private func numberLine(_ number: Double?, unit text: String, label: String, spokenUnit: String, decimals: Int = 0) -> some View {
-        let shown = number.map { $0.formatted(.number.precision(.fractionLength(decimals))) } ?? "--"
+        let shown = number.map { String(format: "%.\(decimals)f", $0) } ?? "--"
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             value(shown).foregroundStyle(number == nil ? Color.secondary : Color.white)
             unit(text)
@@ -304,20 +312,25 @@ struct RunScreenPage: View {
     /// The heart rate at the leading edge and its place in the zones at the trailing edge, both coloured
     /// by the target; the value is grey with no reading.
     private var heartRateLine: some View {
-        let bands = zoneStore.bands
-        let bpm = recorder.heartRate
+        let bands = source.zoneBands
+        let bpm = source.heartRate
         // Blue under the step's heart-rate target, red over it, white in it or with no target, as on the dial.
-        let target = recorder.stepEngine?.current.flatMap { StepHeartRateTarget(step: $0.step, bands: bands) }
+        let target = source.stepEngine?.current.flatMap { StepHeartRateTarget(step: $0.step, bands: bands) }
         let status = bpm.flatMap { bpm in target?.status(forHeartRate: bpm) }
         let color = StepHeartRateTarget.Status.displayColor(status)
         let position = bpm.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+            // The two values keep their size and the small units give way (they shrink to 60 %), so the zone is never
+            // cut to an ellipsis on a narrow screen.
             value(bpm.map { "\(Int($0.rounded()))" } ?? "--", shrinks: false).foregroundStyle(bpm == nil ? Color.secondary : color)
+                .fixedSize(horizontal: true, vertical: false).layoutPriority(1)
             unit("BPM")
             Spacer(minLength: 2)
             HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
-                unit("ZONE")
+                // In the small caption size, so the whole word fits beside the zone on a narrow screen.
+                Text("ZONE").font(RunMetricStyle.captionFont).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                 value(position.map(ZoneDialText.positionValue) ?? "--", shrinks: false).foregroundStyle(color)
+                    .fixedSize(horizontal: true, vertical: false).layoutPriority(1)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -351,15 +364,15 @@ struct RunScreenPage: View {
 
     /// The target of the step being run and where the heart rate is against it.
     private var heartRateTarget: StepHeartRateTarget? {
-        recorder.stepEngine?.current.flatMap { StepHeartRateTarget(step: $0.step, bands: zoneStore.bands) }
+        source.stepEngine?.current.flatMap { StepHeartRateTarget(step: $0.step, bands: source.zoneBands) }
     }
 
     /// The step's time or distance left, with the interval or step number to the right. Only in a planned
     /// workout with steps left; for an open step a line above says how to go on.
     @ViewBuilder
     private func stepCountdown(at date: Date) -> some View {
-        if let engine = recorder.stepEngine, let current = engine.current {
-            let progress = recorder.stepProgress(at: date)
+        if let engine = source.stepEngine, let current = engine.current {
+            let progress = source.stepProgress(at: date)
             let remaining = progress.flatMap { WatchWorkoutSummary.remainingValue($0, showsSeconds: !dimmed) }
             VStack(alignment: .leading, spacing: RunMetricStyle.rowSpacing) {
                 if remaining == nil {
@@ -382,9 +395,9 @@ struct RunScreenPage: View {
     /// heart-rate target (a free run, or a step with a pace or power target) it keeps zone 3 in the middle, with no
     /// zone bright and only the triangle moving, so it doesn't re-lay itself at each zone boundary.
     private var zoneBar: some View {
-        let bands = zoneStore.bands
+        let bands = source.zoneBands
         let target = heartRateTarget
-        let position = recorder.heartRate.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
+        let position = source.heartRate.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
         let topZone = target?.zone ?? 3
         return ZoneDialBar(
             target: Double(topZone), position: position ?? Double(topZone) + 0.5,
@@ -401,8 +414,8 @@ struct RunScreenPage: View {
     /// pace, the ends of the target written under it. A line saying so while the step has no pace target.
     @ViewBuilder
     private func paceBar(at date: Date) -> some View {
-        if let step = recorder.stepEngine?.current?.step, let target = StepPaceTarget(step: step) {
-            let pace = recorder.currentSecondsPerMeter(at: date)
+        if let step = source.stepEngine?.current?.step, let target = StepPaceTarget(step: step) {
+            let pace = source.currentSecondsPerMeter(at: date)
             let labels = target.labels()
             let status = pace.map { target.position(forSecondsPerMeter: $0) }
             VStack(spacing: 2) {
@@ -427,7 +440,7 @@ struct RunScreenPage: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Pace target")
             .accessibilityValue(target.spoken() + (status.map { ", " + Self.spokenPace($0) } ?? ", no pace yet"))
-        } else if recorder.stepEngine?.current != nil {
+        } else if source.stepEngine?.current != nil {
             Text("No pace target in this step")
                 .font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
                 .lineLimit(1).minimumScaleFactor(0.7)
@@ -445,11 +458,11 @@ struct RunScreenPage: View {
 
     /// The battery's charge and, in a planned workout, the forecast for the end (WATCH-119).
     private func battery(at date: Date) -> some View {
-        let battery = BatteryReader.current(elapsed: recorder.elapsed(at: date))
-        let projection = recorder.stepEngine.flatMap { engine in
+        let battery = source.battery(at: date)
+        let projection = source.stepEngine.flatMap { engine in
             BatteryProjection(
-                battery: battery, readings: recorder.batteryReadings,
-                remaining: engine.remaining(progress: recorder.stepProgress(at: date), secondsPerMeter: recorder.secondsPerMeter))
+                battery: battery, readings: source.batteryReadings,
+                remaining: engine.remaining(progress: source.stepProgress(at: date), secondsPerMeter: source.secondsPerMeter))
         }
         return BatteryRow(battery: battery, projection: projection, inset: Self.batteryInset, bottomInset: 0)
             .accessibilityElement(children: .ignore)
@@ -459,10 +472,10 @@ struct RunScreenPage: View {
 
     /// The time in each zone so far, a bar for each of zones 0 (below zone 1) to 5.
     private var zoneHistogram: some View {
-        ZoneHistogram(fractions: recorder.zoneTimeFractions)
+        ZoneHistogram(fractions: source.zoneTimeFractions)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Time in zones")
-            .accessibilityValue(ZoneTimeText.spoken(recorder.zoneTimeFractions))
+            .accessibilityValue(ZoneTimeText.spoken(source.zoneTimeFractions))
     }
 
     private func spokenStep(_ current: PlannedStep, of count: Int, progress: StepProgress?, isOpen: Bool) -> String {
@@ -486,19 +499,19 @@ struct RunScreenPage: View {
         else { parts.append("no heart rate reading") }
         if let target {
             parts.append("target \(target.label)")
-            if let bpm = recorder.heartRate { parts.append(target.position(forHeartRate: bpm).text.lowercased()) }
+            if let bpm = source.heartRate { parts.append(target.position(forHeartRate: bpm).text.lowercased()) }
         }
         return parts.joined(separator: ", ")
     }
 }
 
 /// The time in each zone as six bars, zone 0 (below zone 1) at the left (WATCH-132).
-struct ZoneHistogram: View {
+public struct ZoneHistogram: View {
     /// The share of the time in zones 0 to 5, or `nil` before any was measured.
     let fractions: [Double]?
     private static let height = 52.0
 
-    var body: some View {
+    public var body: some View {
         HStack(alignment: .bottom, spacing: 3) {
             ForEach(0..<6, id: \.self) { zone in
                 let fraction = fractions?[zone] ?? 0

@@ -13,7 +13,7 @@ struct TrainingWatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RunView(recorder: recorder, zoneStore: zoneStore, planStore: planStore, screenStore: screenStore)
+            RunView(recorder: recorder, planStore: planStore, screenStore: screenStore)
                 .task {
                     recorder.zoneStore = zoneStore
                     syncChannel?.activate(onReceive: { context in

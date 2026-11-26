@@ -1,11 +1,10 @@
 import SwiftUI
-import TrainingWatchKit
 
 /// The battery at the bottom of the zone dial (WATCH-118, WATCH-119): "BATTERY 67%" in small type and
 /// in a planned workout the forecast after it ("~44% AT END", coloured by how that rates), and under it
 /// the bar, which takes the colour of the forecast when there is one. Both are in from the sides, where
 /// the screen's corners round off.
-struct BatteryRow: View {
+public struct BatteryRow: View {
     let battery: BatteryDisplay
     /// What the battery will be at the end of the workout, or `nil` when that isn't known.
     let projection: BatteryProjection?
@@ -14,7 +13,7 @@ struct BatteryRow: View {
     /// The room kept free under the bar, for the page indicator.
     let bottomInset: Double
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             // The charge at the left and, in a planned workout, the forecast at the right, in the forecast's colour.
             HStack(spacing: 6) {

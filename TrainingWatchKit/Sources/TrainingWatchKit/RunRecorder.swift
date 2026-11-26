@@ -363,19 +363,6 @@ public final class RunRecorder {
             secondsPerMeter: averageSecondsPerMeter ?? currentSecondsPerMeter())
     }
 
-    /// A reading of `quantity` over `scope`, as a run screen shows it. The average pace of a step or a split is
-    /// its distance over its time (so a stop counts, and it agrees with the time and distance shown beside it); every
-    /// other statistic comes from the readings.
-    public func reading(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope, at date: Date = .now) -> Double? {
-        guard quantity == .pace, statistic == .average, scope != .run else {
-            return statistics.tracker(quantity, scope)?.value(statistic)
-        }
-        let mark = spanMark(at: date)
-        guard let time = spans.value(.time, scope, now: mark), let distance = spans.value(.distance, scope, now: mark),
-              time > 0, distance >= 10 else { return nil }
-        return distance / time
-    }
-
     /// Files a reading under the step and the split the run is in.
     private func record(_ quantity: RunQuantity, _ value: Double) {
         let keys = scopeKeys

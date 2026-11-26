@@ -8,11 +8,14 @@ struct WatchScreenItemsView: View {
     @Binding var draft: RunScreenSetDraft
     let screenID: String
     @State private var isAdding = false
+    @State private var previewWatch = PreviewWatch.large
+    @State private var previewsWorkout = true
 
     private var screen: RunScreen? { draft.screens.first { $0.id == screenID } }
 
     var body: some View {
         List {
+            if let screen { previewSection(for: screen) }
             Section {
                 ForEach(Array((screen?.items ?? []).enumerated()), id: \.offset) { _, item in
                     Label {
@@ -47,6 +50,25 @@ struct WatchScreenItemsView: View {
             NavigationStack {
                 WatchScreenItemPickerView(draft: $draft, screenID: screenID)
             }
+        }
+    }
+
+    /// The screen as the watch draws it, with sample values, and what to preview it on.
+    private func previewSection(for screen: RunScreen) -> some View {
+        Section {
+            WatchScreenPreview(screen: screen, isWorkout: previewsWorkout, watch: previewWatch)
+                .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
+            Picker("Watch", selection: $previewWatch) {
+                ForEach(PreviewWatch.allCases) { Text($0.title).tag($0) }
+            }
+            Picker("Run", selection: $previewsWorkout) {
+                Text("Planned Workout").tag(true)
+                Text("Free Run").tag(false)
+            }
+        } header: {
+            Text("Preview")
+        } footer: {
+            Text("Sample values. A smaller watch drops the first items of a full screen, and a free run leaves out a screen with an item for planned workouts.")
         }
     }
 }

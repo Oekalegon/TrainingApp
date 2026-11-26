@@ -40,7 +40,8 @@ public enum RunQuantity: String, Sendable, Codable, CaseIterable, Hashable {
     ///   - metric: Kilometres and metres rather than miles and feet.
     public func display(_ value: Double, metric: Bool) -> (number: String, unit: String) {
         func format(_ value: Double, _ digits: Int) -> String {
-            value.formatted(.number.precision(.fractionLength(digits)).grouping(.never))
+            // With a point, as the distance and the zone are written on the run screens.
+            String(format: "%.\(digits)f", value)
         }
         switch self {
         case .heartRate: return (format(value, 0), "BPM")

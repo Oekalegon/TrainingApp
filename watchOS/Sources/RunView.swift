@@ -6,7 +6,6 @@ import TrainingWatchKit
 /// planned workouts are on the start screen and tapping one runs its steps (WATCH-104).
 struct RunView: View {
     let recorder: RunRecorder
-    let zoneStore: WatchZoneStore
     let planStore: WatchPlanStore
     let screenStore: RunScreenStore
 
@@ -32,7 +31,7 @@ struct RunView: View {
         case .starting, .saving:
             ProgressView()
         case .running, .paused:
-            RunPages(recorder: recorder, zoneStore: zoneStore, set: screenStore.set(for: recorder.runPlan))
+            RunPages(recorder: recorder, set: screenStore.set(for: recorder.runPlan))
                 // For the battery warning below. The pages need it on themselves too: the pager hands
                 // each one the system's own value.
                 .fakeDimmable()
@@ -78,13 +77,11 @@ struct RunView: View {
 /// run. Which screen shows and when it moves is `RunScreenSelection`.
 private struct RunPages: View {
     let recorder: RunRecorder
-    let zoneStore: WatchZoneStore
     @State private var page = Page.data
     @State private var selection: RunScreenSelection
 
-    init(recorder: RunRecorder, zoneStore: WatchZoneStore, set: RunScreenSet) {
+    init(recorder: RunRecorder, set: RunScreenSet) {
         self.recorder = recorder
-        self.zoneStore = zoneStore
         _selection = State(initialValue: RunScreenSelection(set: set, hasSteps: recorder.hasSteps))
     }
 
@@ -99,7 +96,7 @@ private struct RunPages: View {
                 .tag(Page.controls)
             TabView(selection: Binding(get: { shown.contains { $0.id == selection.current } ? selection.current : (shown.first?.id ?? "") }, set: { selection.select($0) })) {
                 ForEach(shown) { screen in
-                    RunScreenPage(recorder: recorder, zoneStore: zoneStore, screen: screen, showsDoneNote: screen.id == shown.first?.id).fakeDimmable()
+                    WatchRunScreenPage(recorder: recorder, screen: screen, showsDoneNote: screen.id == shown.first?.id).fakeDimmable()
                         .tag(screen.id)
                 }
             }
