@@ -168,3 +168,87 @@ public struct CadenceEstimator: Sendable {
         return (totalSteps - first.steps) / (elapsed - first.elapsed) * 60
     }
 }
+
+/// What stretch of the run a statistic is over (WATCH-135): all of it, or a step or a split (a kilometre or a
+/// mile, as the region says), either the one being run or the one before.
+public enum RunScope: String, Sendable, Codable, CaseIterable, Hashable {
+    case run, step, lastStep, split, lastSplit
+
+    /// Whether the scope exists only in a planned workout's steps.
+    public var requiresSteps: Bool { self == .step || self == .lastStep }
+
+    /// The words after the name in the editor; nothing for the whole run.
+    public var suffix: String? {
+        switch self {
+        case .run: nil
+        case .step: "This Step"
+        case .lastStep: "Last Step"
+        case .split: "This Split"
+        case .lastSplit: "Last Split"
+        }
+    }
+
+    /// The small caption on the watch; nothing for the whole run.
+    public var caption: String? {
+        switch self {
+        case .run: nil
+        case .step: "STEP"
+        case .lastStep: "LAST STEP"
+        case .split: "SPLIT"
+        case .lastSplit: "LAST SPLIT"
+        }
+    }
+
+    /// Whether a statistic means something in this scope: the latest reading is the same in every scope, so
+    /// it is only offered for the whole run.
+    public func offers(_ statistic: RunStatistic) -> Bool { self == .run || statistic != .current }
+}
+
+/// The statistics of every ``RunQuantity`` over the run, the current and the last step and the current and
+/// the last split. The recorder gives each reading with the step and split it falls in, and a new step or
+/// split makes the one before the "last".
+public struct RunStatisticsBook: Sendable, Equatable {
+    public private(set) var run: [RunQuantity: RunQuantityTracker] = [:]
+    private var step: [RunQuantity: RunQuantityTracker] = [:]
+    private var lastStep: [RunQuantity: RunQuantityTracker] = [:]
+    private var split: [RunQuantity: RunQuantityTracker] = [:]
+    private var lastSplit: [RunQuantity: RunQuantityTracker] = [:]
+    private var stepKey: Int?
+    private var splitKey: Int?
+
+    public init() {}
+
+    /// Adds a reading.
+    /// - Parameters:
+    ///   - stepKey: Which step the run is in (any number that changes with the step), or `nil` with no steps,
+    ///     which leaves the step scopes as they are.
+    ///   - splitKey: Which split the run is in: the distance divided by the split's length, rounded down.
+    public mutating func add(_ quantity: RunQuantity, _ value: Double, stepKey: Int?, splitKey: Int) {
+        if let stepKey {
+            if stepKey != self.stepKey {
+                if self.stepKey != nil { lastStep = step }
+                step = [:]
+                self.stepKey = stepKey
+            }
+            step[quantity, default: RunQuantityTracker()].add(value)
+        }
+        if splitKey != self.splitKey {
+            if self.splitKey != nil { lastSplit = split }
+            split = [:]
+            self.splitKey = splitKey
+        }
+        split[quantity, default: RunQuantityTracker()].add(value)
+        run[quantity, default: RunQuantityTracker()].add(value)
+    }
+
+    /// The readings of `quantity` over `scope`, or `nil` when there are none.
+    public func tracker(_ quantity: RunQuantity, _ scope: RunScope) -> RunQuantityTracker? {
+        switch scope {
+        case .run: run[quantity]
+        case .step: step[quantity]
+        case .lastStep: lastStep[quantity]
+        case .split: split[quantity]
+        case .lastSplit: lastSplit[quantity]
+        }
+    }
+}

@@ -51,7 +51,9 @@ public final class RunRecorder {
     /// The heart rate's average and highest, the altitude and the climb, for the catalogue's metrics (WATCH-135).
     public private(set) var stats = RunStatsTracker()
     /// The statistics of every other collected quantity (WATCH-135).
-    public private(set) var quantities: [RunQuantity: RunQuantityTracker] = [:]
+    public private(set) var statistics = RunStatisticsBook()
+    /// The statistics over the whole run.
+    public var quantities: [RunQuantity: RunQuantityTracker] { statistics.run }
     /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
     public var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
@@ -132,7 +134,7 @@ public final class RunRecorder {
         runPlan = plan
         zoneTime.reset()
         stats = RunStatsTracker()
-        quantities = [:]
+        statistics = RunStatisticsBook()
         phase = .starting
         abandoned = false
         routeNote = nil
@@ -322,14 +324,21 @@ public final class RunRecorder {
     /// A reading of a collected quantity, while the run is collecting.
     func quantityArrived(_ quantity: RunQuantity, _ value: Double) {
         guard isCollecting else { return }
-        quantities[quantity, default: RunQuantityTracker()].add(value)
+        record(quantity, value)
+    }
+
+    /// Files a reading under the step and the split the run is in.
+    private func record(_ quantity: RunQuantity, _ value: Double) {
+        let splitLength = PaceText.usesKilometres() ? 1000.0 : 1609.344
+        statistics.add(
+            quantity, value, stepKey: stepEngine?.current?.index, splitKey: Int(max(distanceMeters, 0) / splitLength))
     }
 
     /// A heart-rate reading from the builder.
     func heartRateArrived(_ bpm: Double) {
         heartRate = bpm
         stats.add(heartRate: bpm)
-        quantities[.heartRate, default: RunQuantityTracker()].add(bpm)
+        record(.heartRate, bpm)
         if let zone = zoneStore?.bands?.zone(forHeartRate: bpm) { zoneTime.add(zone: zone, atElapsed: elapsed()) }
         alertHeartRate(bpm)
     }

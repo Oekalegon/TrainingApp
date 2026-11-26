@@ -54,7 +54,7 @@ struct RunQuantityTests {
 
     @Test("a measure item survives encoding, and an unknown one is refused")
     func coding() throws {
-        let item = RunScreenItem.measure(.groundContactTime, .median)
+        let item = RunScreenItem.measure(.groundContactTime, .median, .lastSplit)
         let data = try JSONEncoder().encode(item)
         #expect(try JSONDecoder().decode(RunScreenItem.self, from: data) == item)
         #expect(item.height == 1)
@@ -89,5 +89,48 @@ struct SimulatedReadingsTests {
             #expect(first[quantity] != later[quantity])
         }
         #expect((150...190).contains(first[.cadence]!))
+    }
+}
+
+@Suite("RunStatisticsBook (WATCH-135)")
+struct RunStatisticsBookTests {
+    @Test("a new step makes the one before the last step, and its statistics start over")
+    func steps() {
+        var book = RunStatisticsBook()
+        for value in [160.0, 170] { book.add(.cadence, value, stepKey: 0, splitKey: 0) }
+        #expect(book.tracker(.cadence, .step)?.average == 165)
+        #expect(book.tracker(.cadence, .lastStep) == nil)
+        book.add(.cadence, 180, stepKey: 1, splitKey: 0)
+        #expect(book.tracker(.cadence, .step)?.average == 180)
+        #expect(book.tracker(.cadence, .lastStep)?.average == 165)
+        #expect(book.tracker(.cadence, .lastStep)?.maximum == 170)
+        #expect(book.tracker(.cadence, .run)?.average == 170)
+    }
+
+    @Test("a new split does the same, with or without steps")
+    func splits() {
+        var book = RunStatisticsBook()
+        book.add(.heartRate, 140, stepKey: nil, splitKey: 0)
+        book.add(.heartRate, 150, stepKey: nil, splitKey: 0)
+        book.add(.heartRate, 160, stepKey: nil, splitKey: 1)
+        #expect(book.tracker(.heartRate, .lastSplit)?.average == 145)
+        #expect(book.tracker(.heartRate, .split)?.average == 160)
+        #expect(book.tracker(.heartRate, .step) == nil)
+        // Another quantity in the same split joins it.
+        book.add(.cadence, 170, stepKey: nil, splitKey: 1)
+        #expect(book.tracker(.cadence, .split)?.current == 170)
+        #expect(book.tracker(.cadence, .lastSplit) == nil)
+    }
+
+    @Test("the scopes of an item are written into its id, the whole run's left out for the old form")
+    func scopeCoding() throws {
+        let item = RunScreenItem.measure(.cadence, .average, .lastStep)
+        #expect(item.requiresSteps)
+        #expect(String(data: try JSONEncoder().encode(item), encoding: .utf8)!.contains("cadence.average.lastStep"))
+        let old = Data(#"{"kind":"measure","id":"cadence.average"}"#.utf8)
+        #expect(try JSONDecoder().decode(RunScreenItem.self, from: old) == .measure(.cadence, .average, .run))
+        #expect(!RunScope.step.offers(.current))
+        #expect(RunScope.run.offers(.current))
+        #expect(!RunScreenItem.measure(.cadence, .average, .lastSplit).requiresSteps)
     }
 }

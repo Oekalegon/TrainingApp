@@ -65,7 +65,7 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
     case metric(RunMetric)
     case widget(RunWidget)
     /// A reading the watch collects, with one of its statistics (WATCH-135).
-    case measure(RunQuantity, RunStatistic)
+    case measure(RunQuantity, RunStatistic, RunScope)
 
     /// The height in units: a plain metric is 1, which is a row of the standard screen.
     public var height: Int {
@@ -81,7 +81,7 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
         switch self {
         case .widget(let widget): widget.requiresSteps
         case .metric(let metric): metric.requiresSteps
-        case .measure: false
+        case .measure(_, _, let scope): scope.requiresSteps
         }
     }
 
@@ -102,11 +102,14 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
             }
             self = .widget(widget)
         case "measure":
+            // "cadence.average" is over the whole run; "cadence.average.step" names the scope.
             let parts = id.split(separator: ".").map(String.init)
-            guard parts.count == 2, let quantity = RunQuantity(rawValue: parts[0]), let statistic = RunStatistic(rawValue: parts[1]) else {
+            guard (2...3).contains(parts.count), let quantity = RunQuantity(rawValue: parts[0]),
+                  let statistic = RunStatistic(rawValue: parts[1]),
+                  let scope = parts.count == 3 ? RunScope(rawValue: parts[2]) : RunScope.run else {
                 throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "unknown measure")
             }
-            self = .measure(quantity, statistic)
+            self = .measure(quantity, statistic, scope)
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "unknown item")
         }
@@ -121,9 +124,10 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
         case .widget(let widget):
             try container.encode("widget", forKey: .kind)
             try container.encode(widget.rawValue, forKey: .id)
-        case .measure(let quantity, let statistic):
+        case .measure(let quantity, let statistic, let scope):
             try container.encode("measure", forKey: .kind)
-            try container.encode("\(quantity.rawValue).\(statistic.rawValue)", forKey: .id)
+            let name = "\(quantity.rawValue).\(statistic.rawValue)"
+            try container.encode(scope == .run ? name : name + ".\(scope.rawValue)", forKey: .id)
         }
     }
 }

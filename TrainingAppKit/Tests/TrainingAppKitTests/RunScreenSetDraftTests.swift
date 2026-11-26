@@ -94,8 +94,13 @@ struct RunScreenItemCatalogueTests {
     @Test("every metric and widget is in exactly one group")
     func complete() {
         let all = RunScreenItemCatalogue.groups.flatMap(\.items)
-        let measured = [RunQuantity.cadence, .strideLength, .groundContactTime, .verticalOscillation, .runningSpeed, .runningPower]
-            .flatMap { quantity in RunStatistic.allCases.map { RunScreenItem.measure(quantity, $0) } }
+        // Every quantity but heart rate (whose run-wide latest, average and highest are older metrics) with every
+        // statistic its scopes offer: the latest only for the run.
+        let measured = RunQuantity.allCases.flatMap { quantity in
+            RunScope.allCases.flatMap { scope in
+                RunStatistic.allCases.filter(scope.offers).map { RunScreenItem.measure(quantity, $0, scope) }
+            }
+        }.filter { ![.measure(.heartRate, .current, .run), .measure(.heartRate, .average, .run), .measure(.heartRate, .maximum, .run)].contains($0) }
         let expected = RunMetric.allCases.map(RunScreenItem.metric) + RunWidget.allCases.map(RunScreenItem.widget) + measured
         #expect(Set(all) == Set(expected))
         #expect(all.count == expected.count)
@@ -105,7 +110,15 @@ struct RunScreenItemCatalogueTests {
     @Test("the steps-only items are the ones a free run can't show")
     func stepsOnly() {
         let stepsOnly = RunScreenItemCatalogue.groups.flatMap(\.items).filter(\.requiresSteps)
-        #expect(Set(stepsOnly) == [.widget(.stepCountdown), .metric(.stepTime), .metric(.stepDistance), .metric(.timeRemaining), .metric(.finishTime)])
+        var expected: Set<RunScreenItem> = [
+            .widget(.stepCountdown), .metric(.stepTime), .metric(.stepDistance), .metric(.timeRemaining), .metric(.finishTime),
+        ]
+        for quantity in RunQuantity.allCases {
+            for scope in [RunScope.step, .lastStep] {
+                for statistic in RunStatistic.allCases where scope.offers(statistic) { expected.insert(.measure(quantity, statistic, scope)) }
+            }
+        }
+        #expect(Set(stepsOnly) == expected)
     }
 
     @Test("a search matches names and group names, ignoring case, and leaves no empty group")
@@ -114,7 +127,7 @@ struct RunScreenItemCatalogueTests {
         #expect(RunScreenItemCatalogue.groups(matching: "pace").flatMap(\.items) == [.metric(.currentPace), .metric(.averagePace)])
         #expect(RunScreenItemCatalogue.groups(matching: "BATTERY").flatMap(\.items) == [.widget(.battery)])
         // A group's name matches all its items.
-        #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 7)
+        #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 7 + 2 + 16)
         #expect(RunScreenItemCatalogue.groups(matching: "elevation").flatMap(\.items) == [.metric(.altitude), .metric(.elevationGain), .metric(.grade)])
         #expect(RunScreenItemCatalogue.groups(matching: "nothing like it").isEmpty)
     }

@@ -11,15 +11,29 @@ public enum RunScreenItemCatalogue {
         public let items: [RunScreenItem]
     }
 
+    /// The statistics of a quantity over every scope that offers them, whole run first.
+    static func measures(of quantity: RunQuantity) -> [RunScreenItem] {
+        RunScope.allCases.flatMap { scope in
+            RunStatistic.allCases.filter(scope.offers).map { RunScreenItem.measure(quantity, $0, scope) }
+        }
+    }
+
+    /// The heart rate's statistics the older metrics don't already show (the latest, the average and the highest of the run).
+    static let heartRateMeasures: [RunScreenItem] = measures(of: .heartRate).filter { item in
+        ![.measure(.heartRate, .current, .run), .measure(.heartRate, .average, .run), .measure(.heartRate, .maximum, .run)].contains(item)
+    }
+
     /// Every group, in the order the picker shows them.
     public static let groups: [Group] = [
         Group(title: "Heart Rate", items: [
             .metric(.heartRate), .metric(.averageHeartRate), .metric(.maxHeartRate), .metric(.timeInZone), .metric(.timeSinceZoneEntry), .widget(.zoneBar), .widget(.zoneHistogram),
-        ]),
-        Group(title: "Cadence and Running Form", items: [RunQuantity.cadence, .strideLength, .groundContactTime, .verticalOscillation]
-            .flatMap { quantity in RunStatistic.allCases.map { RunScreenItem.measure(quantity, $0) } }),
-        Group(title: "Speed and Power", items: [RunQuantity.runningSpeed, .runningPower]
-            .flatMap { quantity in RunStatistic.allCases.map { RunScreenItem.measure(quantity, $0) } }),
+        ] + heartRateMeasures),
+        Group(title: "Cadence", items: measures(of: .cadence)),
+        Group(title: "Speed", items: measures(of: .runningSpeed)),
+        Group(title: "Power", items: measures(of: .runningPower)),
+        Group(title: "Stride Length", items: measures(of: .strideLength)),
+        Group(title: "Ground Contact Time", items: measures(of: .groundContactTime)),
+        Group(title: "Vertical Oscillation", items: measures(of: .verticalOscillation)),
         Group(title: "Pace", items: [.metric(.currentPace), .metric(.averagePace)]),
         Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime)]),
         Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade)]),
@@ -65,8 +79,8 @@ extension RunScreenItem {
             case .timeInZone: "Time in This Zone, Total"
             case .timeSinceZoneEntry: "Time Since Entering Zone"
             }
-        case .measure(let quantity, let statistic):
-            [statistic.prefix, quantity.title].compactMap { $0 }.joined(separator: " ")
+        case .measure(let quantity, let statistic, let scope):
+            [statistic.prefix, quantity.title].compactMap { $0 }.joined(separator: " ") + (scope.suffix.map { ", " + $0 } ?? "")
         case .widget(let widget):
             switch widget {
             case .zoneBar: "Zone Bar"
@@ -100,14 +114,25 @@ extension RunScreenItem {
         case .widget(.battery): "The watch's charge and how much is left at the end"
         case .widget(.stepCountdown): "Time or distance left in the step; planned workouts only"
         case .widget(.zoneHistogram): "How long the run has spent in each zone"
-        case .measure(let quantity, let statistic):
-            switch statistic {
-            case .current: "The latest \(quantity.title.lowercased()) the watch measured"
-            case .average: "The mean \(quantity.title.lowercased()) of the run so far"
-            case .minimum: "The lowest \(quantity.title.lowercased()) of the run so far"
-            case .maximum: "The highest \(quantity.title.lowercased()) of the run so far"
-            case .median: "The median \(quantity.title.lowercased()) of the last hour of the run"
-            }
+        case .measure(let quantity, let statistic, let scope): Self.measureDetail(quantity, statistic, scope)
+        }
+    }
+
+    private static func measureDetail(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope) -> String {
+        let name = quantity.title.lowercased()
+        let over: String = switch scope {
+        case .run: "of the run so far"
+        case .step: "of the step being run; planned workouts only"
+        case .lastStep: "of the step before this one; planned workouts only"
+        case .split: "of the kilometre or mile being run"
+        case .lastSplit: "of the kilometre or mile before this one"
+        }
+        return switch statistic {
+        case .current: "The latest \(name) the watch measured"
+        case .average: "The mean \(name) \(over)"
+        case .minimum: "The lowest \(name) \(over)"
+        case .maximum: "The highest \(name) \(over)"
+        case .median: "The median \(name) \(over)" + (scope == .run ? " (the last hour)" : "")
         }
     }
 
@@ -131,7 +156,7 @@ extension RunScreenItem {
         case .widget(.battery): "battery.75percent"
         case .widget(.stepCountdown): "timer"
         case .widget(.zoneHistogram): "chart.bar.fill"
-        case .measure(let quantity, _):
+        case .measure(let quantity, _, _):
             switch quantity {
             case .heartRate: "heart"
             case .cadence: "figure.run"
