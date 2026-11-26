@@ -48,7 +48,7 @@ struct WatchScreenItemsView: View {
         #endif
         .sheet(isPresented: $isAdding) {
             NavigationStack {
-                WatchScreenItemPickerView(draft: $draft, screenID: screenID)
+                WatchScreenItemPickerView(draft: $draft, screenID: screenID, onAdded: { isAdding = false })
             }
         }
     }

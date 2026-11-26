@@ -225,3 +225,21 @@ struct StandardScreensTests {
         #expect(intervals.summary.contains("\(intervals.units) of \(RunScreen.capacity) units"))
     }
 }
+
+@Suite("Catalogue levels (WATCH-139)")
+struct CatalogueLevelsTests {
+    @Test("the first level is a short list of groups with names of their own, each with items to open")
+    func groups() {
+        let groups = RunScreenItemCatalogue.groups
+        #expect(groups.count <= 20)
+        #expect(Set(groups.map(\.title)).count == groups.count)
+        #expect(groups.allSatisfy { !$0.items.isEmpty && !$0.sections.isEmpty })
+    }
+
+    @Test("the second level is split by scope, so no list is longer than one scope's items")
+    func sections() {
+        for group in RunScreenItemCatalogue.groups {
+            #expect(group.sections.map(\.items.count).max() ?? 0 <= 20, "\(group.title) has a long part")
+        }
+    }
+}
