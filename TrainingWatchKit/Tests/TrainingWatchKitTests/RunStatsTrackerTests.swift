@@ -34,6 +34,16 @@ struct RunStatsTrackerTests {
         #expect(abs(grade - 8.333) < 0.01)
     }
 
+    @Test("standing still doesn't pile up points, and the grade stays right after")
+    func stationary() {
+        var stats = RunStatsTracker()
+        stats.add(altitude: 100, atDistance: 0)
+        stats.add(altitude: 105, atDistance: 60)
+        for _ in 0..<1000 { stats.add(altitude: 105, atDistance: 60) }
+        let grade = try! #require(stats.grade)
+        #expect(abs(grade - 8.333) < 0.01)
+    }
+
     @Test("metrics that need steps are marked")
     func steps() {
         #expect(RunScreenItem.metric(.timeRemaining).requiresSteps)

@@ -285,6 +285,28 @@ struct RunRecorderPermissionTests {
 @MainActor
 @Suite("RunRecorder distance and heart rate (WATCH-113)")
 struct RunRecorderSensorTests {
+    @Test("altitude and heart rate feed the run's stats, bad vertical accuracy is skipped, and the next run starts over (WATCH-135)")
+    func runStats() async {
+        let (recorder, backend) = await running()
+        func fix(altitude: Double, accuracy: Double) -> CLLocation {
+            CLLocation(
+                coordinate: CLLocationCoordinate2D(latitude: 52, longitude: 4), altitude: altitude,
+                horizontalAccuracy: 5, verticalAccuracy: accuracy, timestamp: .now)
+        }
+        backend.sendLocations?([fix(altitude: 10, accuracy: 5), fix(altitude: 500, accuracy: 80), fix(altitude: 20, accuracy: -1)])
+        backend.builder.onHeartRate?(140)
+        backend.builder.onHeartRate?(160)
+        await settle()
+        #expect(recorder.stats.altitude == 10)
+        #expect(recorder.stats.averageHeartRate == 150)
+        #expect(recorder.stats.maxHeartRate == 160)
+        backend.session.onStateChange?(.ended)
+        await settle()
+        recorder.reset()
+        #expect(recorder.stats.altitude == nil)
+        #expect(recorder.stats.averageHeartRate == nil)
+    }
+
     @Test("on a real watch the distance is the builder's total and the heart rate its latest")
     func builderReadings() async {
         let (recorder, backend) = await running()

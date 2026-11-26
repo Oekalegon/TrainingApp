@@ -36,6 +36,12 @@ public struct RunScreenSetDraft: Equatable, Sendable {
         }
     }
 
+    /// Whether screen `screenID` holds an item that means something only in a planned workout's steps, so the
+    /// whole screen is left out of a free run (and of a workout once its steps are used up).
+    public func isOnlyInWorkouts(_ screenID: String) -> Bool {
+        screens.first { $0.id == screenID }?.requiresSteps ?? false
+    }
+
     /// The units the items of screen `screenID` take; 0 for an unknown screen.
     public func units(of screenID: String) -> Int {
         screens.first { $0.id == screenID }?.units ?? 0

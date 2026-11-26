@@ -108,23 +108,24 @@ struct RunScreenPage: View {
             if let estimate = remainingEstimate(at: date) {
                 let text = ZoneDialText.totalTimeText(estimate.seconds, showsSeconds: !dimmed)
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
-                    value(estimate.isComplete ? text : "~" + text)
+                    value(estimate.isComplete ? text : "≥" + text)
                     RunMetricStyle.caption("TIME", "LEFT")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Time left").accessibilityValue(spokenDuration(estimate.seconds))
+                .accessibilityLabel("Time left")
+                .accessibilityValue((estimate.isComplete ? "" : "at least ") + spokenDuration(estimate.seconds))
             }
         case .finishTime:
             if let estimate = remainingEstimate(at: date) {
                 let text = date.addingTimeInterval(estimate.seconds).formatted(date: .omitted, time: .shortened)
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
-                    value(estimate.isComplete ? text : "~" + text)
+                    value(estimate.isComplete ? text : "≥" + text)
                     RunMetricStyle.caption("FINISH", "AT")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Finish time").accessibilityValue(text)
+                .accessibilityLabel("Finish time").accessibilityValue((estimate.isComplete ? "" : "at least ") + text)
             }
         }
     }
@@ -133,7 +134,8 @@ struct RunScreenPage: View {
     private func remainingEstimate(at date: Date) -> RemainingEstimate? {
         recorder.stepEngine?.remaining(
             progress: recorder.stepProgress(at: date),
-            secondsPerMeter: recorder.currentSecondsPerMeter(at: date) ?? recorder.averageSecondsPerMeter ?? 0.36)
+            secondsPerMeter: RemainingEstimate.estimatePace(
+                current: recorder.currentSecondsPerMeter(at: date), average: recorder.averageSecondsPerMeter))
     }
 
     /// A number with its unit in small capitals, "--" with no reading.

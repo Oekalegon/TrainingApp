@@ -332,7 +332,7 @@ public final class RunRecorder {
             log.error("route insert failed: \(error.localizedDescription, privacy: .public)")
         }
         routePointCount += locations.count
-        for location in locations where location.verticalAccuracy >= 0 {
+        for location in locations where (0...RunStatsTracker.usableVerticalAccuracy).contains(location.verticalAccuracy) {
             stats.add(altitude: location.altitude, atDistance: distanceMeters)
         }
         guard backend.suppliesSensorReadings else { return }

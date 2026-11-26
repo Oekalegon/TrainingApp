@@ -117,3 +117,17 @@ struct RunScreenItemCatalogueTests {
         #expect(RunScreenItemCatalogue.groups(matching: "nothing like it").isEmpty)
     }
 }
+
+@Suite("Screens only in workouts (WATCH-135)")
+struct ScreensOnlyInWorkoutsTests {
+    @Test("a screen with an item for planned workouts is flagged, so the editor can say a free run leaves it out")
+    func flagged() {
+        var draft = RunScreenSetDraft(.workoutDefault)
+        let id = draft.addScreen()
+        #expect(!draft.isOnlyInWorkouts(id))
+        let added = draft.add(.metric(.finishTime), to: id)
+        #expect(added)
+        #expect(draft.isOnlyInWorkouts(id))
+        #expect(!draft.isOnlyInWorkouts("unknown"))
+    }
+}

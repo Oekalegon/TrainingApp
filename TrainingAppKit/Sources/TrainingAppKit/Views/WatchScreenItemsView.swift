@@ -32,7 +32,10 @@ struct WatchScreenItemsView: View {
             } header: {
                 Text("Top to Bottom")
             } footer: {
-                Text("\(draft.units(of: screenID)) of \(RunScreen.capacity) units used. The last item is at the bottom of the watch's screen.")
+                Text(
+                    "\(draft.units(of: screenID)) of \(RunScreen.capacity) units used. The last item is at the bottom of the watch's screen."
+                        + (draft.isOnlyInWorkouts(screenID)
+                            ? " This screen has an item for planned workouts, so a free run leaves the whole screen out." : ""))
             }
         }
         .navigationTitle("Screen")
