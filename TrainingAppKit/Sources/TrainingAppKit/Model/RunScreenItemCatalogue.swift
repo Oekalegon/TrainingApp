@@ -14,12 +14,14 @@ public enum RunScreenItemCatalogue {
     /// Every group, in the order the picker shows them.
     public static let groups: [Group] = [
         Group(title: "Heart Rate", items: [
-            .metric(.heartRate), .metric(.averageHeartRate), .metric(.maxHeartRate), .widget(.zoneBar), .widget(.zoneHistogram),
+            .metric(.heartRate), .metric(.averageHeartRate), .metric(.maxHeartRate), .metric(.timeInZone), .metric(.timeSinceZoneEntry), .widget(.zoneBar), .widget(.zoneHistogram),
         ]),
         Group(title: "Pace", items: [.metric(.currentPace), .metric(.averagePace)]),
         Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime)]),
         Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade)]),
-        Group(title: "Workout Step", items: [.widget(.stepCountdown), .metric(.timeRemaining), .metric(.finishTime)]),
+        Group(title: "Workout Step", items: [
+            .widget(.stepCountdown), .metric(.stepTime), .metric(.stepDistance), .metric(.timeRemaining), .metric(.finishTime),
+        ]),
         Group(title: "Watch", items: [.widget(.battery)]),
     ]
 
@@ -54,6 +56,10 @@ extension RunScreenItem {
             case .grade: "Grade"
             case .timeRemaining: "Time Left"
             case .finishTime: "Finish Time"
+            case .stepTime: "Step Time"
+            case .stepDistance: "Step Distance"
+            case .timeInZone: "Time in This Zone, Total"
+            case .timeSinceZoneEntry: "Time Since Entering Zone"
             }
         case .widget(let widget):
             switch widget {
@@ -80,6 +86,10 @@ extension RunScreenItem {
         case .metric(.grade): "The slope of the last 50 metres or so, in percent"
         case .metric(.timeRemaining): "The time left in the workout, counting distances at the current pace; planned workouts only"
         case .metric(.finishTime): "The time of day the workout should end; planned workouts only"
+        case .metric(.stepTime): "The time since the step began; planned workouts only"
+        case .metric(.stepDistance): "The distance since the step began; planned workouts only"
+        case .metric(.timeInZone): "All the time the run has spent in the zone the heart rate is in now, over the whole run"
+        case .metric(.timeSinceZoneEntry): "How long the heart rate has been in its zone since it came in"
         case .widget(.zoneBar): "All the zones on one line with the heart rate and the step's target"
         case .widget(.battery): "The watch's charge and how much is left at the end"
         case .widget(.stepCountdown): "Time or distance left in the step; planned workouts only"
@@ -99,6 +109,10 @@ extension RunScreenItem {
         case .metric(.grade): "angle"
         case .metric(.timeRemaining): "hourglass"
         case .metric(.finishTime): "flag.checkered"
+        case .metric(.stepTime): "stopwatch"
+        case .metric(.stepDistance): "ruler"
+        case .metric(.timeInZone): "heart.text.square"
+        case .metric(.timeSinceZoneEntry): "timer"
         case .widget(.zoneBar): "chart.bar.xaxis"
         case .widget(.battery): "battery.75percent"
         case .widget(.stepCountdown): "timer"

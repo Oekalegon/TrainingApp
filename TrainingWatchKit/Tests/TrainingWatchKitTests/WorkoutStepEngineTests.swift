@@ -290,3 +290,21 @@ struct WorkoutMetadataTests {
         #expect(WorkoutMetadata.StepEnd(.lap) == .lap)
     }
 }
+
+@Suite("Step figures (WATCH-135)")
+struct StepFigureTests {
+    @Test("the step's own time and distance count from where it began")
+    func stepFigures() {
+        var engine = WorkoutStepEngine(blocks: [
+            WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(60)), WorkoutStep(kind: .work, goal: .time(60))])
+        ])
+        #expect(engine.stepElapsed(at: 20) == 20)
+        _ = engine.update(elapsed: 70, distance: 200)
+        #expect(engine.stepElapsed(at: 90) == 30)
+        // A step that ended on its time goal begins at the distance of the tick that saw it.
+        #expect(engine.stepDistance(at: 260) == 60)
+        _ = engine.update(elapsed: 200, distance: 500)
+        #expect(engine.stepElapsed(at: 210) == nil)
+        #expect(engine.stepDistance(at: 600) == nil)
+    }
+}

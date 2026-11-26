@@ -103,7 +103,7 @@ struct RunScreenItemCatalogueTests {
     @Test("the steps-only items are the ones a free run can't show")
     func stepsOnly() {
         let stepsOnly = RunScreenItemCatalogue.groups.flatMap(\.items).filter(\.requiresSteps)
-        #expect(Set(stepsOnly) == [.widget(.stepCountdown), .metric(.timeRemaining), .metric(.finishTime)])
+        #expect(Set(stepsOnly) == [.widget(.stepCountdown), .metric(.stepTime), .metric(.stepDistance), .metric(.timeRemaining), .metric(.finishTime)])
     }
 
     @Test("a search matches names and group names, ignoring case, and leaves no empty group")
@@ -112,7 +112,7 @@ struct RunScreenItemCatalogueTests {
         #expect(RunScreenItemCatalogue.groups(matching: "pace").flatMap(\.items) == [.metric(.currentPace), .metric(.averagePace)])
         #expect(RunScreenItemCatalogue.groups(matching: "BATTERY").flatMap(\.items) == [.widget(.battery)])
         // A group's name matches all its items.
-        #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 5)
+        #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 7)
         #expect(RunScreenItemCatalogue.groups(matching: "elevation").flatMap(\.items) == [.metric(.altitude), .metric(.elevationGain), .metric(.grade)])
         #expect(RunScreenItemCatalogue.groups(matching: "nothing like it").isEmpty)
     }

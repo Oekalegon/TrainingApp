@@ -10,6 +10,8 @@ struct ZoneTimeTracker: Sendable {
     /// Seconds in zones 0 to 5.
     private(set) var seconds = [Double](repeating: 0, count: 6)
     private var last: (zone: Int, elapsed: TimeInterval)?
+    /// When the zone of the latest reading was entered: the reading that first fell in it.
+    private var enteredAt: TimeInterval?
 
     /// Adds a reading in `zone` (0 to 5) at `elapsed` seconds into the run, with pauses left out.
     mutating func add(zone: Int, atElapsed elapsed: TimeInterval) {
@@ -17,7 +19,16 @@ struct ZoneTimeTracker: Sendable {
         if let last, elapsed > last.elapsed {
             seconds[last.zone] += min(elapsed - last.elapsed, Self.maximumGap)
         }
+        if last?.zone != zone { enteredAt = elapsed }
         last = (zone, elapsed)
+    }
+
+    /// The seconds spent in `zone` (0 to 5).
+    func seconds(inZone zone: Int) -> Double { seconds[min(max(zone, 0), 5)] }
+
+    /// The seconds from when the latest reading's zone was entered to `elapsed`, or `nil` before any reading.
+    func secondsSinceEntering(atElapsed elapsed: TimeInterval) -> Double? {
+        enteredAt.map { max(elapsed - $0, 0) }
     }
 
     /// Forgets the run before.

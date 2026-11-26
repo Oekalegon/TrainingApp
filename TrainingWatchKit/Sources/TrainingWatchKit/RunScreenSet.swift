@@ -20,12 +20,20 @@ public enum RunMetric: String, Sendable, Codable, CaseIterable, Hashable {
     case timeRemaining
     /// The time of day the planned workout should end at; only with steps.
     case finishTime
+    /// The time since the current step began; only with steps.
+    case stepTime
+    /// The distance since the current step began; only with steps.
+    case stepDistance
+    /// The time the run has spent in the heart-rate zone it is in now.
+    case timeInZone
+    /// The time since the heart rate came into the zone it is in now.
+    case timeSinceZoneEntry
 
     /// The five metrics the standard screens have always shown, in their order.
     public static let standard: [RunMetric] = [.totalTime, .distance, .heartRate, .currentPace, .averagePace]
 
     /// Whether the metric means something only in a planned workout's steps.
-    public var requiresSteps: Bool { self == .timeRemaining || self == .finishTime }
+    public var requiresSteps: Bool { self == .timeRemaining || self == .finishTime || self == .stepTime || self == .stepDistance }
 }
 
 /// A widget a run screen can hold (WATCH-132): something taller or richer than a metric's value.

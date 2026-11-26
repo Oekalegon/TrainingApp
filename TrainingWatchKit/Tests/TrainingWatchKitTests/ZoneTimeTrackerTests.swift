@@ -42,4 +42,21 @@ struct ZoneTimeTrackerTests {
         #expect(ZoneTimeText.spoken([0.1, 0.0, 0.6, 0.3004, 0.0, 0.0]) == "below zone 1 10 percent, zone 2 60 percent, zone 3 30 percent")
         #expect(ZoneTimeText.spoken([0.001, 0, 0, 0, 0, 0]) == "no time measured yet")
     }
+
+    @Test("time in a zone is read per zone, and time since entering counts from the first reading in the zone (WATCH-135)")
+    func perZone() {
+        var tracker = ZoneTimeTracker()
+        #expect(tracker.secondsSinceEntering(atElapsed: 5) == nil)
+        tracker.add(zone: 2, atElapsed: 0)
+        tracker.add(zone: 3, atElapsed: 6)
+        tracker.add(zone: 3, atElapsed: 10)
+        #expect(tracker.seconds(inZone: 2) == 6)
+        #expect(tracker.seconds(inZone: 3) == 4)
+        #expect(tracker.seconds(inZone: 5) == 0)
+        #expect(tracker.secondsSinceEntering(atElapsed: 12) == 6)
+        // Back into zone 2: the stretch starts over, the total keeps what it had.
+        tracker.add(zone: 2, atElapsed: 14)
+        #expect(tracker.secondsSinceEntering(atElapsed: 15) == 1)
+        #expect(tracker.seconds(inZone: 3) == 8)
+    }
 }

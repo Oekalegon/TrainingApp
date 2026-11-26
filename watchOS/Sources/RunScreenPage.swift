@@ -116,6 +116,52 @@ struct RunScreenPage: View {
                 .accessibilityLabel("Time left")
                 .accessibilityValue((estimate.isComplete ? "" : "at least ") + spokenDuration(estimate.seconds))
             }
+        case .stepTime:
+            if let seconds = recorder.stepEngine?.stepElapsed(at: recorder.elapsed(at: date)) {
+                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                    value(ZoneDialText.totalTimeText(seconds, showsSeconds: !dimmed))
+                    RunMetricStyle.caption("STEP", "TIME")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Step time").accessibilityValue(spokenDuration(seconds))
+            }
+        case .stepDistance:
+            if let meters = recorder.stepEngine?.stepDistance(at: recorder.distanceMeters) {
+                let amount = PaceText.distanceValue(meters: meters)
+                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                    value(amount)
+                    unit(PaceText.distanceUnit())
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Step distance")
+                .accessibilityValue("\(amount) \(PaceText.usesKilometres() ? "kilometres" : "miles")")
+            }
+        case .timeInZone:
+            if let seconds = recorder.secondsInCurrentZone {
+                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                    value(ZoneDialText.totalTimeText(seconds, showsSeconds: !dimmed))
+                    RunMetricStyle.caption("IN", "ZONE")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Time in current zone").accessibilityValue(spokenDuration(seconds))
+            } else {
+                numberLine(nil, unit: "IN ZONE", label: "Time in current zone", spokenUnit: "")
+            }
+        case .timeSinceZoneEntry:
+            if let seconds = recorder.secondsSinceEnteringZone {
+                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                    value(ZoneDialText.totalTimeText(seconds, showsSeconds: !dimmed))
+                    RunMetricStyle.caption("SINCE", "ENTRY")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Time since entering zone").accessibilityValue(spokenDuration(seconds))
+            } else {
+                numberLine(nil, unit: "IN ZONE", label: "Time since entering zone", spokenUnit: "")
+            }
         case .finishTime:
             if let estimate = remainingEstimate(at: date) {
                 let text = date.addingTimeInterval(estimate.seconds).formatted(date: .omitted, time: .shortened)

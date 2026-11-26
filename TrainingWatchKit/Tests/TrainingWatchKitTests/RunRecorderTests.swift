@@ -626,6 +626,34 @@ struct RunRecorderStepTests {
         #expect(backend.cues.count > 1)
     }
 
+    @Test("the time in the current zone, in total and since entering it, needs a reading and zones (WATCH-135)")
+    func currentZoneTime() async throws {
+        let zones = WatchZones(settings: .init(effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190))
+        let bands = try #require(ZoneBands(zones: zones))
+        let zone2 = try #require(bands.range(of: 2)), zone3 = try #require(bands.range(of: 3))
+        let (recorder, backend) = await running()
+        #expect(recorder.secondsInCurrentZone == nil)
+        let store = WatchZoneStore(cache: WatchZonesCache(defaults: UserDefaults(suiteName: UUID().uuidString)!))
+        recorder.zoneStore = store
+        backend.builder.elapsed = 100
+        recorder.heartRateArrived(zone2.lowerBound + 1)
+        // Zones haven't arrived: nothing to say.
+        #expect(recorder.secondsInCurrentZone == nil)
+        store.update(zones, persist: false)
+        for second in 101...103 {
+            backend.builder.elapsed = Double(second)
+            recorder.heartRateArrived(zone2.lowerBound + 1)
+        }
+        backend.builder.elapsed = 105
+        #expect(recorder.secondsInCurrentZone == 2)
+        #expect(recorder.secondsSinceEnteringZone == 4)
+        backend.builder.elapsed = 106
+        recorder.heartRateArrived(zone3.lowerBound + 1)
+        backend.builder.elapsed = 108
+        #expect(recorder.secondsInCurrentZone == 0)
+        #expect(recorder.secondsSinceEnteringZone == 2)
+    }
+
     @Test("the time in each zone follows the heart-rate readings on the run clock, and nothing is counted without zones (WATCH-132)")
     func zoneTime() async throws {
         let zones = WatchZones(settings: .init(effectiveDate: .distantPast, restingHeartRateBPM: 55, maxHeartRateBPM: 190))

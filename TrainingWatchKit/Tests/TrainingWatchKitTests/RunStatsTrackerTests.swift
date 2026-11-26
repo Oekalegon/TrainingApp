@@ -1,4 +1,5 @@
 import Testing
+import TrainingCore
 @testable import TrainingWatchKit
 
 @Suite("RunStatsTracker (WATCH-135)")
@@ -48,6 +49,9 @@ struct RunStatsTrackerTests {
     func steps() {
         #expect(RunScreenItem.metric(.timeRemaining).requiresSteps)
         #expect(RunScreenItem.metric(.finishTime).requiresSteps)
+        #expect(RunScreenItem.metric(.stepTime).requiresSteps)
+        #expect(!RunScreenItem.metric(.timeInZone).requiresSteps)
+        #expect(!RunScreenItem.metric(.timeSinceZoneEntry).requiresSteps)
         #expect(!RunScreenItem.metric(.altitude).requiresSteps)
         #expect(RunMetric.standard.count == 5)
     }

@@ -71,6 +71,18 @@ public struct WorkoutStepEngine: Sendable {
         return steps[currentIndex + 1]
     }
 
+    /// The workout time since the current step began, or `nil` once the steps are done.
+    public func stepElapsed(at elapsed: TimeInterval) -> TimeInterval? {
+        isFinished ? nil : max(elapsed - stepStartElapsed, 0)
+    }
+
+    /// The metres run since the current step began, or `nil` once the steps are done. A step that ended on its
+    /// time goal began at the distance of the tick that noticed it, up to half a second (a metre or two) after the
+    /// boundary, so its distance is that much short.
+    public func stepDistance(at distance: Double) -> Double? {
+        isFinished ? nil : max(distance - stepStartDistance, 0)
+    }
+
     /// Whether every step is done, or there were none.
     public var isFinished: Bool { currentIndex == nil }
 
