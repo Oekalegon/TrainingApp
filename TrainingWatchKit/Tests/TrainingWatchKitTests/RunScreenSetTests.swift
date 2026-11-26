@@ -200,3 +200,15 @@ struct RunScreenSetTests {
         #expect(try JSONDecoder().decode(WatchPlannedWorkout.self, from: old).screenSetID == nil)
     }
 }
+
+@Suite("RunScreenPage fitting units (WATCH-138)")
+struct RunScreenPageFittingTests {
+    @Test("the large watches fit 6 units, a 41 mm watch 5, and no screen fewer than 3")
+    func fitting() {
+        #expect(RunScreenPage.fittingUnits(forScreenHeight: 251) == 6)
+        #expect(RunScreenPage.fittingUnits(forScreenHeight: 242) == 6)
+        #expect(RunScreenPage.fittingUnits(forScreenHeight: 215) == 5)
+        #expect(RunScreenPage.fittingUnits(forScreenHeight: 100) == 3)
+        #expect(RunScreenPage.fittingUnits(forScreenHeight: 1000) == RunScreen.capacity)
+    }
+}

@@ -1,36 +1,6 @@
 import SwiftUI
 import TrainingWatchKit
 
-/// Which watch the preview stands for (WATCH-138): the largest watches fit 6 units of height, the others 5, where the
-/// first items of a full screen are left out.
-enum PreviewWatch: String, CaseIterable, Identifiable {
-    case large, small
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .large: "Ultra"
-        case .small: "Other Watches"
-        }
-    }
-
-    /// How many units of height the watch's screen fits.
-    var fittingUnits: Int {
-        switch self {
-        case .large: RunScreen.capacity
-        case .small: RunScreen.capacity - 1
-        }
-    }
-}
-
-/// The two sample runs the preview draws from, made once: a free run and a planned workout (WATCH-138).
-@MainActor
-enum SampleRuns {
-    static let free = SampleRunScreenSource(isWorkout: false)
-    static let workout = SampleRunScreenSource(isWorkout: true)
-}
-
 /// A run screen as the watch draws it (WATCH-138): the same ``RunScreenPage`` the watch uses, fed with sample values,
 /// inside an outline of the watch with its crown and side button, like the simulator's. A screen that has an item
 /// only a planned workout can show is empty in a free run, as it is left out there.

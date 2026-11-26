@@ -6,7 +6,6 @@ import TrainingWatchKit
 /// planned workouts are on the start screen and tapping one runs its steps (WATCH-104).
 struct RunView: View {
     let recorder: RunRecorder
-    let zoneStore: WatchZoneStore
     let planStore: WatchPlanStore
     let screenStore: RunScreenStore
 
@@ -32,7 +31,7 @@ struct RunView: View {
         case .starting, .saving:
             ProgressView()
         case .running, .paused:
-            RunPages(recorder: recorder, zoneStore: zoneStore, set: screenStore.set(for: recorder.runPlan))
+            RunPages(recorder: recorder, set: screenStore.set(for: recorder.runPlan))
                 // For the battery warning below. The pages need it on themselves too: the pager hands
                 // each one the system's own value.
                 .fakeDimmable()
@@ -78,13 +77,11 @@ struct RunView: View {
 /// run. Which screen shows and when it moves is `RunScreenSelection`.
 private struct RunPages: View {
     let recorder: RunRecorder
-    let zoneStore: WatchZoneStore
     @State private var page = Page.data
     @State private var selection: RunScreenSelection
 
-    init(recorder: RunRecorder, zoneStore: WatchZoneStore, set: RunScreenSet) {
+    init(recorder: RunRecorder, set: RunScreenSet) {
         self.recorder = recorder
-        self.zoneStore = zoneStore
         _selection = State(initialValue: RunScreenSelection(set: set, hasSteps: recorder.hasSteps))
     }
 

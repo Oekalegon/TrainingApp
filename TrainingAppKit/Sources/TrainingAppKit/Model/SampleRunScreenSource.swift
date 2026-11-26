@@ -18,7 +18,7 @@ public final class SampleRunScreenSource: RunScreenSource {
     public let statistics: RunStatisticsBook
     public let isWorkout: Bool
 
-    public let heartRate: Double? = 152
+    public private(set) var heartRate: Double?
     public let distanceMeters = SampleRunScreenSource.sampleElapsed * SampleRunScreenSource.metersPerSecond
     public let averageSecondsPerMeter: Double? = 1 / SampleRunScreenSource.metersPerSecond
     public let secondsPerMeter = 1 / SampleRunScreenSource.metersPerSecond
@@ -39,6 +39,7 @@ public final class SampleRunScreenSource: RunScreenSource {
         var book = RunStatisticsBook()
         var stats = RunStatsTracker()
         var spans = RunSpans()
+        var lastHeartRate: Double?
         let splitLength = 1000.0
         // Play the first 25 minutes through at 5-second steps, so the statistics of every scope have something in them.
         for second in stride(from: 5, through: Int(Self.sampleElapsed), by: 5) {
@@ -49,9 +50,12 @@ public final class SampleRunScreenSource: RunScreenSource {
             let splitKey = Int(distance / splitLength)
             let wave = sin(time / 90 * 2 * .pi)
             let climb = max(0, wave) * 0.4
-            stats.add(heartRate: 140 + 14 * sin(time / 200 * 2 * .pi) + 6)
+            // One heart rate for the run's figures and for the statistics of every scope, as the recorder does.
+            let bpm = 146 + 12 * sin(time / 200 * 2 * .pi)
+            stats.add(heartRate: bpm)
+            lastHeartRate = bpm
             stats.add(altitude: 12 + time / 40 + 5 * sin(time / 150), atDistance: distance)
-            book.add(.heartRate, 146 + 12 * sin(time / 200 * 2 * .pi), stepKey: stepKey, splitKey: splitKey)
+            book.add(.heartRate, bpm, stepKey: stepKey, splitKey: splitKey)
             book.add(.pace, Self.metersPerSecond + 0.3 * wave, stepKey: stepKey, splitKey: splitKey)
             for (quantity, value) in SimulatedReadings.values(atElapsed: time) {
                 book.add(quantity, value, stepKey: stepKey, splitKey: splitKey)
@@ -61,6 +65,7 @@ public final class SampleRunScreenSource: RunScreenSource {
                 stepKey: stepKey, splitKey: splitKey, splitLength: splitLength, secondsPerMeter: 1 / Self.metersPerSecond)
         }
         self.stepEngine = engine
+        self.heartRate = lastHeartRate.map { $0.rounded() }
         self.stats = stats
         self.spans = spans
         statistics = book
