@@ -214,4 +214,14 @@ struct StandardScreensTests {
         #expect(second != id)
         #expect(draft.validationError(checksName: false) == nil)
     }
+
+    @Test("the summary lists the items and the units, and says when only planned workouts can show the screen")
+    func summary() throws {
+        let easy = try #require(StandardScreens.all.first { $0.id == "easy-run" })
+        #expect(easy.summary == "Total Time, Distance, Current Pace, Heart Rate and Zone, Zone Bar. 6 of 6 units.")
+        #expect(!easy.summary.contains("Planned workouts only"))
+        let intervals = try #require(StandardScreens.all.first { $0.id == "intervals-pace" })
+        #expect(intervals.summary.hasSuffix("Planned workouts only."))
+        #expect(intervals.summary.contains("\(intervals.units) of \(RunScreen.capacity) units"))
+    }
 }

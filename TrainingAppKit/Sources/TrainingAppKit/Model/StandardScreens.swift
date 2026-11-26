@@ -21,6 +21,14 @@ public enum StandardScreens {
         /// Whether the screen has an item that means something only in a planned workout's steps, so a free run
         /// leaves it out.
         public var isOnlyInWorkouts: Bool { items.contains(where: \.requiresSteps) }
+
+        /// The items and the room they take, with a note for a screen only planned workouts can show: the line
+        /// under the screen's name in the picker.
+        public var summary: String {
+            let names = items.map(\.title).joined(separator: ", ")
+            let note = isOnlyInWorkouts ? " Planned workouts only." : ""
+            return "\(names). \(units) of \(RunScreen.capacity) units.\(note)"
+        }
     }
 
     /// Every standard screen, in the order the editor lists them: for any run first, then for planned workouts.
@@ -45,7 +53,7 @@ public enum StandardScreens {
                 .measure(.pace, .average, .lastSplit), .measure(.pace, .average, .split), .metric(.currentPace),
             ]),
         Template(
-            id: "form", title: "Running Form", detail: "Cadence, stride, ground contact time, vertical oscillation and power",
+            id: "form", title: "Running Form", detail: "Cadence, stride, ground contact time, vertical oscillation and power; most need a recent Apple Watch",
             systemImage: "figure.run.circle",
             items: [
                 .measure(.runningPower, .current, .run), .measure(.verticalOscillation, .current, .run),
@@ -60,7 +68,7 @@ public enum StandardScreens {
                 .metric(.currentPace), .metric(.heartRate),
             ]),
         Template(
-            id: "zones", title: "Heart Rate Zones", detail: "The time in each zone, in this one, and the heart rate",
+            id: "zones", title: "Heart Rate Zones", detail: "Time in each zone, time in this zone and heart rate",
             systemImage: "heart.text.square",
             items: [
                 .metric(.totalTime), .metric(.timeInZone), .metric(.timeSinceZoneEntry), .widget(.zoneHistogram),

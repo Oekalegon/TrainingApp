@@ -44,19 +44,12 @@ struct WatchStandardScreenPickerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(template.title).foregroundStyle(.primary)
                     Text(template.detail).font(.caption).foregroundStyle(.secondary)
-                    Text(Self.summary(of: template)).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                    Text(template.summary).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                 }
             } icon: {
                 Image(systemName: template.systemImage).accessibilityHidden(true)
             }
         }
         .accessibilityElement(children: .combine)
-    }
-
-    /// The items and the room they take, with a note for a screen only planned workouts can show.
-    static func summary(of template: StandardScreens.Template) -> String {
-        let items = template.items.map(\.title).joined(separator: ", ")
-        let note = template.isOnlyInWorkouts ? " Planned workouts only." : ""
-        return "\(items). \(template.units) of \(RunScreen.capacity) units.\(note)"
     }
 }
