@@ -55,6 +55,13 @@ final class HealthKitRunBuilder: NSObject, RunWorkoutBuilder {
     var onQuantity: ((RunQuantity, Double) -> Void)?
     /// The cadence from the step count's total over the last seconds (WATCH-135).
     private var cadence = CadenceEstimator()
+    /// The readings beside heart rate, distance and energy that the run screens can show (WATCH-135). The live data
+    /// source collects and saves them as the app, so the app must be allowed to share them as well as read them
+    /// (`WatchRunBackend`), and each is enabled by name rather than left to the data source's own choice.
+    static let extraTypes: [HKQuantityType] = [
+        HKQuantityType(.stepCount), HKQuantityType(.runningSpeed), HKQuantityType(.runningStrideLength),
+        HKQuantityType(.runningGroundContactTime), HKQuantityType(.runningVerticalOscillation), HKQuantityType(.runningPower),
+    ]
     private let builder: HKLiveWorkoutBuilder
     private let routeBuilder: HKWorkoutRouteBuilder
     private var workout: HKWorkout?
@@ -64,7 +71,9 @@ final class HealthKitRunBuilder: NSObject, RunWorkoutBuilder {
 
     init(store: HKHealthStore, configuration: HKWorkoutConfiguration, session: HKWorkoutSession, reportsReadings: Bool) {
         builder = session.associatedWorkoutBuilder()
-        builder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: configuration)
+        let dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: configuration)
+        for type in Self.extraTypes { dataSource.enableCollection(for: type, predicate: nil) }
+        builder.dataSource = dataSource
         routeBuilder = HKWorkoutRouteBuilder(healthStore: store, device: nil)
         self.reportsReadings = reportsReadings
         // The delegate is set after `super.init()`, which `self` needs.

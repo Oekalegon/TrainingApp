@@ -18,6 +18,18 @@ struct RunQuantityTests {
         #expect(tracker.value(.median) == 170)
     }
 
+    @Test("the sorted window drops the oldest reading, also when it equals another, and the median follows")
+    func slidingMedian() {
+        var tracker = RunQuantityTracker()
+        for value in [5.0, 1, 5, 9] { tracker.add(value) }
+        #expect(tracker.value(.median) == 5)
+        for _ in 0..<RunQuantityTracker.capacity { tracker.add(7) }
+        #expect(tracker.value(.median) == 7)
+        tracker.add(1)
+        #expect(tracker.value(.median) == 7)
+        #expect(tracker.value(.minimum) == 1)
+    }
+
     @Test("the median covers the last readings only; the average covers all")
     func capacity() {
         var tracker = RunQuantityTracker()

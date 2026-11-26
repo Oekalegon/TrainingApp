@@ -100,15 +100,17 @@ public struct RunQuantityTracker: Sendable, Equatable {
     public private(set) var maximum: Double?
     private var sum = 0.0
     private var count = 0
-    private var recent: [Double] = []
+    /// The last ``capacity`` readings in the order they came, to know which one to drop.
+    private var window: [Double] = []
+    /// The same readings in order of size, kept sorted as they come, so the median is read without sorting.
+    private var sorted: [Double] = []
 
     public init() {}
 
     public var average: Double? { count == 0 ? nil : sum / Double(count) }
 
     public var median: Double? {
-        guard !recent.isEmpty else { return nil }
-        let sorted = recent.sorted()
+        guard !sorted.isEmpty else { return nil }
         let middle = sorted.count / 2
         return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
     }
@@ -119,8 +121,22 @@ public struct RunQuantityTracker: Sendable, Equatable {
         maximum = Swift.max(maximum ?? value, value)
         sum += value
         count += 1
-        recent.append(value)
-        if recent.count > Self.capacity { recent.removeFirst(recent.count - Self.capacity) }
+        window.append(value)
+        sorted.insert(value, at: lowerBound(of: value))
+        if window.count > Self.capacity {
+            let dropped = window.removeFirst()
+            sorted.remove(at: lowerBound(of: dropped))
+        }
+    }
+
+    /// Where `value` goes in (or is found in) ``sorted``: the first place that isn't smaller.
+    private func lowerBound(of value: Double) -> Int {
+        var low = 0, high = sorted.count
+        while low < high {
+            let middle = (low + high) / 2
+            if sorted[middle] < value { low = middle + 1 } else { high = middle }
+        }
+        return low
     }
 
     public func value(_ statistic: RunStatistic) -> Double? {
@@ -134,8 +150,9 @@ public struct RunQuantityTracker: Sendable, Equatable {
     }
 }
 
-/// Steps a minute from the step count's running total: the steps over the last `window` seconds.
-public struct CadenceEstimator: Sendable, Equatable {
+/// Steps a minute from the step count's running total: the steps over the last `window` seconds. The readings
+/// needn't come at even intervals: the steps are divided by the real time between the points.
+public struct CadenceEstimator: Sendable {
     public static let window: TimeInterval = 20
     private var points: [(elapsed: TimeInterval, steps: Double)] = []
 
@@ -149,9 +166,5 @@ public struct CadenceEstimator: Sendable, Equatable {
         while points.count > 2, elapsed - points[1].elapsed >= Self.window { points.removeFirst() }
         guard let first = points.first, elapsed - first.elapsed >= 5 else { return nil }
         return (totalSteps - first.steps) / (elapsed - first.elapsed) * 60
-    }
-
-    public static func == (lhs: CadenceEstimator, rhs: CadenceEstimator) -> Bool {
-        lhs.points.map(\.elapsed) == rhs.points.map(\.elapsed) && lhs.points.map(\.steps) == rhs.points.map(\.steps)
     }
 }
