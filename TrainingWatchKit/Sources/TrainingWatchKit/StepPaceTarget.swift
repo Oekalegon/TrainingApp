@@ -34,28 +34,47 @@ public struct StepPaceTarget: Sendable, Hashable {
         (PaceText.text(secondsPerMeter: fastest, locale: locale), PaceText.text(secondsPerMeter: slowest, locale: locale))
     }
 
-    /// The pace written as a range for VoiceOver and the editor, such as "5:00 to 5:30 per kilometre".
-    public func spoken(locale: Locale = .current) -> String {
+    /// Whether the target is one pace (a race-pace step the plan resolved to a single value), so its two ends read alike.
+    public func hasOneLabel(locale: Locale = .current) -> Bool {
         let (fast, slow) = labels(locale: locale)
-        return "\(fast) to \(slow) per \(PaceText.usesKilometres(locale) ? "kilometre" : "mile")"
+        return fast == slow
     }
 
-    /// The part of the bar's scale the target takes: its width again on each side, at least 5 % of the pace.
-    private var margin: Double { max(slowest - fastest, fastest * 0.05) }
+    /// The pace written as a range for VoiceOver and the editor, such as "5:00 to 5:30 per kilometre", or "5:00 per
+    /// kilometre" for one pace.
+    public func spoken(locale: Locale = .current) -> String {
+        let (fast, slow) = labels(locale: locale)
+        let unit = PaceText.usesKilometres(locale) ? "kilometre" : "mile"
+        return fast == slow ? "\(fast) per \(unit)" : "\(fast) to \(slow) per \(unit)"
+    }
+
+    /// The target as drawn and judged: at least 3 % of the pace wide, so a single pace, or a very narrow range, has a
+    /// band to run in. The labels keep the target's own ends.
+    private var band: (fast: Double, slow: Double) {
+        let middle = (fastest + slowest) / 2
+        let half = max((slowest - fastest) / 2, middle * Self.minimumHalfWidth)
+        return (middle - half, middle + half)
+    }
+
+    /// Half the narrowest band, as a share of the pace.
+    private static let minimumHalfWidth = 0.03
+
+    /// The part of the bar's scale beside the band: the band's width again on each side.
+    private var margin: Double { band.slow - band.fast }
 
     /// Where `secondsPerMeter` is on the bar, 0 (the slow end, at the left) to 1 (the fast end, at the right),
-    /// clamped; the target is the middle part.
+    /// clamped; the band is the middle part.
     public func fraction(forSecondsPerMeter pace: Double) -> Double {
-        let slowEnd = slowest + margin, fastEnd = fastest - margin
+        let slowEnd = band.slow + margin, fastEnd = band.fast - margin
         return min(max((slowEnd - pace) / (slowEnd - fastEnd), 0), 1)
     }
 
-    /// The target's own stretch of the bar, as fractions.
+    /// The band's stretch of the bar, as fractions.
     public var targetFractions: ClosedRange<Double> {
-        fraction(forSecondsPerMeter: slowest)...fraction(forSecondsPerMeter: fastest)
+        fraction(forSecondsPerMeter: band.slow)...fraction(forSecondsPerMeter: band.fast)
     }
 
     public func position(forSecondsPerMeter pace: Double) -> Position {
-        if pace > slowest { .tooSlow } else if pace < fastest { .tooFast } else { .inside }
+        if pace > band.slow { .tooSlow } else if pace < band.fast { .tooFast } else { .inside }
     }
 }

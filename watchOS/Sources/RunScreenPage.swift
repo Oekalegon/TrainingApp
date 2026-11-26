@@ -398,7 +398,7 @@ struct RunScreenPage: View {
     }
 
     /// The pace against the step's pace target (WATCH-135): the target bright in the middle, a triangle at the
-    /// pace, the ends of the target written under it. Nothing while the step has no pace target.
+    /// pace, the ends of the target written under it. A line saying so while the step has no pace target.
     @ViewBuilder
     private func paceBar(at date: Date) -> some View {
         if let step = recorder.stepEngine?.current?.step, let target = StepPaceTarget(step: step) {
@@ -408,28 +408,30 @@ struct RunScreenPage: View {
             VStack(spacing: 2) {
                 PaceTargetBar(
                     target: target.targetFractions, position: pace.map { target.fraction(forSecondsPerMeter: $0) },
-                    tint: status.map(Self.paceColor) ?? .white)
+                    tint: StepHeartRateTarget.Status.displayColor(status?.asStatus))
                 HStack {
-                    Text(labels.slow)
-                    Spacer()
-                    Text(PaceText.unit())
-                    Spacer()
-                    Text(labels.fast)
+                    if target.hasOneLabel() {
+                        Spacer()
+                        Text("\(labels.fast) \(PaceText.unit())")
+                        Spacer()
+                    } else {
+                        Text(labels.slow)
+                        Spacer()
+                        Text(PaceText.unit())
+                        Spacer()
+                        Text(labels.fast)
+                    }
                 }
                 .font(RunMetricStyle.captionFont).foregroundStyle(.secondary).lineLimit(1)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Pace target")
             .accessibilityValue(target.spoken() + (status.map { ", " + Self.spokenPace($0) } ?? ", no pace yet"))
-        }
-    }
-
-    /// Blue when slower than the target, red when faster, white inside, as the heart rate is against its target.
-    private static func paceColor(_ position: StepPaceTarget.Position) -> Color {
-        switch position {
-        case .tooSlow: Color(red: 0.35, green: 0.65, blue: 1.0)
-        case .tooFast: Color(red: 1.0, green: 0.4, blue: 0.4)
-        case .inside: .white
+        } else if recorder.stepEngine?.current != nil {
+            Text("No pace target in this step")
+                .font(RunMetricStyle.captionFont).foregroundStyle(.secondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
         }
     }
 
