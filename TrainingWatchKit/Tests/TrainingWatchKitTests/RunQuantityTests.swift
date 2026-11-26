@@ -107,6 +107,22 @@ struct RunStatisticsBookTests {
         #expect(book.tracker(.cadence, .run)?.average == 170)
     }
 
+    @Test("advancing makes the step and split that went by the last ones even when nothing was read in between")
+    func advance() {
+        var book = RunStatisticsBook()
+        book.add(.cadence, 170, stepKey: 0, splitKey: 0)
+        book.advance(stepKey: 1, splitKey: 0)
+        book.advance(stepKey: 2, splitKey: 1)
+        #expect(book.tracker(.cadence, .lastStep) == nil)
+        #expect(book.tracker(.cadence, .step) == nil)
+        #expect(book.tracker(.cadence, .lastSplit)?.average == 170)
+        // After the last step the step that was run is the last one, and no step is current.
+        book.add(.cadence, 180, stepKey: 2, splitKey: 1)
+        book.advance(stepKey: nil, splitKey: 1)
+        #expect(book.tracker(.cadence, .lastStep)?.average == 180)
+        #expect(book.tracker(.cadence, .step) == nil)
+    }
+
     @Test("a new split does the same, with or without steps")
     func splits() {
         var book = RunStatisticsBook()

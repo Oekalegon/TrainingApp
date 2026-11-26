@@ -9,6 +9,28 @@ public enum RunScreenItemCatalogue {
         public var id: String { title }
         public let title: String
         public let items: [RunScreenItem]
+
+        /// A part of a group: the items over one scope, or the items that have none.
+        public struct Section: Equatable, Sendable, Identifiable {
+            public var id: String { title ?? "" }
+            /// The scope's name ("Whole Run", "This Step"…), or `nil` for the items that have no scope.
+            public let title: String?
+            public let items: [RunScreenItem]
+        }
+
+        /// The items in parts by scope, so a long group is browsed one scope at a time: first the items with no
+        /// scope, then the whole run, this step, the last step, this split and the last split, each only if it has
+        /// items. A group of items with no scope is one part with no title.
+        public var sections: [Section] {
+            var parts: [Section] = []
+            let plain = items.filter { $0.scope == nil }
+            if !plain.isEmpty { parts.append(Section(title: nil, items: plain)) }
+            for scope in RunScope.allCases {
+                let scoped = items.filter { $0.scope == scope }
+                if !scoped.isEmpty { parts.append(Section(title: scope.suffix ?? "Whole Run", items: scoped)) }
+            }
+            return parts
+        }
     }
 
     /// The statistics of a quantity over every scope that offers them, whole run first.
@@ -57,6 +79,14 @@ public enum RunScreenItemCatalogue {
 }
 
 extension RunScreenItem {
+    /// The scope of a statistic, or `nil` for the other items.
+    var scope: RunScope? {
+        switch self {
+        case .measure(_, _, let scope): scope
+        case .metric, .widget: nil
+        }
+    }
+
     /// The item's name in the editor.
     public var title: String {
         switch self {

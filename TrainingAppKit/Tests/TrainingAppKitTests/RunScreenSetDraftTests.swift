@@ -146,3 +146,16 @@ struct ScreensOnlyInWorkoutsTests {
         #expect(!draft.isOnlyInWorkouts("unknown"))
     }
 }
+
+@Suite("Catalogue sections (WATCH-135)")
+struct CatalogueSectionsTests {
+    @Test("a group is split by scope, the items with no scope first, and the parts hold every item once")
+    func sections() throws {
+        for group in RunScreenItemCatalogue.groups {
+            #expect(group.sections.flatMap(\.items) == group.items.filter { $0.scope == nil } + RunScope.allCases.flatMap { scope in group.items.filter { $0.scope == scope } })
+            #expect(Set(group.sections.flatMap(\.items)) == Set(group.items))
+        }
+        let heartRate = try #require(RunScreenItemCatalogue.groups.first { $0.title == "Heart Rate" })
+        #expect(heartRate.sections.map(\.title) == [nil, "Whole Run", "This Step", "Last Step", "This Split", "Last Split"])
+    }
+}

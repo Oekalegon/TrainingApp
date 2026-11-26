@@ -12,8 +12,9 @@ struct WatchScreenItemPickerView: View {
     var body: some View {
         List {
             ForEach(RunScreenItemCatalogue.groups(matching: query)) { group in
-                Section(group.title) {
-                    ForEach(group.items, id: \.self) { item in
+                ForEach(group.sections) { part in
+                Section(part.title.map { group.title + ", " + $0 } ?? group.title) {
+                    ForEach(part.items, id: \.self) { item in
                         let fits = draft.canAdd(item, to: screenID)
                         Button {
                             if draft.add(item, to: screenID) { dismiss() }
@@ -30,6 +31,7 @@ struct WatchScreenItemPickerView: View {
                         }
                         .disabled(!fits)
                     }
+                }
                 }
             }
         }

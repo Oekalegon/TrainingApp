@@ -218,25 +218,30 @@ public struct RunStatisticsBook: Sendable, Equatable {
 
     public init() {}
 
-    /// Adds a reading.
+    /// Notes which step and split the run is in, so a new one is seen as soon as it begins, not at the next reading
+    /// of some quantity (a quantity that arrives every few seconds, or not in a short step at all, would otherwise
+    /// let an older step stand as the "last" one). The recorder calls it at each step change and each split mark.
     /// - Parameters:
-    ///   - stepKey: Which step the run is in (any number that changes with the step), or `nil` with no steps,
-    ///     which leaves the step scopes as they are.
+    ///   - stepKey: Which step the run is in (any number that changes with the step), or `nil` with no steps or
+    ///     after the last, which makes the step that was being run the last step.
     ///   - splitKey: Which split the run is in: the distance divided by the split's length, rounded down.
-    public mutating func add(_ quantity: RunQuantity, _ value: Double, stepKey: Int?, splitKey: Int) {
-        if let stepKey {
-            if stepKey != self.stepKey {
-                if self.stepKey != nil { lastStep = step }
-                step = [:]
-                self.stepKey = stepKey
-            }
-            step[quantity, default: RunQuantityTracker()].add(value)
+    public mutating func advance(stepKey: Int?, splitKey: Int) {
+        if stepKey != self.stepKey {
+            if self.stepKey != nil { lastStep = step }
+            step = [:]
+            self.stepKey = stepKey
         }
         if splitKey != self.splitKey {
             if self.splitKey != nil { lastSplit = split }
             split = [:]
             self.splitKey = splitKey
         }
+    }
+
+    /// Adds a reading, to the run and to the step and the split it falls in (see ``advance(stepKey:splitKey:)``).
+    public mutating func add(_ quantity: RunQuantity, _ value: Double, stepKey: Int?, splitKey: Int) {
+        advance(stepKey: stepKey, splitKey: splitKey)
+        if stepKey != nil { step[quantity, default: RunQuantityTracker()].add(value) }
         split[quantity, default: RunQuantityTracker()].add(value)
         run[quantity, default: RunQuantityTracker()].add(value)
     }

@@ -55,6 +55,7 @@ extension RunRecorder {
             return
         }
         stepEngine = engine
+        advanceScopes()
         await record(transitions)
     }
 
