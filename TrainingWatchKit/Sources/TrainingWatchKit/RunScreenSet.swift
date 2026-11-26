@@ -5,6 +5,29 @@ import Observation
 /// the watch, so it never changes and is never reused.
 public enum RunMetric: String, Sendable, Codable, CaseIterable, Hashable {
     case totalTime, distance, heartRate, currentPace, averagePace
+    // Added with the catalogue (WATCH-135). Older sets never hold them.
+    /// The time of day.
+    case clock
+    /// The mean heart rate of the run so far.
+    case averageHeartRate
+    /// The highest heart rate of the run so far.
+    case maxHeartRate
+    /// The altitude from the GPS.
+    case altitude
+    /// The metres climbed so far.
+    case elevationGain
+    /// The slope of the last stretch, in percent.
+    case grade
+    /// The time left in the planned workout; only with steps.
+    case timeRemaining
+    /// The time of day the planned workout should end at; only with steps.
+    case finishTime
+
+    /// The five metrics the standard screens have always shown, in their order.
+    public static let standard: [RunMetric] = [.totalTime, .distance, .heartRate, .currentPace, .averagePace]
+
+    /// Whether the metric means something only in a planned workout's steps.
+    public var requiresSteps: Bool { self == .timeRemaining || self == .finishTime }
 }
 
 /// A widget a run screen can hold (WATCH-132): something taller or richer than a metric's value.
@@ -46,7 +69,10 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
 
     /// Whether the item means something only in a planned workout's steps.
     public var requiresSteps: Bool {
-        if case .widget(let widget) = self { widget.requiresSteps } else { false }
+        switch self {
+        case .widget(let widget): widget.requiresSteps
+        case .metric(let metric): metric.requiresSteps
+        }
     }
 
     private enum CodingKeys: String, CodingKey { case kind, id }
@@ -170,14 +196,14 @@ public struct RunScreenSet: Sendable, Hashable, Codable, Identifiable {
     /// Today's standard screen: all five metrics.
     public static let freeRunDefault = RunScreenSet(
         id: "default.freeRun", name: "Free run",
-        screens: [RunScreen(id: "standard", items: RunMetric.allCases.map(RunScreenItem.metric))])
+        screens: [RunScreen(id: "standard", items: RunMetric.standard.map(RunScreenItem.metric))])
 
     /// The default for a workout: the standard screen and, opening first, the zone dial (WATCH-118),
     /// which is the step's countdown, the heart rate, the zone bar, the total time and the battery.
     public static let workoutDefault = RunScreenSet(
         id: "default.workout", name: "Workout",
         screens: [
-            RunScreen(id: "standard", items: RunMetric.allCases.map(RunScreenItem.metric)),
+            RunScreen(id: "standard", items: RunMetric.standard.map(RunScreenItem.metric)),
             RunScreen(id: "dial", items: [
                 .widget(.stepCountdown), .metric(.heartRate), .widget(.zoneBar), .metric(.totalTime), .widget(.battery),
             ]),
