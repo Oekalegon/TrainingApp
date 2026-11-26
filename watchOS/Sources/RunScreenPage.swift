@@ -45,7 +45,7 @@ struct RunScreenPage: View {
                     switch item {
                     case .metric(let metric): row(metric, at: date)
                     case .widget(let widget): widgetView(widget, at: date)
-                    case .measure(let quantity, let statistic): measureRow(quantity, statistic)
+                    case .measure(let quantity, let statistic, let scope): measureRow(quantity, statistic, scope)
                     }
                 }
                 if showsDoneNote, recorder.stepEngine?.isFinished == true {
@@ -178,18 +178,24 @@ struct RunScreenPage: View {
     }
 
     /// A collected reading with one of its statistics: the number, its unit and, for a statistic, "AVG" and so on.
-    private func measureRow(_ quantity: RunQuantity, _ statistic: RunStatistic) -> some View {
+    private func measureRow(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope) -> some View {
         let metric = PaceText.usesKilometres()
-        let reading = recorder.quantities[quantity]?.value(statistic)
+        let reading = recorder.statistics.tracker(quantity, scope)?.value(statistic)
         let shown = reading.map { quantity.display($0, metric: metric) }
-        let unitText = [statistic.caption, shown?.unit ?? quantity.display(0, metric: metric).unit].filter { !$0.isEmpty }.joined(separator: " ")
+        let unitName = shown?.unit ?? quantity.display(0, metric: metric).unit
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             value(shown?.number ?? "--").foregroundStyle(reading == nil ? Color.secondary : Color.white)
-            unit(unitText)
+            if let scopeCaption = scope.caption {
+                // A scoped statistic: the unit, then "AVG" over "LAST STEP" and so on.
+                unit(unitName)
+                RunMetricStyle.caption(statistic.caption, scopeCaption)
+            } else {
+                unit([statistic.caption, unitName].filter { !$0.isEmpty }.joined(separator: " "))
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([statistic.prefix, quantity.title].compactMap { $0 }.joined(separator: " "))
+        .accessibilityLabel([statistic.prefix, quantity.title].compactMap { $0 }.joined(separator: " ") + (scope.suffix.map { ", " + $0.lowercased() } ?? ""))
         .accessibilityValue(shown.map { "\($0.number) \(quantity.spokenUnit(metric: metric))" } ?? "no reading")
     }
 

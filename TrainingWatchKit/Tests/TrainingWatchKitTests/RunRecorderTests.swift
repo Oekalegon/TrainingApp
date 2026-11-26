@@ -313,8 +313,8 @@ struct RunRecorderSensorTests {
         backend.builder.onQuantity?(.cadence, 170)
         backend.builder.onQuantity?(.cadence, 180)
         await settle()
-        #expect(recorder.quantities[.cadence]?.value(.average) == 175)
-        #expect(recorder.quantities[.cadence]?.value(.maximum) == 180)
+        #expect(recorder.statistics.tracker(.cadence, .run)?.value(.average) == 175)
+        #expect(recorder.statistics.tracker(.cadence, .run)?.value(.maximum) == 180)
     }
 
     @Test("on a real watch the distance is the builder's total and the heart rate its latest")
@@ -384,6 +384,44 @@ struct RunRecorderSensorTests {
         #expect(backend.builder.heartRateSamples == [150])
     }
 
+    @Test("a step with no reading of a quantity is still the last step, and the one before it is not (WATCH-135)")
+    func lastStepWithoutReadings() async {
+        let steps = [10.0, 10, 10].map { WorkoutStep(kind: .work, goal: .time($0), target: .heartRateZone(2)) }
+        let (recorder, backend) = await running(plan: plan(steps))
+        backend.builder.elapsed = 1
+        backend.builder.onQuantity?(.cadence, 170)
+        await settle()
+        #expect(recorder.statistics.tracker(.cadence, .step)?.current == 170)
+        // The whole second step goes by with no cadence reading, and the third begins.
+        backend.builder.elapsed = 11
+        await recorder.tickSteps()
+        #expect(recorder.statistics.tracker(.cadence, .lastStep)?.average == 170)
+        backend.builder.elapsed = 21
+        await recorder.tickSteps()
+        #expect(recorder.statistics.tracker(.cadence, .lastStep) == nil)
+        backend.builder.onQuantity?(.cadence, 180)
+        await settle()
+        #expect(recorder.statistics.tracker(.cadence, .lastStep) == nil)
+        #expect(recorder.statistics.tracker(.cadence, .step)?.average == 180)
+        #expect(recorder.statistics.tracker(.cadence, .run)?.average == 175)
+    }
+
+    @Test("the next split starts at its mark, and readings are filed in it (WATCH-135)")
+    func splits() async {
+        let (recorder, backend) = await running()
+        backend.builder.onDistance?(500)
+        backend.builder.onHeartRate?(140)
+        await settle()
+        backend.builder.onDistance?(PaceText.usesKilometres() ? 1000 : 1609.344)
+        await settle()
+        #expect(recorder.statistics.tracker(.heartRate, .lastSplit)?.average == 140)
+        #expect(recorder.statistics.tracker(.heartRate, .split) == nil)
+        backend.builder.onHeartRate?(160)
+        await settle()
+        #expect(recorder.statistics.tracker(.heartRate, .split)?.average == 160)
+        #expect(recorder.statistics.tracker(.heartRate, .run)?.average == 150)
+    }
+
     @Test("a supplying backend (the simulator) gets made-up readings of the other quantities with each heart rate (WATCH-135)")
     func suppliedQuantities() async {
         let backend = FakeBackend()
@@ -391,13 +429,13 @@ struct RunRecorderSensorTests {
         let (recorder, _) = await running(backend: backend)
         backend.sendHeartRate?(150)
         await settle()
-        #expect(recorder.quantities[.cadence]?.value(.current) != nil)
-        #expect(recorder.quantities[.runningPower]?.value(.current) != nil)
+        #expect(recorder.statistics.tracker(.cadence, .run)?.value(.current) != nil)
+        #expect(recorder.statistics.tracker(.runningPower, .run)?.value(.current) != nil)
         // A real watch's recorder adds none of its own.
         let (real, realBackend) = await running()
         realBackend.builder.onHeartRate?(150)
         await settle()
-        #expect(real.quantities[.cadence] == nil)
+        #expect(real.statistics.tracker(.cadence, .run) == nil)
     }
 
     @Test("reset clears the readings of the run before")

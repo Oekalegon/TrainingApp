@@ -31,7 +31,11 @@ public final class RunRecorder {
     public private(set) var heartRate: Double?
     public private(set) var distanceMeters: Double = 0 {
         // Only with a run going: with no builder `elapsed()` is 0, which the window would take as a new run.
-        didSet { if let builder { paceWindow.add(meters: distanceMeters, at: builder.elapsedTime(at: .now)) } }
+        didSet {
+            guard let builder else { return }
+            paceWindow.add(meters: distanceMeters, at: builder.elapsedTime(at: .now))
+            advanceScopes()
+        }
     }
     /// The last seconds of distance, for the current pace.
     @ObservationIgnored private var paceWindow = PaceWindow()
@@ -51,7 +55,7 @@ public final class RunRecorder {
     /// The heart rate's average and highest, the altitude and the climb, for the catalogue's metrics (WATCH-135).
     public private(set) var stats = RunStatsTracker()
     /// The statistics of every other collected quantity (WATCH-135).
-    public private(set) var quantities: [RunQuantity: RunQuantityTracker] = [:]
+    public private(set) var statistics = RunStatisticsBook()
     /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
     public var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
@@ -132,7 +136,7 @@ public final class RunRecorder {
         runPlan = plan
         zoneTime.reset()
         stats = RunStatsTracker()
-        quantities = [:]
+        statistics = RunStatisticsBook()
         phase = .starting
         abandoned = false
         routeNote = nil
@@ -322,14 +326,32 @@ public final class RunRecorder {
     /// A reading of a collected quantity, while the run is collecting.
     func quantityArrived(_ quantity: RunQuantity, _ value: Double) {
         guard isCollecting else { return }
-        quantities[quantity, default: RunQuantityTracker()].add(value)
+        record(quantity, value)
+    }
+
+    /// The step and the split the run is in, as keys for the statistics.
+    private var scopeKeys: (step: Int?, split: Int) {
+        let splitLength = PaceText.usesKilometres() ? 1000.0 : 1609.344
+        return (stepEngine?.current?.index, Int(max(distanceMeters, 0) / splitLength))
+    }
+
+    /// Tells the statistics which step and split the run is in, so a new one starts the moment it begins.
+    func advanceScopes() {
+        let keys = scopeKeys
+        statistics.advance(stepKey: keys.step, splitKey: keys.split)
+    }
+
+    /// Files a reading under the step and the split the run is in.
+    private func record(_ quantity: RunQuantity, _ value: Double) {
+        let keys = scopeKeys
+        statistics.add(quantity, value, stepKey: keys.step, splitKey: keys.split)
     }
 
     /// A heart-rate reading from the builder.
     func heartRateArrived(_ bpm: Double) {
         heartRate = bpm
         stats.add(heartRate: bpm)
-        quantities[.heartRate, default: RunQuantityTracker()].add(bpm)
+        record(.heartRate, bpm)
         if let zone = zoneStore?.bands?.zone(forHeartRate: bpm) { zoneTime.add(zone: zone, atElapsed: elapsed()) }
         alertHeartRate(bpm)
     }
