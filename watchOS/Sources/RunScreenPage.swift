@@ -90,11 +90,6 @@ struct RunScreenPage: View {
             paceLine(recorder.currentSecondsPerMeter(at: date), label: "Current pace", caption: "CURRENT")
         case .averagePace:
             paceLine(recorder.averageSecondsPerMeter, label: "Average pace", caption: "AVERAGE")
-        case .clock:
-            let text = date.formatted(date: .omitted, time: .shortened)
-            value(text).accessibilityElement(children: .ignore)
-                .accessibilityLabel("Time of day").accessibilityValue(text)
-                .frame(maxWidth: .infinity, alignment: .leading)
         case .averageHeartRate:
             numberLine(recorder.stats.averageHeartRate, unit: "AVG BPM", label: "Average heart rate", spokenUnit: "beats per minute")
         case .maxHeartRate:

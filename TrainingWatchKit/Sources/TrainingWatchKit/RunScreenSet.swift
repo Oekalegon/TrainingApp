@@ -6,8 +6,6 @@ import Observation
 public enum RunMetric: String, Sendable, Codable, CaseIterable, Hashable {
     case totalTime, distance, heartRate, currentPace, averagePace
     // Added with the catalogue (WATCH-135). Older sets never hold them.
-    /// The time of day.
-    case clock
     /// The mean heart rate of the run so far.
     case averageHeartRate
     /// The highest heart rate of the run so far.

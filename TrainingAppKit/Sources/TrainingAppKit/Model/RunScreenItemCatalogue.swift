@@ -17,7 +17,7 @@ public enum RunScreenItemCatalogue {
             .metric(.heartRate), .metric(.averageHeartRate), .metric(.maxHeartRate), .widget(.zoneBar), .widget(.zoneHistogram),
         ]),
         Group(title: "Pace", items: [.metric(.currentPace), .metric(.averagePace)]),
-        Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime), .metric(.clock)]),
+        Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime)]),
         Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade)]),
         Group(title: "Workout Step", items: [.widget(.stepCountdown), .metric(.timeRemaining), .metric(.finishTime)]),
         Group(title: "Watch", items: [.widget(.battery)]),
@@ -47,7 +47,6 @@ extension RunScreenItem {
             case .heartRate: "Heart Rate and Zone"
             case .currentPace: "Current Pace"
             case .averagePace: "Average Pace"
-            case .clock: "Time of Day"
             case .averageHeartRate: "Average Heart Rate"
             case .maxHeartRate: "Highest Heart Rate"
             case .altitude: "Altitude"
@@ -74,7 +73,6 @@ extension RunScreenItem {
         case .metric(.heartRate): "The heart rate and its place in the zones"
         case .metric(.currentPace): "The pace over the last 20 seconds"
         case .metric(.averagePace): "The pace of the whole run"
-        case .metric(.clock): "The time of day"
         case .metric(.averageHeartRate): "The mean heart rate of the run so far"
         case .metric(.maxHeartRate): "The highest heart rate of the run so far"
         case .metric(.altitude): "The altitude from the GPS"
@@ -96,7 +94,6 @@ extension RunScreenItem {
         case .metric(.distance): "point.topleft.down.to.point.bottomright.curvepath"
         case .metric(.heartRate): "heart.fill"
         case .metric(.currentPace), .metric(.averagePace): "speedometer"
-        case .metric(.clock): "clock.fill"
         case .metric(.averageHeartRate), .metric(.maxHeartRate): "heart"
         case .metric(.altitude), .metric(.elevationGain): "mountain.2"
         case .metric(.grade): "angle"

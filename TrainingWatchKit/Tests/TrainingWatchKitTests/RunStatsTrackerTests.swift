@@ -38,7 +38,7 @@ struct RunStatsTrackerTests {
     func steps() {
         #expect(RunScreenItem.metric(.timeRemaining).requiresSteps)
         #expect(RunScreenItem.metric(.finishTime).requiresSteps)
-        #expect(!RunScreenItem.metric(.clock).requiresSteps)
+        #expect(!RunScreenItem.metric(.altitude).requiresSteps)
         #expect(RunMetric.standard.count == 5)
     }
 }
