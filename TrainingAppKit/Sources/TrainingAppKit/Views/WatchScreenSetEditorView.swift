@@ -15,6 +15,7 @@ struct WatchScreenSetEditorView: View {
     let kind: Kind
     @Environment(\.dismiss) private var dismiss
     @State private var errorText: String?
+    @State private var isAddingScreen = false
 
     init(screens: WatchScreenSetSync, model: TrainingModel, draft: RunScreenSetDraft, kind: Kind) {
         self.screens = screens
@@ -40,7 +41,7 @@ struct WatchScreenSetEditorView: View {
                 }
                 .onDelete { draft.removeScreens(at: $0) }
                 .onMove { draft.moveScreens(from: $0, to: $1) }
-                Button("Add Screen", systemImage: "plus") { draft.addScreen() }
+                Button("Add Screen", systemImage: "plus") { isAddingScreen = true }
             } header: {
                 Text("Screens")
             } footer: {
@@ -82,6 +83,9 @@ struct WatchScreenSetEditorView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button(isSaved ? "Close" : "Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(problem != nil) }
+        }
+        .sheet(isPresented: $isAddingScreen) {
+            NavigationStack { WatchStandardScreenPickerView(draft: $draft) }
         }
     }
 
