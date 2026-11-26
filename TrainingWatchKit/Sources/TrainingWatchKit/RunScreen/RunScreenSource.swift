@@ -9,6 +9,7 @@ public protocol RunScreenSource: AnyObject {
     var stepEngine: WorkoutStepEngine? { get }
     var stats: RunStatsTracker { get }
     var spans: RunSpans { get }
+    var statistics: RunStatisticsBook { get }
     var heartRate: Double? { get }
     var distanceMeters: Double { get }
     var averageSecondsPerMeter: Double? { get }
@@ -27,9 +28,23 @@ public protocol RunScreenSource: AnyObject {
     func currentSecondsPerMeter(at date: Date) -> Double?
     func stepProgress(at date: Date) -> StepProgress?
     func spanMark(at date: Date) -> RunSpans.Mark
-    func reading(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope, at date: Date) -> Double?
     /// The watch's battery now.
     func battery(at date: Date) -> BatteryDisplay
+}
+
+extension RunScreenSource {
+    /// A reading of `quantity` over `scope`, as a run screen shows it. The average pace of a step or a split is
+    /// its distance over its time (so a stop counts, and it agrees with the time and distance shown beside it); every
+    /// other statistic comes from the readings.
+    public func reading(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope, at date: Date = .now) -> Double? {
+        guard quantity == .pace, statistic == .average, scope != .run else {
+            return statistics.tracker(quantity, scope)?.value(statistic)
+        }
+        let mark = spanMark(at: date)
+        guard let time = spans.value(.time, scope, now: mark), let distance = spans.value(.distance, scope, now: mark),
+              time > 0, distance >= 10 else { return nil }
+        return distance / time
+    }
 }
 
 extension RunRecorder: RunScreenSource {
