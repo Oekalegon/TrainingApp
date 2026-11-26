@@ -160,8 +160,8 @@ struct RunSpanTests {
     @Test("a split's time, distance and climb count from where it began, and the one before is kept")
     func splits() {
         var spans = RunSpans()
-        spans.update(mark(0, 0), stepKey: nil, splitKey: 0)
-        spans.update(mark(300, 1000, 12), stepKey: nil, splitKey: 1)
+        spans.update(mark(0, 0), stepKey: nil, splitKey: 0, splitLength: 1000, secondsPerMeter: nil)
+        spans.update(mark(300, 1000, 12), stepKey: nil, splitKey: 1, splitLength: 1000, secondsPerMeter: nil)
         #expect(spans.value(.time, .lastSplit, now: mark(300, 1000, 12)) == 300)
         #expect(spans.value(.climb, .lastSplit, now: mark(300, 1000, 12)) == 12)
         #expect(spans.value(.distance, .split, now: mark(400, 1350, 15)) == 350)
@@ -170,12 +170,24 @@ struct RunSpanTests {
         #expect(spans.value(.time, .step, now: mark(400, 1350)) == nil)
     }
 
+    @Test("a split begins at its mark: the split before is exactly one split long, the time placed by the pace")
+    func exactSplit() {
+        var spans = RunSpans()
+        spans.update(mark(0, 0), stepKey: nil, splitKey: 0, splitLength: 1000, secondsPerMeter: 0.3)
+        // The first fix past 1000 m is 3 m over the mark, 1 s of running at 0.3 s/m... ten metres in 3 s.
+        spans.update(mark(303, 1010, 8), stepKey: nil, splitKey: 1, splitLength: 1000, secondsPerMeter: 0.3)
+        #expect(spans.value(.distance, .lastSplit, now: mark(303, 1010, 8)) == 1000)
+        #expect(abs(spans.value(.time, .lastSplit, now: mark(303, 1010, 8))! - 300) < 1e-9)
+        #expect(spans.value(.distance, .split, now: mark(303, 1010, 8)) == 10)
+        #expect(abs(spans.value(.time, .split, now: mark(303, 1010, 8))! - 3) < 1e-9)
+    }
+
     @Test("a step ending the workout leaves its figures as the last step")
     func steps() {
         var spans = RunSpans()
-        spans.update(mark(0, 0), stepKey: 0, splitKey: 0)
-        spans.update(mark(60, 200), stepKey: 1, splitKey: 0)
-        spans.update(mark(180, 600), stepKey: nil, splitKey: 0)
+        spans.update(mark(0, 0), stepKey: 0, splitKey: 0, splitLength: 1000, secondsPerMeter: nil)
+        spans.update(mark(60, 200), stepKey: 1, splitKey: 0, splitLength: 1000, secondsPerMeter: nil)
+        spans.update(mark(180, 600), stepKey: nil, splitKey: 0, splitLength: 1000, secondsPerMeter: nil)
         #expect(spans.value(.time, .lastStep, now: mark(200, 700)) == 120)
         #expect(spans.value(.distance, .lastStep, now: mark(200, 700)) == 400)
         #expect(spans.value(.time, .step, now: mark(200, 700)) == nil)
@@ -190,6 +202,10 @@ struct RunSpanTests {
         // 4 m/s is 250 s per km, 4:10.
         #expect(shown(4, metric: true) == "4'10\" /KM")
         #expect(shown(4, metric: false).hasSuffix("/MI"))
+        #expect(RunSpanKind.climb.caption == "CLIMB")
+        #expect(RunSpanKind.allCases.map(\.caption) == ["TIME", "DIST", "CLIMB"])
+        #expect(PaceText.text(secondsPerMeter: 0.3, kilometres: true) == "5:00")
+        #expect(PaceText.unit(kilometres: false) == "/mi")
         #expect(RunStatistic.minimum.prefix(for: .pace) == "Slowest")
         #expect(RunStatistic.maximum.prefix(for: .pace) == "Fastest")
         #expect(RunStatistic.minimum.prefix(for: .cadence) == "Lowest")

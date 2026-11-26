@@ -45,7 +45,7 @@ struct RunScreenPage: View {
                     switch item {
                     case .metric(let metric): row(metric, at: date)
                     case .widget(let widget): widgetView(widget, at: date)
-                    case .measure(let quantity, let statistic, let scope): measureRow(quantity, statistic, scope)
+                    case .measure(let quantity, let statistic, let scope): measureRow(quantity, statistic, scope, at: date)
                     case .span(let kind, let scope): spanRow(kind, scope, at: date)
                     }
                 }
@@ -179,9 +179,9 @@ struct RunScreenPage: View {
     }
 
     /// A collected reading with one of its statistics: the number, its unit and, for a statistic, "AVG" and so on.
-    private func measureRow(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope) -> some View {
+    private func measureRow(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope, at date: Date) -> some View {
         let metric = PaceText.usesKilometres()
-        let reading = recorder.statistics.tracker(quantity, scope)?.value(statistic)
+        let reading = recorder.reading(quantity, statistic, scope, at: date)
         let shown = reading.map { quantity.display($0, metric: metric) }
         let unitName = shown?.unit ?? quantity.display(0, metric: metric).unit
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
@@ -225,7 +225,7 @@ struct RunScreenPage: View {
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             value(number).foregroundStyle(reading == nil ? Color.secondary : Color.white)
             if !unitName.isEmpty { unit(unitName) }
-            RunMetricStyle.caption(kind.title.uppercased().replacingOccurrences(of: "ELEVATION GAIN", with: "CLIMB"), scope.caption ?? "")
+            RunMetricStyle.caption(kind.caption, scope.caption ?? "")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)

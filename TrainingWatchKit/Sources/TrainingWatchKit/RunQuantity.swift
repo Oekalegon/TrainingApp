@@ -51,8 +51,7 @@ public enum RunQuantity: String, Sendable, Codable, CaseIterable, Hashable {
         case .verticalOscillation: return metric ? (format(value, 1), "CM") : (format(value / 2.54, 1), "IN")
         case .runningPower: return (format(value, 0), "W")
         case .pace:
-            let text = PaceText.markedText(secondsPerMeter: value > 0 ? 1 / value : nil, locale: metric ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US"))
-            return (text, PaceText.unit(metric ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US")).uppercased())
+            return (PaceText.markedText(secondsPerMeter: value > 0 ? 1 / value : nil, kilometres: metric), PaceText.unit(kilometres: metric).uppercased())
         }
     }
 
@@ -277,6 +276,15 @@ public enum RunSpanKind: String, Sendable, Codable, CaseIterable, Hashable {
         case .climb: "Elevation Gain"
         }
     }
+
+    /// The small word on the watch.
+    public var caption: String {
+        switch self {
+        case .time: "TIME"
+        case .distance: "DIST"
+        case .climb: "CLIMB"
+        }
+    }
 }
 
 /// The time, distance and climb of the step and the split being run and of the ones before (WATCH-135). The
@@ -309,24 +317,40 @@ public struct RunSpans: Sendable, Equatable {
     }
 
     private var stepStart: Mark?
-    private var splitStart: Mark?
+    /// The first split begins with the run, not when the first reading comes.
+    private var splitStart: Mark? = Mark(elapsed: 0, distance: 0, climb: 0)
     private var stepKey: Int?
-    private var splitKey: Int?
+    private var splitKey: Int? = 0
     private var lastStep: Mark?
     private var lastSplit: Mark?
 
     public init() {}
 
     /// Notes where the run is, and the step (`nil` with no steps or after the last) and the split it is in.
-    public mutating func update(_ now: Mark, stepKey: Int?, splitKey: Int) {
+    ///
+    /// A split is a stretch of exactly `splitLength` metres, so a new one begins at its mark, not where the run was
+    /// when it was noticed: its start is put on the mark, and the time it was passed is worked out from how far
+    /// past it the run is and the pace, so the split before reads exactly one split long.
+    /// - Parameters:
+    ///   - splitLength: The length of a split in metres.
+    ///   - secondsPerMeter: The pace to place the mark in time with, or `nil` to take the time as it is.
+    public mutating func update(_ now: Mark, stepKey: Int?, splitKey: Int, splitLength: Double, secondsPerMeter: Double?) {
         if stepKey != self.stepKey {
             if let start = stepStart { lastStep = now.since(start) }
             stepStart = stepKey == nil ? nil : now
             self.stepKey = stepKey
         }
         if splitKey != self.splitKey {
-            if let start = splitStart { lastSplit = now.since(start) }
-            splitStart = now
+            let markDistance = Double(splitKey) * splitLength
+            let overshoot = max(now.distance - markDistance, 0)
+            var boundary = now
+            if self.splitKey != nil, let start = splitStart, markDistance > start.distance {
+                boundary = Mark(
+                    elapsed: max(now.elapsed - overshoot * (secondsPerMeter ?? 0), start.elapsed),
+                    distance: markDistance, climb: now.climb)
+            }
+            if let start = splitStart { lastSplit = boundary.since(start) }
+            splitStart = boundary
             self.splitKey = splitKey
         }
     }

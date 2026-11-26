@@ -35,7 +35,6 @@ public final class RunRecorder {
             guard let builder else { return }
             paceWindow.add(meters: distanceMeters, at: builder.elapsedTime(at: .now))
             advanceScopes()
-            updateSpans()
             if isCollecting, let secondsPerMeter = currentSecondsPerMeter(), secondsPerMeter > 0 {
                 record(.pace, 1 / secondsPerMeter)
             }
@@ -62,6 +61,8 @@ public final class RunRecorder {
     public private(set) var statistics = RunStatisticsBook()
     /// The time, distance and climb of the step and split being run and the ones before.
     public private(set) var spans = RunSpans()
+    /// The length of a split in metres, from the region, read when a run starts.
+    @ObservationIgnored private var splitLength = 1000.0
     /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
     public var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
@@ -144,6 +145,7 @@ public final class RunRecorder {
         stats = RunStatsTracker()
         statistics = RunStatisticsBook()
         spans = RunSpans()
+        splitLength = PaceText.usesKilometres() ? 1000.0 : 1609.344
         phase = .starting
         abandoned = false
         routeNote = nil
@@ -338,14 +340,14 @@ public final class RunRecorder {
 
     /// The step and the split the run is in, as keys for the statistics.
     private var scopeKeys: (step: Int?, split: Int) {
-        let splitLength = PaceText.usesKilometres() ? 1000.0 : 1609.344
-        return (stepEngine?.current?.index, Int(max(distanceMeters, 0) / splitLength))
+        (stepEngine?.current?.index, Int(max(distanceMeters, 0) / splitLength))
     }
 
     /// Tells the statistics which step and split the run is in, so a new one starts the moment it begins.
     func advanceScopes() {
         let keys = scopeKeys
         statistics.advance(stepKey: keys.step, splitKey: keys.split)
+        updateSpans()
     }
 
     /// Where the run is now, for the spans.
@@ -354,9 +356,24 @@ public final class RunRecorder {
     }
 
     /// Tells the spans where the run is, so a new step or split is noticed.
-    func updateSpans() {
-        let splitLength = PaceText.usesKilometres() ? 1000.0 : 1609.344
-        spans.update(spanMark(), stepKey: stepEngine?.current?.index, splitKey: Int(max(distanceMeters, 0) / splitLength))
+    private func updateSpans() {
+        let keys = scopeKeys
+        spans.update(
+            spanMark(), stepKey: keys.step, splitKey: keys.split, splitLength: splitLength,
+            secondsPerMeter: averageSecondsPerMeter ?? currentSecondsPerMeter())
+    }
+
+    /// A reading of `quantity` over `scope`, as a run screen shows it. The average pace of a step or a split is
+    /// its distance over its time (so a stop counts, and it agrees with the time and distance shown beside it); every
+    /// other statistic comes from the readings.
+    public func reading(_ quantity: RunQuantity, _ statistic: RunStatistic, _ scope: RunScope, at date: Date = .now) -> Double? {
+        guard quantity == .pace, statistic == .average, scope != .run else {
+            return statistics.tracker(quantity, scope)?.value(statistic)
+        }
+        let mark = spanMark(at: date)
+        guard let time = spans.value(.time, scope, now: mark), let distance = spans.value(.distance, scope, now: mark),
+              time > 0, distance >= 10 else { return nil }
+        return distance / time
     }
 
     /// Files a reading under the step and the split the run is in.

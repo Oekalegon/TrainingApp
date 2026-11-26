@@ -159,5 +159,9 @@ struct CatalogueSectionsTests {
         }
         let heartRate = try #require(RunScreenItemCatalogue.groups.first { $0.title == "Heart Rate" })
         #expect(heartRate.sections.map(\.title) == [nil, "Whole Run", "This Step", "Last Step", "This Split", "Last Split"])
+        let distance = try #require(RunScreenItemCatalogue.groups.first { $0.title == "Distance and Time" })
+        #expect(distance.sections.first?.title == nil)
+        #expect(distance.sections.map(\.title).contains("This Split"))
+        #expect(distance.sections.map(\.title).contains("Last Step"))
     }
 }
