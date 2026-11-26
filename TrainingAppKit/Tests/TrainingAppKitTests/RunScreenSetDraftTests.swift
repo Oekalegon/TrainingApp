@@ -100,13 +100,34 @@ struct RunScreenItemCatalogueTests {
         #expect(Set(all.map(\.title)).count == all.count)
     }
 
+    @Test("the steps-only items are the ones a free run can't show")
+    func stepsOnly() {
+        let stepsOnly = RunScreenItemCatalogue.groups.flatMap(\.items).filter(\.requiresSteps)
+        #expect(Set(stepsOnly) == [.widget(.stepCountdown), .metric(.timeRemaining), .metric(.finishTime)])
+    }
+
     @Test("a search matches names and group names, ignoring case, and leaves no empty group")
     func search() {
         #expect(RunScreenItemCatalogue.groups(matching: "").count == RunScreenItemCatalogue.groups.count)
         #expect(RunScreenItemCatalogue.groups(matching: "pace").flatMap(\.items) == [.metric(.currentPace), .metric(.averagePace)])
         #expect(RunScreenItemCatalogue.groups(matching: "BATTERY").flatMap(\.items) == [.widget(.battery)])
         // A group's name matches all its items.
-        #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 3)
+        #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 5)
+        #expect(RunScreenItemCatalogue.groups(matching: "elevation").flatMap(\.items) == [.metric(.altitude), .metric(.elevationGain), .metric(.grade)])
         #expect(RunScreenItemCatalogue.groups(matching: "nothing like it").isEmpty)
+    }
+}
+
+@Suite("Screens only in workouts (WATCH-135)")
+struct ScreensOnlyInWorkoutsTests {
+    @Test("a screen with an item for planned workouts is flagged, so the editor can say a free run leaves it out")
+    func flagged() {
+        var draft = RunScreenSetDraft(.workoutDefault)
+        let id = draft.addScreen()
+        #expect(!draft.isOnlyInWorkouts(id))
+        let added = draft.add(.metric(.finishTime), to: id)
+        #expect(added)
+        #expect(draft.isOnlyInWorkouts(id))
+        #expect(!draft.isOnlyInWorkouts("unknown"))
     }
 }

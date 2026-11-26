@@ -52,7 +52,7 @@ struct RunScreenSetTests {
 
     @Test("the default reproduces today's standard screen")
     func defaults() {
-        #expect(RunScreenSet.freeRunDefault.screens.first?.items == RunMetric.allCases.map(RunScreenItem.metric))
+        #expect(RunScreenSet.freeRunDefault.screens.first?.items == RunMetric.standard.map(RunScreenItem.metric))
     }
 
     @Test("the screens travel in the context, and a context without them still decodes")

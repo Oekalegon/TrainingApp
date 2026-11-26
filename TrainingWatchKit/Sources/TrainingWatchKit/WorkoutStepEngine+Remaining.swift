@@ -6,6 +6,17 @@ public struct RemainingEstimate: Sendable, Hashable {
     public let seconds: TimeInterval
     /// Whether every step has been counted: an open step has no end, so then the estimate is short.
     public let isComplete: Bool
+
+    /// The pace to count distance goals at (seconds per metre) for an estimate shown on the run screen: the run's
+    /// average pace, with the current pace taken into account only between half and double of it, so a stop or a
+    /// GPS glitch doesn't make the estimate jump by minutes. Without an average yet (the first 50 m) the current
+    /// pace, and without either 6:00 a kilometre.
+    public static func estimatePace(current: Double?, average: Double?) -> Double {
+        let fallback = 0.36
+        guard let average, average > 0 else { return current.flatMap { $0 > 0 ? $0 : nil } ?? fallback }
+        guard let current, current > 0 else { return average }
+        return min(max(current, average * 0.5), average * 2)
+    }
 }
 
 extension WorkoutStepEngine {

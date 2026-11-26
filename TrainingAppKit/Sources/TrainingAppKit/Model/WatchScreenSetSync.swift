@@ -102,7 +102,7 @@ public final class WatchScreenSetSync {
     public static func newSet(named name: String) -> RunScreenSet {
         RunScreenSet(
             id: UUID().uuidString, name: name,
-            screens: [RunScreen(id: UUID().uuidString, items: RunMetric.allCases.map(RunScreenItem.metric))])
+            screens: [RunScreen(id: UUID().uuidString, items: RunMetric.standard.map(RunScreenItem.metric))])
     }
 
     /// Replaces the set for a free run (the built-in one's contents can be edited, its id stays).

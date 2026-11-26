@@ -96,6 +96,16 @@ struct BatteryForecastTests {
         #expect(estimate.isComplete)
     }
 
+    @Test("the pace for an estimate follows the average and keeps the current one within half to double of it")
+    func estimatePace() {
+        #expect(RemainingEstimate.estimatePace(current: 0.3, average: 0.3) == 0.3)
+        #expect(RemainingEstimate.estimatePace(current: 2.0, average: 0.3) == 0.6)
+        #expect(RemainingEstimate.estimatePace(current: 0.05, average: 0.3) == 0.15)
+        #expect(RemainingEstimate.estimatePace(current: nil, average: 0.3) == 0.3)
+        #expect(RemainingEstimate.estimatePace(current: 0.4, average: nil) == 0.4)
+        #expect(RemainingEstimate.estimatePace(current: nil, average: nil) == 0.36)
+    }
+
     @Test("an open step can't be counted, so the estimate is incomplete; a finished workout has none")
     func remainingOpen() throws {
         let engine = WorkoutStepEngine(blocks: [

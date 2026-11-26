@@ -48,6 +48,8 @@ public final class RunRecorder {
 
     /// The time in each zone so far, for the zone histogram (WATCH-132).
     var zoneTime = ZoneTimeTracker()
+    /// The heart rate's average and highest, the altitude and the climb, for the catalogue's metrics (WATCH-135).
+    public private(set) var stats = RunStatsTracker()
     /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
     public var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
@@ -127,6 +129,7 @@ public final class RunRecorder {
         guard phase == .idle else { return }
         runPlan = plan
         zoneTime.reset()
+        stats = RunStatsTracker()
         phase = .starting
         abandoned = false
         routeNote = nil
@@ -205,6 +208,7 @@ public final class RunRecorder {
         session = nil
         builder = nil
         lastLocation = nil
+        stats = RunStatsTracker()
         canRetrySave = false
         collectionEnded = false
     }
@@ -299,6 +303,7 @@ public final class RunRecorder {
     /// A heart-rate reading from the builder.
     func heartRateArrived(_ bpm: Double) {
         heartRate = bpm
+        stats.add(heartRate: bpm)
         if let zone = zoneStore?.bands?.zone(forHeartRate: bpm) { zoneTime.add(zone: zone, atElapsed: elapsed()) }
         alertHeartRate(bpm)
     }
@@ -327,6 +332,9 @@ public final class RunRecorder {
             log.error("route insert failed: \(error.localizedDescription, privacy: .public)")
         }
         routePointCount += locations.count
+        for location in locations where (0...RunStatsTracker.usableVerticalAccuracy).contains(location.verticalAccuracy) {
+            stats.add(altitude: location.altitude, atDistance: distanceMeters)
+        }
         guard backend.suppliesSensorReadings else { return }
         // Such a backend records no distance from GPS, so derive it from the playback locations.
         // One sample per batch, stamped from the previous sample's end to now: a fix's own

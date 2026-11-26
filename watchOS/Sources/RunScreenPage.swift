@@ -90,7 +90,65 @@ struct RunScreenPage: View {
             paceLine(recorder.currentSecondsPerMeter(at: date), label: "Current pace", caption: "CURRENT")
         case .averagePace:
             paceLine(recorder.averageSecondsPerMeter, label: "Average pace", caption: "AVERAGE")
+        case .averageHeartRate:
+            numberLine(recorder.stats.averageHeartRate, unit: "AVG BPM", label: "Average heart rate", spokenUnit: "beats per minute")
+        case .maxHeartRate:
+            numberLine(recorder.stats.maxHeartRate, unit: "MAX BPM", label: "Highest heart rate", spokenUnit: "beats per minute")
+        case .altitude:
+            let metric = PaceText.usesKilometres()
+            numberLine(recorder.stats.altitude.map { metric ? $0 : $0 * 3.28084 },
+                       unit: metric ? "M ALT" : "FT ALT", label: "Altitude", spokenUnit: metric ? "metres" : "feet")
+        case .elevationGain:
+            let metric = PaceText.usesKilometres()
+            numberLine(recorder.stats.altitude == nil ? nil : (metric ? recorder.stats.elevationGain : recorder.stats.elevationGain * 3.28084),
+                       unit: metric ? "M UP" : "FT UP", label: "Elevation gain", spokenUnit: metric ? "metres" : "feet")
+        case .grade:
+            numberLine(recorder.stats.grade, unit: "% GRADE", label: "Grade", spokenUnit: "percent", decimals: 1)
+        case .timeRemaining:
+            if let estimate = remainingEstimate(at: date) {
+                let text = ZoneDialText.totalTimeText(estimate.seconds, showsSeconds: !dimmed)
+                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                    value(estimate.isComplete ? text : "≥" + text)
+                    RunMetricStyle.caption("TIME", "LEFT")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Time left")
+                .accessibilityValue((estimate.isComplete ? "" : "at least ") + spokenDuration(estimate.seconds))
+            }
+        case .finishTime:
+            if let estimate = remainingEstimate(at: date) {
+                let text = date.addingTimeInterval(estimate.seconds).formatted(date: .omitted, time: .shortened)
+                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                    value(estimate.isComplete ? text : "≥" + text)
+                    RunMetricStyle.caption("FINISH", "AT")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Finish time").accessibilityValue((estimate.isComplete ? "" : "at least ") + text)
+            }
         }
+    }
+
+    /// What is left of the planned workout, counting distances at the pace so far.
+    private func remainingEstimate(at date: Date) -> RemainingEstimate? {
+        recorder.stepEngine?.remaining(
+            progress: recorder.stepProgress(at: date),
+            secondsPerMeter: RemainingEstimate.estimatePace(
+                current: recorder.currentSecondsPerMeter(at: date), average: recorder.averageSecondsPerMeter))
+    }
+
+    /// A number with its unit in small capitals, "--" with no reading.
+    private func numberLine(_ number: Double?, unit text: String, label: String, spokenUnit: String, decimals: Int = 0) -> some View {
+        let shown = number.map { $0.formatted(.number.precision(.fractionLength(decimals))) } ?? "--"
+        return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+            value(shown).foregroundStyle(number == nil ? Color.secondary : Color.white)
+            unit(text)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(number == nil ? "no reading" : "\(shown) \(spokenUnit)")
     }
 
     /// A value in the shared font. It shrinks only when it can't fit and `shrinks` allows it; the heart-rate
