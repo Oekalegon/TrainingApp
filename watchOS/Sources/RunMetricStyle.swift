@@ -97,3 +97,14 @@ extension StepHeartRateTarget.Status {
         }
     }
 }
+
+extension StepPaceTarget.Position {
+    /// The same verdict as a heart rate's, so one colour rule serves both bars: slower than the target is "below".
+    var asStatus: StepHeartRateTarget.Status {
+        switch self {
+        case .tooSlow: .below
+        case .tooFast: .above
+        case .inside: .inside
+        }
+    }
+}

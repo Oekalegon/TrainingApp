@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import TrainingCore
 @testable import TrainingWatchKit
 
 @Suite("RunQuantity (WATCH-135)")
@@ -213,5 +214,56 @@ struct RunSpanTests {
         #expect(!RunScreenItem.span(.time, .split).requiresSteps)
         let item = RunScreenItem.span(.climb, .lastSplit)
         #expect((try? JSONDecoder().decode(RunScreenItem.self, from: JSONEncoder().encode(item))) == item)
+    }
+}
+
+@Suite("StepPaceTarget (WATCH-135)")
+struct StepPaceTargetTests {
+    private func step(target: IntensityTarget?, companion: IntensityTarget? = nil) -> WorkoutStep {
+        WorkoutStep(kind: .work, goal: .time(60), target: target, companionTarget: companion)
+    }
+
+    @Test("a pace target comes from the step's own target or its companion, and a heart-rate step has none")
+    func resolving() throws {
+        let own = try #require(StepPaceTarget(step: step(target: .pace(300...330))))
+        #expect(abs(own.fastest - 0.3) < 1e-9 && abs(own.slowest - 0.33) < 1e-9)
+        #expect(StepPaceTarget(step: step(target: .heartRateZone(3), companion: .pace(300...330))) != nil)
+        #expect(StepPaceTarget(step: step(target: .heartRateZone(3))) == nil)
+        #expect(StepPaceTarget(step: step(target: nil)) == nil)
+        #expect(StepPaceTarget(step: step(target: .pace(0...330))) == nil)
+    }
+
+    @Test("a single pace or a narrow range gets a band of at least 3 % of the pace to run in")
+    func narrowTarget() throws {
+        let single = try #require(StepPaceTarget(step: step(target: .pace(300...300))))
+        #expect(single.hasOneLabel(locale: Locale(identifier: "nl_NL")))
+        #expect(single.spoken(locale: Locale(identifier: "nl_NL")) == "5:00 per kilometre")
+        let band = single.targetFractions
+        #expect(band.upperBound > band.lowerBound)
+        #expect(abs((band.lowerBound + band.upperBound) / 2 - 0.5) < 1e-9)
+        #expect(single.position(forSecondsPerMeter: 0.3) == .inside)
+        #expect(single.position(forSecondsPerMeter: 0.305) == .inside)
+        #expect(single.position(forSecondsPerMeter: 0.32) == .tooSlow)
+        #expect(single.position(forSecondsPerMeter: 0.28) == .tooFast)
+        // A wide target keeps its own ends.
+        let wide = try #require(StepPaceTarget(step: step(target: .pace(300...330))))
+        #expect(!wide.hasOneLabel(locale: Locale(identifier: "nl_NL")))
+        #expect(wide.spoken(locale: Locale(identifier: "nl_NL")) == "5:00 to 5:30 per kilometre")
+        #expect(RunWidget.paceBar.height == 2)
+    }
+
+    @Test("the bar puts the target in the middle, slow at the left and fast at the right")
+    func bar() throws {
+        let target = try #require(StepPaceTarget(step: step(target: .pace(300...330))))
+        #expect(abs(target.targetFractions.lowerBound - 1.0 / 3) < 1e-9)
+        #expect(abs(target.targetFractions.upperBound - 2.0 / 3) < 1e-9)
+        #expect(target.fraction(forSecondsPerMeter: 0.5) == 0)
+        #expect(target.fraction(forSecondsPerMeter: 0.1) == 1)
+        #expect(target.position(forSecondsPerMeter: 0.35) == .tooSlow)
+        #expect(target.position(forSecondsPerMeter: 0.31) == .inside)
+        #expect(target.position(forSecondsPerMeter: 0.28) == .tooFast)
+        #expect(target.labels(locale: Locale(identifier: "nl_NL")) == ("5:00", "5:30"))
+        #expect(RunWidget.paceBar.requiresSteps)
+        #expect(RunMetric.stepNumber.requiresSteps)
     }
 }
