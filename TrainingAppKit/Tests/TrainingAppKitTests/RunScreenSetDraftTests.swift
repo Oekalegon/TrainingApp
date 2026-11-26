@@ -112,7 +112,7 @@ struct RunScreenItemCatalogueTests {
         #expect(RunScreenItemCatalogue.groups(matching: "pace").flatMap(\.items) == [.metric(.currentPace), .metric(.averagePace)])
         #expect(RunScreenItemCatalogue.groups(matching: "BATTERY").flatMap(\.items) == [.widget(.battery)])
         // A group's name matches all its items.
-        #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 6)
+        #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 7)
         #expect(RunScreenItemCatalogue.groups(matching: "elevation").flatMap(\.items) == [.metric(.altitude), .metric(.elevationGain), .metric(.grade)])
         #expect(RunScreenItemCatalogue.groups(matching: "nothing like it").isEmpty)
     }

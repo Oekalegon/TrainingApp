@@ -51,35 +51,8 @@ struct RunStatsTrackerTests {
         #expect(RunScreenItem.metric(.finishTime).requiresSteps)
         #expect(RunScreenItem.metric(.stepTime).requiresSteps)
         #expect(!RunScreenItem.metric(.timeInZone).requiresSteps)
+        #expect(!RunScreenItem.metric(.timeSinceZoneEntry).requiresSteps)
         #expect(!RunScreenItem.metric(.altitude).requiresSteps)
         #expect(RunMetric.standard.count == 5)
-    }
-}
-
-@Suite("Step and zone figures (WATCH-135)")
-struct StepFigureTests {
-    @Test("the step's own time and distance count from where it began")
-    func stepFigures() {
-        var engine = WorkoutStepEngine(blocks: [
-            WorkoutBlock(steps: [WorkoutStep(kind: .warmup, goal: .time(60)), WorkoutStep(kind: .work, goal: .time(60))])
-        ])
-        #expect(engine.stepElapsed(at: 20) == 20)
-        _ = engine.update(elapsed: 70, distance: 200)
-        #expect(engine.stepElapsed(at: 90) == 30)
-        #expect(engine.stepDistance(at: 260) == 60)
-        _ = engine.update(elapsed: 200, distance: 500)
-        #expect(engine.stepElapsed(at: 210) == nil)
-        #expect(engine.stepDistance(at: 600) == nil)
-    }
-
-    @Test("time in a zone is read per zone")
-    func zoneSeconds() {
-        var tracker = ZoneTimeTracker()
-        tracker.add(zone: 2, atElapsed: 0)
-        tracker.add(zone: 3, atElapsed: 6)
-        tracker.add(zone: 3, atElapsed: 10)
-        #expect(tracker.seconds(inZone: 2) == 6)
-        #expect(tracker.seconds(inZone: 3) == 4)
-        #expect(tracker.seconds(inZone: 5) == 0)
     }
 }

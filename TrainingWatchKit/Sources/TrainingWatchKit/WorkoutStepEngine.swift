@@ -76,7 +76,9 @@ public struct WorkoutStepEngine: Sendable {
         isFinished ? nil : max(elapsed - stepStartElapsed, 0)
     }
 
-    /// The metres run since the current step began, or `nil` once the steps are done.
+    /// The metres run since the current step began, or `nil` once the steps are done. A step that ended on its
+    /// time goal began at the distance of the tick that noticed it, up to half a second (a metre or two) after the
+    /// boundary, so its distance is that much short.
     public func stepDistance(at distance: Double) -> Double? {
         isFinished ? nil : max(distance - stepStartDistance, 0)
     }

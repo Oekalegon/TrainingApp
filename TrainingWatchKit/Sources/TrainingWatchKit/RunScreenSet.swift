@@ -26,6 +26,8 @@ public enum RunMetric: String, Sendable, Codable, CaseIterable, Hashable {
     case stepDistance
     /// The time the run has spent in the heart-rate zone it is in now.
     case timeInZone
+    /// The time since the heart rate came into the zone it is in now.
+    case timeSinceZoneEntry
 
     /// The five metrics the standard screens have always shown, in their order.
     public static let standard: [RunMetric] = [.totalTime, .distance, .heartRate, .currentPace, .averagePace]

@@ -150,6 +150,18 @@ struct RunScreenPage: View {
             } else {
                 numberLine(nil, unit: "IN ZONE", label: "Time in current zone", spokenUnit: "")
             }
+        case .timeSinceZoneEntry:
+            if let seconds = recorder.secondsSinceEnteringZone {
+                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                    value(ZoneDialText.totalTimeText(seconds, showsSeconds: !dimmed))
+                    RunMetricStyle.caption("SINCE", "ENTRY")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Time since entering zone").accessibilityValue(spokenDuration(seconds))
+            } else {
+                numberLine(nil, unit: "IN ZONE", label: "Time since entering zone", spokenUnit: "")
+            }
         case .finishTime:
             if let estimate = remainingEstimate(at: date) {
                 let text = date.addingTimeInterval(estimate.seconds).formatted(date: .omitted, time: .shortened)
