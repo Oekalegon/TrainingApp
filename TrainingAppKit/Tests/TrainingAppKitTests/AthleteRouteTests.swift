@@ -12,7 +12,7 @@ struct AthleteRouteTests {
     func titlesAndIconsAreDistinct() {
         let routes: [AthleteRoute] = [
             .personalInformation, .heartRateZones, .paceZones, .connectedServices, .appleHealth,
-            .appleWatch, .synchronisation, .watchAlerts, .calendar, .developer,
+            .appleWatch, .synchronisation, .watchAlerts, .watchScreens, .calendar, .developer,
         ]
 
         #expect(Set(routes.map(\.title)).count == routes.count)

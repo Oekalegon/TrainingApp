@@ -48,6 +48,8 @@ struct AthleteView: View {
     let watchSync: WatchScheduleSync?
     /// The settings for the watch's alerts (WATCH-107), shown on the synchronisation screen.
     var watchCues: WatchCueSync?
+    /// The athlete's run screens for the watch (WATCH-134).
+    var watchScreens: WatchScreenSetSync?
     /// Reads what HealthKit recorded for recent workouts, for the Developer screen (MVP2-146 spike).
     var workoutInspector: (any WorkoutInspecting)?
     /// Whether the overlap-review sheet (MVP1-67), opened by tapping ``OverlapWarningBanner``, is
@@ -164,7 +166,7 @@ struct AthleteView: View {
                 onImport: onImport, onConnect: onConnectHealth
             )
         case .appleWatch:
-            AppleWatchView(showsAlerts: watchCues != nil)
+            AppleWatchView(showsAlerts: watchCues != nil, showsScreens: watchScreens != nil)
         case .synchronisation:
             if let watchSync {
                 WatchSynchronisationView(sync: watchSync)
@@ -172,6 +174,10 @@ struct AthleteView: View {
         case .watchAlerts:
             if let watchCues {
                 WatchAlertsView(cues: watchCues)
+            }
+        case .watchScreens:
+            if let watchScreens {
+                WatchScreensView(screens: watchScreens, model: microCycleViewModel.model)
             }
         case .calendar:
             CalendarSettingsView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)

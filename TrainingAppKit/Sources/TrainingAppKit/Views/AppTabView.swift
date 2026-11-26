@@ -131,6 +131,7 @@ public struct AppTabView: View {
                     onSetActivitySport: { await viewModel.setActivitySport($0, sport: $1, venue: $2) },
                     watchSync: watchSync,
                     watchCues: watchCues,
+                    watchScreens: watchScreens,
                     workoutInspector: workoutInspector
                 )
             }
