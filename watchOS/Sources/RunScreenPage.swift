@@ -45,6 +45,7 @@ struct RunScreenPage: View {
                     switch item {
                     case .metric(let metric): row(metric, at: date)
                     case .widget(let widget): widgetView(widget, at: date)
+                    case .measure(let quantity, let statistic): measureRow(quantity, statistic)
                     }
                 }
                 if showsDoneNote, recorder.stepEngine?.isFinished == true {
@@ -174,6 +175,22 @@ struct RunScreenPage: View {
                 .accessibilityLabel("Finish time").accessibilityValue((estimate.isComplete ? "" : "at least ") + text)
             }
         }
+    }
+
+    /// A collected reading with one of its statistics: the number, its unit and, for a statistic, "AVG" and so on.
+    private func measureRow(_ quantity: RunQuantity, _ statistic: RunStatistic) -> some View {
+        let metric = PaceText.usesKilometres()
+        let reading = recorder.quantities[quantity]?.value(statistic)
+        let shown = reading.map { quantity.display($0, metric: metric) }
+        let unitText = [statistic.caption, shown?.unit ?? quantity.display(0, metric: metric).unit].filter { !$0.isEmpty }.joined(separator: " ")
+        return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+            value(shown?.number ?? "--").foregroundStyle(reading == nil ? Color.secondary : Color.white)
+            unit(unitText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([statistic.prefix, quantity.title].compactMap { $0 }.joined(separator: " "))
+        .accessibilityValue(shown.map { "\($0.number) \(quantity.spokenUnit(metric: metric))" } ?? "no reading")
     }
 
     /// What is left of the planned workout, counting distances at the pace so far.

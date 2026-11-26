@@ -307,6 +307,16 @@ struct RunRecorderSensorTests {
         #expect(recorder.stats.averageHeartRate == nil)
     }
 
+    @Test("other collected quantities keep their statistics for the run, and the next run starts over (WATCH-135)")
+    func quantities() async {
+        let (recorder, backend) = await running()
+        backend.builder.onQuantity?(.cadence, 170)
+        backend.builder.onQuantity?(.cadence, 180)
+        await settle()
+        #expect(recorder.quantities[.cadence]?.value(.average) == 175)
+        #expect(recorder.quantities[.cadence]?.value(.maximum) == 180)
+    }
+
     @Test("on a real watch the distance is the builder's total and the heart rate its latest")
     func builderReadings() async {
         let (recorder, backend) = await running()
@@ -372,6 +382,22 @@ struct RunRecorderSensorTests {
         await settle()
         #expect(recorder.heartRate == 150)
         #expect(backend.builder.heartRateSamples == [150])
+    }
+
+    @Test("a supplying backend (the simulator) gets made-up readings of the other quantities with each heart rate (WATCH-135)")
+    func suppliedQuantities() async {
+        let backend = FakeBackend()
+        backend.suppliesSensorReadings = true
+        let (recorder, _) = await running(backend: backend)
+        backend.sendHeartRate?(150)
+        await settle()
+        #expect(recorder.quantities[.cadence]?.value(.current) != nil)
+        #expect(recorder.quantities[.runningPower]?.value(.current) != nil)
+        // A real watch's recorder adds none of its own.
+        let (real, realBackend) = await running()
+        realBackend.builder.onHeartRate?(150)
+        await settle()
+        #expect(real.quantities[.cadence] == nil)
     }
 
     @Test("reset clears the readings of the run before")

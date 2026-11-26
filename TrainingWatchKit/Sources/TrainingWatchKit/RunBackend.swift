@@ -76,6 +76,9 @@ public protocol RunWorkoutBuilder: AnyObject {
     /// Called with the total distance in metres so far, when the builder has one. Never called by
     /// a backend that supplies its own readings.
     var onDistance: ((Double) -> Void)? { get set }
+    /// Called with the latest reading of any other quantity the builder collects (WATCH-135), in the
+    /// quantity's own unit; the cadence is worked out by the builder from the step count.
+    var onQuantity: ((RunQuantity, Double) -> Void)? { get set }
 
     /// Elapsed workout time at `date`, without paused time.
     func elapsedTime(at date: Date) -> TimeInterval

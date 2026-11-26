@@ -1,0 +1,170 @@
+import Foundation
+
+/// A reading the watch collects during a run and a run screen can show (WATCH-135): the workout builder
+/// delivers them, the recorder keeps their statistics (``RunQuantityTracker``).
+public enum RunQuantity: String, Sendable, Codable, CaseIterable, Hashable {
+    case heartRate
+    /// Steps a minute, worked out from the step count (``CadenceEstimator``).
+    case cadence
+    /// Metres a second.
+    case runningSpeed
+    /// Metres.
+    case strideLength
+    /// Milliseconds.
+    case groundContactTime
+    /// Centimetres.
+    case verticalOscillation
+    /// Watts.
+    case runningPower
+
+    /// The name in the editor and for VoiceOver.
+    public var title: String {
+        switch self {
+        case .heartRate: "Heart Rate"
+        case .cadence: "Cadence"
+        case .runningSpeed: "Speed"
+        case .strideLength: "Stride Length"
+        case .groundContactTime: "Ground Contact Time"
+        case .verticalOscillation: "Vertical Oscillation"
+        case .runningPower: "Power"
+        }
+    }
+
+    /// How a value looks on the watch: the number and its unit in small capitals.
+    /// - Parameters:
+    ///   - value: The reading in the quantity's own unit (see the cases).
+    ///   - metric: Kilometres and metres rather than miles and feet.
+    public func display(_ value: Double, metric: Bool) -> (number: String, unit: String) {
+        func format(_ value: Double, _ digits: Int) -> String {
+            value.formatted(.number.precision(.fractionLength(digits)).grouping(.never))
+        }
+        switch self {
+        case .heartRate: return (format(value, 0), "BPM")
+        case .cadence: return (format(value, 0), "SPM")
+        case .runningSpeed: return metric ? (format(value * 3.6, 1), "KM/H") : (format(value * 2.236_936, 1), "MPH")
+        case .strideLength: return metric ? (format(value, 2), "M") : (format(value * 3.280_84, 1), "FT")
+        case .groundContactTime: return (format(value, 0), "MS")
+        case .verticalOscillation: return metric ? (format(value, 1), "CM") : (format(value / 2.54, 1), "IN")
+        case .runningPower: return (format(value, 0), "W")
+        }
+    }
+
+    /// The unit as VoiceOver says it, in the same measure as ``display(_:metric:)``.
+    public func spokenUnit(metric: Bool) -> String {
+        switch self {
+        case .heartRate: "beats per minute"
+        case .cadence: "steps per minute"
+        case .runningSpeed: metric ? "kilometres per hour" : "miles per hour"
+        case .strideLength: metric ? "metres" : "feet"
+        case .groundContactTime: "milliseconds"
+        case .verticalOscillation: metric ? "centimetres" : "inches"
+        case .runningPower: "watts"
+        }
+    }
+}
+
+/// What a run screen can say about a ``RunQuantity``.
+public enum RunStatistic: String, Sendable, Codable, CaseIterable, Hashable {
+    case current, average, minimum, maximum, median
+
+    /// The word before the quantity's name in the editor; nothing for the current reading.
+    public var prefix: String? {
+        switch self {
+        case .current: nil
+        case .average: "Average"
+        case .minimum: "Lowest"
+        case .maximum: "Highest"
+        case .median: "Median"
+        }
+    }
+
+    /// The small caption on the watch.
+    public var caption: String {
+        switch self {
+        case .current: ""
+        case .average: "AVG"
+        case .minimum: "MIN"
+        case .maximum: "MAX"
+        case .median: "MED"
+        }
+    }
+}
+
+/// The readings of one ``RunQuantity`` during a run, with their statistics. The average, lowest and highest
+/// are over every reading; the median is over the last ``capacity``, so a long run's memory stays small.
+public struct RunQuantityTracker: Sendable, Equatable {
+    public static let capacity = 3600
+
+    public private(set) var current: Double?
+    public private(set) var minimum: Double?
+    public private(set) var maximum: Double?
+    private var sum = 0.0
+    private var count = 0
+    /// The last ``capacity`` readings in the order they came, to know which one to drop.
+    private var window: [Double] = []
+    /// The same readings in order of size, kept sorted as they come, so the median is read without sorting.
+    private var sorted: [Double] = []
+
+    public init() {}
+
+    public var average: Double? { count == 0 ? nil : sum / Double(count) }
+
+    public var median: Double? {
+        guard !sorted.isEmpty else { return nil }
+        let middle = sorted.count / 2
+        return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
+    }
+
+    public mutating func add(_ value: Double) {
+        current = value
+        minimum = Swift.min(minimum ?? value, value)
+        maximum = Swift.max(maximum ?? value, value)
+        sum += value
+        count += 1
+        window.append(value)
+        sorted.insert(value, at: lowerBound(of: value))
+        if window.count > Self.capacity {
+            let dropped = window.removeFirst()
+            sorted.remove(at: lowerBound(of: dropped))
+        }
+    }
+
+    /// Where `value` goes in (or is found in) ``sorted``: the first place that isn't smaller.
+    private func lowerBound(of value: Double) -> Int {
+        var low = 0, high = sorted.count
+        while low < high {
+            let middle = (low + high) / 2
+            if sorted[middle] < value { low = middle + 1 } else { high = middle }
+        }
+        return low
+    }
+
+    public func value(_ statistic: RunStatistic) -> Double? {
+        switch statistic {
+        case .current: current
+        case .average: average
+        case .minimum: minimum
+        case .maximum: maximum
+        case .median: median
+        }
+    }
+}
+
+/// Steps a minute from the step count's running total: the steps over the last `window` seconds. The readings
+/// needn't come at even intervals: the steps are divided by the real time between the points.
+public struct CadenceEstimator: Sendable {
+    public static let window: TimeInterval = 20
+    private var points: [(elapsed: TimeInterval, steps: Double)] = []
+
+    public init() {}
+
+    /// The total number of steps so far at `elapsed` seconds into the run (pauses left out); returns the
+    /// cadence, or `nil` until there are 5 seconds to measure over.
+    public mutating func add(totalSteps: Double, atElapsed elapsed: TimeInterval) -> Double? {
+        points.append((elapsed, totalSteps))
+        // Keep the newest point at least a window old, so the span is the window once it has passed.
+        while points.count > 2, elapsed - points[1].elapsed >= Self.window { points.removeFirst() }
+        guard let first = points.first, elapsed - first.elapsed >= 5 else { return nil }
+        return (totalSteps - first.steps) / (elapsed - first.elapsed) * 60
+    }
+}

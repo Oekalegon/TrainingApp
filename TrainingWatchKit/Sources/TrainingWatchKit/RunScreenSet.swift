@@ -64,12 +64,15 @@ public enum RunWidget: String, Sendable, Codable, CaseIterable, Hashable {
 public enum RunScreenItem: Sendable, Hashable, Codable {
     case metric(RunMetric)
     case widget(RunWidget)
+    /// A reading the watch collects, with one of its statistics (WATCH-135).
+    case measure(RunQuantity, RunStatistic)
 
     /// The height in units: a plain metric is 1, which is a row of the standard screen.
     public var height: Int {
         switch self {
         case .metric: 1
         case .widget(let widget): widget.height
+        case .measure: 1
         }
     }
 
@@ -78,6 +81,7 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
         switch self {
         case .widget(let widget): widget.requiresSteps
         case .metric(let metric): metric.requiresSteps
+        case .measure: false
         }
     }
 
@@ -97,6 +101,12 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
                 throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "unknown widget")
             }
             self = .widget(widget)
+        case "measure":
+            let parts = id.split(separator: ".").map(String.init)
+            guard parts.count == 2, let quantity = RunQuantity(rawValue: parts[0]), let statistic = RunStatistic(rawValue: parts[1]) else {
+                throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "unknown measure")
+            }
+            self = .measure(quantity, statistic)
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "unknown item")
         }
@@ -111,6 +121,9 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
         case .widget(let widget):
             try container.encode("widget", forKey: .kind)
             try container.encode(widget.rawValue, forKey: .id)
+        case .measure(let quantity, let statistic):
+            try container.encode("measure", forKey: .kind)
+            try container.encode("\(quantity.rawValue).\(statistic.rawValue)", forKey: .id)
         }
     }
 }

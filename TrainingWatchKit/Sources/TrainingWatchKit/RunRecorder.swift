@@ -50,6 +50,8 @@ public final class RunRecorder {
     var zoneTime = ZoneTimeTracker()
     /// The heart rate's average and highest, the altitude and the climb, for the catalogue's metrics (WATCH-135).
     public private(set) var stats = RunStatsTracker()
+    /// The statistics of every other collected quantity (WATCH-135).
+    public private(set) var quantities: [RunQuantity: RunQuantityTracker] = [:]
     /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
     public var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
@@ -130,6 +132,7 @@ public final class RunRecorder {
         runPlan = plan
         zoneTime.reset()
         stats = RunStatsTracker()
+        quantities = [:]
         phase = .starting
         abandoned = false
         routeNote = nil
@@ -153,6 +156,9 @@ public final class RunRecorder {
             }
             builder.onHeartRate = { [weak self] bpm in
                 Task { @MainActor in self?.heartRateArrived(bpm) }
+            }
+            builder.onQuantity = { [weak self] quantity, value in
+                Task { @MainActor in self?.quantityArrived(quantity, value) }
             }
             builder.onDistance = { [weak self] meters in
                 Task { @MainActor in self?.distanceMeters = meters }
@@ -313,10 +319,17 @@ public final class RunRecorder {
         phase = .failed(message)
     }
 
+    /// A reading of a collected quantity, while the run is collecting.
+    func quantityArrived(_ quantity: RunQuantity, _ value: Double) {
+        guard isCollecting else { return }
+        quantities[quantity, default: RunQuantityTracker()].add(value)
+    }
+
     /// A heart-rate reading from the builder.
     func heartRateArrived(_ bpm: Double) {
         heartRate = bpm
         stats.add(heartRate: bpm)
+        quantities[.heartRate, default: RunQuantityTracker()].add(bpm)
         if let zone = zoneStore?.bands?.zone(forHeartRate: bpm) { zoneTime.add(zone: zone, atElapsed: elapsed()) }
         alertHeartRate(bpm)
     }
@@ -328,6 +341,8 @@ public final class RunRecorder {
         // Shown before the await, so readings land in the order they were taken and one still in
         // flight when the run ends can't show up on the next run.
         heartRateArrived(bpm)
+        // The simulator has no other sensors: made-up readings arrive with each heart rate (WATCH-135).
+        for (quantity, value) in SimulatedReadings.values(atElapsed: elapsed()) { quantityArrived(quantity, value) }
         do {
             try await builder.addHeartRateSample(bpm, at: .now)
         } catch {

@@ -11,18 +11,18 @@ final class WatchRunBackend: RunBackend {
     private let store = HKHealthStore()
     private let locationFeed = LocationFeed()
 
-    private static let readTypes: Set<HKObjectType> = [
+    private static let readTypes: Set<HKObjectType> = Set<HKObjectType>([
         HKQuantityType(.heartRate),
         HKQuantityType(.distanceWalkingRunning),
-        HKQuantityType(.activeEnergyBurned)
-    ]
-    private static let shareTypes: Set<HKSampleType> = [
+        HKQuantityType(.activeEnergyBurned),
+    ]).union(HealthKitRunBuilder.extraTypes)
+    private static let shareTypes: Set<HKSampleType> = Set<HKSampleType>([
         HKObjectType.workoutType(),
         HKSeriesType.workoutRoute(),
         HKQuantityType(.heartRate),
         HKQuantityType(.distanceWalkingRunning),
-        HKQuantityType(.activeEnergyBurned)
-    ]
+        HKQuantityType(.activeEnergyBurned),
+    ]).union(HealthKitRunBuilder.extraTypes)
 
     func requestHealthAuthorization() async throws -> Bool {
         try await store.requestAuthorization(toShare: Self.shareTypes, read: Self.readTypes)
