@@ -66,13 +66,15 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
     case widget(RunWidget)
     /// A reading the watch collects, with one of its statistics (WATCH-135).
     case measure(RunQuantity, RunStatistic, RunScope)
+    /// What a step or a split adds up: its time, distance or climb (WATCH-135).
+    case span(RunSpanKind, RunScope)
 
     /// The height in units: a plain metric is 1, which is a row of the standard screen.
     public var height: Int {
         switch self {
         case .metric: 1
         case .widget(let widget): widget.height
-        case .measure: 1
+        case .measure, .span: 1
         }
     }
 
@@ -81,7 +83,7 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
         switch self {
         case .widget(let widget): widget.requiresSteps
         case .metric(let metric): metric.requiresSteps
-        case .measure(_, _, let scope): scope.requiresSteps
+        case .measure(_, _, let scope), .span(_, let scope): scope.requiresSteps
         }
     }
 
@@ -110,6 +112,12 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
                 throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "unknown measure")
             }
             self = .measure(quantity, statistic, scope)
+        case "span":
+            let parts = id.split(separator: ".").map(String.init)
+            guard parts.count == 2, let kind = RunSpanKind(rawValue: parts[0]), let scope = RunScope(rawValue: parts[1]), scope != .run else {
+                throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "unknown span")
+            }
+            self = .span(kind, scope)
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "unknown item")
         }
@@ -128,6 +136,9 @@ public enum RunScreenItem: Sendable, Hashable, Codable {
             try container.encode("measure", forKey: .kind)
             let name = "\(quantity.rawValue).\(statistic.rawValue)"
             try container.encode(scope == .run ? name : name + ".\(scope.rawValue)", forKey: .id)
+        case .span(let kind, let scope):
+            try container.encode("span", forKey: .kind)
+            try container.encode("\(kind.rawValue).\(scope.rawValue)", forKey: .id)
         }
     }
 }

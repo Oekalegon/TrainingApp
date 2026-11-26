@@ -74,8 +74,11 @@ public enum PaceText {
 
     /// The unit pace is given per: "/km" or "/mi".
     public static func unit(_ locale: Locale = .current) -> String {
-        usesKilometres(locale) ? "/km" : "/mi"
+        unit(kilometres: usesKilometres(locale))
     }
+
+    /// The unit pace is given per, for a measure chosen by the caller.
+    public static func unit(kilometres: Bool) -> String { kilometres ? "/km" : "/mi" }
 
     /// Pace as minutes and seconds per kilometre or mile, such as "5:32", or "--" for no pace. A pace
     /// of an hour or more per unit (walking slowly) is "--" too: it has no place on a run screen.
@@ -84,8 +87,13 @@ public enum PaceText {
     ///   - secondsPerMeter: The pace, or `nil` when it isn't known.
     ///   - locale: Decides between kilometres and miles.
     public static func text(secondsPerMeter: Double?, locale: Locale = .current) -> String {
+        text(secondsPerMeter: secondsPerMeter, kilometres: usesKilometres(locale))
+    }
+
+    /// The same as ``text(secondsPerMeter:locale:)`` for a measure chosen by the caller.
+    public static func text(secondsPerMeter: Double?, kilometres: Bool) -> String {
         guard let secondsPerMeter, secondsPerMeter.isFinite, secondsPerMeter > 0 else { return "--" }
-        let perUnit = secondsPerMeter * (usesKilometres(locale) ? 1000 : 1609.344)
+        let perUnit = secondsPerMeter * (kilometres ? 1000 : 1609.344)
         let total = Int(perUnit.rounded())
         guard total < 3600 else { return "--" }
         return String(format: "%d:%02d", total / 60, total % 60)
@@ -94,7 +102,12 @@ public enum PaceText {
     /// Pace written with minute and second marks, such as `5'32"`, or "--" for no pace. Same rules as
     /// ``text(secondsPerMeter:locale:)``.
     public static func markedText(secondsPerMeter: Double?, locale: Locale = .current) -> String {
-        let plain = text(secondsPerMeter: secondsPerMeter, locale: locale)
+        markedText(secondsPerMeter: secondsPerMeter, kilometres: usesKilometres(locale))
+    }
+
+    /// The same as ``markedText(secondsPerMeter:locale:)`` for a measure chosen by the caller.
+    public static func markedText(secondsPerMeter: Double?, kilometres: Bool) -> String {
+        let plain = text(secondsPerMeter: secondsPerMeter, kilometres: kilometres)
         let parts = plain.split(separator: ":")
         return parts.count == 2 ? "\(parts[0])'\(parts[1])\"" : plain
     }

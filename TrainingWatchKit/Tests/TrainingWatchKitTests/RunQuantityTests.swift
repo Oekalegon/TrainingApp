@@ -79,11 +79,11 @@ struct RunQuantityTests {
 
 @Suite("SimulatedReadings (WATCH-135)")
 struct SimulatedReadingsTests {
-    @Test("every quantity but heart rate has a plausible, moving value")
+    @Test("every quantity but heart rate and pace (which come from the GPS) has a plausible, moving value")
     func values() {
         let first = SimulatedReadings.values(atElapsed: 0)
         let later = SimulatedReadings.values(atElapsed: 20)
-        #expect(Set(first.keys) == Set(RunQuantity.allCases).subtracting([.heartRate]))
+        #expect(Set(first.keys) == Set(RunQuantity.allCases).subtracting([.heartRate, .pace]))
         for quantity in first.keys {
             #expect(first[quantity]! > 0)
             #expect(first[quantity] != later[quantity])
@@ -148,5 +148,70 @@ struct RunStatisticsBookTests {
         #expect(!RunScope.step.offers(.current))
         #expect(RunScope.run.offers(.current))
         #expect(!RunScreenItem.measure(.cadence, .average, .lastSplit).requiresSteps)
+    }
+}
+
+@Suite("RunSpans and pace statistics (WATCH-135)")
+struct RunSpanTests {
+    private func mark(_ elapsed: Double, _ distance: Double, _ climb: Double = 0) -> RunSpans.Mark {
+        RunSpans.Mark(elapsed: elapsed, distance: distance, climb: climb)
+    }
+
+    @Test("a split's time, distance and climb count from where it began, and the one before is kept")
+    func splits() {
+        var spans = RunSpans()
+        spans.update(mark(0, 0), stepKey: nil, splitKey: 0, splitLength: 1000, secondsPerMeter: nil)
+        spans.update(mark(300, 1000, 12), stepKey: nil, splitKey: 1, splitLength: 1000, secondsPerMeter: nil)
+        #expect(spans.value(.time, .lastSplit, now: mark(300, 1000, 12)) == 300)
+        #expect(spans.value(.climb, .lastSplit, now: mark(300, 1000, 12)) == 12)
+        #expect(spans.value(.distance, .split, now: mark(400, 1350, 15)) == 350)
+        #expect(spans.value(.time, .split, now: mark(400, 1350, 15)) == 100)
+        #expect(spans.value(.time, .run, now: mark(400, 1350)) == nil)
+        #expect(spans.value(.time, .step, now: mark(400, 1350)) == nil)
+    }
+
+    @Test("a split begins at its mark: the split before is exactly one split long, the time placed by the pace")
+    func exactSplit() {
+        var spans = RunSpans()
+        spans.update(mark(0, 0), stepKey: nil, splitKey: 0, splitLength: 1000, secondsPerMeter: 0.3)
+        // The first fix past 1000 m is 3 m over the mark, 1 s of running at 0.3 s/m... ten metres in 3 s.
+        spans.update(mark(303, 1010, 8), stepKey: nil, splitKey: 1, splitLength: 1000, secondsPerMeter: 0.3)
+        #expect(spans.value(.distance, .lastSplit, now: mark(303, 1010, 8)) == 1000)
+        #expect(abs(spans.value(.time, .lastSplit, now: mark(303, 1010, 8))! - 300) < 1e-9)
+        #expect(spans.value(.distance, .split, now: mark(303, 1010, 8)) == 10)
+        #expect(abs(spans.value(.time, .split, now: mark(303, 1010, 8))! - 3) < 1e-9)
+    }
+
+    @Test("a step ending the workout leaves its figures as the last step")
+    func steps() {
+        var spans = RunSpans()
+        spans.update(mark(0, 0), stepKey: 0, splitKey: 0, splitLength: 1000, secondsPerMeter: nil)
+        spans.update(mark(60, 200), stepKey: 1, splitKey: 0, splitLength: 1000, secondsPerMeter: nil)
+        spans.update(mark(180, 600), stepKey: nil, splitKey: 0, splitLength: 1000, secondsPerMeter: nil)
+        #expect(spans.value(.time, .lastStep, now: mark(200, 700)) == 120)
+        #expect(spans.value(.distance, .lastStep, now: mark(200, 700)) == 400)
+        #expect(spans.value(.time, .step, now: mark(200, 700)) == nil)
+    }
+
+    @Test("a pace is stored as a speed and shown as a pace, the lowest speed being the slowest")
+    func pace() {
+        func shown(_ speed: Double, metric: Bool) -> String {
+            let (number, unit) = RunQuantity.pace.display(speed, metric: metric)
+            return number + " " + unit
+        }
+        // 4 m/s is 250 s per km, 4:10.
+        #expect(shown(4, metric: true) == "4'10\" /KM")
+        #expect(shown(4, metric: false).hasSuffix("/MI"))
+        #expect(RunSpanKind.climb.caption == "CLIMB")
+        #expect(RunSpanKind.allCases.map(\.caption) == ["TIME", "DIST", "CLIMB"])
+        #expect(PaceText.text(secondsPerMeter: 0.3, kilometres: true) == "5:00")
+        #expect(PaceText.unit(kilometres: false) == "/mi")
+        #expect(RunStatistic.minimum.prefix(for: .pace) == "Slowest")
+        #expect(RunStatistic.maximum.prefix(for: .pace) == "Fastest")
+        #expect(RunStatistic.minimum.prefix(for: .cadence) == "Lowest")
+        #expect(RunScreenItem.span(.time, .lastStep).requiresSteps)
+        #expect(!RunScreenItem.span(.time, .split).requiresSteps)
+        let item = RunScreenItem.span(.climb, .lastSplit)
+        #expect((try? JSONDecoder().decode(RunScreenItem.self, from: JSONEncoder().encode(item))) == item)
     }
 }

@@ -100,7 +100,8 @@ struct RunScreenItemCatalogueTests {
             RunScope.allCases.flatMap { scope in
                 RunStatistic.allCases.filter(scope.offers).map { RunScreenItem.measure(quantity, $0, scope) }
             }
-        }.filter { ![.measure(.heartRate, .current, .run), .measure(.heartRate, .average, .run), .measure(.heartRate, .maximum, .run)].contains($0) }
+        }.filter { !RunScreenItemCatalogue.shownByMetrics.contains($0) }
+        + RunSpanKind.allCases.flatMap { kind in [RunScope.step, .lastStep, .split, .lastSplit].map { RunScreenItem.span(kind, $0) } }
         let expected = RunMetric.allCases.map(RunScreenItem.metric) + RunWidget.allCases.map(RunScreenItem.widget) + measured
         #expect(Set(all) == Set(expected))
         #expect(all.count == expected.count)
@@ -118,17 +119,18 @@ struct RunScreenItemCatalogueTests {
                 for statistic in RunStatistic.allCases where scope.offers(statistic) { expected.insert(.measure(quantity, statistic, scope)) }
             }
         }
+        for kind in RunSpanKind.allCases { for scope in [RunScope.step, .lastStep] { expected.insert(.span(kind, scope)) } }
         #expect(Set(stepsOnly) == expected)
     }
 
     @Test("a search matches names and group names, ignoring case, and leaves no empty group")
     func search() {
         #expect(RunScreenItemCatalogue.groups(matching: "").count == RunScreenItemCatalogue.groups.count)
-        #expect(RunScreenItemCatalogue.groups(matching: "pace").flatMap(\.items) == [.metric(.currentPace), .metric(.averagePace)])
+        #expect(RunScreenItemCatalogue.groups(matching: "pace").flatMap(\.items).prefix(2) == [.metric(.currentPace), .metric(.averagePace)])
         #expect(RunScreenItemCatalogue.groups(matching: "BATTERY").flatMap(\.items) == [.widget(.battery)])
         // A group's name matches all its items.
         #expect(RunScreenItemCatalogue.groups(matching: "heart rate").flatMap(\.items).count == 7 + 2 + 16)
-        #expect(RunScreenItemCatalogue.groups(matching: "elevation").flatMap(\.items) == [.metric(.altitude), .metric(.elevationGain), .metric(.grade)])
+        #expect(RunScreenItemCatalogue.groups(matching: "elevation").flatMap(\.items).prefix(3) == [.metric(.altitude), .metric(.elevationGain), .metric(.grade)])
         #expect(RunScreenItemCatalogue.groups(matching: "nothing like it").isEmpty)
     }
 }
@@ -157,5 +159,9 @@ struct CatalogueSectionsTests {
         }
         let heartRate = try #require(RunScreenItemCatalogue.groups.first { $0.title == "Heart Rate" })
         #expect(heartRate.sections.map(\.title) == [nil, "Whole Run", "This Step", "Last Step", "This Split", "Last Split"])
+        let distance = try #require(RunScreenItemCatalogue.groups.first { $0.title == "Distance and Time" })
+        #expect(distance.sections.first?.title == nil)
+        #expect(distance.sections.map(\.title).contains("This Split"))
+        #expect(distance.sections.map(\.title).contains("Last Step"))
     }
 }

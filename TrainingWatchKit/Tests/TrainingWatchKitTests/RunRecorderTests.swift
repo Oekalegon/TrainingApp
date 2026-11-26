@@ -406,6 +406,29 @@ struct RunRecorderSensorTests {
         #expect(recorder.statistics.tracker(.cadence, .run)?.average == 175)
     }
 
+    @Test("a split's time and distance count from its mark, the pace over it is its distance over its time (WATCH-135)")
+    func splitSpans() async {
+        let split = PaceText.usesKilometres() ? 1000.0 : 1609.344
+        let (recorder, backend) = await running()
+        backend.builder.elapsed = 100
+        backend.builder.onDistance?(split / 2)
+        await settle()
+        // The first fix past the mark is 10 m over it, 3 s after the run passed it at 0.3 s/m.
+        backend.builder.elapsed = 303
+        backend.builder.onDistance?(split + 10)
+        await settle()
+        let mark = recorder.spanMark()
+        let lastDistance = try? #require(recorder.spans.value(.distance, .lastSplit, now: mark))
+        #expect(lastDistance == split)
+        #expect(recorder.spans.value(.distance, .split, now: mark) == 10)
+        let lastTime = recorder.spans.value(.time, .lastSplit, now: mark) ?? 0
+        #expect(lastTime > 290 && lastTime < 303)
+        let speed = recorder.reading(.pace, .average, .lastSplit)
+        #expect(speed != nil && abs(speed! - split / lastTime) < 1e-9)
+        // The whole run's average pace still comes from the readings.
+        #expect(recorder.reading(.pace, .average, .run) == recorder.statistics.tracker(.pace, .run)?.value(.average))
+    }
+
     @Test("the next split starts at its mark, and readings are filed in it (WATCH-135)")
     func splits() async {
         let (recorder, backend) = await running()
