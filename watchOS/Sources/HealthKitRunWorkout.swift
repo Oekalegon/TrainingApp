@@ -52,6 +52,9 @@ private enum RouteError: Error { case noWorkout }
 final class HealthKitRunBuilder: NSObject, RunWorkoutBuilder {
     var onHeartRate: ((Double) -> Void)?
     var onDistance: ((Double) -> Void)?
+    var onQuantity: ((RunQuantity, Double) -> Void)?
+    /// The cadence from the step count's total over the last seconds (WATCH-135).
+    private var cadence = CadenceEstimator()
     private let builder: HKLiveWorkoutBuilder
     private let routeBuilder: HKWorkoutRouteBuilder
     private var workout: HKWorkout?
@@ -124,10 +127,30 @@ extension HealthKitRunBuilder: HKLiveWorkoutBuilderDelegate {
         let distance = collectedTypes.contains(distanceType)
             ? workoutBuilder.statistics(for: distanceType)?.sumQuantity()?.doubleValue(for: .meter())
             : nil
+        // The other readings of the workout (WATCH-135): the latest value of each type that arrived, in the
+        // unit the quantity is shown from. Types a watch doesn't measure never arrive.
+        var readings: [(RunQuantity, Double)] = []
+        func latest(_ identifier: HKQuantityTypeIdentifier, _ unit: HKUnit) -> Double? {
+            let type = HKQuantityType(identifier)
+            guard collectedTypes.contains(type) else { return nil }
+            return workoutBuilder.statistics(for: type)?.mostRecentQuantity()?.doubleValue(for: unit)
+        }
+        if let value = latest(.runningSpeed, .meter().unitDivided(by: .second())) { readings.append((.runningSpeed, value)) }
+        if let value = latest(.runningStrideLength, .meter()) { readings.append((.strideLength, value)) }
+        if let value = latest(.runningGroundContactTime, .secondUnit(with: .milli)) { readings.append((.groundContactTime, value)) }
+        if let value = latest(.runningVerticalOscillation, .meterUnit(with: .centi)) { readings.append((.verticalOscillation, value)) }
+        if let value = latest(.runningPower, .watt()) { readings.append((.runningPower, value)) }
+        let stepType = HKQuantityType(.stepCount)
+        let steps = collectedTypes.contains(stepType)
+            ? workoutBuilder.statistics(for: stepType)?.sumQuantity()?.doubleValue(for: .count())
+            : nil
+        let elapsed = workoutBuilder.elapsedTime
         Task { @MainActor in
             guard reportsReadings else { return }
             if let bpm { onHeartRate?(bpm) }
             if let distance { onDistance?(distance) }
+            for (quantity, value) in readings { onQuantity?(quantity, value) }
+            if let steps, let spm = cadence.add(totalSteps: steps, atElapsed: elapsed) { onQuantity?(.cadence, spm) }
         }
     }
 }

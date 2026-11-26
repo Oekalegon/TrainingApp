@@ -22,6 +22,7 @@ final class FakeRunSession: RunWorkoutSession {
 final class FakeBuilder: RunWorkoutBuilder {
     var onHeartRate: ((Double) -> Void)?
     var onDistance: ((Double) -> Void)?
+    var onQuantity: ((RunQuantity, Double) -> Void)?
     /// What `elapsedTime(at:)` answers; the tests move it.
     var elapsed: TimeInterval = 0
     private(set) var calls: [String] = []

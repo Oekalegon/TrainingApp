@@ -307,6 +307,16 @@ struct RunRecorderSensorTests {
         #expect(recorder.stats.averageHeartRate == nil)
     }
 
+    @Test("other collected quantities keep their statistics for the run, and the next run starts over (WATCH-135)")
+    func quantities() async {
+        let (recorder, backend) = await running()
+        backend.builder.onQuantity?(.cadence, 170)
+        backend.builder.onQuantity?(.cadence, 180)
+        await settle()
+        #expect(recorder.quantities[.cadence]?.value(.average) == 175)
+        #expect(recorder.quantities[.cadence]?.value(.maximum) == 180)
+    }
+
     @Test("on a real watch the distance is the builder's total and the heart rate its latest")
     func builderReadings() async {
         let (recorder, backend) = await running()

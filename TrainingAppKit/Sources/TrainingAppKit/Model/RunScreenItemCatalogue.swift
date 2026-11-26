@@ -16,6 +16,10 @@ public enum RunScreenItemCatalogue {
         Group(title: "Heart Rate", items: [
             .metric(.heartRate), .metric(.averageHeartRate), .metric(.maxHeartRate), .metric(.timeInZone), .metric(.timeSinceZoneEntry), .widget(.zoneBar), .widget(.zoneHistogram),
         ]),
+        Group(title: "Cadence and Running Form", items: [RunQuantity.cadence, .strideLength, .groundContactTime, .verticalOscillation]
+            .flatMap { quantity in RunStatistic.allCases.map { RunScreenItem.measure(quantity, $0) } }),
+        Group(title: "Speed and Power", items: [RunQuantity.runningSpeed, .runningPower]
+            .flatMap { quantity in RunStatistic.allCases.map { RunScreenItem.measure(quantity, $0) } }),
         Group(title: "Pace", items: [.metric(.currentPace), .metric(.averagePace)]),
         Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime)]),
         Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade)]),
@@ -61,6 +65,8 @@ extension RunScreenItem {
             case .timeInZone: "Time in This Zone, Total"
             case .timeSinceZoneEntry: "Time Since Entering Zone"
             }
+        case .measure(let quantity, let statistic):
+            [statistic.prefix, quantity.title].compactMap { $0 }.joined(separator: " ")
         case .widget(let widget):
             switch widget {
             case .zoneBar: "Zone Bar"
@@ -94,6 +100,14 @@ extension RunScreenItem {
         case .widget(.battery): "The watch's charge and how much is left at the end"
         case .widget(.stepCountdown): "Time or distance left in the step; planned workouts only"
         case .widget(.zoneHistogram): "How long the run has spent in each zone"
+        case .measure(let quantity, let statistic):
+            switch statistic {
+            case .current: "The latest \(quantity.title.lowercased()) the watch measured"
+            case .average: "The mean \(quantity.title.lowercased()) of the run so far"
+            case .minimum: "The lowest \(quantity.title.lowercased()) of the run so far"
+            case .maximum: "The highest \(quantity.title.lowercased()) of the run so far"
+            case .median: "The median \(quantity.title.lowercased()) of the last hour of the run"
+            }
         }
     }
 
@@ -117,6 +131,16 @@ extension RunScreenItem {
         case .widget(.battery): "battery.75percent"
         case .widget(.stepCountdown): "timer"
         case .widget(.zoneHistogram): "chart.bar.fill"
+        case .measure(let quantity, _):
+            switch quantity {
+            case .heartRate: "heart"
+            case .cadence: "figure.run"
+            case .runningSpeed: "gauge.with.needle"
+            case .strideLength: "ruler"
+            case .groundContactTime: "shoeprints.fill"
+            case .verticalOscillation: "arrow.up.and.down"
+            case .runningPower: "bolt.fill"
+            }
         }
     }
 }

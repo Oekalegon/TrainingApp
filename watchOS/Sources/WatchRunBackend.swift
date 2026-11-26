@@ -14,7 +14,14 @@ final class WatchRunBackend: RunBackend {
     private static let readTypes: Set<HKObjectType> = [
         HKQuantityType(.heartRate),
         HKQuantityType(.distanceWalkingRunning),
-        HKQuantityType(.activeEnergyBurned)
+        HKQuantityType(.activeEnergyBurned),
+        // Read for the run screens' extra metrics (WATCH-135).
+        HKQuantityType(.stepCount),
+        HKQuantityType(.runningSpeed),
+        HKQuantityType(.runningStrideLength),
+        HKQuantityType(.runningGroundContactTime),
+        HKQuantityType(.runningVerticalOscillation),
+        HKQuantityType(.runningPower)
     ]
     private static let shareTypes: Set<HKSampleType> = [
         HKObjectType.workoutType(),

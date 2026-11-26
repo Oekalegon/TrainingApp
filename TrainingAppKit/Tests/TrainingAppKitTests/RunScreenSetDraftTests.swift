@@ -94,7 +94,9 @@ struct RunScreenItemCatalogueTests {
     @Test("every metric and widget is in exactly one group")
     func complete() {
         let all = RunScreenItemCatalogue.groups.flatMap(\.items)
-        let expected = RunMetric.allCases.map(RunScreenItem.metric) + RunWidget.allCases.map(RunScreenItem.widget)
+        let measured = [RunQuantity.cadence, .strideLength, .groundContactTime, .verticalOscillation, .runningSpeed, .runningPower]
+            .flatMap { quantity in RunStatistic.allCases.map { RunScreenItem.measure(quantity, $0) } }
+        let expected = RunMetric.allCases.map(RunScreenItem.metric) + RunWidget.allCases.map(RunScreenItem.widget) + measured
         #expect(Set(all) == Set(expected))
         #expect(all.count == expected.count)
         #expect(Set(all.map(\.title)).count == all.count)
