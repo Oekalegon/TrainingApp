@@ -20,6 +20,9 @@ struct ZoneTimeTracker: Sendable {
         last = (zone, elapsed)
     }
 
+    /// The seconds spent in `zone` (0 to 5).
+    func seconds(inZone zone: Int) -> Double { seconds[min(max(zone, 0), 5)] }
+
     /// Forgets the run before.
     mutating func reset() { self = ZoneTimeTracker() }
 

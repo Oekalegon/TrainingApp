@@ -199,6 +199,12 @@ public final class RunRecorder {
     }
 
     /// The share of the run's time in zones 0 to 5, or `nil` before any heart rate was measured.
+    /// The seconds the run has spent in the zone the heart rate is in now, or `nil` with no reading or no zones.
+    public var secondsInCurrentZone: Double? {
+        guard let heartRate, let zone = zoneStore?.bands?.zone(forHeartRate: heartRate) else { return nil }
+        return zoneTime.seconds(inZone: zone)
+    }
+
     public var zoneTimeFractions: [Double]? { zoneTime.fractions }
 
     private func releaseRun() {
