@@ -166,3 +166,62 @@ struct CatalogueSectionsTests {
         #expect(distance.sections.map(\.title).contains("Last Step"))
     }
 }
+
+@Suite("StandardScreens (WATCH-137)")
+struct StandardScreensTests {
+    @Test("every standard screen has items, fits a screen and has a name of its own")
+    func valid() {
+        #expect(!StandardScreens.all.isEmpty)
+        for template in StandardScreens.all {
+            #expect(!template.items.isEmpty, "\(template.title) is empty")
+            #expect(template.units <= RunScreen.capacity, "\(template.title) is too tall")
+            #expect(RunScreen(id: template.id, items: template.items).fits)
+            #expect(Set(template.items).count == template.items.count, "\(template.title) repeats an item")
+        }
+        #expect(Set(StandardScreens.all.map(\.id)).count == StandardScreens.all.count)
+        #expect(Set(StandardScreens.all.map(\.title)).count == StandardScreens.all.count)
+    }
+
+    @Test("every item of a standard screen is one the editor's catalogue offers")
+    func inCatalogue() {
+        let offered = Set(RunScreenItemCatalogue.groups.flatMap(\.items))
+        for template in StandardScreens.all {
+            for item in template.items {
+                // The whole-run latest, average and highest of heart rate and pace are the older metrics.
+                #expect(offered.contains(item), "\(template.title): \(item.title) isn't in the catalogue")
+            }
+        }
+    }
+
+    @Test("the workout-only screens are the ones with a step item, and the rest run in a free run")
+    func workoutOnly() {
+        let only = StandardScreens.all.filter(\.isOnlyInWorkouts).map(\.id)
+        #expect(only == ["intervals-heart-rate", "intervals-pace", "workout-progress"])
+        #expect(StandardScreens.all.first { $0.id == "easy-run" }?.isOnlyInWorkouts == false)
+    }
+
+    @Test("adding a standard screen puts a copy of its items at the end, with a fresh id, and the draft stays valid")
+    func adding() throws {
+        var draft = RunScreenSetDraft(.freeRunDefault)
+        let before = draft.screens.count
+        let template = try #require(StandardScreens.all.first { $0.id == "splits" })
+        let id = draft.addScreen(from: template)
+        #expect(draft.screens.count == before + 1)
+        #expect(draft.screens.last?.id == id)
+        #expect(draft.screens.last?.items == template.items)
+        #expect(draft.units(of: id) == template.units)
+        let second = draft.addScreen(from: template)
+        #expect(second != id)
+        #expect(draft.validationError(checksName: false) == nil)
+    }
+
+    @Test("the summary lists the items and the units, and says when only planned workouts can show the screen")
+    func summary() throws {
+        let easy = try #require(StandardScreens.all.first { $0.id == "easy-run" })
+        #expect(easy.summary == "Total Time, Distance, Current Pace, Heart Rate and Zone, Zone Bar. 6 of 6 units.")
+        #expect(!easy.summary.contains("Planned workouts only"))
+        let intervals = try #require(StandardScreens.all.first { $0.id == "intervals-pace" })
+        #expect(intervals.summary.hasSuffix("Planned workouts only."))
+        #expect(intervals.summary.contains("\(intervals.units) of \(RunScreen.capacity) units"))
+    }
+}
