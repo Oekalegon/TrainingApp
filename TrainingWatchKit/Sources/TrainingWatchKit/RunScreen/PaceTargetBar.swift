@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The pace bar of a run screen (WATCH-135): a line with the target's stretch bright, slow at the left and fast at
 /// the right, and a triangle above and one under it at the current pace. Fractions are 0 (slow end) to 1 (fast end).
-struct PaceTargetBar: View {
+public struct PaceTargetBar: View {
     /// The target's stretch of the bar.
     let target: ClosedRange<Double>
     /// Where the pace is, or `nil` before there is one.
@@ -14,7 +14,7 @@ struct PaceTargetBar: View {
     private static let markerHeight = 7.0, markerHalfWidth = 4.5, markerGap = 2.0
     private static var room: Double { markerHeight + markerGap }
 
-    var body: some View {
+    public var body: some View {
         Canvas { context, size in
             context.translateBy(x: 0, y: Self.room)
             let bar = CGRect(x: 0, y: 0.15 * Self.barHeight, width: size.width, height: 0.7 * Self.barHeight)

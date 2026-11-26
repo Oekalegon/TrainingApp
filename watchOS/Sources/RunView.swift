@@ -99,7 +99,7 @@ private struct RunPages: View {
                 .tag(Page.controls)
             TabView(selection: Binding(get: { shown.contains { $0.id == selection.current } ? selection.current : (shown.first?.id ?? "") }, set: { selection.select($0) })) {
                 ForEach(shown) { screen in
-                    RunScreenPage(recorder: recorder, zoneStore: zoneStore, screen: screen, showsDoneNote: screen.id == shown.first?.id).fakeDimmable()
+                    WatchRunScreenPage(recorder: recorder, screen: screen, showsDoneNote: screen.id == shown.first?.id).fakeDimmable()
                         .tag(screen.id)
                 }
             }
