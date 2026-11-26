@@ -341,6 +341,8 @@ public final class RunRecorder {
         // Shown before the await, so readings land in the order they were taken and one still in
         // flight when the run ends can't show up on the next run.
         heartRateArrived(bpm)
+        // The simulator has no other sensors: made-up readings arrive with each heart rate (WATCH-135).
+        for (quantity, value) in SimulatedReadings.values(atElapsed: elapsed()) { quantityArrived(quantity, value) }
         do {
             try await builder.addHeartRateSample(bpm, at: .now)
         } catch {

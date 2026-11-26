@@ -64,3 +64,18 @@ struct RunQuantityTests {
         #expect(shown(.verticalOscillation, 2.54, metric: false) == "1.0 IN")
     }
 }
+
+@Suite("SimulatedReadings (WATCH-135)")
+struct SimulatedReadingsTests {
+    @Test("every quantity but heart rate has a plausible, moving value")
+    func values() {
+        let first = SimulatedReadings.values(atElapsed: 0)
+        let later = SimulatedReadings.values(atElapsed: 20)
+        #expect(Set(first.keys) == Set(RunQuantity.allCases).subtracting([.heartRate]))
+        for quantity in first.keys {
+            #expect(first[quantity]! > 0)
+            #expect(first[quantity] != later[quantity])
+        }
+        #expect((150...190).contains(first[.cadence]!))
+    }
+}

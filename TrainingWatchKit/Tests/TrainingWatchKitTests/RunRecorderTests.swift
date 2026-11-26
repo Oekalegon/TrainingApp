@@ -384,6 +384,22 @@ struct RunRecorderSensorTests {
         #expect(backend.builder.heartRateSamples == [150])
     }
 
+    @Test("a supplying backend (the simulator) gets made-up readings of the other quantities with each heart rate (WATCH-135)")
+    func suppliedQuantities() async {
+        let backend = FakeBackend()
+        backend.suppliesSensorReadings = true
+        let (recorder, _) = await running(backend: backend)
+        backend.sendHeartRate?(150)
+        await settle()
+        #expect(recorder.quantities[.cadence]?.value(.current) != nil)
+        #expect(recorder.quantities[.runningPower]?.value(.current) != nil)
+        // A real watch's recorder adds none of its own.
+        let (real, realBackend) = await running()
+        realBackend.builder.onHeartRate?(150)
+        await settle()
+        #expect(real.quantities[.cadence] == nil)
+    }
+
     @Test("reset clears the readings of the run before")
     func resetClears() async {
         let (recorder, backend) = await running()
