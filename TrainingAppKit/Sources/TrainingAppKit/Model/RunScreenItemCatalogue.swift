@@ -37,28 +37,34 @@ public enum RunScreenItemCatalogue {
     static func measures(of quantity: RunQuantity) -> [RunScreenItem] {
         RunScope.allCases.flatMap { scope in
             RunStatistic.allCases.filter(scope.offers).map { RunScreenItem.measure(quantity, $0, scope) }
-        }
+        }.filter { !shownByMetrics.contains($0) }
     }
 
-    /// The heart rate's statistics the older metrics don't already show (the latest, the average and the highest of the run).
-    static let heartRateMeasures: [RunScreenItem] = measures(of: .heartRate).filter { item in
-        ![.measure(.heartRate, .current, .run), .measure(.heartRate, .average, .run), .measure(.heartRate, .maximum, .run)].contains(item)
+    /// The whole-run statistics an older metric already shows, which the catalogue leaves out of the measures.
+    static let shownByMetrics: Set<RunScreenItem> = [
+        .measure(.heartRate, .current, .run), .measure(.heartRate, .average, .run), .measure(.heartRate, .maximum, .run),
+        .measure(.pace, .current, .run), .measure(.pace, .average, .run),
+    ]
+
+    /// The scopes of a step or a split, which have a time, a distance and a climb of their own.
+    static func spans(_ kind: RunSpanKind) -> [RunScreenItem] {
+        [RunScope.step, .lastStep, .split, .lastSplit].map { RunScreenItem.span(kind, $0) }
     }
 
     /// Every group, in the order the picker shows them.
     public static let groups: [Group] = [
         Group(title: "Heart Rate", items: [
             .metric(.heartRate), .metric(.averageHeartRate), .metric(.maxHeartRate), .metric(.timeInZone), .metric(.timeSinceZoneEntry), .widget(.zoneBar), .widget(.zoneHistogram),
-        ] + heartRateMeasures),
+        ] + measures(of: .heartRate)),
         Group(title: "Cadence", items: measures(of: .cadence)),
         Group(title: "Speed", items: measures(of: .runningSpeed)),
         Group(title: "Power", items: measures(of: .runningPower)),
         Group(title: "Stride Length", items: measures(of: .strideLength)),
         Group(title: "Ground Contact Time", items: measures(of: .groundContactTime)),
         Group(title: "Vertical Oscillation", items: measures(of: .verticalOscillation)),
-        Group(title: "Pace", items: [.metric(.currentPace), .metric(.averagePace)]),
-        Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime)]),
-        Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade)]),
+        Group(title: "Pace", items: [.metric(.currentPace), .metric(.averagePace)] + measures(of: .pace)),
+        Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime)] + spans(.distance) + spans(.time)),
+        Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade)] + spans(.climb)),
         Group(title: "Workout Step", items: [
             .widget(.stepCountdown), .metric(.stepTime), .metric(.stepDistance), .metric(.timeRemaining), .metric(.finishTime),
         ]),
@@ -79,10 +85,10 @@ public enum RunScreenItemCatalogue {
 }
 
 extension RunScreenItem {
-    /// The scope of a statistic, or `nil` for the other items.
+    /// The scope of a statistic or a span, or `nil` for the other items.
     var scope: RunScope? {
         switch self {
-        case .measure(_, _, let scope): scope
+        case .measure(_, _, let scope), .span(_, let scope): scope
         case .metric, .widget: nil
         }
     }
@@ -109,8 +115,9 @@ extension RunScreenItem {
             case .timeInZone: "Time in This Zone, Total"
             case .timeSinceZoneEntry: "Time Since Entering Zone"
             }
+        case .span(let kind, let scope): kind.title + ", " + (scope.suffix ?? "")
         case .measure(let quantity, let statistic, let scope):
-            [statistic.prefix, quantity.title].compactMap { $0 }.joined(separator: " ") + (scope.suffix.map { ", " + $0 } ?? "")
+            [statistic.prefix(for: quantity), quantity.title].compactMap { $0 }.joined(separator: " ") + (scope.suffix.map { ", " + $0 } ?? "")
         case .widget(let widget):
             switch widget {
             case .zoneBar: "Zone Bar"
@@ -144,7 +151,23 @@ extension RunScreenItem {
         case .widget(.battery): "The watch's charge and how much is left at the end"
         case .widget(.stepCountdown): "Time or distance left in the step; planned workouts only"
         case .widget(.zoneHistogram): "How long the run has spent in each zone"
+        case .span(let kind, let scope): Self.spanDetail(kind, scope)
         case .measure(let quantity, let statistic, let scope): Self.measureDetail(quantity, statistic, scope)
+        }
+    }
+
+    private static func spanDetail(_ kind: RunSpanKind, _ scope: RunScope) -> String {
+        let what = switch kind {
+        case .time: "The time"
+        case .distance: "The distance"
+        case .climb: "The metres climbed"
+        }
+        return switch scope {
+        case .run: what
+        case .step: what + " of the step being run; planned workouts only"
+        case .lastStep: what + " of the step before this one; planned workouts only"
+        case .split: what + " of the kilometre or mile being run"
+        case .lastSplit: what + " of the kilometre or mile before this one"
         }
     }
 
@@ -157,11 +180,12 @@ extension RunScreenItem {
         case .split: "of the kilometre or mile being run"
         case .lastSplit: "of the kilometre or mile before this one"
         }
+        let isPace = quantity == .pace
         return switch statistic {
         case .current: "The latest \(name) the watch measured"
         case .average: "The mean \(name) \(over)"
-        case .minimum: "The lowest \(name) \(over)"
-        case .maximum: "The highest \(name) \(over)"
+        case .minimum: "The \(isPace ? "slowest" : "lowest") \(name) \(over)"
+        case .maximum: "The \(isPace ? "fastest" : "highest") \(name) \(over)"
         case .median: "The median \(name) \(over)" + (scope == .run ? " (the last hour)" : "")
         }
     }
@@ -186,8 +210,15 @@ extension RunScreenItem {
         case .widget(.battery): "battery.75percent"
         case .widget(.stepCountdown): "timer"
         case .widget(.zoneHistogram): "chart.bar.fill"
+        case .span(let kind, _):
+            switch kind {
+            case .time: "stopwatch"
+            case .distance: "ruler"
+            case .climb: "mountain.2"
+            }
         case .measure(let quantity, _, _):
             switch quantity {
+            case .pace: "speedometer"
             case .heartRate: "heart"
             case .cadence: "figure.run"
             case .runningSpeed: "gauge.with.needle"

@@ -35,6 +35,10 @@ public final class RunRecorder {
             guard let builder else { return }
             paceWindow.add(meters: distanceMeters, at: builder.elapsedTime(at: .now))
             advanceScopes()
+            updateSpans()
+            if isCollecting, let secondsPerMeter = currentSecondsPerMeter(), secondsPerMeter > 0 {
+                record(.pace, 1 / secondsPerMeter)
+            }
         }
     }
     /// The last seconds of distance, for the current pace.
@@ -56,6 +60,8 @@ public final class RunRecorder {
     public private(set) var stats = RunStatsTracker()
     /// The statistics of every other collected quantity (WATCH-135).
     public private(set) var statistics = RunStatisticsBook()
+    /// The time, distance and climb of the step and split being run and the ones before.
+    public private(set) var spans = RunSpans()
     /// The athlete's zones, to turn a step's heart-rate target into bpm for the alerts. Set by the app.
     public var zoneStore: WatchZoneStore?
     /// Decides when the heart rate against the step's target is worth an alert (WATCH-106). Used by
@@ -137,6 +143,7 @@ public final class RunRecorder {
         zoneTime.reset()
         stats = RunStatsTracker()
         statistics = RunStatisticsBook()
+        spans = RunSpans()
         phase = .starting
         abandoned = false
         routeNote = nil
@@ -339,6 +346,17 @@ public final class RunRecorder {
     func advanceScopes() {
         let keys = scopeKeys
         statistics.advance(stepKey: keys.step, splitKey: keys.split)
+    }
+
+    /// Where the run is now, for the spans.
+    public func spanMark(at date: Date = .now) -> RunSpans.Mark {
+        RunSpans.Mark(elapsed: elapsed(at: date), distance: distanceMeters, climb: stats.elevationGain)
+    }
+
+    /// Tells the spans where the run is, so a new step or split is noticed.
+    func updateSpans() {
+        let splitLength = PaceText.usesKilometres() ? 1000.0 : 1609.344
+        spans.update(spanMark(), stepKey: stepEngine?.current?.index, splitKey: Int(max(distanceMeters, 0) / splitLength))
     }
 
     /// Files a reading under the step and the split the run is in.

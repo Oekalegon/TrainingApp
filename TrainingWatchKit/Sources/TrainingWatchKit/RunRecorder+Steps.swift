@@ -56,6 +56,7 @@ extension RunRecorder {
         }
         stepEngine = engine
         advanceScopes()
+        updateSpans()
         await record(transitions)
     }
 

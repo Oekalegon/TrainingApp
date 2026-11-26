@@ -16,6 +16,9 @@ public enum RunQuantity: String, Sendable, Codable, CaseIterable, Hashable {
     case verticalOscillation
     /// Watts.
     case runningPower
+    /// The pace from the GPS, kept as a speed in metres a second (so the average of the readings is the pace over the
+    /// distance) and shown as a pace; the lowest speed is the slowest pace.
+    case pace
 
     /// The name in the editor and for VoiceOver.
     public var title: String {
@@ -27,6 +30,7 @@ public enum RunQuantity: String, Sendable, Codable, CaseIterable, Hashable {
         case .groundContactTime: "Ground Contact Time"
         case .verticalOscillation: "Vertical Oscillation"
         case .runningPower: "Power"
+        case .pace: "Pace"
         }
     }
 
@@ -46,6 +50,9 @@ public enum RunQuantity: String, Sendable, Codable, CaseIterable, Hashable {
         case .groundContactTime: return (format(value, 0), "MS")
         case .verticalOscillation: return metric ? (format(value, 1), "CM") : (format(value / 2.54, 1), "IN")
         case .runningPower: return (format(value, 0), "W")
+        case .pace:
+            let text = PaceText.markedText(secondsPerMeter: value > 0 ? 1 / value : nil, locale: metric ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US"))
+            return (text, PaceText.unit(metric ? Locale(identifier: "nl_NL") : Locale(identifier: "en_US")).uppercased())
         }
     }
 
@@ -59,6 +66,7 @@ public enum RunQuantity: String, Sendable, Codable, CaseIterable, Hashable {
         case .groundContactTime: "milliseconds"
         case .verticalOscillation: metric ? "centimetres" : "inches"
         case .runningPower: "watts"
+        case .pace: metric ? "per kilometre" : "per mile"
         }
     }
 }
@@ -254,6 +262,105 @@ public struct RunStatisticsBook: Sendable, Equatable {
         case .lastStep: lastStep[quantity]
         case .split: split[quantity]
         case .lastSplit: lastSplit[quantity]
+        }
+    }
+}
+
+/// What a step or a split adds up (WATCH-135): the time it took, the distance run and the metres climbed.
+public enum RunSpanKind: String, Sendable, Codable, CaseIterable, Hashable {
+    case time, distance, climb
+
+    public var title: String {
+        switch self {
+        case .time: "Time"
+        case .distance: "Distance"
+        case .climb: "Elevation Gain"
+        }
+    }
+}
+
+/// The time, distance and climb of the step and the split being run and of the ones before (WATCH-135). The
+/// recorder tells it where the run is now and which step and split that is; it notices a new one and keeps the
+/// finished one as the "last". It notices a step or split at the next reading, which can be a second late.
+public struct RunSpans: Sendable, Equatable {
+    /// Where the run is: its workout time (pauses left out), distance in metres and climb in metres.
+    public struct Mark: Sendable, Equatable {
+        public var elapsed: Double
+        public var distance: Double
+        public var climb: Double
+
+        public init(elapsed: Double, distance: Double, climb: Double) {
+            self.elapsed = elapsed
+            self.distance = distance
+            self.climb = climb
+        }
+
+        func since(_ start: Mark) -> Mark {
+            Mark(elapsed: elapsed - start.elapsed, distance: distance - start.distance, climb: climb - start.climb)
+        }
+
+        func value(_ kind: RunSpanKind) -> Double {
+            switch kind {
+            case .time: elapsed
+            case .distance: distance
+            case .climb: climb
+            }
+        }
+    }
+
+    private var stepStart: Mark?
+    private var splitStart: Mark?
+    private var stepKey: Int?
+    private var splitKey: Int?
+    private var lastStep: Mark?
+    private var lastSplit: Mark?
+
+    public init() {}
+
+    /// Notes where the run is, and the step (`nil` with no steps or after the last) and the split it is in.
+    public mutating func update(_ now: Mark, stepKey: Int?, splitKey: Int) {
+        if stepKey != self.stepKey {
+            if let start = stepStart { lastStep = now.since(start) }
+            stepStart = stepKey == nil ? nil : now
+            self.stepKey = stepKey
+        }
+        if splitKey != self.splitKey {
+            if let start = splitStart { lastSplit = now.since(start) }
+            splitStart = now
+            self.splitKey = splitKey
+        }
+    }
+
+    /// The `kind` of the step or split in `scope` as of `now`, or `nil` for the whole run or when there is none.
+    public func value(_ kind: RunSpanKind, _ scope: RunScope, now: Mark) -> Double? {
+        switch scope {
+        case .run: nil
+        case .step: stepStart.map { now.since($0).value(kind) }
+        case .split: splitStart.map { now.since($0).value(kind) }
+        case .lastStep: lastStep?.value(kind)
+        case .lastSplit: lastSplit?.value(kind)
+        }
+    }
+}
+
+extension RunStatistic {
+    /// The word before the name for `quantity`: a pace's lowest speed is its slowest, the highest its fastest.
+    public func prefix(for quantity: RunQuantity) -> String? {
+        guard quantity == .pace else { return prefix }
+        switch self {
+        case .minimum: return "Slowest"
+        case .maximum: return "Fastest"
+        default: return prefix
+        }
+    }
+
+    /// The caption on the watch for `quantity`.
+    public func caption(for quantity: RunQuantity) -> String {
+        guard quantity == .pace else { return caption }
+        switch self {
+        case .minimum: return "SLOW"
+        case .maximum: return "FAST"
+        default: return caption
         }
     }
 }

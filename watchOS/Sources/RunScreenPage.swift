@@ -46,6 +46,7 @@ struct RunScreenPage: View {
                     case .metric(let metric): row(metric, at: date)
                     case .widget(let widget): widgetView(widget, at: date)
                     case .measure(let quantity, let statistic, let scope): measureRow(quantity, statistic, scope)
+                    case .span(let kind, let scope): spanRow(kind, scope, at: date)
                     }
                 }
                 if showsDoneNote, recorder.stepEngine?.isFinished == true {
@@ -188,15 +189,48 @@ struct RunScreenPage: View {
             if let scopeCaption = scope.caption {
                 // A scoped statistic: the unit, then "AVG" over "LAST STEP" and so on.
                 unit(unitName)
-                RunMetricStyle.caption(statistic.caption, scopeCaption)
+                RunMetricStyle.caption(statistic.caption(for: quantity), scopeCaption)
             } else {
-                unit([statistic.caption, unitName].filter { !$0.isEmpty }.joined(separator: " "))
+                unit([statistic.caption(for: quantity), unitName].filter { !$0.isEmpty }.joined(separator: " "))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([statistic.prefix, quantity.title].compactMap { $0 }.joined(separator: " ") + (scope.suffix.map { ", " + $0.lowercased() } ?? ""))
+        .accessibilityLabel([statistic.prefix(for: quantity), quantity.title].compactMap { $0 }.joined(separator: " ") + (scope.suffix.map { ", " + $0.lowercased() } ?? ""))
         .accessibilityValue(shown.map { "\($0.number) \(quantity.spokenUnit(metric: metric))" } ?? "no reading")
+    }
+
+    /// The time, distance or climb of a step or a split.
+    private func spanRow(_ kind: RunSpanKind, _ scope: RunScope, at date: Date) -> some View {
+        let reading = recorder.spans.value(kind, scope, now: recorder.spanMark(at: date))
+        let metric = PaceText.usesKilometres()
+        let number: String
+        let unitName: String
+        let spoken: String
+        switch kind {
+        case .time:
+            number = reading.map { ZoneDialText.totalTimeText($0, showsSeconds: !dimmed) } ?? "--"
+            unitName = ""
+            spoken = reading.map(spokenDuration) ?? ""
+        case .distance:
+            number = reading.map { PaceText.distanceValue(meters: $0) } ?? "--"
+            unitName = PaceText.distanceUnit()
+            spoken = "\(number) \(metric ? "kilometres" : "miles")"
+        case .climb:
+            let climb = reading.map { metric ? $0 : $0 * 3.28084 }
+            number = climb.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "--"
+            unitName = metric ? "M UP" : "FT UP"
+            spoken = "\(number) \(metric ? "metres" : "feet")"
+        }
+        return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+            value(number).foregroundStyle(reading == nil ? Color.secondary : Color.white)
+            if !unitName.isEmpty { unit(unitName) }
+            RunMetricStyle.caption(kind.title.uppercased().replacingOccurrences(of: "ELEVATION GAIN", with: "CLIMB"), scope.caption ?? "")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(kind.title + ", " + (scope.suffix ?? "").lowercased())
+        .accessibilityValue(reading == nil ? "no reading" : spoken)
     }
 
     /// What is left of the planned workout, counting distances at the pace so far.
