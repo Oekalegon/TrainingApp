@@ -118,6 +118,17 @@ struct RunScreenPage: View {
                 .accessibilityLabel("Time left")
                 .accessibilityValue((estimate.isComplete ? "" : "at least ") + spokenDuration(estimate.seconds))
             }
+        case .stepNumber:
+            if let engine = recorder.stepEngine, let current = engine.current {
+                let place = ZoneDialText.place(of: current, in: engine.steps.count)
+                HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+                    value(place.text)
+                    unit(place.isRepeat ? "INTERVAL" : "STEP")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Step").accessibilityValue(ZoneDialText.placeLine(current, of: engine.steps.count).lowercased())
+            }
         case .stepTime:
             if let seconds = recorder.stepEngine?.stepElapsed(at: recorder.elapsed(at: date)) {
                 HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
@@ -334,6 +345,7 @@ struct RunScreenPage: View {
         case .zoneBar: zoneBar
         case .battery: battery(at: date)
         case .zoneHistogram: zoneHistogram
+        case .paceBar: paceBar(at: date)
         }
     }
 
@@ -383,6 +395,50 @@ struct RunScreenPage: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Heart rate zones")
             .accessibilityValue(spokenZoneBar(target: target, position: position))
+    }
+
+    /// The pace against the step's pace target (WATCH-135): the target bright in the middle, a triangle at the
+    /// pace, the ends of the target written under it. Nothing while the step has no pace target.
+    @ViewBuilder
+    private func paceBar(at date: Date) -> some View {
+        if let step = recorder.stepEngine?.current?.step, let target = StepPaceTarget(step: step) {
+            let pace = recorder.currentSecondsPerMeter(at: date)
+            let labels = target.labels()
+            let status = pace.map { target.position(forSecondsPerMeter: $0) }
+            VStack(spacing: 2) {
+                PaceTargetBar(
+                    target: target.targetFractions, position: pace.map { target.fraction(forSecondsPerMeter: $0) },
+                    tint: status.map(Self.paceColor) ?? .white)
+                HStack {
+                    Text(labels.slow)
+                    Spacer()
+                    Text(PaceText.unit())
+                    Spacer()
+                    Text(labels.fast)
+                }
+                .font(RunMetricStyle.captionFont).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Pace target")
+            .accessibilityValue(target.spoken() + (status.map { ", " + Self.spokenPace($0) } ?? ", no pace yet"))
+        }
+    }
+
+    /// Blue when slower than the target, red when faster, white inside, as the heart rate is against its target.
+    private static func paceColor(_ position: StepPaceTarget.Position) -> Color {
+        switch position {
+        case .tooSlow: Color(red: 0.35, green: 0.65, blue: 1.0)
+        case .tooFast: Color(red: 1.0, green: 0.4, blue: 0.4)
+        case .inside: .white
+        }
+    }
+
+    private static func spokenPace(_ position: StepPaceTarget.Position) -> String {
+        switch position {
+        case .tooSlow: "slower than the target"
+        case .tooFast: "faster than the target"
+        case .inside: "in the target"
+        }
     }
 
     /// The battery's charge and, in a planned workout, the forecast for the end (WATCH-119).

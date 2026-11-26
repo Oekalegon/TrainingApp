@@ -112,7 +112,8 @@ struct RunScreenItemCatalogueTests {
     func stepsOnly() {
         let stepsOnly = RunScreenItemCatalogue.groups.flatMap(\.items).filter(\.requiresSteps)
         var expected: Set<RunScreenItem> = [
-            .widget(.stepCountdown), .metric(.stepTime), .metric(.stepDistance), .metric(.timeRemaining), .metric(.finishTime),
+            .widget(.stepCountdown), .widget(.paceBar), .metric(.stepNumber), .metric(.stepTime), .metric(.stepDistance),
+            .metric(.timeRemaining), .metric(.finishTime),
         ]
         for quantity in RunQuantity.allCases {
             for scope in [RunScope.step, .lastStep] {

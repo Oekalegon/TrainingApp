@@ -66,7 +66,7 @@ public enum RunScreenItemCatalogue {
         Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime)] + spans(.distance) + spans(.time)),
         Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade)] + spans(.climb)),
         Group(title: "Workout Step", items: [
-            .widget(.stepCountdown), .metric(.stepTime), .metric(.stepDistance), .metric(.timeRemaining), .metric(.finishTime),
+            .widget(.stepCountdown), .metric(.stepTime), .metric(.stepDistance), .metric(.stepNumber), .widget(.paceBar), .metric(.timeRemaining), .metric(.finishTime),
         ]),
         Group(title: "Watch", items: [.widget(.battery)]),
     ]
@@ -110,6 +110,7 @@ extension RunScreenItem {
             case .grade: "Grade"
             case .timeRemaining: "Time Left"
             case .finishTime: "Finish Time"
+            case .stepNumber: "Step Number"
             case .stepTime: "Step Time"
             case .stepDistance: "Step Distance"
             case .timeInZone: "Time in This Zone, Total"
@@ -124,6 +125,7 @@ extension RunScreenItem {
             case .battery: "Battery and Forecast"
             case .stepCountdown: "Step Countdown"
             case .zoneHistogram: "Time in Zones"
+            case .paceBar: "Pace Bar"
             }
         }
     }
@@ -151,6 +153,8 @@ extension RunScreenItem {
         case .widget(.battery): "The watch's charge and how much is left at the end"
         case .widget(.stepCountdown): "Time or distance left in the step; planned workouts only"
         case .widget(.zoneHistogram): "How long the run has spent in each zone"
+        case .widget(.paceBar): "The pace against the step's pace target; planned workouts only, and drawn only while the step has a pace target"
+        case .metric(.stepNumber): "Which step it is, or which interval of a repeated block; planned workouts only"
         case .span(let kind, let scope): Self.spanDetail(kind, scope)
         case .measure(let quantity, let statistic, let scope): Self.measureDetail(quantity, statistic, scope)
         }
@@ -210,6 +214,8 @@ extension RunScreenItem {
         case .widget(.battery): "battery.75percent"
         case .widget(.stepCountdown): "timer"
         case .widget(.zoneHistogram): "chart.bar.fill"
+        case .widget(.paceBar): "chart.bar.xaxis"
+        case .metric(.stepNumber): "number"
         case .span(let kind, _):
             switch kind {
             case .time: "stopwatch"

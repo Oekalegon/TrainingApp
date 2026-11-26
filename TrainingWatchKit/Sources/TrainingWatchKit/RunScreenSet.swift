@@ -20,6 +20,8 @@ public enum RunMetric: String, Sendable, Codable, CaseIterable, Hashable {
     case timeRemaining
     /// The time of day the planned workout should end at; only with steps.
     case finishTime
+    /// Which step it is, "3/8", or the interval of a repeated block; only with steps.
+    case stepNumber
     /// The time since the current step began; only with steps.
     case stepTime
     /// The distance since the current step began; only with steps.
@@ -33,7 +35,7 @@ public enum RunMetric: String, Sendable, Codable, CaseIterable, Hashable {
     public static let standard: [RunMetric] = [.totalTime, .distance, .heartRate, .currentPace, .averagePace]
 
     /// Whether the metric means something only in a planned workout's steps.
-    public var requiresSteps: Bool { self == .timeRemaining || self == .finishTime || self == .stepTime || self == .stepDistance }
+    public var requiresSteps: Bool { self == .timeRemaining || self == .finishTime || self == .stepNumber || self == .stepTime || self == .stepDistance }
 }
 
 /// A widget a run screen can hold (WATCH-132): something taller or richer than a metric's value.
@@ -46,17 +48,20 @@ public enum RunWidget: String, Sendable, Codable, CaseIterable, Hashable {
     case stepCountdown
     /// The time spent in each zone so far, as bars; height 2.
     case zoneHistogram
+    /// The pace against the step's pace target, drawn like the zone bar; only for a planned workout, and only
+    /// while the step has a pace target (WATCH-135); height 2.
+    case paceBar
 
     /// The height in units.
     public var height: Int {
         switch self {
-        case .zoneBar, .zoneHistogram: 2
+        case .zoneBar, .zoneHistogram, .paceBar: 2
         case .battery, .stepCountdown: 1
         }
     }
 
     /// Whether the widget means something only in a planned workout's steps.
-    public var requiresSteps: Bool { self == .stepCountdown }
+    public var requiresSteps: Bool { self == .stepCountdown || self == .paceBar }
 }
 
 /// One thing on a run screen: a metric or a widget. Each has a ``height`` in units, and a screen holds

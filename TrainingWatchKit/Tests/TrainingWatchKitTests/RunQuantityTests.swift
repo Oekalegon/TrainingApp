@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import TrainingCore
 @testable import TrainingWatchKit
 
 @Suite("RunQuantity (WATCH-135)")
@@ -213,5 +214,37 @@ struct RunSpanTests {
         #expect(!RunScreenItem.span(.time, .split).requiresSteps)
         let item = RunScreenItem.span(.climb, .lastSplit)
         #expect((try? JSONDecoder().decode(RunScreenItem.self, from: JSONEncoder().encode(item))) == item)
+    }
+}
+
+@Suite("StepPaceTarget (WATCH-135)")
+struct StepPaceTargetTests {
+    private func step(target: IntensityTarget?, companion: IntensityTarget? = nil) -> WorkoutStep {
+        WorkoutStep(kind: .work, goal: .time(60), target: target, companionTarget: companion)
+    }
+
+    @Test("a pace target comes from the step's own target or its companion, and a heart-rate step has none")
+    func resolving() throws {
+        let own = try #require(StepPaceTarget(step: step(target: .pace(300...330))))
+        #expect(abs(own.fastest - 0.3) < 1e-9 && abs(own.slowest - 0.33) < 1e-9)
+        #expect(StepPaceTarget(step: step(target: .heartRateZone(3), companion: .pace(300...330))) != nil)
+        #expect(StepPaceTarget(step: step(target: .heartRateZone(3))) == nil)
+        #expect(StepPaceTarget(step: step(target: nil)) == nil)
+        #expect(StepPaceTarget(step: step(target: .pace(0...330))) == nil)
+    }
+
+    @Test("the bar puts the target in the middle, slow at the left and fast at the right")
+    func bar() throws {
+        let target = try #require(StepPaceTarget(step: step(target: .pace(300...330))))
+        #expect(abs(target.targetFractions.lowerBound - 1.0 / 3) < 1e-9)
+        #expect(abs(target.targetFractions.upperBound - 2.0 / 3) < 1e-9)
+        #expect(target.fraction(forSecondsPerMeter: 0.5) == 0)
+        #expect(target.fraction(forSecondsPerMeter: 0.1) == 1)
+        #expect(target.position(forSecondsPerMeter: 0.35) == .tooSlow)
+        #expect(target.position(forSecondsPerMeter: 0.31) == .inside)
+        #expect(target.position(forSecondsPerMeter: 0.28) == .tooFast)
+        #expect(target.labels(locale: Locale(identifier: "nl_NL")) == ("5:00", "5:30"))
+        #expect(RunWidget.paceBar.requiresSteps)
+        #expect(RunMetric.stepNumber.requiresSteps)
     }
 }
