@@ -237,7 +237,7 @@ public struct RunScreenPage: View {
             spoken = "\(number) \(metric ? "kilometres" : "miles")"
         case .climb:
             let climb = reading.map { metric ? $0 : $0 * 3.28084 }
-            number = climb.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "--"
+            number = climb.map { String(format: "%.0f", $0) } ?? "--"
             unitName = metric ? "M UP" : "FT UP"
             spoken = "\(number) \(metric ? "metres" : "feet")"
         }
@@ -262,7 +262,7 @@ public struct RunScreenPage: View {
 
     /// A number with its unit in small capitals, "--" with no reading.
     private func numberLine(_ number: Double?, unit text: String, label: String, spokenUnit: String, decimals: Int = 0) -> some View {
-        let shown = number.map { $0.formatted(.number.precision(.fractionLength(decimals))) } ?? "--"
+        let shown = number.map { String(format: "%.\(decimals)f", $0) } ?? "--"
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             value(shown).foregroundStyle(number == nil ? Color.secondary : Color.white)
             unit(text)
@@ -320,12 +320,17 @@ public struct RunScreenPage: View {
         let color = StepHeartRateTarget.Status.displayColor(status)
         let position = bpm.flatMap { bpm in bands.map { $0.position(forHeartRate: bpm) } }
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
+            // The two values keep their size and the small units give way (they shrink to 60 %), so the zone is never
+            // cut to an ellipsis on a narrow screen.
             value(bpm.map { "\(Int($0.rounded()))" } ?? "--", shrinks: false).foregroundStyle(bpm == nil ? Color.secondary : color)
+                .fixedSize(horizontal: true, vertical: false).layoutPriority(1)
             unit("BPM")
             Spacer(minLength: 2)
             HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
-                unit("ZONE")
+                // In the small caption size, so the whole word fits beside the zone on a narrow screen.
+                Text("ZONE").font(RunMetricStyle.captionFont).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                 value(position.map(ZoneDialText.positionValue) ?? "--", shrinks: false).foregroundStyle(color)
+                    .fixedSize(horizontal: true, vertical: false).layoutPriority(1)
             }
         }
         .accessibilityElement(children: .ignore)
