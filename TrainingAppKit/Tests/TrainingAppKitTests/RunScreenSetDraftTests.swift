@@ -140,6 +140,19 @@ struct RunScreenSetDraftTests {
         #expect(!draft.isFull("a", fittingUnits: 6))
     }
 
+    @Test("screens that come with the app are not the athlete's own, but a changed or named one is")
+    func appScreensAreNotMine() {
+        let easy = StandardScreens.all[0]
+        let named = RunScreen(id: "a", items: easy.items, name: easy.title)
+        let unnamedDefault = RunScreen(id: "b", items: RunScreenSet.workoutDefault.screens[0].items)
+        let renamed = RunScreen(id: "c", items: easy.items, name: "My easy day")
+        let changed = RunScreen(id: "d", items: easy.items + [.metric(.averagePace)])
+        let blank = RunScreen(id: "e", items: [.metric(.totalTime)])
+        let config = RunScreenConfig(
+            freeRun: RunScreenSet(id: "f", name: "F", screens: [named, unnamedDefault, renamed, changed, blank]), workout: .workoutDefault, sets: [])
+        #expect(ScreenLibrary.userScreens(in: config).map(\.id) == ["c", "d"])
+    }
+
     @Test("a screen made in the set being edited is offered with the saved ones, once")
     func editingScreensAreOffered() {
         let mine = RunScreen(id: "m", items: [.metric(.distance), .metric(.currentPace)], name: "Hills")
