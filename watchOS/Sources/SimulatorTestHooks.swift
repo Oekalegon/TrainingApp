@@ -9,6 +9,8 @@ import TrainingWatchKit
 /// - `-autopause <after>,<for>`: pause after that many seconds, for that many seconds.
 /// - `-autolap <after>`: press the lap button after that many seconds.
 /// - `-fakeDimmed`: show the run screens as with the wrist down (`isLuminanceReduced`), see `RunView`.
+/// - `-fakeElevationScreens`: a free run with the two elevation graphs, kept over what a paired phone sends and not
+///   saved for the next launch (see `TrainingWatchApp`). Use it with a track that has altitudes and `-gpxSpeed`.
 /// - `-autoend <seconds>`: end the run after that long.
 private struct SimulatorTestHooks: ViewModifier {
     let recorder: RunRecorder

@@ -55,11 +55,16 @@ public enum RunWidget: String, Sendable, Codable, CaseIterable, Hashable {
     /// otherwise (a heart-rate target, a step with no target, or a free run); height 2. One widget for a screen
     /// that serves workouts with either kind of target.
     case targetBar
+    /// The whole run's altitude against distance (WATCH-149), the line coloured by the grade from green to red, with a
+    /// dot at the current position; height 2.
+    case elevationProfile
+    /// The same for the last 10 km of the run; height 2.
+    case elevationRecent
 
     /// The height in units.
     public var height: Int {
         switch self {
-        case .zoneBar, .zoneHistogram, .paceBar, .targetBar: 2
+        case .zoneBar, .zoneHistogram, .paceBar, .targetBar, .elevationProfile, .elevationRecent: 2
         case .battery, .stepCountdown: 1
         }
     }
@@ -341,10 +346,12 @@ public final class RunScreenStore {
         return config.set(withID: plan.screenSetID)
     }
 
-    public func update(_ config: RunScreenConfig) {
+    /// - Parameter persists: Whether to keep the config in the cache for the next launch. The simulator's test
+    ///   screens (`-fakeElevationScreens`) pass `false`, so they don't outlive the launch argument.
+    public func update(_ config: RunScreenConfig, persists: Bool = true) {
         guard config != self.config else { return }
         self.config = config
-        cache.save(config)
+        if persists { cache.save(config) }
     }
 }
 

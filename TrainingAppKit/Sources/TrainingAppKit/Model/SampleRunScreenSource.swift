@@ -54,7 +54,8 @@ public final class SampleRunScreenSource: RunScreenSource {
             let bpm = 146 + 12 * sin(time / 200 * 2 * .pi)
             stats.add(heartRate: bpm)
             lastHeartRate = bpm
-            stats.add(altitude: 12 + time / 40 + 5 * sin(time / 150), atDistance: distance)
+            // A gentle climb with a steep stretch about two thirds in, so the preview's grade colours show.
+            stats.add(altitude: 12 + time / 40 + 5 * sin(time / 150) + 95 * max(0, min((time - 900) / 300, 1)) - 45 * max(0, min((time - 1200) / 300, 1)), atDistance: distance)
             book.add(.heartRate, bpm, stepKey: stepKey, splitKey: splitKey)
             book.add(.pace, Self.metersPerSecond + 0.3 * wave, stepKey: stepKey, splitKey: splitKey)
             for (quantity, value) in SimulatedReadings.values(atElapsed: time) {

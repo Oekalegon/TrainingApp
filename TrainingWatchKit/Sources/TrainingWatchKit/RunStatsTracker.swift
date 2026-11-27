@@ -1,8 +1,9 @@
 import Foundation
 
 /// Running statistics of a run for the run screens' catalogue (WATCH-135): the heart rate's average and
-/// highest, the altitude, the climb so far and the grade of the last stretch. Pure, so it is tested without a
-/// watch; `RunRecorder` feeds it the heart-rate readings and the GPS fixes.
+/// highest, the altitude, the climb so far and the grade of the last stretch, and the altitude against distance for
+/// the elevation graphs, the whole run and the last 10 km (WATCH-149). Pure, so it is tested without a watch;
+/// `RunRecorder` feeds it the heart-rate readings and the GPS fixes.
 public struct RunStatsTracker: Sendable {
     /// The climb is counted only once the altitude has moved this far (metres) from the last counted point,
     /// so GPS noise doesn't add up to a climb.
@@ -26,6 +27,20 @@ public struct RunStatsTracker: Sendable {
     private var reference: Double?
     /// Recent (distance, altitude) points for the grade, at most ``maximumPoints``.
     private var recent: [(meters: Double, altitude: Double)] = []
+    /// The whole run's altitude against distance for the elevation profile (WATCH-149), thinned as the run grows:
+    /// at most ``maximumProfilePoints``, so a long run costs no more to keep or draw than a short one.
+    public private(set) var profile: [ElevationPoint] = []
+    /// The distance (metres) a point must be past the last profile point to be kept; doubles each time the profile is thinned.
+    private var profileSpacing = 5.0
+    static let maximumProfilePoints = 120
+    /// The last three altitudes as they came: the profiles take their median, so one fix that is off by tens of
+    /// metres (passing the accuracy filter) doesn't rescale the graph or show as a red spike.
+    private var lastAltitudes: [Double] = []
+    /// The last stretch of the run for the "last 10 km" elevation graph (WATCH-149), at a finer spacing than ``profile``
+    /// has on a long run: a point every ``recentSpacing`` metres, the ones further back than ``recentWindowMeters`` dropped.
+    public private(set) var recentProfile: [ElevationPoint] = []
+    public static let recentWindowMeters = 10_000.0
+    public static let recentSpacing = 25.0
 
     public init() {}
 
@@ -61,6 +76,11 @@ public struct RunStatsTracker: Sendable {
         } else {
             reference = altitude
         }
+        lastAltitudes.append(altitude)
+        if lastAltitudes.count > 3 { lastAltitudes.removeFirst() }
+        let smoothed = lastAltitudes.count == 3 ? lastAltitudes.sorted()[1] : altitude
+        addToProfile(altitude: smoothed, atDistance: meters)
+        addToRecentProfile(altitude: smoothed, atDistance: meters)
         // A fix at the same distance (standing still) replaces the last point instead of piling up.
         if let last = recent.last, last.meters == meters, recent.count > 1 {
             recent[recent.count - 1] = (meters, altitude)
@@ -70,5 +90,47 @@ public struct RunStatsTracker: Sendable {
         if recent.count > Self.maximumPoints { recent.removeFirst(recent.count - Self.maximumPoints) }
         // Keep one point at least a window back, so the grade always has a full stretch.
         while recent.count > 2, meters - recent[1].meters >= Self.gradeWindowMeters { recent.removeFirst() }
+    }
+
+    /// Keeps a point every ``recentSpacing`` metres and forgets those more than ``recentWindowMeters`` behind the run.
+    /// At most 401 points however long the run is.
+    private mutating func addToRecentProfile(altitude: Double, atDistance meters: Double) {
+        if let last = recentProfile.last, meters - last.meters < Self.recentSpacing { return }
+        recentProfile.append(ElevationPoint(meters: meters, altitude: altitude))
+        let behind = meters - Self.recentWindowMeters
+        if let first = recentProfile.first, first.meters < behind {
+            recentProfile.removeAll { $0.meters < behind }
+        }
+    }
+
+    /// Keeps a point once the run is ``profileSpacing`` metres past the last one; at the limit every other point goes
+    /// and the spacing doubles, so the profile always spans the whole run. A fix less than the spacing past the last
+    /// point (standing still) adds nothing.
+    private mutating func addToProfile(altitude: Double, atDistance meters: Double) {
+        guard let last = profile.last else {
+            profile = [ElevationPoint(meters: meters, altitude: altitude)]
+            return
+        }
+        if meters - last.meters >= profileSpacing {
+            profile.append(ElevationPoint(meters: meters, altitude: altitude))
+            if profile.count > Self.maximumProfilePoints {
+                // Keep the first and the last point, thin the ones between.
+                let lastPoint = profile[profile.count - 1]
+                profile = profile.enumerated().filter { $0.offset % 2 == 0 }.map(\.element)
+                if profile.last != lastPoint { profile.append(lastPoint) }
+                profileSpacing *= 2
+            }
+        }
+    }
+}
+
+/// One point of the elevation profile: the run's distance in metres and the altitude in metres there.
+public struct ElevationPoint: Sendable, Hashable {
+    public var meters: Double
+    public var altitude: Double
+
+    public init(meters: Double, altitude: Double) {
+        self.meters = meters
+        self.altitude = altitude
     }
 }

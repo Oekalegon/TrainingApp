@@ -364,6 +364,8 @@ public struct RunScreenPage: View {
         case .zoneHistogram: zoneHistogram
         case .paceBar: paceBar(at: date)
         case .targetBar: targetBar(at: date)
+        case .elevationProfile: ElevationProfileView(points: source.stats.profile)
+        case .elevationRecent: ElevationProfileView(points: source.stats.recentProfile)
         }
     }
 
