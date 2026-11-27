@@ -32,6 +32,11 @@ public struct RunStatsTracker: Sendable {
     /// The distance (metres) a point must be past the last profile point to be kept; doubles each time the profile is thinned.
     private var profileSpacing = 5.0
     static let maximumProfilePoints = 120
+    /// The last stretch of the run for the "last 10 km" elevation graph (WATCH-149), at a finer spacing than ``profile``
+    /// has on a long run: a point every ``recentSpacing`` metres, the ones further back than ``recentWindowMeters`` dropped.
+    public private(set) var recentProfile: [ElevationPoint] = []
+    public static let recentWindowMeters = 10_000.0
+    public static let recentSpacing = 25.0
 
     public init() {}
 
@@ -68,6 +73,7 @@ public struct RunStatsTracker: Sendable {
             reference = altitude
         }
         addToProfile(altitude: altitude, atDistance: meters)
+        addToRecentProfile(altitude: altitude, atDistance: meters)
         // A fix at the same distance (standing still) replaces the last point instead of piling up.
         if let last = recent.last, last.meters == meters, recent.count > 1 {
             recent[recent.count - 1] = (meters, altitude)
@@ -77,6 +83,17 @@ public struct RunStatsTracker: Sendable {
         if recent.count > Self.maximumPoints { recent.removeFirst(recent.count - Self.maximumPoints) }
         // Keep one point at least a window back, so the grade always has a full stretch.
         while recent.count > 2, meters - recent[1].meters >= Self.gradeWindowMeters { recent.removeFirst() }
+    }
+
+    /// Keeps a point every ``recentSpacing`` metres and forgets those more than ``recentWindowMeters`` behind the run.
+    /// At most 401 points however long the run is.
+    private mutating func addToRecentProfile(altitude: Double, atDistance meters: Double) {
+        if let last = recentProfile.last, meters - last.meters < Self.recentSpacing { return }
+        recentProfile.append(ElevationPoint(meters: meters, altitude: altitude))
+        let behind = meters - Self.recentWindowMeters
+        if let first = recentProfile.first, first.meters < behind {
+            recentProfile.removeAll { $0.meters < behind }
+        }
     }
 
     /// Keeps a point once the run is ``profileSpacing`` metres past the last one; at the limit every other point goes

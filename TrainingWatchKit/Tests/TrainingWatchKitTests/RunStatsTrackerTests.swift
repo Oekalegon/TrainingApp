@@ -58,6 +58,40 @@ struct RunStatsTrackerTests {
         #expect(stats.profile.map(\.meters) == stats.profile.map(\.meters).sorted())
     }
 
+    @Test("the last-10-km profile keeps fine points, drops what is further back and stays bounded")
+    func recentProfile() throws {
+        var stats = RunStatsTracker()
+        for meter in stride(from: 0.0, through: 30_000, by: 10) { stats.add(altitude: 50 + meter / 100, atDistance: meter) }
+        let recent = stats.recentProfile
+        #expect(recent.count <= Int(RunStatsTracker.recentWindowMeters / RunStatsTracker.recentSpacing) + 1)
+        let first = try #require(recent.first)
+        let last = try #require(recent.last)
+        #expect(last.meters == 30_000)
+        #expect(last.meters - first.meters <= RunStatsTracker.recentWindowMeters)
+        #expect(last.meters - first.meters > RunStatsTracker.recentWindowMeters - 2 * RunStatsTracker.recentSpacing)
+        // Finer than the whole-run profile, which is thinned to a few hundred metres a point by now.
+        #expect(recent.count > stats.profile.count)
+    }
+
+    @Test("grade colours go from green on the flat to red at 25 % and steeper, up or down")
+    func gradeColour() {
+        #expect(abs(ElevationGrade.hue(forGrade: 0) - 1.0 / 3) < 1e-9)
+        #expect(ElevationGrade.hue(forGrade: 25) == 0)
+        #expect(ElevationGrade.hue(forGrade: 40) == 0)
+        #expect(ElevationGrade.hue(forGrade: -25) == 0)
+        #expect(abs(ElevationGrade.hue(forGrade: 12.5) - 1.0 / 6) < 1e-9)
+    }
+
+    @Test("the grade at a point is taken over a stretch, so close noisy points don't read as steep")
+    func gradeStretch() {
+        // A steady 10 % climb with 1 m of noise on points 10 m apart.
+        let points = (0..<30).map { ElevationPoint(meters: Double($0) * 10, altitude: Double($0) + ($0 % 2 == 0 ? 0.5 : -0.5)) }
+        let grades = ElevationGrade.grades(of: points)
+        #expect(grades.count == points.count)
+        #expect(grades[15...20].allSatisfy { abs($0 - 10) < 2 })
+        #expect(ElevationGrade.gradient(for: points).count == points.count)
+    }
+
     @Test("standing still adds no profile points")
     func profileStationary() {
         var stats = RunStatsTracker()
