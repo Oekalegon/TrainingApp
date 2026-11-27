@@ -4,20 +4,26 @@ import TrainingWatchKit
 /// A run screen set while the athlete edits it (WATCH-134): the changes are made on this copy and only
 /// handed to ``WatchScreenSetSync`` when the athlete saves, so a half-made set never reaches the watch.
 /// All the rules of a screen live here, so they are tested and the views stay thin: a screen holds at most
-/// ``RunScreen/capacity`` units, so an item that doesn't fit isn't added, and the screens can be reordered
-/// and one of them is the screen the run opens on.
+/// ``RunScreen/capacity`` units, so an item that doesn't fit isn't added, and the screens can be reordered: the run
+/// opens on the first one.
 public struct RunScreenSetDraft: Equatable, Sendable {
     public var id: String
     public var name: String
     public var screens: [RunScreen]
-    /// The id of the screen the run opens on; the first screen when it names none.
+    /// The id of the screen the run opens on; always nil in a draft, which opens on the first screen (an older set
+    /// that named another one has it moved to the front when the draft is made).
     public var startScreenID: String?
 
     public init(_ set: RunScreenSet) {
         id = set.id
         name = set.name
-        screens = set.screens
-        // The run opens on the first screen; reorder the screens to change it.
+        // The run opens on the first screen, so a screen an older set opened on goes to the front: saving the set
+        // doesn't change where the run opens.
+        var screens = set.screens
+        if let start = set.startScreenID, let index = screens.firstIndex(where: { $0.id == start }), index > 0 {
+            screens.insert(screens.remove(at: index), at: 0)
+        }
+        self.screens = screens
         startScreenID = nil
     }
 
@@ -81,6 +87,12 @@ public struct RunScreenSetDraft: Equatable, Sendable {
     public mutating func moveItems(from source: IndexSet, to destination: Int, in screenID: String) {
         guard let index = screens.firstIndex(where: { $0.id == screenID }) else { return }
         screens[index].items.move(fromOffsets: source, toOffset: destination)
+    }
+
+    /// Whether a screen has all the room a watch offers (`units`: 6 on an Ultra, 5 on the others), so no item can be
+    /// added for that watch. The athlete's choice of watch in the preview decides which.
+    public func isFull(_ screenID: String, fittingUnits units: Int) -> Bool {
+        self.units(of: screenID) >= units
     }
 
     /// The name of a screen as the list shows it: nil when it has none, or only spaces.

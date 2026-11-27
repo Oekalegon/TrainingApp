@@ -17,7 +17,7 @@ struct WatchScreenItemsView: View {
     @State private var previewsWorkout = true
 
     /// Whether the screen has all the room the watch chosen in the preview offers (6 units on the Ultra, 5 at 41 mm).
-    private var isFull: Bool { draft.units(of: screenID) >= previewWatch.fittingUnits }
+    private var isFull: Bool { draft.isFull(screenID, fittingUnits: previewWatch.fittingUnits) }
 
     /// The screen's name; an empty field is no name.
     private var nameBinding: Binding<String> {

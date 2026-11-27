@@ -119,13 +119,35 @@ struct RunScreenSetDraftTests {
         #expect(draft.displayName(of: id) == "Zones")
     }
 
-    @Test("a set saved with a start screen opens on its first screen in the editor")
+    @Test("a screen an older set opened on goes to the front, so the run still opens on it")
     func startsOnFirstScreen() {
         let set = RunScreenSet(
             id: "x", name: "X",
             screens: [RunScreen(id: "a", items: [.metric(.distance)]), RunScreen(id: "b", items: [.metric(.heartRate)])],
             startScreenID: "b")
-        #expect(RunScreenSetDraft(set).set.startIndex == 0)
+        let draft = RunScreenSetDraft(set)
+        #expect(draft.screens.map(\.id) == ["b", "a"])
+        #expect(draft.startScreenID == nil)
+        #expect(draft.set.startIndex == 0)
+    }
+
+    @Test("a screen is full for a watch when its items take all the units that watch fits")
+    func fullScreen() {
+        let draft = RunScreenSetDraft(RunScreenSet(
+            id: "x", name: "X",
+            screens: [RunScreen(id: "a", items: [.metric(.distance), .metric(.heartRate), .metric(.currentPace), .metric(.totalTime), .metric(.averagePace)])]))
+        #expect(draft.isFull("a", fittingUnits: 5))
+        #expect(!draft.isFull("a", fittingUnits: 6))
+    }
+
+    @Test("a screen made in the set being edited is offered with the saved ones, once")
+    func editingScreensAreOffered() {
+        let mine = RunScreen(id: "m", items: [.metric(.distance), .metric(.currentPace)], name: "Hills")
+        let config = RunScreenConfig(freeRun: RunScreenSet(id: "f", name: "F", screens: [mine]), workout: .workoutDefault, sets: [])
+        let fresh = RunScreen(id: "n", items: [.metric(.heartRate)], name: "New")
+        let screens = ScreenLibrary.userScreens(in: config, editing: [mine, fresh])
+        #expect(screens.filter { $0.name == "Hills" }.count == 1)
+        #expect(screens.contains { $0.id == "n" })
     }
 
     @Test("screens move, and a start screen that is deleted is forgotten so the run opens on the first")

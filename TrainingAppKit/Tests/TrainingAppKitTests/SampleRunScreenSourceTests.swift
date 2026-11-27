@@ -74,4 +74,17 @@ struct SampleRunScreenSourceTests {
         // The Ultra's case is the squarer one, relative to its size.
         #expect(ultra.caseCornerRadius / ultra.screenSize.width < other.caseCornerRadius / other.screenSize.width)
     }
+
+    @Test("the Ultra's case outline stays inside its frame and the guard bulges out of the right edge")
+    func caseShape() {
+        let frame = CGRect(x: 0, y: 0, width: 240, height: 280)
+        let plain = WatchCaseShape(cornerRadius: 60, guardWidth: 0, guardTop: 0, guardBottom: 0, shoulder: 0).path(in: frame)
+        #expect(plain.boundingRect.width.rounded() == 240)
+        let guarded = WatchCaseShape(cornerRadius: 60, guardWidth: 10, guardTop: 70, guardBottom: 210, shoulder: 6).path(in: frame)
+        let box = guarded.boundingRect
+        #expect(box.minX >= -0.5 && box.maxX <= 240.5 && box.minY >= -0.5 && box.maxY <= 280.5)
+        // The guard reaches the right edge of the frame at its middle, the case body stops 10 points short of it.
+        #expect(guarded.contains(CGPoint(x: 235, y: 140)))
+        #expect(!guarded.contains(CGPoint(x: 235, y: 20)))
+    }
 }

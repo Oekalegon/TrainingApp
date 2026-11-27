@@ -7,10 +7,14 @@ public enum ScreenLibrary {
     /// The athlete's own screens: those in the free-run set, the workout set and their own sets, each once (a screen
     /// that two sets share, or that only differs in its id, is listed once) and without the ones that are just a
     /// standard screen, which the sheet lists under the standard screens.
-    public static func userScreens(in config: RunScreenConfig) -> [RunScreen] {
+    /// - Parameters:
+    ///   - config: The saved sets.
+    ///   - editing: The screens of the set being edited, saved or not: a screen made in it is offered at once, before
+    ///     the set is saved.
+    public static func userScreens(in config: RunScreenConfig, editing: [RunScreen] = []) -> [RunScreen] {
         var seen: [RunScreen] = []
         let standardItems = StandardScreens.all.map(\.items)
-        for screen in ([config.freeRun, config.workout] + config.sets).flatMap(\.screens) {
+        for screen in ([config.freeRun, config.workout] + config.sets).flatMap(\.screens) + editing {
             let isStandard = standardItems.contains(screen.items) && (screen.name ?? "").isEmpty
             let isKnown = seen.contains { $0.items == screen.items && $0.name == screen.name }
             if !isStandard && !isKnown { seen.append(screen) }

@@ -91,7 +91,7 @@ struct WatchScreenSetEditorView: View {
         }
         .sheet(isPresented: $isAddingScreen) {
             NavigationStack {
-                WatchStandardScreenPickerView(draft: $draft, userScreens: ScreenLibrary.userScreens(in: screens.config))
+                WatchStandardScreenPickerView(draft: $draft, userScreens: ScreenLibrary.userScreens(in: screens.config, editing: draft.screens))
             }
         }
     }
@@ -114,7 +114,7 @@ struct WatchScreenSetEditorView: View {
 
     private func screenRow(_ screen: RunScreen) -> some View {
         // The preview and the metrics start at the top of the row; the metrics are a bulleted list.
-        return HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             // A small preview of the screen with sample values; the list beside it says the same in words.
             WatchScreenPreview(screen: screen, isWorkout: true, watch: .large, scale: 0.3)
                 .accessibilityHidden(true)
