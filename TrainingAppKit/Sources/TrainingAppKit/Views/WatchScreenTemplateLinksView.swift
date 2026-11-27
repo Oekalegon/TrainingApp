@@ -30,6 +30,9 @@ struct WatchScreenTemplateLinksView: View {
                         }
                     }
                 }
+                // Plain, so the name keeps the list's colour and not the button's blue tint.
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .accessibilityAddTraits(current == setID ? .isSelected : [])
             }
             if let errorText {

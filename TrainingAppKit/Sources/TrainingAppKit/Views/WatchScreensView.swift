@@ -8,15 +8,7 @@ import TrainingWatchKit
 struct WatchScreensView: View {
     let screens: WatchScreenSetSync
     let model: TrainingModel
-    @State private var editing: Editing?
     @State private var confirmingReset = false
-
-    /// A set being edited and whether it is one of the two built-in ones (which keep their names).
-    private struct Editing: Identifiable {
-        let id = UUID()
-        let draft: RunScreenSetDraft
-        let kind: WatchScreenSetEditorView.Kind
-    }
 
     var body: some View {
         List {
@@ -35,9 +27,10 @@ struct WatchScreensView: View {
                 .onDelete { offsets in
                     for index in offsets { screens.deleteSet(id: screens.config.sets[index].id) }
                 }
-                Button("Add Set", systemImage: "plus") {
-                    editing = Editing(
-                        draft: RunScreenSetDraft(WatchScreenSetSync.newSet(named: "")), kind: .custom)
+                NavigationLink {
+                    editor(RunScreenSetDraft(WatchScreenSetSync.newSet(named: "")), kind: .custom)
+                } label: {
+                    Label("Add Set", systemImage: "plus")
                 }
             } header: {
                 Text("My Sets")
@@ -55,11 +48,6 @@ struct WatchScreensView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .sheet(item: $editing) { editing in
-            NavigationStack {
-                WatchScreenSetEditorView(screens: screens, model: model, draft: editing.draft, kind: editing.kind)
-            }
-        }
         .confirmationDialog("Reset the run screens?", isPresented: $confirmingReset, titleVisibility: .visible) {
             Button("Reset", role: .destructive) { screens.resetToDefaults() }
         } message: {
@@ -67,12 +55,17 @@ struct WatchScreensView: View {
         }
     }
 
+    /// The editor for a set, pushed on the navigation stack like the other settings pages.
+    private func editor(_ draft: RunScreenSetDraft, kind: WatchScreenSetEditorView.Kind) -> some View {
+        WatchScreenSetEditorView(screens: screens, model: model, draft: draft, kind: kind)
+    }
+
     private func row(_ set: RunScreenSet, kind: WatchScreenSetEditorView.Kind) -> some View {
-        Button {
-            editing = Editing(draft: RunScreenSetDraft(set), kind: kind)
+        NavigationLink {
+            editor(RunScreenSetDraft(set), kind: kind)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(set.name).foregroundStyle(.primary)
+                Text(set.name)
                 Text(set.screens.count == 1 ? "1 screen" : "\(set.screens.count) screens")
                     .font(.caption).foregroundStyle(.secondary)
             }

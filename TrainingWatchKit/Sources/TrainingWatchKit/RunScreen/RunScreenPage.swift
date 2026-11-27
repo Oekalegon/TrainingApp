@@ -107,13 +107,13 @@ public struct RunScreenPage: View {
         case .altitude:
             let metric = PaceText.usesKilometres()
             numberLine(source.stats.altitude.map { metric ? $0 : $0 * 3.28084 },
-                       unit: metric ? "M ALT" : "FT ALT", label: "Altitude", spokenUnit: metric ? "metres" : "feet")
+                       unit: metric ? "M" : "FT", caption: "ALTITUDE", label: "Altitude", spokenUnit: metric ? "metres" : "feet")
         case .elevationGain:
             let metric = PaceText.usesKilometres()
             numberLine(source.stats.altitude == nil ? nil : (metric ? source.stats.elevationGain : source.stats.elevationGain * 3.28084),
-                       unit: metric ? "M UP" : "FT UP", label: "Elevation gain", spokenUnit: metric ? "metres" : "feet")
+                       unit: metric ? "M" : "FT", caption: "ASCENT", label: "Elevation gain", spokenUnit: metric ? "metres" : "feet")
         case .grade:
-            numberLine(source.stats.grade, unit: "% GRADE", label: "Grade", spokenUnit: "percent", decimals: 1)
+            numberLine(source.stats.grade, unit: "%", caption: "GRADE", label: "Grade", spokenUnit: "percent", decimals: 1)
         case .timeRemaining:
             if let estimate = remainingEstimate(at: date) {
                 let text = ZoneDialText.totalTimeText(estimate.seconds, showsSeconds: !dimmed)
@@ -238,7 +238,7 @@ public struct RunScreenPage: View {
         case .climb:
             let climb = reading.map { metric ? $0 : $0 * 3.28084 }
             number = climb.map { String(format: "%.0f", $0) } ?? "--"
-            unitName = metric ? "M UP" : "FT UP"
+            unitName = metric ? "M" : "FT"
             spoken = "\(number) \(metric ? "metres" : "feet")"
         }
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
@@ -260,12 +260,16 @@ public struct RunScreenPage: View {
                 current: source.currentSecondsPerMeter(at: date), average: source.averageSecondsPerMeter))
     }
 
-    /// A number with its unit in small capitals, "--" with no reading.
-    private func numberLine(_ number: Double?, unit text: String, label: String, spokenUnit: String, decimals: Int = 0) -> some View {
+    /// A number with its unit in small capitals and, when `caption` is given, a word naming it in the caption size
+    /// ("47 M ALTITUDE"), "--" with no reading.
+    private func numberLine(_ number: Double?, unit text: String, caption: String? = nil, label: String, spokenUnit: String, decimals: Int = 0) -> some View {
         let shown = number.map { String(format: "%.\(decimals)f", $0) } ?? "--"
         return HStack(alignment: .lastTextBaseline, spacing: RunMetricStyle.unitSpacing) {
             value(shown).foregroundStyle(number == nil ? Color.secondary : Color.white)
             unit(text)
+            if let caption {
+                Text(caption).font(RunMetricStyle.captionFont).foregroundStyle(.secondary).lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
@@ -383,7 +387,7 @@ public struct RunScreenPage: View {
                 StepCountdownRow(
                     remaining: remaining ?? "Open",
                     place: ZoneDialText.place(of: current, in: engine.steps.count),
-                    remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "STEP TIME" : "STEP DISTANCE"))
+                    remainingKind: remaining == nil ? nil : (progress?.remainingTime != nil ? "TIME" : "DIST"))
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Step")

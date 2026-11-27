@@ -24,7 +24,11 @@ struct WatchScreenItemRow: View {
             } icon: {
                 Image(systemName: item.systemImage).accessibilityHidden(true)
             }
+            .labelStyle(TopAlignedLabelStyle())
         }
+        // Plain, so the texts keep the list's colours and not the button's blue tint.
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .disabled(!fits)
     }
 }
