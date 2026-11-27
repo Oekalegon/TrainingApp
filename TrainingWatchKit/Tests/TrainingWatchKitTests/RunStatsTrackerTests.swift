@@ -45,6 +45,43 @@ struct RunStatsTrackerTests {
         #expect(abs(grade - 8.333) < 0.01)
     }
 
+    @Test("the elevation profile (WATCH-149) keeps the start and the latest point and never grows past its limit")
+    func profile() throws {
+        var stats = RunStatsTracker()
+        for meter in stride(from: 0.0, through: 20_000, by: 10) { stats.add(altitude: 50 + meter / 100, atDistance: meter) }
+        #expect(stats.profile.count <= RunStatsTracker.maximumProfilePoints)
+        #expect(stats.profile.count > RunStatsTracker.maximumProfilePoints / 4)
+        #expect(stats.profile.first == ElevationPoint(meters: 0, altitude: 50))
+        // The run is covered to its end, within one thinned spacing.
+        let last = try #require(stats.profile.last)
+        #expect(last.meters > 19_000)
+        #expect(stats.profile.map(\.meters) == stats.profile.map(\.meters).sorted())
+    }
+
+    @Test("standing still adds no profile points")
+    func profileStationary() {
+        var stats = RunStatsTracker()
+        stats.add(altitude: 100, atDistance: 0)
+        for _ in 0..<500 { stats.add(altitude: 101, atDistance: 1) }
+        #expect(stats.profile.count == 1)
+    }
+
+    @Test("the profile is scaled to fit, with room above and below, and a flat run stays in the middle")
+    func profileShape() {
+        let climb = ElevationProfileShape.normalized([
+            ElevationPoint(meters: 0, altitude: 100), ElevationPoint(meters: 500, altitude: 150), ElevationPoint(meters: 1000, altitude: 200),
+        ])
+        #expect(climb.map(\.x) == [0, 0.5, 1])
+        #expect(abs(climb[0].y - ElevationProfileShape.margin) < 1e-9)
+        #expect(abs(climb[2].y - (1 - ElevationProfileShape.margin)) < 1e-9)
+        // Under the least range, a flat run is a line in the middle and not stretched into a climb.
+        let flat = ElevationProfileShape.normalized([ElevationPoint(meters: 0, altitude: 80), ElevationPoint(meters: 100, altitude: 80.5)])
+        #expect(flat.allSatisfy { abs($0.y - 0.5) < 0.05 })
+        #expect(ElevationProfileShape.normalized([ElevationPoint(meters: 0, altitude: 80)]).isEmpty)
+        #expect(RunWidget.elevationProfile.height == 2)
+        #expect(!RunWidget.elevationProfile.requiresSteps)
+    }
+
     @Test("metrics that need steps are marked")
     func steps() {
         #expect(RunScreenItem.metric(.timeRemaining).requiresSteps)

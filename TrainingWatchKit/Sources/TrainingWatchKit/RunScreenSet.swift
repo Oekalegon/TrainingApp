@@ -55,11 +55,13 @@ public enum RunWidget: String, Sendable, Codable, CaseIterable, Hashable {
     /// otherwise (a heart-rate target, a step with no target, or a free run); height 2. One widget for a screen
     /// that serves workouts with either kind of target.
     case targetBar
+    /// The run's altitude against distance (WATCH-149): a green line with a green fade below it; height 2.
+    case elevationProfile
 
     /// The height in units.
     public var height: Int {
         switch self {
-        case .zoneBar, .zoneHistogram, .paceBar, .targetBar: 2
+        case .zoneBar, .zoneHistogram, .paceBar, .targetBar, .elevationProfile: 2
         case .battery, .stepCountdown: 1
         }
     }

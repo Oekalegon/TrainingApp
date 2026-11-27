@@ -78,7 +78,7 @@ public enum RunScreenItemCatalogue {
         Group(title: "Vertical Oscillation", items: measures(of: .verticalOscillation)),
         Group(title: "Pace", items: [.metric(.currentPace), .metric(.averagePace)] + measures(of: .pace)),
         Group(title: "Distance and Time", items: [.metric(.distance), .metric(.totalTime)] + spans(.distance) + spans(.time)),
-        Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade)] + spans(.climb)),
+        Group(title: "Elevation and Grade", items: [.metric(.altitude), .metric(.elevationGain), .metric(.grade), .widget(.elevationProfile)] + spans(.climb)),
         Group(title: "Workout Step", items: [
             .widget(.stepCountdown), .widget(.targetBar), .metric(.stepTime), .metric(.stepDistance), .metric(.stepNumber), .widget(.paceBar), .metric(.timeRemaining), .metric(.finishTime),
         ]),
@@ -141,6 +141,7 @@ extension RunScreenItem {
             case .zoneHistogram: "Time in Zones"
             case .paceBar: "Pace Bar"
             case .targetBar: "Target Bar"
+            case .elevationProfile: "Elevation Profile"
             }
         }
     }
@@ -168,6 +169,7 @@ extension RunScreenItem {
         case .widget(.battery): "The watch's charge and how much is left at the end"
         case .widget(.stepCountdown): "Time or distance left in the step; planned workouts only"
         case .widget(.zoneHistogram): "How long the run has spent in each zone"
+        case .widget(.elevationProfile): "The altitude against the distance run so far, as a green line with a fade below it"
         case .widget(.targetBar): "The bar for the step's target: the pace bar when the step has a pace target, the zone bar otherwise"
         case .widget(.paceBar): "The pace against the step's pace target; planned workouts only, and drawn only while the step has a pace target"
         case .metric(.stepNumber): "Which step it is, or which interval of a repeated block; planned workouts only"
@@ -232,6 +234,7 @@ extension RunScreenItem {
         case .widget(.zoneHistogram): "chart.bar.fill"
         case .widget(.paceBar): "chart.bar.xaxis"
         case .widget(.targetBar): "target"
+        case .widget(.elevationProfile): "chart.line.uptrend.xyaxis"
         case .metric(.stepNumber): "number"
         case .span(let kind, _):
             switch kind {
