@@ -100,8 +100,8 @@ struct RunStatsTrackerTests {
         #expect(ElevationGrid.niceStep(atLeast: 0.04) == 0.05)
         let points = (0...40).map { ElevationPoint(meters: Double($0) * 100, altitude: 12 + Double($0)) }
         let scale = try #require(ElevationScale(points))
-        // 4 km: a line every km, none on the edges.
-        #expect(ElevationGrid.distances(scale) == [1000, 2000, 3000])
+        // 4 km: a line every 2 km, none on the edges.
+        #expect(ElevationGrid.distances(scale) == [2000])
         let altitudes = ElevationGrid.altitudes(scale)
         #expect(!altitudes.isEmpty && altitudes.count <= 4)
         // Each altitude line is inside the drawn range, and sits where the line draws that altitude.
@@ -111,6 +111,8 @@ struct RunStatsTrackerTests {
         }
         #expect(ElevationGrid.distanceLabel(2000) == "2 km")
         #expect(ElevationGrid.distanceLabel(500) == "0.5 km")
+        #expect(ElevationGrid.distanceLabel(50) == "0.05 km")
+        #expect(ElevationGrid.distanceLabel(12_000) == "12 km")
         #expect(ElevationGrid.altitudeLabel(49.6) == "50 m")
         #expect(ElevationScale([ElevationPoint(meters: 0, altitude: 1)]) == nil)
     }

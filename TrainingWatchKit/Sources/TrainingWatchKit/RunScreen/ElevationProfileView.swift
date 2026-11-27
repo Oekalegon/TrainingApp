@@ -165,7 +165,7 @@ struct ElevationScale {
 enum ElevationGrid {
     /// The least number of lines wanted either way is none; the most is about this many.
     static let altitudeLines = 3.0
-    static let distanceLines = 4.0
+    static let distanceLines = 3.0
 
     /// The smallest 1, 2 or 5 times a power of ten that is at least `value`.
     static func niceStep(atLeast value: Double) -> Double {
@@ -197,10 +197,12 @@ enum ElevationGrid {
 
     static func altitudeLabel(_ meters: Double) -> String { "\(Int(meters.rounded())) m" }
 
-    /// "2 km", or "0.5 km" for a step under a kilometre.
+    /// "2 km", "0.5 km", or "0.05 km" early in a run: up to two decimals, without trailing zeros.
     static func distanceLabel(_ meters: Double) -> String {
-        let km = meters / 1000
-        return (km == km.rounded() ? "\(Int(km))" : String(format: "%.1f", km)) + " km"
+        var text = String(format: "%.2f", meters / 1000)
+        while text.hasSuffix("0") { text.removeLast() }
+        if text.hasSuffix(".") { text.removeLast() }
+        return text + " km"
     }
 }
 
