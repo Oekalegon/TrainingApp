@@ -81,7 +81,7 @@ struct WatchScreenItemsView: View {
         } header: {
             Text("Preview")
         } footer: {
-            Text("Sample values. A smaller watch drops the first items of a full screen, and a free run leaves out a screen with an item for planned workouts.")
+            Text("Sample values. Other watches are drawn at 41 mm: a full screen loses its first item there, and a wide row has less room. A 45 mm watch fits the same as the Ultra. A free run leaves out a screen with an item for planned workouts.")
         }
     }
 }

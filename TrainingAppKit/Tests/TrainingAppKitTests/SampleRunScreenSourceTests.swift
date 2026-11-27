@@ -58,4 +58,20 @@ struct SampleRunScreenSourceTests {
         #expect(PreviewWatch.small.fittingUnits == RunScreen.capacity - 1)
         #expect(PreviewWatch.allCases.count == 2)
     }
+
+    @Test("each watch has its own screen, the units it fits come from the watch's own rule, and only the Ultra has the Action button and a crown guard (WATCH-142)")
+    func eachWatchHasItsOwnDrawing() {
+        let ultra = PreviewWatch.large
+        let other = PreviewWatch.small
+        #expect(ultra.screenSize == CGSize(width: 205, height: 251))
+        #expect(other.screenSize.width < ultra.screenSize.width && other.screenSize.height < ultra.screenSize.height)
+        for watch in PreviewWatch.allCases {
+            #expect(watch.fittingUnits == RunScreenPage.fittingUnits(forScreenHeight: watch.screenSize.height))
+            #expect(watch.screenCornerRadius < watch.caseCornerRadius)
+        }
+        #expect(ultra.hasActionButton && ultra.hasCrownGuard)
+        #expect(!other.hasActionButton && !other.hasCrownGuard)
+        // The Ultra's case is the squarer one, relative to its size.
+        #expect(ultra.caseCornerRadius / ultra.screenSize.width < other.caseCornerRadius / other.screenSize.width)
+    }
 }

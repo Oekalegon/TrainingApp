@@ -2,7 +2,9 @@ import SwiftUI
 import TrainingWatchKit
 
 /// A run screen as the watch draws it (WATCH-138): the same ``RunScreenPage`` the watch uses, fed with sample values,
-/// inside an outline of the watch with its crown and side button, like the simulator's. A screen that has an item
+/// inside an outline of the watch with its crown and side button, like the simulator's. The outline and the screen
+/// size follow the watch chosen (WATCH-142): the Ultra's squarer case has a crown guard and the Action button, the
+/// other watches' case is rounder and has a smaller screen. A screen that has an item
 /// only a planned workout can show is empty in a free run, as it is left out there.
 struct WatchScreenPreview: View {
     let screen: RunScreen
@@ -12,15 +14,16 @@ struct WatchScreenPreview: View {
     /// size (WATCH-143), as wide as it is, for a list row.
     var scale: CGFloat = 1
 
-    /// The size of the Ultra's screen in points (49 mm: 205 × 251), the one the "Ultra" choice stands for, and of the
-    /// bezel around it. The watch lays the run screens out at this width, so a row that is too wide for a narrower
-    /// screen would shrink in the preview and not on the watch.
-    private static let screenSize = CGSize(width: 205, height: 251)
-    private static let bezel = 9.0
+    /// The room kept on each side of the case for what sticks out of it (the crown, its guard, the buttons), so the
+    /// watch stays centred.
+    private static let sideRoom = 20.0
 
-    /// The size of the whole drawing at full size: the case with the crown's room on both sides.
-    private static let fullSize = CGSize(
-        width: screenSize.width + 2 * bezel + 2 * crownWidth - 6, height: screenSize.height + 2 * bezel)
+    /// The size of the whole drawing at full size: the case with the room for what sticks out on both sides.
+    private var fullSize: CGSize {
+        CGSize(
+            width: watch.screenSize.width + 2 * watch.bezel + 2 * Self.sideRoom,
+            height: watch.screenSize.height + 2 * watch.bezel)
+    }
 
     var body: some View {
         Group {
@@ -28,7 +31,7 @@ struct WatchScreenPreview: View {
                 drawing
                     .fixedSize()
                     .scaleEffect(scale)
-                    .frame(width: Self.fullSize.width * scale, height: Self.fullSize.height * scale)
+                    .frame(width: fullSize.width * scale, height: fullSize.height * scale)
             } else {
                 drawing.frame(maxWidth: .infinity)
             }
@@ -37,37 +40,106 @@ struct WatchScreenPreview: View {
         .accessibilityLabel("Preview of the watch screen, with sample values")
     }
 
-    /// The crown and the side button stick out on the right; the same room on the left keeps the watch centred.
+    /// The case with the crown and buttons that stick out of it, each in the room kept at the side.
     private var drawing: some View {
-        HStack(spacing: -3) {
-            Color.clear.frame(width: Self.crownWidth - 3, height: 1)
-            watchCase
-            crown
-        }
+        watchCase
+            // Each side is as wide as the room kept for it, and moved out so it starts 1 point inside the case.
+            .overlay(alignment: .trailing) {
+                rightSide.frame(width: Self.sideRoom, alignment: .leading).offset(x: Self.sideRoom - 1)
+            }
+            .overlay(alignment: .leading) {
+                leftSide.frame(width: Self.sideRoom, alignment: .trailing).offset(x: -(Self.sideRoom - 1))
+            }
+            .frame(width: fullSize.width, height: fullSize.height)
     }
 
-    private static let crownWidth = 9.0
+    /// How far the Ultra's guard stands out of its case, and how tall it is.
+    private static let guardWidth = 10.0
+    private static let guardHeight = 132.0
 
-    /// The case: a rounded body with the screen in it.
+    /// The colours of the outline, like the simulator's: a nearly black body with a thin light edge, and a slightly
+    /// lighter band round the screen.
+    private static let edge = Color(white: 0.42)
+    private static let body = Color(white: 0.11)
+    private static let band = Color(white: 0.17)
+    private static let actionOrange = Color(red: 0.55, green: 0.27, blue: 0.07)
+
+    /// The case: a dark rounded body with a thin light edge, a lighter band round the screen, and the screen in it.
     private var watchCase: some View {
-        RoundedRectangle(cornerRadius: 58, style: .continuous)
-            .fill(LinearGradient(colors: [Color(white: 0.42), Color(white: 0.16)], startPoint: .top, endPoint: .bottom))
-            .frame(width: Self.screenSize.width + 2 * Self.bezel, height: Self.screenSize.height + 2 * Self.bezel)
+        let width = watch.screenSize.width + 2 * watch.bezel
+        let height = watch.screenSize.height + 2 * watch.bezel
+        let bandInset = watch.hasCrownGuard ? 8.0 : 4.0
+        let guardWidth = watch.hasCrownGuard ? Self.guardWidth : 0
+        // The case and its guard are one outline, drawn behind; the guard sticks out to the right of the case's frame.
+        let outline = WatchCaseShape(
+            cornerRadius: watch.caseCornerRadius, guardWidth: guardWidth,
+            guardTop: height / 2 - Self.guardHeight / 2, guardBottom: height / 2 + Self.guardHeight / 2, shoulder: 6)
+        return Color.clear
+            .frame(width: width, height: height)
+            .background(alignment: .leading) {
+                ZStack {
+                    outline.fill(Self.body)
+                    outline.stroke(Self.edge, lineWidth: 1.2)
+                }
+                .frame(width: width + guardWidth, height: height, alignment: .leading)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: watch.caseCornerRadius - bandInset, style: .continuous)
+                    .fill(Self.band)
+                    .padding(bandInset)
+            }
+            .frame(width: width, height: height)
             .overlay {
                 screenContent
-                    .frame(width: Self.screenSize.width, height: Self.screenSize.height)
+                    .frame(width: watch.screenSize.width, height: watch.screenSize.height)
                     .background(.black)
-                    .clipShape(RoundedRectangle(cornerRadius: 50, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: watch.screenCornerRadius, style: .continuous))
             }
     }
 
-    /// The crown and the side button on the right of the case.
-    private var crown: some View {
-        VStack(spacing: 22) {
-            RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.3)).frame(width: Self.crownWidth, height: 34)
-            RoundedRectangle(cornerRadius: 2).fill(Color(white: 0.25)).frame(width: 6, height: 40)
+    /// A part that sticks out of the case, in the same body colour and thin light edge.
+    private func part(width: Double, height: Double, radius: Double) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(Self.body)
+            .overlay { RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Self.edge, lineWidth: 1.2) }
+            .frame(width: width, height: height)
+    }
+
+    /// The crown, ridged, and the side button. The Ultra's guard is a bulge of its case, as tall as the crown and
+    /// the button together, with the crown standing out of it and the button a tall narrow outline below the crown;
+    /// the others' crown stands alone.
+    private var rightSide: some View {
+        ZStack(alignment: .leading) {
+            if watch.hasCrownGuard {
+                part(width: 7, height: 58, radius: 3).offset(x: Self.guardWidth + 0.5, y: 22)
+                crown(width: 16, height: 47).offset(y: -35)
+            } else {
+                crown(width: 11, height: 40).offset(y: -30)
+                part(width: 7, height: 44, radius: 3).offset(y: 28)
+            }
         }
-        .offset(y: -20)
+    }
+
+    /// A crown: a dark outline with fine ridges along its outer edge.
+    private func crown(width: Double, height: Double) -> some View {
+        part(width: width, height: height, radius: min(8, width / 2))
+            .overlay(alignment: .trailing) {
+                VStack(spacing: 1.5) {
+                    ForEach(0..<Int((height - 14) / 2.5), id: \.self) { _ in
+                        Rectangle().fill(Color(white: 0.6)).frame(width: 5, height: 1)
+                    }
+                }
+                .padding(.trailing, 1.5)
+            }
+    }
+
+    /// The Action button, a dark orange strip on the Ultra's left side.
+    @ViewBuilder
+    private var leftSide: some View {
+        if watch.hasActionButton {
+            RoundedRectangle(cornerRadius: 2.5, style: .continuous).fill(Self.actionOrange).frame(width: 5, height: 73)
+                .offset(y: 19)
+        }
     }
 
     private var screenContent: some View {
@@ -85,7 +157,7 @@ struct WatchScreenPreview: View {
             // The system's own clock, which sits at the top right of every watch screen.
             Text("10:09")
                 .font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(.white)
-                .padding(.top, 9).padding(.trailing, 20)
+                .padding(.top, watch.hasCrownGuard ? 25 : 9).padding(.trailing, 20)
         }
         .environment(\.colorScheme, .dark)
     }
