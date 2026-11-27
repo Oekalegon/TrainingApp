@@ -111,11 +111,20 @@ struct WatchScreenSetEditorView: View {
     }
 
     private func screenRow(_ screen: RunScreen) -> some View {
-        return HStack(spacing: 12) {
-            // A small preview of the screen with sample values; the text beside it says the same in words.
+        // The preview and the metrics start at the top of the row; the metrics are a bulleted list.
+        return HStack(alignment: .top, spacing: 12) {
+            // A small preview of the screen with sample values; the list beside it says the same in words.
             WatchScreenPreview(screen: screen, isWorkout: true, watch: .large, scale: 0.3)
                 .accessibilityHidden(true)
-            Text(screen.items.map(\.title).joined(separator: ", ")).lineLimit(3)
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(screen.items.enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("•").accessibilityHidden(true)
+                        Text(item.title)
+                    }
+                    .font(.subheadline)
+                }
+            }
         }
         .accessibilityElement(children: .combine)
     }
