@@ -86,6 +86,39 @@ struct RunScreenSetDraftTests {
         #expect(draft.displayName(of: id) == template.title)
     }
 
+    @Test("the athlete's own screens are listed once, without the standard ones (WATCH-134)")
+    func userScreens() {
+        let mine = RunScreen(id: "m", items: [.metric(.distance), .metric(.currentPace)], name: "Hills")
+        let copy = RunScreen(id: "other", items: mine.items, name: "Hills")
+        let standard = RunScreen(id: "s", items: StandardScreens.all[0].items)
+        let config = RunScreenConfig(
+            freeRun: RunScreenSet(id: "f", name: "F", screens: [standard, mine]),
+            workout: RunScreenSet(id: "w", name: "W", screens: [copy]),
+            sets: [])
+        #expect(ScreenLibrary.userScreens(in: config).map(\.id) == ["m"])
+    }
+
+    @Test("a search finds a screen by its name or by the name of any metric on it")
+    func screenSearch() {
+        let items: [RunScreenItem] = [.metric(.distance), .metric(.currentPace)]
+        #expect(ScreenLibrary.matches(name: nil, items: items, query: "current pace"))
+        #expect(ScreenLibrary.matches(name: nil, items: items, query: "  DISTANCE "))
+        #expect(ScreenLibrary.matches(name: "Hill repeats", items: items, query: "hill"))
+        #expect(!ScreenLibrary.matches(name: "Hill repeats", items: items, query: "cadence"))
+        #expect(ScreenLibrary.matches(name: nil, items: items, query: ""))
+        #expect(StandardScreens.all.contains { ScreenLibrary.matches(name: $0.title, items: $0.items, query: "current pace") })
+    }
+
+    @Test("adding a copy of an own screen gives it a new id and keeps its items and name")
+    func addCopy() {
+        var draft = RunScreenSetDraft(RunScreenSet(id: "x", name: "X", screens: [RunScreen(id: "a", items: [.metric(.distance)])]))
+        let original = RunScreen(id: "m", items: [.metric(.heartRate)], name: "Zones")
+        let id = draft.addScreen(copying: original)
+        #expect(id != original.id)
+        #expect(draft.screens.last?.items == original.items)
+        #expect(draft.displayName(of: id) == "Zones")
+    }
+
     @Test("a set saved with a start screen opens on its first screen in the editor")
     func startsOnFirstScreen() {
         let set = RunScreenSet(

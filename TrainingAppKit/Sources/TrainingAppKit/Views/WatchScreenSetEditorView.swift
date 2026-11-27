@@ -90,7 +90,9 @@ struct WatchScreenSetEditorView: View {
             Button("Keep Editing", role: .cancel) {}
         }
         .sheet(isPresented: $isAddingScreen) {
-            NavigationStack { WatchStandardScreenPickerView(draft: $draft) }
+            NavigationStack {
+                WatchStandardScreenPickerView(draft: $draft, userScreens: ScreenLibrary.userScreens(in: screens.config))
+            }
         }
     }
 
