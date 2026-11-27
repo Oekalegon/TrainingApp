@@ -252,6 +252,18 @@ struct StepPaceTargetTests {
         #expect(RunWidget.paceBar.height == 2)
     }
 
+    @Test("the Target Bar shows the pace bar for a pace target and the zone bar for a heart-rate target or none")
+    func targetBar() {
+        #expect(StepPaceTarget.showsPaceBar(for: step(target: .pace(300...330))))
+        #expect(!StepPaceTarget.showsPaceBar(for: step(target: .heartRateZone(3))))
+        // A heart-rate step the plan also gave a pace keeps the zone bar: its target is the heart rate.
+        #expect(!StepPaceTarget.showsPaceBar(for: step(target: .heartRateZone(3), companion: .pace(300...330))))
+        #expect(!StepPaceTarget.showsPaceBar(for: step(target: nil)))
+        #expect(!StepPaceTarget.showsPaceBar(for: nil))
+        #expect(RunWidget.targetBar.height == 2)
+        #expect(!RunWidget.targetBar.requiresSteps)
+    }
+
     @Test("the bar puts the target in the middle, slow at the left and fast at the right")
     func bar() throws {
         let target = try #require(StepPaceTarget(step: step(target: .pace(300...330))))

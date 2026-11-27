@@ -363,6 +363,7 @@ public struct RunScreenPage: View {
         case .battery: battery(at: date)
         case .zoneHistogram: zoneHistogram
         case .paceBar: paceBar(at: date)
+        case .targetBar: targetBar(at: date)
         }
     }
 
@@ -412,6 +413,17 @@ public struct RunScreenPage: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Heart rate zones")
             .accessibilityValue(spokenZoneBar(target: target, position: position))
+    }
+
+    /// The bar that fits the step's target: the pace bar for a pace target, the zone bar for a heart-rate target or anything else, so a
+    /// screen with this widget shows the right one as the steps change (and the zone bar in a free run).
+    @ViewBuilder
+    private func targetBar(at date: Date) -> some View {
+        if StepPaceTarget.showsPaceBar(for: source.stepEngine?.current?.step) {
+            paceBar(at: date)
+        } else {
+            zoneBar
+        }
     }
 
     /// The pace against the step's pace target (WATCH-135): the target bright in the middle, a triangle at the

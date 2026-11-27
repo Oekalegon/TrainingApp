@@ -51,11 +51,15 @@ public enum RunWidget: String, Sendable, Codable, CaseIterable, Hashable {
     /// The pace against the step's pace target, drawn like the zone bar; only for a planned workout, and only
     /// while the step has a pace target (WATCH-135); height 2.
     case paceBar
+    /// The bar for whatever the step's target is: the pace bar while the step has a pace target, the zone bar
+    /// otherwise (a heart-rate target, a step with no target, or a free run); height 2. One widget for a screen
+    /// that serves workouts with either kind of target.
+    case targetBar
 
     /// The height in units.
     public var height: Int {
         switch self {
-        case .zoneBar, .zoneHistogram, .paceBar: 2
+        case .zoneBar, .zoneHistogram, .paceBar, .targetBar: 2
         case .battery, .stepCountdown: 1
         }
     }
