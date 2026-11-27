@@ -17,7 +17,8 @@ public struct RunScreenSetDraft: Equatable, Sendable {
         id = set.id
         name = set.name
         screens = set.screens
-        startScreenID = set.startScreenID
+        // The run opens on the first screen; reorder the screens to change it.
+        startScreenID = nil
     }
 
     /// The set the draft stands for.

@@ -143,7 +143,7 @@ struct RunScreenSetTests {
     func workoutDefault() throws {
         let dial = try #require(RunScreenSet.workoutDefault.screens.first { $0.id == "dial" })
         #expect(dial.units == RunScreen.capacity)
-        #expect(RunScreenSet.workoutDefault.startIndex == 1)
+        #expect(RunScreenSet.workoutDefault.startIndex == 0)
     }
 
     @Test("a screen too tall for a small watch loses its first items and keeps the last")

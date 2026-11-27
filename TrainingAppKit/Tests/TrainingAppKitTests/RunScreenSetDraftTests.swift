@@ -58,6 +58,15 @@ struct RunScreenSetDraftTests {
         #expect(draft.screens.map(\.id) == [id])
     }
 
+    @Test("a set saved with a start screen opens on its first screen in the editor")
+    func startsOnFirstScreen() {
+        let set = RunScreenSet(
+            id: "x", name: "X",
+            screens: [RunScreen(id: "a", items: [.metric(.distance)]), RunScreen(id: "b", items: [.metric(.heartRate)])],
+            startScreenID: "b")
+        #expect(RunScreenSetDraft(set).set.startIndex == 0)
+    }
+
     @Test("screens move, and a start screen that is deleted is forgotten so the run opens on the first")
     func startScreen() {
         var draft = draft()

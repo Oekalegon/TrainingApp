@@ -16,6 +16,9 @@ struct WatchScreenItemsView: View {
     @State private var previewWatch = PreviewWatch.large
     @State private var previewsWorkout = true
 
+    /// Whether the screen has all the room the watch chosen in the preview offers (6 units on the Ultra, 5 at 41 mm).
+    private var isFull: Bool { draft.units(of: screenID) >= previewWatch.fittingUnits }
+
     private var screen: RunScreen? { draft.screens.first { $0.id == screenID } }
 
     var body: some View {
@@ -24,10 +27,7 @@ struct WatchScreenItemsView: View {
             Section {
                 ForEach(Array((screen?.items ?? []).enumerated()), id: \.offset) { _, item in
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.title)
-                            Text("\(item.height) \(item.height == 1 ? "unit" : "units")").font(.caption).foregroundStyle(.secondary)
-                        }
+                        Text(item.title)
                     } icon: {
                         Image(systemName: item.systemImage).accessibilityHidden(true)
                     }
@@ -36,19 +36,22 @@ struct WatchScreenItemsView: View {
                 }
                 .onDelete { draft.removeItems(at: $0, from: screenID) }
                 .onMove { draft.moveItems(from: $0, to: $1, in: screenID) }
-                Button("Add Item", systemImage: "plus") {
+                // Not offered once the screen is full for the watch chosen in the preview.
+                if !isFull {
+                    Button("Add Item", systemImage: "plus") {
                     // Only a group that still exists: an id that matches none would push an empty page.
-                    pickerPath = lastGroupID.flatMap { id in
-                        RunScreenItemCatalogue.browsableGroups.contains { $0.id == id } ? [id] : nil
-                    } ?? []
-                    isAdding = true
+                        pickerPath = lastGroupID.flatMap { id in
+                            RunScreenItemCatalogue.browsableGroups.contains { $0.id == id } ? [id] : nil
+                        } ?? []
+                        isAdding = true
+                    }
                 }
-                    .disabled(draft.units(of: screenID) >= RunScreen.capacity)
             } header: {
                 Text("Top to Bottom")
             } footer: {
                 Text(
-                    "\(draft.units(of: screenID)) of \(RunScreen.capacity) units used. The last item is at the bottom of the watch's screen."
+                    (isFull ? "This screen is full (\(previewWatch.title)): remove an item to add another. " : "")
+                        + "The last item is at the bottom of the watch's screen."
                         + (draft.isOnlyInWorkouts(screenID)
                             ? " This screen has an item for planned workouts, so a free run leaves the whole screen out." : ""))
             }

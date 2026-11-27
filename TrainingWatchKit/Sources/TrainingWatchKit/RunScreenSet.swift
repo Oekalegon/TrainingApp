@@ -237,17 +237,16 @@ public struct RunScreenSet: Sendable, Hashable, Codable, Identifiable {
         id: "default.freeRun", name: "Free run",
         screens: [RunScreen(id: "standard", items: RunMetric.standard.map(RunScreenItem.metric))])
 
-    /// The default for a workout: the standard screen and, opening first, the zone dial (WATCH-118),
-    /// which is the step's countdown, the heart rate, the zone bar, the total time and the battery.
+    /// The default for a workout: the zone dial first (WATCH-118), which is the step's countdown, the heart rate,
+    /// the zone bar, the total time and the battery, and then the standard screen.
     public static let workoutDefault = RunScreenSet(
         id: "default.workout", name: "Workout",
         screens: [
-            RunScreen(id: "standard", items: RunMetric.standard.map(RunScreenItem.metric)),
             RunScreen(id: "dial", items: [
                 .widget(.stepCountdown), .metric(.heartRate), .widget(.zoneBar), .metric(.totalTime), .widget(.battery),
             ]),
-        ],
-        startScreenID: "dial")
+            RunScreen(id: "standard", items: RunMetric.standard.map(RunScreenItem.metric)),
+        ])
 }
 
 /// What the phone sends: the set for a free run and the set for a workout. Sets linked to workout
