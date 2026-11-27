@@ -16,6 +16,10 @@ public enum RunScreenItemCatalogue {
             /// The scope's name ("Whole Run", "This Step"…), or `nil` for the items that have no scope.
             public let title: String?
             public let items: [RunScreenItem]
+
+            /// The header in a group's own view: the scope's name, or "Metrics" for the items with none (the group's
+            /// name is already the title of the view).
+            public var displayTitle: String { title ?? "Metrics" }
         }
 
         /// The items in parts by scope, so a long group is browsed one scope at a time: first the items with no
@@ -50,6 +54,16 @@ public enum RunScreenItemCatalogue {
     static func spans(_ kind: RunSpanKind) -> [RunScreenItem] {
         [RunScope.step, .lastStep, .split, .lastSplit].map { RunScreenItem.span(kind, $0) }
     }
+
+    /// The most items a group can have and still be listed in the picker's first level as rows of its own: a group
+    /// that small would take a tap to open and show a row or two.
+    public static let inlineLimit = 2
+
+    /// The groups the picker's first level opens (those with more than ``inlineLimit`` items), in order.
+    public static var browsableGroups: [Group] { groups.filter { $0.items.count > inlineLimit } }
+
+    /// The items of the small groups, listed in the first level as they are.
+    public static var inlineItems: [RunScreenItem] { groups.filter { $0.items.count <= inlineLimit }.flatMap(\.items) }
 
     /// Every group, in the order the picker shows them.
     public static let groups: [Group] = [

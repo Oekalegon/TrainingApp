@@ -13,7 +13,7 @@ struct WatchScreenItemGroupView: View {
     var body: some View {
         List {
             ForEach(group.sections) { part in
-                Section(part.title ?? group.title) {
+                Section(part.displayTitle) {
                     ForEach(part.items, id: \.self) { item in
                         WatchScreenItemRow(draft: $draft, screenID: screenID, item: item, onAdded: onAdded)
                     }

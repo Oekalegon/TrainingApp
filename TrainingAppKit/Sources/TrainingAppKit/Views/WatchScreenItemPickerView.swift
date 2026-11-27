@@ -33,18 +33,26 @@ struct WatchScreenItemPickerView: View {
 
     private var isSearching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// The groups, each a row with how many items it holds that opens the group's items.
+    /// The groups, each a row with how many items it holds that opens the group's items, and under them the items of
+    /// the groups too small to open.
+    @ViewBuilder
     private var groups: some View {
         Section {
-            ForEach(RunScreenItemCatalogue.groups) { group in
+            ForEach(RunScreenItemCatalogue.browsableGroups) { group in
                 NavigationLink {
                     WatchScreenItemGroupView(draft: $draft, screenID: screenID, group: group, onAdded: onAdded)
                 } label: {
                     LabeledContent(group.title, value: "\(group.items.count)")
                 }
+                .accessibilityValue("\(group.items.count) items")
             }
         } footer: {
             Text("Choose a group, or search for an item by name.")
+        }
+        Section("Other Items") {
+            ForEach(RunScreenItemCatalogue.inlineItems, id: \.self) { item in
+                WatchScreenItemRow(draft: $draft, screenID: screenID, item: item, onAdded: onAdded)
+            }
         }
     }
 

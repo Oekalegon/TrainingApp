@@ -228,18 +228,25 @@ struct StandardScreensTests {
 
 @Suite("Catalogue levels (WATCH-139)")
 struct CatalogueLevelsTests {
-    @Test("the first level is a short list of groups with names of their own, each with items to open")
-    func groups() {
-        let groups = RunScreenItemCatalogue.groups
-        #expect(groups.count <= 20)
-        #expect(Set(groups.map(\.title)).count == groups.count)
-        #expect(groups.allSatisfy { !$0.items.isEmpty && !$0.sections.isEmpty })
+    @Test("the first level opens only groups with more than two items; the small ones are listed as items, and nothing is lost")
+    func levels() {
+        let browsable = RunScreenItemCatalogue.browsableGroups
+        #expect(browsable.allSatisfy { $0.items.count > RunScreenItemCatalogue.inlineLimit })
+        #expect(Set(browsable.map(\.title)).count == browsable.count)
+        // The battery is alone in its group, so it is an item of the first level.
+        #expect(RunScreenItemCatalogue.inlineItems.contains(.widget(.battery)))
+        let reachable = Set(browsable.flatMap(\.items)).union(RunScreenItemCatalogue.inlineItems)
+        #expect(reachable == Set(RunScreenItemCatalogue.groups.flatMap(\.items)))
+        // The first level is short: the groups and a few single items.
+        #expect(browsable.count + RunScreenItemCatalogue.inlineItems.count <= 16)
     }
 
-    @Test("the second level is split by scope, so no list is longer than one scope's items")
-    func sections() {
-        for group in RunScreenItemCatalogue.groups {
-            #expect(group.sections.map(\.items.count).max() ?? 0 <= 20, "\(group.title) has a long part")
-        }
+    @Test("a group's own view heads the items with no scope \"Metrics\", not the group's name, and the other parts by scope")
+    func headers() throws {
+        let heartRate = try #require(RunScreenItemCatalogue.groups.first { $0.title == "Heart Rate" })
+        let titles = heartRate.sections.map(\.displayTitle)
+        #expect(titles.first == "Metrics")
+        #expect(!titles.contains("Heart Rate"))
+        #expect(titles.contains("This Split"))
     }
 }
