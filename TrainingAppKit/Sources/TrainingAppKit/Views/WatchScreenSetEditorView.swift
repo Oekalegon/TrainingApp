@@ -50,17 +50,7 @@ struct WatchScreenSetEditorView: View {
             } header: {
                 Text("Screens")
             } footer: {
-                Text("The crown turns through the screens, the first on top. A screen holds \(RunScreen.capacity) units of height.")
-            }
-            Section {
-                Picker("Opens On", selection: Binding(
-                    get: { draft.startScreen?.id ?? "" },
-                    set: { draft.startScreenID = $0 })
-                ) {
-                    ForEach(Array(draft.screens.enumerated()), id: \.element.id) { index, screen in
-                        Text("Screen \(index + 1): \(screen.items.map(\.title).joined(separator: ", "))").tag(screen.id)
-                    }
-                }
+                Text("The crown turns through the screens, the first on top. The run opens on the first screen.")
             }
             if kind == .custom {
                 Section {
@@ -100,7 +90,9 @@ struct WatchScreenSetEditorView: View {
             Button("Keep Editing", role: .cancel) {}
         }
         .sheet(isPresented: $isAddingScreen) {
-            NavigationStack { WatchStandardScreenPickerView(draft: $draft) }
+            NavigationStack {
+                WatchStandardScreenPickerView(draft: $draft, userScreens: ScreenLibrary.userScreens(in: screens.config, editing: draft.screens))
+            }
         }
     }
 
@@ -121,16 +113,16 @@ struct WatchScreenSetEditorView: View {
     }
 
     private func screenRow(_ screen: RunScreen) -> some View {
-        let number = (draft.screens.firstIndex { $0.id == screen.id } ?? 0) + 1
-        return HStack(spacing: 12) {
-            // A small preview of the screen with sample values; the text beside it says the same in words.
+        // The preview and the metrics start at the top of the row; the metrics are a bulleted list.
+        HStack(alignment: .top, spacing: 12) {
+            // A small preview of the screen with sample values; the list beside it says the same in words.
             WatchScreenPreview(screen: screen, isWorkout: true, watch: .large, scale: 0.3)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Screen \(number)")
-                Text(screen.items.map(\.title).joined(separator: ", "))
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                Text("\(screen.units) of \(RunScreen.capacity) units").font(.caption2).foregroundStyle(.secondary)
+                if let name = draft.displayName(of: screen.id) {
+                    Text(name).font(.subheadline.weight(.semibold)).padding(.bottom, 2)
+                }
+                WatchScreenItemBullets(items: screen.items)
             }
         }
         .accessibilityElement(children: .combine)

@@ -58,6 +58,111 @@ struct RunScreenSetDraftTests {
         #expect(draft.screens.map(\.id) == [id])
     }
 
+    @Test("a screen's name is shown only when it has one, and a name of spaces is none (WATCH-134)")
+    func screenNames() {
+        var draft = RunScreenSetDraft(RunScreenSet(
+            id: "x", name: "X",
+            screens: [RunScreen(id: "a", items: [.metric(.distance)]), RunScreen(id: "b", items: [.metric(.heartRate)], name: "  Hills ")]))
+        #expect(draft.displayName(of: "a") == nil)
+        #expect(draft.displayName(of: "b") == "Hills")
+        draft.screens[0].name = "   "
+        #expect(draft.displayName(of: "a") == nil)
+        #expect(draft.set.screens.map(\.name) == [nil, "Hills"])
+    }
+
+    @Test("a screen's name survives encoding and a screen without one decodes as unnamed")
+    func screenNameCoding() throws {
+        let named = RunScreen(id: "a", items: [.metric(.distance)], name: "Easy")
+        #expect(try JSONDecoder().decode(RunScreen.self, from: JSONEncoder().encode(named)).name == "Easy")
+        let old = Data(#"{"id":"a","items":[]}"#.utf8)
+        #expect(try JSONDecoder().decode(RunScreen.self, from: old).name == nil)
+    }
+
+    @Test("a screen added from a standard screen is named after it")
+    func templateName() {
+        var draft = RunScreenSetDraft(RunScreenSet(id: "x", name: "X", screens: [RunScreen(id: "a", items: [.metric(.distance)])]))
+        let template = StandardScreens.all[0]
+        let id = draft.addScreen(from: template)
+        #expect(draft.displayName(of: id) == template.title)
+    }
+
+    @Test("the athlete's own screens are listed once, without the standard ones (WATCH-134)")
+    func userScreens() {
+        let mine = RunScreen(id: "m", items: [.metric(.distance), .metric(.currentPace)], name: "Hills")
+        let copy = RunScreen(id: "other", items: mine.items, name: "Hills")
+        let standard = RunScreen(id: "s", items: StandardScreens.all[0].items)
+        let config = RunScreenConfig(
+            freeRun: RunScreenSet(id: "f", name: "F", screens: [standard, mine]),
+            workout: RunScreenSet(id: "w", name: "W", screens: [copy]),
+            sets: [])
+        #expect(ScreenLibrary.userScreens(in: config).map(\.id) == ["m"])
+    }
+
+    @Test("a search finds a screen by its name or by the name of any metric on it")
+    func screenSearch() {
+        let items: [RunScreenItem] = [.metric(.distance), .metric(.currentPace)]
+        #expect(ScreenLibrary.matches(name: nil, items: items, query: "current pace"))
+        #expect(ScreenLibrary.matches(name: nil, items: items, query: "  DISTANCE "))
+        #expect(ScreenLibrary.matches(name: "Hill repeats", items: items, query: "hill"))
+        #expect(!ScreenLibrary.matches(name: "Hill repeats", items: items, query: "cadence"))
+        #expect(ScreenLibrary.matches(name: nil, items: items, query: ""))
+        #expect(StandardScreens.all.contains { ScreenLibrary.matches(name: $0.title, items: $0.items, query: "current pace") })
+    }
+
+    @Test("adding a copy of an own screen gives it a new id and keeps its items and name")
+    func addCopy() {
+        var draft = RunScreenSetDraft(RunScreenSet(id: "x", name: "X", screens: [RunScreen(id: "a", items: [.metric(.distance)])]))
+        let original = RunScreen(id: "m", items: [.metric(.heartRate)], name: "Zones")
+        let id = draft.addScreen(copying: original)
+        #expect(id != original.id)
+        #expect(draft.screens.last?.items == original.items)
+        #expect(draft.displayName(of: id) == "Zones")
+    }
+
+    @Test("a screen an older set opened on goes to the front, so the run still opens on it")
+    func startsOnFirstScreen() {
+        let set = RunScreenSet(
+            id: "x", name: "X",
+            screens: [RunScreen(id: "a", items: [.metric(.distance)]), RunScreen(id: "b", items: [.metric(.heartRate)])],
+            startScreenID: "b")
+        let draft = RunScreenSetDraft(set)
+        #expect(draft.screens.map(\.id) == ["b", "a"])
+        #expect(draft.startScreenID == nil)
+        #expect(draft.set.startIndex == 0)
+    }
+
+    @Test("a screen is full for a watch when its items take all the units that watch fits")
+    func fullScreen() {
+        let draft = RunScreenSetDraft(RunScreenSet(
+            id: "x", name: "X",
+            screens: [RunScreen(id: "a", items: [.metric(.distance), .metric(.heartRate), .metric(.currentPace), .metric(.totalTime), .metric(.averagePace)])]))
+        #expect(draft.isFull("a", fittingUnits: 5))
+        #expect(!draft.isFull("a", fittingUnits: 6))
+    }
+
+    @Test("screens that come with the app are not the athlete's own, but a changed or named one is")
+    func appScreensAreNotMine() {
+        let easy = StandardScreens.all[0]
+        let named = RunScreen(id: "a", items: easy.items, name: easy.title)
+        let unnamedDefault = RunScreen(id: "b", items: RunScreenSet.workoutDefault.screens[0].items)
+        let renamed = RunScreen(id: "c", items: easy.items, name: "My easy day")
+        let changed = RunScreen(id: "d", items: easy.items + [.metric(.averagePace)])
+        let blank = RunScreen(id: "e", items: [.metric(.totalTime)])
+        let config = RunScreenConfig(
+            freeRun: RunScreenSet(id: "f", name: "F", screens: [named, unnamedDefault, renamed, changed, blank]), workout: .workoutDefault, sets: [])
+        #expect(ScreenLibrary.userScreens(in: config).map(\.id) == ["c", "d"])
+    }
+
+    @Test("a screen made in the set being edited is offered with the saved ones, once")
+    func editingScreensAreOffered() {
+        let mine = RunScreen(id: "m", items: [.metric(.distance), .metric(.currentPace)], name: "Hills")
+        let config = RunScreenConfig(freeRun: RunScreenSet(id: "f", name: "F", screens: [mine]), workout: .workoutDefault, sets: [])
+        let fresh = RunScreen(id: "n", items: [.metric(.heartRate)], name: "New")
+        let screens = ScreenLibrary.userScreens(in: config, editing: [mine, fresh])
+        #expect(screens.filter { $0.name == "Hills" }.count == 1)
+        #expect(screens.contains { $0.id == "n" })
+    }
+
     @Test("screens move, and a start screen that is deleted is forgotten so the run opens on the first")
     func startScreen() {
         var draft = draft()

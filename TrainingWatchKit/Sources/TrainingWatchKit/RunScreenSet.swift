@@ -51,11 +51,15 @@ public enum RunWidget: String, Sendable, Codable, CaseIterable, Hashable {
     /// The pace against the step's pace target, drawn like the zone bar; only for a planned workout, and only
     /// while the step has a pace target (WATCH-135); height 2.
     case paceBar
+    /// The bar for whatever the step's target is: the pace bar while the step has a pace target, the zone bar
+    /// otherwise (a heart-rate target, a step with no target, or a free run); height 2. One widget for a screen
+    /// that serves workouts with either kind of target.
+    case targetBar
 
     /// The height in units.
     public var height: Int {
         switch self {
-        case .zoneBar, .zoneHistogram, .paceBar: 2
+        case .zoneBar, .zoneHistogram, .paceBar, .targetBar: 2
         case .battery, .stepCountdown: 1
         }
     }
@@ -156,10 +160,14 @@ public struct RunScreen: Sendable, Hashable, Codable, Identifiable {
 
     public var id: String
     public var items: [RunScreenItem]
+    /// A name the athlete gave the screen, shown in the phone's list of screens; nil when there is none. The watch
+    /// doesn't show it.
+    public var name: String?
 
-    public init(id: String, items: [RunScreenItem]) {
+    public init(id: String, items: [RunScreenItem], name: String? = nil) {
         self.id = id
         self.items = items
+        self.name = name
     }
 
     /// Whether a screen means something only in a planned workout's steps: it has a step widget. Left
@@ -180,7 +188,7 @@ public struct RunScreen: Sendable, Hashable, Codable, Identifiable {
     /// Whether the items fit the screen.
     public var fits: Bool { units <= Self.capacity }
 
-    private enum CodingKeys: String, CodingKey { case id, items }
+    private enum CodingKeys: String, CodingKey { case id, items, name }
 
     /// An item the watch doesn't know (a phone newer than the watch) is dropped, and items past the
     /// capacity are cut from the top, so a set from a newer phone can't break a run.
@@ -189,6 +197,7 @@ public struct RunScreen: Sendable, Hashable, Codable, Identifiable {
         id = try container.decode(String.self, forKey: .id)
         let items = try container.decode([Lossy<RunScreenItem>].self, forKey: .items).compactMap(\.value)
         self.items = Self.fitted(items)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
     }
 
     /// `items` with the first ones left out until they fit.
@@ -237,17 +246,16 @@ public struct RunScreenSet: Sendable, Hashable, Codable, Identifiable {
         id: "default.freeRun", name: "Free run",
         screens: [RunScreen(id: "standard", items: RunMetric.standard.map(RunScreenItem.metric))])
 
-    /// The default for a workout: the standard screen and, opening first, the zone dial (WATCH-118),
-    /// which is the step's countdown, the heart rate, the zone bar, the total time and the battery.
+    /// The default for a workout: the zone dial first (WATCH-118), which is the step's countdown, the heart rate,
+    /// the zone bar, the total time and the battery, and then the standard screen.
     public static let workoutDefault = RunScreenSet(
         id: "default.workout", name: "Workout",
         screens: [
-            RunScreen(id: "standard", items: RunMetric.standard.map(RunScreenItem.metric)),
             RunScreen(id: "dial", items: [
                 .widget(.stepCountdown), .metric(.heartRate), .widget(.zoneBar), .metric(.totalTime), .widget(.battery),
             ]),
-        ],
-        startScreenID: "dial")
+            RunScreen(id: "standard", items: RunMetric.standard.map(RunScreenItem.metric)),
+        ])
 }
 
 /// What the phone sends: the set for a free run and the set for a workout. Sets linked to workout

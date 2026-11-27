@@ -16,18 +16,35 @@ struct WatchScreenItemsView: View {
     @State private var previewWatch = PreviewWatch.large
     @State private var previewsWorkout = true
 
+    /// Whether the screen has all the room the watch chosen in the preview offers (6 units on the Ultra, 5 at 41 mm).
+    private var isFull: Bool { draft.isFull(screenID, fittingUnits: previewWatch.fittingUnits) }
+
+    /// The screen's name; an empty field is no name.
+    private var nameBinding: Binding<String> {
+        Binding(
+            get: { screen?.name ?? "" },
+            set: { text in
+                guard let index = draft.screens.firstIndex(where: { $0.id == screenID }) else { return }
+                draft.screens[index].name = text.isEmpty ? nil : text
+            })
+    }
+
     private var screen: RunScreen? { draft.screens.first { $0.id == screenID } }
 
     var body: some View {
         List {
+            Section {
+                TextField("Name (optional)", text: nameBinding)
+            } header: {
+                Text("Name")
+            } footer: {
+                Text("Shown in the list of screens; the watch doesn't show it.")
+            }
             if let screen { previewSection(for: screen) }
             Section {
                 ForEach(Array((screen?.items ?? []).enumerated()), id: \.offset) { _, item in
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.title)
-                            Text("\(item.height) \(item.height == 1 ? "unit" : "units")").font(.caption).foregroundStyle(.secondary)
-                        }
+                        Text(item.title)
                     } icon: {
                         Image(systemName: item.systemImage).accessibilityHidden(true)
                     }
@@ -36,19 +53,22 @@ struct WatchScreenItemsView: View {
                 }
                 .onDelete { draft.removeItems(at: $0, from: screenID) }
                 .onMove { draft.moveItems(from: $0, to: $1, in: screenID) }
-                Button("Add Item", systemImage: "plus") {
+                // Not offered once the screen is full for the watch chosen in the preview.
+                if !isFull {
+                    Button("Add Item", systemImage: "plus") {
                     // Only a group that still exists: an id that matches none would push an empty page.
-                    pickerPath = lastGroupID.flatMap { id in
-                        RunScreenItemCatalogue.browsableGroups.contains { $0.id == id } ? [id] : nil
-                    } ?? []
-                    isAdding = true
+                        pickerPath = lastGroupID.flatMap { id in
+                            RunScreenItemCatalogue.browsableGroups.contains { $0.id == id } ? [id] : nil
+                        } ?? []
+                        isAdding = true
+                    }
                 }
-                    .disabled(draft.units(of: screenID) >= RunScreen.capacity)
             } header: {
                 Text("Top to Bottom")
             } footer: {
                 Text(
-                    "\(draft.units(of: screenID)) of \(RunScreen.capacity) units used. The last item is at the bottom of the watch's screen."
+                    (isFull ? "This screen is full (\(previewWatch.title)): remove an item to add another. " : "")
+                        + "The last item is at the bottom of the watch's screen."
                         + (draft.isOnlyInWorkouts(screenID)
                             ? " This screen has an item for planned workouts, so a free run leaves the whole screen out." : ""))
             }
@@ -81,7 +101,7 @@ struct WatchScreenItemsView: View {
         } header: {
             Text("Preview")
         } footer: {
-            Text("Sample values. A smaller watch drops the first items of a full screen, and a free run leaves out a screen with an item for planned workouts.")
+            Text("Sample values. Other watches are drawn at 41 mm: a full screen loses its first item there, and a wide row has less room. A 45 mm watch fits the same as the Ultra. A free run leaves out a screen with an item for planned workouts.")
         }
     }
 }

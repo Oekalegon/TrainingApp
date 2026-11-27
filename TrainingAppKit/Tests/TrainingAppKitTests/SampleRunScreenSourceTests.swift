@@ -58,4 +58,33 @@ struct SampleRunScreenSourceTests {
         #expect(PreviewWatch.small.fittingUnits == RunScreen.capacity - 1)
         #expect(PreviewWatch.allCases.count == 2)
     }
+
+    @Test("each watch has its own screen, the units it fits come from the watch's own rule, and only the Ultra has the Action button and a crown guard (WATCH-142)")
+    func eachWatchHasItsOwnDrawing() {
+        let ultra = PreviewWatch.large
+        let other = PreviewWatch.small
+        #expect(ultra.screenSize == CGSize(width: 205, height: 251))
+        #expect(other.screenSize.width < ultra.screenSize.width && other.screenSize.height < ultra.screenSize.height)
+        for watch in PreviewWatch.allCases {
+            #expect(watch.fittingUnits == RunScreenPage.fittingUnits(forScreenHeight: watch.screenSize.height))
+            #expect(watch.screenCornerRadius < watch.caseCornerRadius)
+        }
+        #expect(ultra.hasActionButton && ultra.hasCrownGuard)
+        #expect(!other.hasActionButton && !other.hasCrownGuard)
+        // The Ultra's case is the squarer one, relative to its size.
+        #expect(ultra.caseCornerRadius / ultra.screenSize.width < other.caseCornerRadius / other.screenSize.width)
+    }
+
+    @Test("the Ultra's case outline stays inside its frame and the guard bulges out of the right edge")
+    func caseShape() {
+        let frame = CGRect(x: 0, y: 0, width: 240, height: 280)
+        let plain = WatchCaseShape(cornerRadius: 60, guardWidth: 0, guardTop: 0, guardBottom: 0, shoulder: 0).path(in: frame)
+        #expect(plain.boundingRect.width.rounded() == 240)
+        let guarded = WatchCaseShape(cornerRadius: 60, guardWidth: 10, guardTop: 70, guardBottom: 210, shoulder: 6).path(in: frame)
+        let box = guarded.boundingRect
+        #expect(box.minX >= -0.5 && box.maxX <= 240.5 && box.minY >= -0.5 && box.maxY <= 280.5)
+        // The guard reaches the right edge of the frame at its middle, the case body stops 10 points short of it.
+        #expect(guarded.contains(CGPoint(x: 235, y: 140)))
+        #expect(!guarded.contains(CGPoint(x: 235, y: 20)))
+    }
 }

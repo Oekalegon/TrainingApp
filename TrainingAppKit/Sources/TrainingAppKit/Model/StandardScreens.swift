@@ -97,7 +97,7 @@ extension RunScreenSetDraft {
     /// - Returns: The new screen's id.
     @discardableResult
     public mutating func addScreen(from template: StandardScreens.Template) -> String {
-        let screen = RunScreen(id: UUID().uuidString, items: template.items)
+        let screen = RunScreen(id: UUID().uuidString, items: template.items, name: template.title)
         screens.append(screen)
         return screen.id
     }

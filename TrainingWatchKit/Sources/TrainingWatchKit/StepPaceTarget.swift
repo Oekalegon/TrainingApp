@@ -24,6 +24,14 @@ public struct StepPaceTarget: Sendable, Hashable {
         return nil
     }
 
+    /// Whether the Target Bar shows the pace bar for `step`: its own target is a pace. A step whose target is a heart
+    /// rate zone keeps the zone bar even when the plan also resolved a pace for it (the companion target), and a step
+    /// with no target, or no step at all (a free run), gets the zone bar too.
+    public static func showsPaceBar(for step: WorkoutStep?) -> Bool {
+        guard let step, case .pace? = step.target else { return false }
+        return StepPaceTarget(step: step) != nil
+    }
+
     public init(fastestSecondsPerKilometre fast: Double, slowestSecondsPerKilometre slow: Double) {
         fastest = min(fast, slow) / 1000
         slowest = max(fast, slow) / 1000
