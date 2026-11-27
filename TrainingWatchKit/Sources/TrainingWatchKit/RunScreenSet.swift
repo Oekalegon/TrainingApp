@@ -346,10 +346,12 @@ public final class RunScreenStore {
         return config.set(withID: plan.screenSetID)
     }
 
-    public func update(_ config: RunScreenConfig) {
+    /// - Parameter persists: Whether to keep the config in the cache for the next launch. The simulator's test
+    ///   screens (`-fakeElevationScreens`) pass `false`, so they don't outlive the launch argument.
+    public func update(_ config: RunScreenConfig, persists: Bool = true) {
         guard config != self.config else { return }
         self.config = config
-        cache.save(config)
+        if persists { cache.save(config) }
     }
 }
 

@@ -1,8 +1,9 @@
 import Foundation
 
 /// Running statistics of a run for the run screens' catalogue (WATCH-135): the heart rate's average and
-/// highest, the altitude, the climb so far and the grade of the last stretch. Pure, so it is tested without a
-/// watch; `RunRecorder` feeds it the heart-rate readings and the GPS fixes.
+/// highest, the altitude, the climb so far and the grade of the last stretch, and the altitude against distance for
+/// the elevation graphs, the whole run and the last 10 km (WATCH-149). Pure, so it is tested without a watch;
+/// `RunRecorder` feeds it the heart-rate readings and the GPS fixes.
 public struct RunStatsTracker: Sendable {
     /// The climb is counted only once the altitude has moved this far (metres) from the last counted point,
     /// so GPS noise doesn't add up to a climb.
@@ -32,6 +33,9 @@ public struct RunStatsTracker: Sendable {
     /// The distance (metres) a point must be past the last profile point to be kept; doubles each time the profile is thinned.
     private var profileSpacing = 5.0
     static let maximumProfilePoints = 120
+    /// The last three altitudes as they came: the profiles take their median, so one fix that is off by tens of
+    /// metres (passing the accuracy filter) doesn't rescale the graph or show as a red spike.
+    private var lastAltitudes: [Double] = []
     /// The last stretch of the run for the "last 10 km" elevation graph (WATCH-149), at a finer spacing than ``profile``
     /// has on a long run: a point every ``recentSpacing`` metres, the ones further back than ``recentWindowMeters`` dropped.
     public private(set) var recentProfile: [ElevationPoint] = []
@@ -72,8 +76,11 @@ public struct RunStatsTracker: Sendable {
         } else {
             reference = altitude
         }
-        addToProfile(altitude: altitude, atDistance: meters)
-        addToRecentProfile(altitude: altitude, atDistance: meters)
+        lastAltitudes.append(altitude)
+        if lastAltitudes.count > 3 { lastAltitudes.removeFirst() }
+        let smoothed = lastAltitudes.count == 3 ? lastAltitudes.sorted()[1] : altitude
+        addToProfile(altitude: smoothed, atDistance: meters)
+        addToRecentProfile(altitude: smoothed, atDistance: meters)
         // A fix at the same distance (standing still) replaces the last point instead of piling up.
         if let last = recent.last, last.meters == meters, recent.count > 1 {
             recent[recent.count - 1] = (meters, altitude)

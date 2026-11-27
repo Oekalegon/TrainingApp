@@ -47,7 +47,7 @@ struct TrainingWatchApp: App {
                         screenStore.update(RunScreenConfig(freeRun: RunScreenSet(id: "fake.elevation", name: "Free run", screens: [
                             RunScreen(id: "whole", items: [.metric(.totalTime), .metric(.distance), .widget(.elevationProfile)]),
                             RunScreen(id: "recent", items: [.metric(.totalTime), .metric(.altitude), .widget(.elevationRecent)]),
-                        ])))
+                        ])), persists: false)
                     }
                     #endif
                 }

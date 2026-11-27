@@ -135,6 +135,12 @@ struct RunScreenSetTests {
         #expect(screen.units == 3)
         let data = try JSONEncoder().encode(screen)
         #expect(try JSONDecoder().decode(RunScreen.self, from: data) == screen)
+        // The elevation graphs (WATCH-149) travel with their ids too.
+        let elevation = RunScreen(id: "e", items: [.widget(.elevationProfile), .widget(.elevationRecent)])
+        let encoded = try JSONEncoder().encode(elevation)
+        #expect(String(decoding: encoded, as: UTF8.self).contains("elevationRecent"))
+        #expect(try JSONDecoder().decode(RunScreen.self, from: encoded) == elevation)
+        #expect(elevation.units == 4)
         #expect(RunScreen(id: "d", items: [.widget(.stepCountdown)]).requiresSteps)
         #expect(!RunScreen(id: "d", items: [.widget(.zoneBar), .metric(.distance)]).requiresSteps)
     }

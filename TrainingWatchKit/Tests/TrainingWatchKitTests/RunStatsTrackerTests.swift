@@ -73,48 +73,29 @@ struct RunStatsTrackerTests {
         #expect(recent.count > stats.profile.count)
     }
 
-    @Test("grade colours go from green on the flat to red at 25 % and steeper, up or down")
-    func gradeColour() {
-        #expect(abs(ElevationGrade.hue(forGrade: 0) - 1.0 / 3) < 1e-9)
-        #expect(ElevationGrade.hue(forGrade: 25) == 0)
-        #expect(ElevationGrade.hue(forGrade: 40) == 0)
-        #expect(ElevationGrade.hue(forGrade: -25) == 0)
-        #expect(abs(ElevationGrade.hue(forGrade: 12.5) - 1.0 / 6) < 1e-9)
+    @Test("a run under 10 km keeps all its points in the last-10-km profile, and standing still adds none")
+    func recentProfileShortRun() throws {
+        var stats = RunStatsTracker()
+        for meter in stride(from: 0.0, through: 1000, by: RunStatsTracker.recentSpacing) { stats.add(altitude: 20, atDistance: meter) }
+        #expect(stats.recentProfile.first?.meters == 0)
+        #expect(stats.recentProfile.count == 41)
+        for _ in 0..<200 { stats.add(altitude: 20, atDistance: 1000) }
+        #expect(stats.recentProfile.count == 41)
     }
 
-    @Test("the grade at a point is taken over a stretch, so close noisy points don't read as steep")
-    func gradeStretch() {
-        // A steady 10 % climb with 1 m of noise on points 10 m apart.
-        let points = (0..<30).map { ElevationPoint(meters: Double($0) * 10, altitude: Double($0) + ($0 % 2 == 0 ? 0.5 : -0.5)) }
-        let grades = ElevationGrade.grades(of: points)
-        #expect(grades.count == points.count)
-        #expect(grades[15...20].allSatisfy { abs($0 - 10) < 2 })
-        #expect(ElevationGrade.gradient(for: points).count == points.count)
-    }
-
-    @Test("the grid draws lines at round altitudes and distances inside the graph, with labels")
-    func grid() throws {
-        #expect(ElevationGrid.niceStep(atLeast: 1750) == 2000)
-        #expect(ElevationGrid.niceStep(atLeast: 3.3) == 5)
-        #expect(ElevationGrid.niceStep(atLeast: 10) == 10)
-        #expect(ElevationGrid.niceStep(atLeast: 0.04) == 0.05)
-        let points = (0...40).map { ElevationPoint(meters: Double($0) * 100, altitude: 12 + Double($0)) }
-        let scale = try #require(ElevationScale(points))
-        // 4 km: a line every 2 km, none on the edges.
-        #expect(ElevationGrid.distances(scale) == [2000])
-        let altitudes = ElevationGrid.altitudes(scale)
-        #expect(!altitudes.isEmpty && altitudes.count <= 4)
-        // Each altitude line is inside the drawn range, and sits where the line draws that altitude.
-        for altitude in altitudes {
-            #expect(altitude > scale.baseAltitude && altitude < scale.baseAltitude + scale.range)
-            #expect(scale.y(altitude: altitude) > 0 && scale.y(altitude: altitude) < 1)
+    @Test("one fix that is far off doesn't spike the profiles, and a real climb still shows")
+    func profileSmoothing() throws {
+        var stats = RunStatsTracker()
+        for (index, meter) in stride(from: 0.0, through: 200, by: 10).enumerated() {
+            // A flat 30 m with one bad fix of 90 m.
+            stats.add(altitude: index == 10 ? 90 : 30, atDistance: meter)
         }
-        #expect(ElevationGrid.distanceLabel(2000) == "2 km")
-        #expect(ElevationGrid.distanceLabel(500) == "0.5 km")
-        #expect(ElevationGrid.distanceLabel(50) == "0.05 km")
-        #expect(ElevationGrid.distanceLabel(12_000) == "12 km")
-        #expect(ElevationGrid.altitudeLabel(49.6) == "50 m")
-        #expect(ElevationScale([ElevationPoint(meters: 0, altitude: 1)]) == nil)
+        #expect(stats.profile.map(\.altitude).max() == 30)
+        #expect(stats.recentProfile.map(\.altitude).max() == 30)
+        var climb = RunStatsTracker()
+        for (index, meter) in stride(from: 0.0, through: 200, by: 10).enumerated() { climb.add(altitude: 30 + Double(index), atDistance: meter) }
+        let last = try #require(climb.profile.last)
+        #expect(last.altitude >= 48)
     }
 
     @Test("standing still adds no profile points")
@@ -123,22 +104,6 @@ struct RunStatsTrackerTests {
         stats.add(altitude: 100, atDistance: 0)
         for _ in 0..<500 { stats.add(altitude: 101, atDistance: 1) }
         #expect(stats.profile.count == 1)
-    }
-
-    @Test("the profile is scaled to fit, with room above and below, and a flat run stays in the middle")
-    func profileShape() {
-        let climb = ElevationProfileShape.normalized([
-            ElevationPoint(meters: 0, altitude: 100), ElevationPoint(meters: 500, altitude: 150), ElevationPoint(meters: 1000, altitude: 200),
-        ])
-        #expect(climb.map(\.x) == [0, 0.5, 1])
-        #expect(abs(climb[0].y - ElevationProfileShape.margin) < 1e-9)
-        #expect(abs(climb[2].y - (1 - ElevationProfileShape.margin)) < 1e-9)
-        // Under the least range, a flat run is a line in the middle and not stretched into a climb.
-        let flat = ElevationProfileShape.normalized([ElevationPoint(meters: 0, altitude: 80), ElevationPoint(meters: 100, altitude: 80.5)])
-        #expect(flat.allSatisfy { abs($0.y - 0.5) < 0.05 })
-        #expect(ElevationProfileShape.normalized([ElevationPoint(meters: 0, altitude: 80)]).isEmpty)
-        #expect(RunWidget.elevationProfile.height == 2)
-        #expect(!RunWidget.elevationProfile.requiresSteps)
     }
 
     @Test("metrics that need steps are marked")

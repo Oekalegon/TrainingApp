@@ -82,6 +82,8 @@ targets:
 # For the 6 x 20 s interval run, untick -fakeAlertPlan and the alert-test track and tick
 # -fakeIntervalPlan and the short-intervals track, in Xcode under Product > Scheme > Edit Scheme >
 # Run > Arguments.
+# To see the elevation graphs (WATCH-149), add -fakeElevationScreens and -autostart, and a -gpxPath track that has
+# altitudes; -gpxSpeed 10 plays it ten times faster.
 schemes:
   TrainingWatch:
     build:
