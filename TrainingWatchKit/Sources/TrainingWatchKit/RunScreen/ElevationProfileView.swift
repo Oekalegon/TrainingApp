@@ -18,6 +18,7 @@ public struct ElevationProfileView: View {
         ZStack {
             if points.count >= 2 {
                 let colors = ElevationGrade.gradient(for: points)
+                ElevationGridView(points: points)
                 ElevationProfileShape(points: points, closed: true)
                     .fill(LinearGradient(stops: colors, startPoint: .leading, endPoint: .trailing).opacity(0.55))
                     .mask(LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom))
@@ -112,18 +113,8 @@ struct ElevationProfileShape: Shape {
 
     /// Each point as a fraction of the width (0 at the first point, 1 at the last) and the height (0 at the bottom).
     static func normalized(_ points: [ElevationPoint]) -> [CGPoint] {
-        guard let first = points.first, let last = points.last, points.count >= 2 else { return [] }
-        let length = max(last.meters - first.meters, 1)
-        let low = points.map(\.altitude).min() ?? 0
-        let high = points.map(\.altitude).max() ?? 0
-        let range = max(high - low, minimumRange)
-        // A range wider than the climb is centred on it.
-        let base = low - (range - (high - low)) / 2
-        return points.map { point in
-            CGPoint(
-                x: (point.meters - first.meters) / length,
-                y: margin + (1 - 2 * margin) * (point.altitude - base) / range)
-        }
+        guard let scale = ElevationScale(points) else { return [] }
+        return points.map { CGPoint(x: scale.x(meters: $0.meters), y: scale.y(altitude: $0.altitude)) }
     }
 
     func path(in rect: CGRect) -> Path {
@@ -140,4 +131,130 @@ struct ElevationProfileShape: Shape {
         }
         return path
     }
+}
+
+/// How the profile's distance and altitude map onto the drawing: shared by the line and the grid, so a grid line
+/// sits exactly where the altitude or distance it names is drawn.
+struct ElevationScale {
+    let startMeters: Double
+    let length: Double
+    /// The altitude at the bottom of the drawn range (above the bottom margin) and the metres the range spans.
+    let baseAltitude: Double
+    let range: Double
+
+    init?(_ points: [ElevationPoint]) {
+        guard let first = points.first, let last = points.last, points.count >= 2 else { return nil }
+        startMeters = first.meters
+        length = max(last.meters - first.meters, 1)
+        let low = points.map(\.altitude).min() ?? 0
+        let high = points.map(\.altitude).max() ?? 0
+        range = max(high - low, ElevationProfileShape.minimumRange)
+        // A range wider than the climb is centred on it.
+        baseAltitude = low - (range - (high - low)) / 2
+    }
+
+    func x(meters: Double) -> Double { (meters - startMeters) / length }
+
+    func y(altitude: Double) -> Double {
+        let margin = ElevationProfileShape.margin
+        return margin + (1 - 2 * margin) * (altitude - baseAltitude) / range
+    }
+}
+
+/// The horizontal (altitude) and vertical (distance) lines drawn behind the profile, at round values.
+enum ElevationGrid {
+    /// The least number of lines wanted either way is none; the most is about this many.
+    static let altitudeLines = 3.0
+    static let distanceLines = 4.0
+
+    /// The smallest 1, 2 or 5 times a power of ten that is at least `value`.
+    static func niceStep(atLeast value: Double) -> Double {
+        guard value > 0 else { return 1 }
+        let magnitude = pow(10, floor(log10(value)))
+        return [1.0, 2, 5, 10].map { $0 * magnitude }.first { $0 >= value * (1 - 1e-9) } ?? 10 * magnitude
+    }
+
+    /// The altitudes (metres) of the horizontal lines: multiples of a round step inside the drawn range.
+    static func altitudes(_ scale: ElevationScale) -> [Double] {
+        multiples(of: niceStep(atLeast: scale.range / altitudeLines), from: scale.baseAltitude, to: scale.baseAltitude + scale.range)
+    }
+
+    /// The distances (metres, from the start of the run) of the vertical lines: multiples of a round step inside the graph.
+    static func distances(_ scale: ElevationScale) -> [Double] {
+        multiples(of: niceStep(atLeast: scale.length / distanceLines), from: scale.startMeters, to: scale.startMeters + scale.length)
+    }
+
+    /// The multiples of `step` strictly between `low` and `high`, so none sits on the edge of the drawing.
+    private static func multiples(of step: Double, from low: Double, to high: Double) -> [Double] {
+        var result: [Double] = []
+        var value = (low / step).rounded(.down) * step + step
+        while value < high - step * 0.01 {
+            result.append(value)
+            value += step
+        }
+        return result
+    }
+
+    static func altitudeLabel(_ meters: Double) -> String { "\(Int(meters.rounded())) m" }
+
+    /// "2 km", or "0.5 km" for a step under a kilometre.
+    static func distanceLabel(_ meters: Double) -> String {
+        let km = meters / 1000
+        return (km == km.rounded() ? "\(Int(km))" : String(format: "%.1f", km)) + " km"
+    }
+}
+
+/// The grid with its labels inside the graph: the altitude at the left end of each horizontal line, the distance at
+/// the foot of each vertical one. Faint, so the profile stays what the eye follows.
+struct ElevationGridView: View {
+    let points: [ElevationPoint]
+
+    private static let lineColor = Color.white.opacity(0.22)
+    private static let labelColor = Color.white.opacity(0.55)
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let scale = ElevationScale(points) {
+                let width = proxy.size.width
+                let height = proxy.size.height
+                ZStack(alignment: .topLeading) {
+                    ForEach(ElevationGrid.altitudes(scale), id: \.self) { altitude in
+                        let y = height - scale.y(altitude: altitude) * height
+                        line(from: CGPoint(x: 0, y: y), to: CGPoint(x: width, y: y))
+                        label(ElevationGrid.altitudeLabel(altitude))
+                            .position(x: 2 + Self.labelWidth / 2, y: y - 6)
+                    }
+                    ForEach(ElevationGrid.distances(scale), id: \.self) { meters in
+                        let x = scale.x(meters: meters) * width
+                        line(from: CGPoint(x: x, y: 0), to: CGPoint(x: x, y: height))
+                        // At the right end the label would be cut off: it goes to the left of the line instead.
+                        let fitsRight = x + 2 + Self.textRoom <= width
+                        label(ElevationGrid.distanceLabel(meters), alignment: fitsRight ? .leading : .trailing)
+                            .position(x: fitsRight ? x + 2 + Self.labelWidth / 2 : x - 2 - Self.labelWidth / 2, y: height - 6)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func line(from start: CGPoint, to end: CGPoint) -> some View {
+        Path { path in
+            path.move(to: start)
+            path.addLine(to: end)
+        }
+        .stroke(Self.lineColor, style: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+    }
+
+    private func label(_ text: String, alignment: Alignment = .leading) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium, design: .rounded)).foregroundStyle(Self.labelColor)
+            .lineLimit(1).fixedSize()
+            // A fixed, leading-aligned frame, so `position` puts the text's left end at the line and not its middle.
+            .frame(width: Self.labelWidth, alignment: alignment)
+    }
+
+    private static let labelWidth = 60.0
+    /// The room a label such as "10.5 km" needs at 9 points.
+    private static let textRoom = 34.0
 }

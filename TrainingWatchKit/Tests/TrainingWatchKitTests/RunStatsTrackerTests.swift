@@ -92,6 +92,29 @@ struct RunStatsTrackerTests {
         #expect(ElevationGrade.gradient(for: points).count == points.count)
     }
 
+    @Test("the grid draws lines at round altitudes and distances inside the graph, with labels")
+    func grid() throws {
+        #expect(ElevationGrid.niceStep(atLeast: 1750) == 2000)
+        #expect(ElevationGrid.niceStep(atLeast: 3.3) == 5)
+        #expect(ElevationGrid.niceStep(atLeast: 10) == 10)
+        #expect(ElevationGrid.niceStep(atLeast: 0.04) == 0.05)
+        let points = (0...40).map { ElevationPoint(meters: Double($0) * 100, altitude: 12 + Double($0)) }
+        let scale = try #require(ElevationScale(points))
+        // 4 km: a line every km, none on the edges.
+        #expect(ElevationGrid.distances(scale) == [1000, 2000, 3000])
+        let altitudes = ElevationGrid.altitudes(scale)
+        #expect(!altitudes.isEmpty && altitudes.count <= 4)
+        // Each altitude line is inside the drawn range, and sits where the line draws that altitude.
+        for altitude in altitudes {
+            #expect(altitude > scale.baseAltitude && altitude < scale.baseAltitude + scale.range)
+            #expect(scale.y(altitude: altitude) > 0 && scale.y(altitude: altitude) < 1)
+        }
+        #expect(ElevationGrid.distanceLabel(2000) == "2 km")
+        #expect(ElevationGrid.distanceLabel(500) == "0.5 km")
+        #expect(ElevationGrid.altitudeLabel(49.6) == "50 m")
+        #expect(ElevationScale([ElevationPoint(meters: 0, altitude: 1)]) == nil)
+    }
+
     @Test("standing still adds no profile points")
     func profileStationary() {
         var stats = RunStatsTracker()
