@@ -8,21 +8,42 @@ struct WatchScreenPreview: View {
     let screen: RunScreen
     let isWorkout: Bool
     let watch: PreviewWatch
+    /// 1 draws the watch at full size, centred in the row; a smaller number draws a thumbnail of that fraction of the
+    /// size (WATCH-143), as wide as it is, for a list row.
+    var scale: CGFloat = 1
 
-    /// The size of the watch's screen in points (a 45 mm watch's), and of the bezel around it.
-    private static let screenSize = CGSize(width: 198, height: 242)
+    /// The size of the Ultra's screen in points (49 mm: 205 × 251), the one the "Ultra" choice stands for, and of the
+    /// bezel around it. The watch lays the run screens out at this width, so a row that is too wide for a narrower
+    /// screen would shrink in the preview and not on the watch.
+    private static let screenSize = CGSize(width: 205, height: 251)
     private static let bezel = 9.0
 
+    /// The size of the whole drawing at full size: the case with the crown's room on both sides.
+    private static let fullSize = CGSize(
+        width: screenSize.width + 2 * bezel + 2 * crownWidth - 6, height: screenSize.height + 2 * bezel)
+
     var body: some View {
-        // The crown and the side button stick out on the right; the same room on the left keeps the watch centred.
+        Group {
+            if scale < 1 {
+                drawing
+                    .fixedSize()
+                    .scaleEffect(scale)
+                    .frame(width: Self.fullSize.width * scale, height: Self.fullSize.height * scale)
+            } else {
+                drawing.frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Preview of the watch screen, with sample values")
+    }
+
+    /// The crown and the side button stick out on the right; the same room on the left keeps the watch centred.
+    private var drawing: some View {
         HStack(spacing: -3) {
             Color.clear.frame(width: Self.crownWidth - 3, height: 1)
             watchCase
             crown
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Preview of the watch screen, with sample values")
     }
 
     private static let crownWidth = 9.0

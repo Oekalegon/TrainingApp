@@ -49,7 +49,11 @@ struct WatchStandardScreenPickerView: View {
             } icon: {
                 Image(systemName: template.systemImage).accessibilityHidden(true)
             }
+            .labelStyle(TopAlignedLabelStyle())
         }
+        // Plain, so the texts keep the list's colours and not the button's blue tint.
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 }

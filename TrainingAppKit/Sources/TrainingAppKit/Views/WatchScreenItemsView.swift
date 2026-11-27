@@ -8,6 +8,11 @@ struct WatchScreenItemsView: View {
     @Binding var draft: RunScreenSetDraft
     let screenID: String
     @State private var isAdding = false
+    /// The group of the item added last to this screen: the picker opens on it, as the next item is likely related
+    /// (altitude, then grade). A screen that is just started has none, and the picker opens on all the groups.
+    @State private var lastGroupID: String?
+    /// The picker's navigation: the group it opens on, if any.
+    @State private var pickerPath: [String] = []
     @State private var previewWatch = PreviewWatch.large
     @State private var previewsWorkout = true
 
@@ -26,11 +31,18 @@ struct WatchScreenItemsView: View {
                     } icon: {
                         Image(systemName: item.systemImage).accessibilityHidden(true)
                     }
+                    .labelStyle(TopAlignedLabelStyle())
                     .accessibilityElement(children: .combine)
                 }
                 .onDelete { draft.removeItems(at: $0, from: screenID) }
                 .onMove { draft.moveItems(from: $0, to: $1, in: screenID) }
-                Button("Add Item", systemImage: "plus") { isAdding = true }
+                Button("Add Item", systemImage: "plus") {
+                    // Only a group that still exists: an id that matches none would push an empty page.
+                    pickerPath = lastGroupID.flatMap { id in
+                        RunScreenItemCatalogue.browsableGroups.contains { $0.id == id } ? [id] : nil
+                    } ?? []
+                    isAdding = true
+                }
                     .disabled(draft.units(of: screenID) >= RunScreen.capacity)
             } header: {
                 Text("Top to Bottom")
@@ -47,8 +59,9 @@ struct WatchScreenItemsView: View {
         .toolbar { ToolbarItem(placement: .primaryAction) { EditButton() } }
         #endif
         .sheet(isPresented: $isAdding) {
-            NavigationStack {
-                WatchScreenItemPickerView(draft: $draft, screenID: screenID, onAdded: { isAdding = false })
+            NavigationStack(path: $pickerPath) {
+                WatchScreenItemPickerView(
+                    draft: $draft, screenID: screenID, lastGroupID: $lastGroupID, onAdded: { isAdding = false })
             }
         }
     }

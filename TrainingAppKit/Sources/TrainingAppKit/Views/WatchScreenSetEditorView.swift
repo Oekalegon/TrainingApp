@@ -4,7 +4,8 @@ import TrainingWatchKit
 
 /// Edits one run screen set (WATCH-134): its name, its screens (reorder, add, delete, the one the run opens
 /// on) and, for the athlete's own sets, which workout templates run with it. The changes are made on a copy
-/// (``RunScreenSetDraft``) and saved with Save, which refuses a set that can't be used and says why.
+/// (``RunScreenSetDraft``) and saved with Save, which refuses a set that can't be used and says why. It is pushed
+/// on the navigation stack: going back without Save drops the changes.
 struct WatchScreenSetEditorView: View {
     /// Which set is being edited: the two built-in ones keep their names and can't be deleted.
     enum Kind { case freeRun, workout, custom }
@@ -16,11 +17,15 @@ struct WatchScreenSetEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var errorText: String?
     @State private var isAddingScreen = false
+    /// What the draft was when the editor opened, or when it was last saved: going back with a different draft asks first.
+    @State private var baseline: RunScreenSetDraft
+    @State private var confirmingDiscard = false
 
     init(screens: WatchScreenSetSync, model: TrainingModel, draft: RunScreenSetDraft, kind: Kind) {
         self.screens = screens
         self.model = model
         _draft = State(initialValue: draft)
+        _baseline = State(initialValue: draft)
         self.kind = kind
     }
 
@@ -81,13 +86,26 @@ struct WatchScreenSetEditorView: View {
         .toolbar { ToolbarItem(placement: .primaryAction) { EditButton() } }
         #endif
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button(isSaved ? "Close" : "Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(problem != nil) }
+            if hasUnsavedChanges {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { confirmingDiscard = true }
+                }
+            }
+        }
+        // With changes the system back button (and the swipe back) would drop them silently: Cancel asks first.
+        .navigationBarBackButtonHidden(hasUnsavedChanges)
+        .confirmationDialog("Discard your changes?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+            Button("Discard Changes", role: .destructive) { dismiss() }
+            Button("Keep Editing", role: .cancel) {}
         }
         .sheet(isPresented: $isAddingScreen) {
             NavigationStack { WatchStandardScreenPickerView(draft: $draft) }
         }
     }
+
+    /// Whether the draft differs from what it was when the editor opened or was last saved.
+    private var hasUnsavedChanges: Bool { draft != baseline }
 
     /// Whether the set is already one of the athlete's saved sets (a new one is, after its first Save).
     private var isSaved: Bool { screens.config.sets.contains { $0.id == draft.id } }
@@ -104,11 +122,16 @@ struct WatchScreenSetEditorView: View {
 
     private func screenRow(_ screen: RunScreen) -> some View {
         let number = (draft.screens.firstIndex { $0.id == screen.id } ?? 0) + 1
-        return VStack(alignment: .leading, spacing: 2) {
-            Text("Screen \(number)")
-            Text(screen.items.map(\.title).joined(separator: ", "))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-            Text("\(screen.units) of \(RunScreen.capacity) units").font(.caption2).foregroundStyle(.secondary)
+        return HStack(spacing: 12) {
+            // A small preview of the screen with sample values; the text beside it says the same in words.
+            WatchScreenPreview(screen: screen, isWorkout: true, watch: .large, scale: 0.3)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Screen \(number)")
+                Text(screen.items.map(\.title).joined(separator: ", "))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text("\(screen.units) of \(RunScreen.capacity) units").font(.caption2).foregroundStyle(.secondary)
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -123,6 +146,7 @@ struct WatchScreenSetEditorView: View {
             case .custom: try screens.save(draft.set)
             }
             errorText = nil
+            baseline = draft
             if !isFirstSave { dismiss() }
         } catch let error as ScreenSetError {
             errorText = error.userMessage

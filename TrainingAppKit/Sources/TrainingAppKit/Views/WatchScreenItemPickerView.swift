@@ -8,6 +8,8 @@ import TrainingWatchKit
 struct WatchScreenItemPickerView: View {
     @Binding var draft: RunScreenSetDraft
     let screenID: String
+    /// The group of the item added last, kept by the screen's list so the picker can open on it next time.
+    @Binding var lastGroupID: String?
     /// Called after an item was added, to close the picker.
     let onAdded: () -> Void
     @State private var query = ""
@@ -22,6 +24,12 @@ struct WatchScreenItemPickerView: View {
             }
         }
         .searchable(text: $query)
+        .navigationDestination(for: String.self) { id in
+            if let group = RunScreenItemCatalogue.browsableGroups.first(where: { $0.id == id }) {
+                WatchScreenItemGroupView(
+                    draft: $draft, screenID: screenID, group: group, onAdded: { added(in: group.id) })
+            }
+        }
         .navigationTitle("Add Item")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -39,9 +47,7 @@ struct WatchScreenItemPickerView: View {
     private var groups: some View {
         Section {
             ForEach(RunScreenItemCatalogue.browsableGroups) { group in
-                NavigationLink {
-                    WatchScreenItemGroupView(draft: $draft, screenID: screenID, group: group, onAdded: onAdded)
-                } label: {
+                NavigationLink(value: group.id) {
                     LabeledContent(group.title, value: "\(group.items.count)")
                 }
                 .accessibilityValue("\(group.items.count) items")
@@ -51,9 +57,16 @@ struct WatchScreenItemPickerView: View {
         }
         Section("Other Items") {
             ForEach(RunScreenItemCatalogue.inlineItems, id: \.self) { item in
-                WatchScreenItemRow(draft: $draft, screenID: screenID, item: item, onAdded: onAdded)
+                // An item outside the groups: the next pick starts from all the groups again.
+                WatchScreenItemRow(draft: $draft, screenID: screenID, item: item, onAdded: { added(in: nil) })
             }
         }
+    }
+
+    /// Remembers the group of the item that was added, and closes the picker.
+    private func added(in groupID: String?) {
+        lastGroupID = groupID
+        onAdded()
     }
 
     /// The items that match what is typed, by group and scope.
@@ -67,7 +80,7 @@ struct WatchScreenItemPickerView: View {
             ForEach(group.sections) { part in
                 Section(Self.header(of: part, in: group)) {
                     ForEach(part.items, id: \.self) { item in
-                        WatchScreenItemRow(draft: $draft, screenID: screenID, item: item, onAdded: onAdded)
+                        WatchScreenItemRow(draft: $draft, screenID: screenID, item: item, onAdded: { added(in: group.id) })
                     }
                 }
             }
