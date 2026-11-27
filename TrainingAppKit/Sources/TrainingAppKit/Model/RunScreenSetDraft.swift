@@ -23,7 +23,14 @@ public struct RunScreenSetDraft: Equatable, Sendable {
 
     /// The set the draft stands for.
     public var set: RunScreenSet {
-        RunScreenSet(id: id, name: name, screens: screens, startScreenID: startScreenID)
+        // A name of only spaces is no name.
+        let named = screens.map { screen -> RunScreen in
+            var screen = screen
+            let trimmed = screen.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+            screen.name = trimmed?.isEmpty == false ? trimmed : nil
+            return screen
+        }
+        return RunScreenSet(id: id, name: name, screens: named, startScreenID: startScreenID)
     }
 
     /// The first problem that keeps the set from being saved, or `nil`. The name only counts for the
@@ -74,6 +81,12 @@ public struct RunScreenSetDraft: Equatable, Sendable {
     public mutating func moveItems(from source: IndexSet, to destination: Int, in screenID: String) {
         guard let index = screens.firstIndex(where: { $0.id == screenID }) else { return }
         screens[index].items.move(fromOffsets: source, toOffset: destination)
+    }
+
+    /// The name of a screen as the list shows it: nil when it has none, or only spaces.
+    public func displayName(of screenID: String) -> String? {
+        let name = screens.first { $0.id == screenID }?.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name?.isEmpty == false ? name : nil
     }
 
     /// Adds a screen with the total time on it (a screen can't be empty) and returns its id.

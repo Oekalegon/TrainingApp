@@ -15,8 +15,13 @@ struct WatchStandardScreenPickerView: View {
                     draft.addScreen()
                     dismiss()
                 } label: {
-                    Label("Blank Screen", systemImage: "square.dashed")
+                    HStack(alignment: .top, spacing: 12) {
+                        preview([.metric(.totalTime)])
+                        Text("Blank Screen")
+                    }
                 }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
             } footer: {
                 Text("Starts with the total time; add the items yourself.")
             }
@@ -40,20 +45,27 @@ struct WatchStandardScreenPickerView: View {
             draft.addScreen(from: template)
             dismiss()
         } label: {
-            Label {
+            HStack(alignment: .top, spacing: 12) {
+                preview(template.items)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(template.title).foregroundStyle(.primary)
-                    Text(template.detail).font(.caption).foregroundStyle(.secondary)
-                    Text(template.summary).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                        .font(.subheadline.weight(.semibold)).padding(.bottom, 2)
+                    WatchScreenItemBullets(items: template.items)
+                    if template.isOnlyInWorkouts {
+                        Text("Planned workouts only.").font(.caption2).foregroundStyle(.secondary).padding(.top, 2)
+                    }
                 }
-            } icon: {
-                Image(systemName: template.systemImage).accessibilityHidden(true)
             }
-            .labelStyle(TopAlignedLabelStyle())
         }
         // Plain, so the texts keep the list's colours and not the button's blue tint.
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    /// A small preview of a screen with these items, as in the editor's list of screens.
+    private func preview(_ items: [RunScreenItem]) -> some View {
+        WatchScreenPreview(screen: RunScreen(id: "preview", items: items), isWorkout: true, watch: .large, scale: 0.3)
+            .accessibilityHidden(true)
     }
 }

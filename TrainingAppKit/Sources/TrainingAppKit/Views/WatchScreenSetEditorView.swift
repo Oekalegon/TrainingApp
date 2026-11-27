@@ -117,13 +117,10 @@ struct WatchScreenSetEditorView: View {
             WatchScreenPreview(screen: screen, isWorkout: true, watch: .large, scale: 0.3)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(Array(screen.items.enumerated()), id: \.offset) { _, item in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("•").accessibilityHidden(true)
-                        Text(item.title)
-                    }
-                    .font(.subheadline)
+                if let name = draft.displayName(of: screen.id) {
+                    Text(name).font(.subheadline.weight(.semibold)).padding(.bottom, 2)
                 }
+                WatchScreenItemBullets(items: screen.items)
             }
         }
         .accessibilityElement(children: .combine)

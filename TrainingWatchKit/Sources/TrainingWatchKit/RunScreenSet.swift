@@ -156,10 +156,14 @@ public struct RunScreen: Sendable, Hashable, Codable, Identifiable {
 
     public var id: String
     public var items: [RunScreenItem]
+    /// A name the athlete gave the screen, shown in the phone's list of screens; nil when there is none. The watch
+    /// doesn't show it.
+    public var name: String?
 
-    public init(id: String, items: [RunScreenItem]) {
+    public init(id: String, items: [RunScreenItem], name: String? = nil) {
         self.id = id
         self.items = items
+        self.name = name
     }
 
     /// Whether a screen means something only in a planned workout's steps: it has a step widget. Left
@@ -180,7 +184,7 @@ public struct RunScreen: Sendable, Hashable, Codable, Identifiable {
     /// Whether the items fit the screen.
     public var fits: Bool { units <= Self.capacity }
 
-    private enum CodingKeys: String, CodingKey { case id, items }
+    private enum CodingKeys: String, CodingKey { case id, items, name }
 
     /// An item the watch doesn't know (a phone newer than the watch) is dropped, and items past the
     /// capacity are cut from the top, so a set from a newer phone can't break a run.
@@ -189,6 +193,7 @@ public struct RunScreen: Sendable, Hashable, Codable, Identifiable {
         id = try container.decode(String.self, forKey: .id)
         let items = try container.decode([Lossy<RunScreenItem>].self, forKey: .items).compactMap(\.value)
         self.items = Self.fitted(items)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
     }
 
     /// `items` with the first ones left out until they fit.

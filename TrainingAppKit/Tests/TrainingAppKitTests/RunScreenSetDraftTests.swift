@@ -58,6 +58,34 @@ struct RunScreenSetDraftTests {
         #expect(draft.screens.map(\.id) == [id])
     }
 
+    @Test("a screen's name is shown only when it has one, and a name of spaces is none (WATCH-134)")
+    func screenNames() {
+        var draft = RunScreenSetDraft(RunScreenSet(
+            id: "x", name: "X",
+            screens: [RunScreen(id: "a", items: [.metric(.distance)]), RunScreen(id: "b", items: [.metric(.heartRate)], name: "  Hills ")]))
+        #expect(draft.displayName(of: "a") == nil)
+        #expect(draft.displayName(of: "b") == "Hills")
+        draft.screens[0].name = "   "
+        #expect(draft.displayName(of: "a") == nil)
+        #expect(draft.set.screens.map(\.name) == [nil, "Hills"])
+    }
+
+    @Test("a screen's name survives encoding and a screen without one decodes as unnamed")
+    func screenNameCoding() throws {
+        let named = RunScreen(id: "a", items: [.metric(.distance)], name: "Easy")
+        #expect(try JSONDecoder().decode(RunScreen.self, from: JSONEncoder().encode(named)).name == "Easy")
+        let old = Data(#"{"id":"a","items":[]}"#.utf8)
+        #expect(try JSONDecoder().decode(RunScreen.self, from: old).name == nil)
+    }
+
+    @Test("a screen added from a standard screen is named after it")
+    func templateName() {
+        var draft = RunScreenSetDraft(RunScreenSet(id: "x", name: "X", screens: [RunScreen(id: "a", items: [.metric(.distance)])]))
+        let template = StandardScreens.all[0]
+        let id = draft.addScreen(from: template)
+        #expect(draft.displayName(of: id) == template.title)
+    }
+
     @Test("a set saved with a start screen opens on its first screen in the editor")
     func startsOnFirstScreen() {
         let set = RunScreenSet(

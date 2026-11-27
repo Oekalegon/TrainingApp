@@ -19,10 +19,27 @@ struct WatchScreenItemsView: View {
     /// Whether the screen has all the room the watch chosen in the preview offers (6 units on the Ultra, 5 at 41 mm).
     private var isFull: Bool { draft.units(of: screenID) >= previewWatch.fittingUnits }
 
+    /// The screen's name; an empty field is no name.
+    private var nameBinding: Binding<String> {
+        Binding(
+            get: { screen?.name ?? "" },
+            set: { text in
+                guard let index = draft.screens.firstIndex(where: { $0.id == screenID }) else { return }
+                draft.screens[index].name = text.isEmpty ? nil : text
+            })
+    }
+
     private var screen: RunScreen? { draft.screens.first { $0.id == screenID } }
 
     var body: some View {
         List {
+            Section {
+                TextField("Name (optional)", text: nameBinding)
+            } header: {
+                Text("Name")
+            } footer: {
+                Text("Shown in the list of screens; the watch doesn't show it.")
+            }
             if let screen { previewSection(for: screen) }
             Section {
                 ForEach(Array((screen?.items ?? []).enumerated()), id: \.offset) { _, item in
