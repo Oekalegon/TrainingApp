@@ -35,6 +35,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: iOS/Resources/TrainingApp.entitlements
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "The map shows where you are and can be centred on you."
         INFOPLIST_KEY_NSHealthShareUsageDescription: "TrainingApp reads your workouts and heart-rate data to compute your training load and fitness trend."
         # Some HealthKit APIs require this present even for read-only access (see TrainingKit's HealthKitHarness).
         INFOPLIST_KEY_NSHealthUpdateUsageDescription: "TrainingApp does not write any data to Health; this key is required by some HealthKit APIs even when only read access is requested."

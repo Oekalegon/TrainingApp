@@ -45,4 +45,11 @@ enum MapFit {
     static func intersects(_ a: BoundingBox, _ b: BoundingBox) -> Bool {
         a.south <= b.north && b.south <= a.north && a.west <= b.east && b.west <= a.east
     }
+
+    /// How many points a distance on the ground is at a latitude and zoom (256-point tiles): the radius of the accuracy circle round
+    /// the position.
+    static func points(forMeters meters: Double, atLatitude latitude: Double, zoom: Double) -> Double {
+        let metersPerPoint = 40_075_016.686 * cos(latitude * .pi / 180) / (tileSize * pow(2, zoom))
+        return meters / max(metersPerPoint, 1e-9)
+    }
 }

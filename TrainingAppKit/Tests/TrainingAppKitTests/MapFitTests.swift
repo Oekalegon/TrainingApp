@@ -47,6 +47,17 @@ struct MapFitTests {
         #expect(wideZoom < MapFit.zoom(fitting: BoundingBox(south: 47.0, west: 0, north: 47.1, east: 1), in: size))
     }
 
+    @Test("a distance on the ground is as many points as the map scale says: smaller when zoomed out and north of the equator")
+    func accuracyRadius() {
+        // At the equator and zoom 0 the world (40 075 km) is 256 points wide.
+        #expect(abs(MapFit.points(forMeters: 40_075_016.686, atLatitude: 0, zoom: 0) - 256) < 1e-6)
+        let near = MapFit.points(forMeters: 100, atLatitude: 52, zoom: 15)
+        let far = MapFit.points(forMeters: 100, atLatitude: 52, zoom: 13)
+        #expect(abs(near / far - 4) < 1e-9)
+        #expect(MapFit.points(forMeters: 100, atLatitude: 60, zoom: 15) > MapFit.points(forMeters: 100, atLatitude: 0, zoom: 15))
+        #expect(MapFit.points(forMeters: 0, atLatitude: 52, zoom: 15) == 0)
+    }
+
     @Test("areas that overlap or touch intersect, and the others don't")
     func intersection() {
         let a = BoundingBox(south: 0, west: 0, north: 1, east: 1)

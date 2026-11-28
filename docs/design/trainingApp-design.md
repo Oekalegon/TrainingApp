@@ -725,6 +725,7 @@ The list itself (`AthleteView`):
 
 The screens:
 
+- **The Map tab** (MVP4-101, `MapTabView`; the fifth tab, between Library and Athlete, only where a `MapLibrary` is given): the selected map across the whole screen, under the status bar and the tab bar (`ignoresSafeArea`; the tab bar floats over it). The athlete's position is a blue dot with a white ring, a pulsing halo and a circle for how far off the position can be (`UserLocationDotView`, a view over the map placed with the map's own viewport, as the kit's overlays are part of a cached image); `LocationModel` follows the position while the tab is shown and the app is active, and asks for "when in use" the first time the tab opens. The first position found moves the map to it, once, when the map covers it. The glass buttons at the top right centre on the position (filled while it is followed, crossed out and an alert with the way to Settings when location is off) and open Maps. Without a map the tab says so and offers to add one.
 - **Maps** (MVP4-101, `MapsView`): the maps on the phone, which GeoMapKit draws (`../GeoMapKit`, a package dependency of
   `TrainingAppKit` on its `develop` branch). `MapLibrary` keeps them as files in `Documents/Maps`, the way the kit's demo app does: a
   `.gmk` store file is copied in, a folder of blocks (`manifest.json` and block files, several gigabytes for a big area) or a file over

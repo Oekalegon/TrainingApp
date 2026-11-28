@@ -20,6 +20,7 @@ public struct AppTabView: View {
         case week
         case plans
         case library
+        case map
         case athlete
     }
 
@@ -106,6 +107,12 @@ public struct AppTabView: View {
             Tab("Library", systemImage: "books.vertical", value: AppTab.library) {
                 WorkoutLibraryView(viewModel: libraryViewModel)
                     .searchResults(searchResultsView, text: $searchText)
+            }
+
+            if let mapLibrary {
+                Tab("Map", systemImage: "map", value: AppTab.map) {
+                    MapTabView(library: mapLibrary)
+                }
             }
 
             Tab("Athlete", systemImage: "person.circle", value: AppTab.athlete) {
