@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 struct TrainingAppApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var environment: TrainingAppEnvironment?
+    /// The maps on the phone (MVP4-101), kept in the app's Documents.
+    @State private var mapLibrary = MapLibrary()
 
     var body: some Scene {
         WindowGroup {
@@ -31,6 +33,7 @@ struct TrainingAppApp: App {
                     watchZoneSync: environment.watchZoneSync,
                     watchCues: environment.watchCueSync,
                     watchScreens: environment.watchScreenSync,
+                    mapLibrary: mapLibrary,
                     iCloud: CloudKitAccountChecker(containerIdentifier: TrainingAppEnvironment.cloudKitContainerIdentifier),
                     workoutInspector: environment.workoutInspector
                 )

@@ -50,6 +50,8 @@ struct AthleteView: View {
     var watchCues: WatchCueSync?
     /// The athlete's run screens for the watch (WATCH-134).
     var watchScreens: WatchScreenSetSync?
+    /// The maps on the phone (MVP4-101); `nil` hides the Maps row.
+    var mapLibrary: MapLibrary?
     /// Reads what HealthKit recorded for recent workouts, for the Developer screen (MVP2-146 spike).
     var workoutInspector: (any WorkoutInspecting)?
     /// Whether the overlap-review sheet (MVP1-67), opened by tapping ``OverlapWarningBanner``, is
@@ -92,6 +94,7 @@ struct AthleteView: View {
                     AthleteRouteRow(route: .personalInformation)
                     AthleteRouteRow(route: .connectedServices)
                     AthleteRouteRow(route: .calendar)
+                    if mapLibrary != nil { AthleteRouteRow(route: .maps) }
                 }
 
                 Section {
@@ -179,6 +182,8 @@ struct AthleteView: View {
             if let watchScreens {
                 WatchScreensView(screens: watchScreens, model: microCycleViewModel.model)
             }
+        case .maps:
+            if let mapLibrary { MapsView(library: mapLibrary) }
         case .calendar:
             CalendarSettingsView(viewModel: viewModel, microCycleViewModel: microCycleViewModel)
         case .developer:

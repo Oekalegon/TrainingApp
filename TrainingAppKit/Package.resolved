@@ -1,6 +1,15 @@
 {
-  "originHash" : "ef9fbdd635bf2e08bf4d8bc6a2175034b1bd19f0637a4ad476b07895da53788b",
+  "originHash" : "d642b58d7a41bf6de6cab2e44fe89d2c28d196fb6ac4ecd14302c08174bee097",
   "pins" : [
+    {
+      "identity" : "geomapkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Oekalegon/GeoMapKit.git",
+      "state" : {
+        "branch" : "develop",
+        "revision" : "7c50180206218dc8163076070ffc6da0226ba134"
+      }
+    },
     {
       "identity" : "trainingkit",
       "kind" : "remoteSourceControl",

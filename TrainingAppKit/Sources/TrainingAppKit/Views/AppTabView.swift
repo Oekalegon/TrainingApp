@@ -43,6 +43,7 @@ public struct AppTabView: View {
     private let watchZoneSync: WatchZoneSync?
     private let watchCues: WatchCueSync?
     private let watchScreens: WatchScreenSetSync?
+    private let mapLibrary: MapLibrary?
     private let workoutInspector: (any WorkoutInspecting)?
 
     /// - Parameters:
@@ -55,13 +56,14 @@ public struct AppTabView: View {
     ///     becomes active and when changed; `nil` hides them.
     ///   - watchScreens: The athlete's run screens for the watch (WATCH-109), sent when the app becomes
     ///     active and when changed; `nil` skips it.
+    ///   - mapLibrary: The maps on the phone (MVP4-101), listed under Athlete ▸ Maps; `nil` hides them.
     ///   - iCloud: Looks up the iCloud account, for the first-run introduction and the warning banner
     ///     (MVP2-147); `nil` never warns.
     ///   - workoutInspector: Reads what HealthKit recorded for recent workouts, for the Developer
     ///     screen (MVP2-146 spike); `nil` hides it.
     public init(
         model: TrainingModel, refresher: any ActivityRefreshing, watchSync: WatchScheduleSync? = nil,
-        watchZoneSync: WatchZoneSync? = nil, watchCues: WatchCueSync? = nil, watchScreens: WatchScreenSetSync? = nil, iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
+        watchZoneSync: WatchZoneSync? = nil, watchCues: WatchCueSync? = nil, watchScreens: WatchScreenSetSync? = nil, mapLibrary: MapLibrary? = nil, iCloud: (any ICloudAccountChecking)? = nil, workoutInspector: (any WorkoutInspecting)? = nil
     ) {
         let viewModel = MicroCycleViewModel(model: model, refresher: refresher, watchSync: watchSync, iCloud: iCloud)
         _viewModel = State(initialValue: viewModel)
@@ -72,6 +74,7 @@ public struct AppTabView: View {
         self.watchZoneSync = watchZoneSync
         self.watchCues = watchCues
         self.watchScreens = watchScreens
+        self.mapLibrary = mapLibrary
         self.workoutInspector = workoutInspector
     }
 
@@ -132,6 +135,7 @@ public struct AppTabView: View {
                     watchSync: watchSync,
                     watchCues: watchCues,
                     watchScreens: watchScreens,
+                    mapLibrary: mapLibrary,
                     workoutInspector: workoutInspector
                 )
             }

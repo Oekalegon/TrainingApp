@@ -720,10 +720,23 @@ The list itself (`AthleteView`):
   (`OverlapReviewView`) §2.1 used to open from its old banner; tapping a row opens that activity's own
   detail sheet (§2.2). The same live count is mirrored as a `.badge(_:)` on the Athlete tab's own
   tab-bar icon (§2.0), so it's visible without switching tabs.
-- Four rows, each pushing a screen: **Personal Information**, **Connected Services**, **Calendar**,
-  and, in a section of its own, **Developer**.
+- Five rows, each pushing a screen: **Personal Information**, **Connected Services**, **Calendar**,
+  **Maps** (MVP4-101, where a `MapLibrary` is given) and, in a section of its own, **Developer**.
 
 The screens:
+
+- **Maps** (MVP4-101, `MapsView`): the maps on the phone, which GeoMapKit draws (`../GeoMapKit`, a package dependency of
+  `TrainingAppKit` on its `develop` branch). `MapLibrary` keeps them as files in `Documents/Maps`, the way the kit's demo app does: a
+  `.gmk` store file is copied in, a folder of blocks (`manifest.json` and block files, several gigabytes for a big area) or a file over
+  100 MB is linked with a bookmark and left where it is, so deleting it in the app doesn't delete the original. Add Map opens the
+  Files picker for `.gmk` files and folders; each map that can't be added gets a reason (`MapLibraryError`). A tap on a map selects it
+  (the check mark); routes are drawn on the selected one. **Show Map** (`MapPreviewView`) looks at it, **Show a GPX Route**
+  (`GPXRouteMapScreen`, `GPXRouteLoader`) draws the first route or track of a GPX file on it. The data credit the licence asks for is
+  drawn by the kit in a corner of every map and written in the screen's footer. **`RouteMapView`** (with `RouteMapViewModel`, tested) is
+  what the activity sheet (MVP4-100), a planned workout and, later, a course will show: the selected map with the route as a
+  `RouteOverlay`, fitted to the view (`MapFit`, Web Mercator), and, where there is no map, a message that says why (no map yet; the route
+  is outside the selected map, `RouteMapPlan`; the map can't be opened). Where the maps come from is not decided: the kit builds them on
+  the Mac today, so for now they are added from Files. The Watch's map is WATCH-151.
 
 - **Personal Information** (`PersonalInformationView`): the avatar (tap it to choose a photo from the
   library with `PhotosPicker`; "Remove Photo" goes back to the initials. `AvatarImageProcessor` cuts the
