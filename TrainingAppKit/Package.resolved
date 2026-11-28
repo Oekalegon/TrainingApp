@@ -1,13 +1,13 @@
 {
-  "originHash" : "d642b58d7a41bf6de6cab2e44fe89d2c28d196fb6ac4ecd14302c08174bee097",
+  "originHash" : "ec75caf4a5de862eef9c1324fbeff720645573694700ccc932334b7e08059070",
   "pins" : [
     {
       "identity" : "geomapkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Oekalegon/GeoMapKit.git",
       "state" : {
-        "branch" : "develop",
-        "revision" : "7c50180206218dc8163076070ffc6da0226ba134"
+        "branch" : "feature/map-library-downloads",
+        "revision" : "f1e6ae81e9f984587c579b621802bb806dc6b7e4"
       }
     },
     {

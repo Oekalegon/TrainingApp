@@ -1,5 +1,6 @@
 import Foundation
 import GeoCore
+import MapLibrary
 import Testing
 import Tracks
 @testable import TrainingAppKit
@@ -27,7 +28,7 @@ struct RouteMapViewModelTests {
         guard case .ready(let first) = model.state else { Issue.record("ready"); return }
         #expect(first.map.id == "vaduz.gmk")
         #expect(abs(first.center.longitude - model.route.boundingBox.west - (model.route.boundingBox.east - model.route.boundingBox.west) / 2) < 1e-9)
-        #expect(first.zoom > 10 && first.zoom <= MapFit.maximumZoom)
+        #expect(first.zoom > 10 && first.zoom <= 17)
         // A new size changes where to look and how far to zoom; the map and the drawn overlay stay.
         model.load(viewSize: CGSize(width: 200, height: 200))
         guard case .ready(let second) = model.state else { Issue.record("ready again"); return }

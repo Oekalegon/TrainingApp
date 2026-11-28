@@ -14,7 +14,7 @@ let package = Package(
         .package(path: "../TrainingWatchKit"),
         // The map (MVP4-101): own vector renderer, GPX and routes. Public; a branch like TrainingKit, so a fix in the kit
         // reaches the app at the next resolve.
-        .package(url: "https://github.com/Oekalegon/GeoMapKit.git", branch: "develop")
+        .package(url: "https://github.com/Oekalegon/GeoMapKit.git", branch: "feature/map-library-downloads")
     ],
     targets: [
         .target(
@@ -27,8 +27,8 @@ let package = Package(
                 .product(name: "TrainingWatchKit", package: "TrainingWatchKit"),
                 .product(name: "GeoCore", package: "GeoMapKit"),
                 .product(name: "FeatureStore", package: "GeoMapKit"),
-                .product(name: "MapStyle", package: "GeoMapKit"),
-                .product(name: "MapBuilder", package: "GeoMapKit"),
+                .product(name: "MapLibrary", package: "GeoMapKit"),
+                .product(name: "MapDownload", package: "GeoMapKit"),
                 .product(name: "MapRender", package: "GeoMapKit"),
                 .product(name: "Regions", package: "GeoMapKit"),
                 .product(name: "MapUI", package: "GeoMapKit"),

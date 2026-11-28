@@ -1,4 +1,6 @@
 import SwiftUI
+import MapLibrary
+import MapDownload
 
 /// Gets a map for an area (MVP4-102): says where it comes from and what it takes, waits for a yes, shows the progress and ends with
 /// the map in the library. Nothing is downloaded before the athlete taps Download.

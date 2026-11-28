@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import MapLibrary
 
 /// Athlete ▸ Maps (MVP4-101): the maps on the phone, one of which is shown. A map is a `.gmk` file or a folder of blocks made with
 /// GeoMapKit (the kit's demo app builds them on the Mac); add one from Files. The map with the check mark is the one routes are drawn on.

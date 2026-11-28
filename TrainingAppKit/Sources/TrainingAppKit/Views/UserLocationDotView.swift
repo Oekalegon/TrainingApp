@@ -1,5 +1,6 @@
 import GeoCore
 import MapRender
+import MapUI
 import SwiftUI
 
 /// Where the athlete is on the map (MVP4-101): a blue dot with a white ring, a soft circle for how far off the position can be, and a
@@ -16,7 +17,7 @@ struct UserLocationDotView: View {
 
     var body: some View {
         let point = MapViewport(center: center, zoom: zoom, width: size.width, height: size.height, bearing: bearing).screenPoint(for: coordinate)
-        let accuracyRadius = accuracy.map { MapFit.points(forMeters: $0, atLatitude: coordinate.latitude, zoom: zoom) } ?? 0
+        let accuracyRadius = accuracy.map { $0 / ScaleRuler.metresPerPoint(latitude: coordinate.latitude, zoom: zoom) } ?? 0
         ZStack {
             // How far off the position can be, when that is more than the dot.
             if accuracyRadius > 12 {

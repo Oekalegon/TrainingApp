@@ -1,5 +1,6 @@
 import SwiftUI
 import TrainingCore
+import MapLibrary
 
 /// The app's top-level screen (design doc §2.0): a bottom tab bar switching between the micro-cycle
 /// view ("Week"), the training plans ("Plans", MVP5-125), the workout library ("Library", MVP2-21) and the athlete account screen ("Athlete") —

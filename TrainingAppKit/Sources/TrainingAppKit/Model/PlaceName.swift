@@ -21,6 +21,3 @@ enum PlaceName {
     }
 }
 
-extension MapArea: Identifiable {
-    public var id: String { "\(name)|\(box.south)|\(box.west)|\(box.north)|\(box.east)" }
-}

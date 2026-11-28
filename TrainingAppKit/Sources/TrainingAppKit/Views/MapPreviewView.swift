@@ -1,6 +1,7 @@
 import GeoCore
 import MapUI
 import SwiftUI
+import MapLibrary
 
 /// The selected map on its own, to look at what has been added (MVP4-101), opened from Athlete ▸ Maps.
 struct MapPreviewView: View {
@@ -39,8 +40,8 @@ struct MapPreviewView: View {
             let map = try library.open(item)
             errorText = nil
             if let bounds = map.bounds {
-                center = MapFit.center(of: bounds)
-                zoom = MapFit.zoom(fitting: bounds, in: viewSize)
+                center = WebMercator.center(of: bounds)
+                zoom = WebMercator.zoom(fitting: bounds, width: viewSize.width, height: viewSize.height)
             }
             opened = map
         } catch {

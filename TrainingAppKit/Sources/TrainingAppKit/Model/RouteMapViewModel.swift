@@ -3,6 +3,8 @@ import GeoCore
 import Observation
 import TrackOverlays
 import Tracks
+import MapDownload
+import MapLibrary
 
 /// What a map of one route shows (MVP4-101): the athlete's selected map with the route drawn over it, or the reason there is no
 /// map to show. The route comes from outside (the workout's route from Health, a planned workout's course, later); this only

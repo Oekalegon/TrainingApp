@@ -14,7 +14,7 @@ enum RouteMapPlan: Equatable {
     ///   - mapBounds: The area the map covers, or `nil` when the map doesn't say (then it is tried).
     ///   - viewSize: The size of the map view in points, for the zoom.
     static func make(routeBounds: BoundingBox, mapBounds: BoundingBox?, viewSize: CGSize) -> RouteMapPlan {
-        if let mapBounds, !MapFit.intersects(routeBounds, mapBounds) { return .outsideMap }
-        return .show(center: MapFit.center(of: routeBounds), zoom: MapFit.zoom(fitting: routeBounds, in: viewSize))
+        if let mapBounds, !routeBounds.intersects(mapBounds) { return .outsideMap }
+        return .show(center: WebMercator.center(of: routeBounds), zoom: WebMercator.zoom(fitting: routeBounds, width: viewSize.width, height: viewSize.height))
     }
 }

@@ -1,6 +1,7 @@
 import FeatureStore
 import Foundation
 import GeoCore
+import MapLibrary
 import Tracks
 @testable import TrainingAppKit
 

@@ -1,4 +1,6 @@
 import Foundation
+import MapLibrary
+import MapDownload
 
 /// A download of a map that a sheet shows (MVP4-102): the area and the model that gets it. They travel together, so the sheet that
 /// is shown for the item always has its model.

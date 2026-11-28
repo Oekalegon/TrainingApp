@@ -1,7 +1,12 @@
 import Foundation
 import Regions
+import MapDownload
+import MapLibrary
 
 extension MapDownloadModel {
+    /// The address of the ready-made maps' `index.json`: `nil` until a server exists, so maps are built on the phone.
+    static let hostedIndexURL: URL? = nil
+
     /// The model the app uses: a ready-made map from the server when it has one, and a build on the phone when not.
     ///
     /// Maps built on the phone and the region files they are built from are kept in the app's own storage, on the device and out of
@@ -28,8 +33,9 @@ extension MapDownloadModel {
         if removesSources { excludeFromBackup(sources) }
         let downloader = URLSessionDownloader(userAgent: "TrainingApp")
         return MapDownloadModel(
-            library: library, hosted: URLSessionHostedMapCatalog(),
-            phone: GeofabrikPhoneBuilder(cacheDirectory: sources, downloader: downloader, removesSources: removesSources, staleAfter: staleAfter),
+            library: library, hosted: URLSessionHostedMapCatalog(indexURL: Self.hostedIndexURL),
+            phone: GeofabrikPhoneBuilder(
+                cacheDirectory: sources, userAgent: "TrainingApp", downloader: downloader, removesSources: removesSources, staleAfter: staleAfter),
             downloader: downloader, builtDirectory: built)
     }
 

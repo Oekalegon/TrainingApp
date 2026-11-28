@@ -1,6 +1,8 @@
 import GeoCore
 import MapUI
 import SwiftUI
+import MapLibrary
+import MapDownload
 
 /// A route drawn over the athlete's selected map (MVP4-101). Where there is no map to show it says why, in words, and not an empty
 /// frame: no map yet, the route is outside the map, or the map can't be opened.

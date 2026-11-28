@@ -1,6 +1,7 @@
 import ImageIO
 import SwiftUI
 import TrainingCore
+import MapLibrary
 
 /// The Athlete tab (MVP2-123, design doc §2.3): the avatar and name, the live overlap warning, and a
 /// settings-style list of groups, each opening its own screen — Personal Information (with Heart

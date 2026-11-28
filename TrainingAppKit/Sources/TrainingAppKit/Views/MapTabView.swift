@@ -1,6 +1,8 @@
 import GeoCore
 import MapUI
 import SwiftUI
+import MapDownload
+import MapLibrary
 
 /// The Map tab (MVP4-101): the athlete's selected map across the whole screen, under the status bar and the tab bar, with the athlete's
 /// position highlighted and a button that centres on it. Without a map it says so and offers to add one.
@@ -179,8 +181,8 @@ struct MapTabView: View {
                 center = found
                 zoom = Self.positionZoom
             } else if let bounds = map.bounds {
-                center = MapFit.center(of: bounds)
-                zoom = MapFit.zoom(fitting: bounds, in: viewSize)
+                center = WebMercator.center(of: bounds)
+                zoom = WebMercator.zoom(fitting: bounds, width: viewSize.width, height: viewSize.height)
             }
         } catch {
             opened = nil

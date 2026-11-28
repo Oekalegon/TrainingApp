@@ -1,6 +1,7 @@
 import SwiftUI
 import Tracks
 import UniformTypeIdentifiers
+import MapLibrary
 
 /// Picks a GPX file and shows its route on the selected map (MVP4-101), opened from Athlete ▸ Maps: a way to see a course on the map
 /// before planned workouts and Health routes feed `RouteMapView`.
