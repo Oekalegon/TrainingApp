@@ -6,6 +6,9 @@ import SwiftUI
 /// frame: no map yet, the route is outside the map, or the map can't be opened.
 public struct RouteMapView: View {
     @State private var viewModel: RouteMapViewModel
+    /// The download that is shown in a sheet while it is set.
+    @State private var download: MapDownloadRequest?
+    @State private var viewSize = CGSize(width: 400, height: 600)
 
     public init(viewModel: RouteMapViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -15,7 +18,13 @@ public struct RouteMapView: View {
         GeometryReader { geometry in
             content
                 .frame(width: geometry.size.width, height: geometry.size.height)
-                .task(id: geometry.size) { viewModel.load(viewSize: geometry.size) }
+                .task(id: geometry.size) {
+                    viewSize = geometry.size
+                    viewModel.load(viewSize: geometry.size)
+                }
+        }
+        .sheet(item: $download, onDismiss: { viewModel.load(viewSize: viewSize) }) { request in
+            MapDownloadSheet(model: request.model, area: request.area)
         }
     }
 
@@ -25,9 +34,9 @@ public struct RouteMapView: View {
         case .idle:
             ProgressView()
         case .noMap:
-            message("No Map", systemImage: "map", text: "Add a map under Athlete ▸ Maps to see your route on it.")
+            message("No Map", systemImage: "map", text: "Download a map to see your route on it.", offersDownload: true)
         case .outsideMap(let name):
-            message("Outside the Map", systemImage: "map", text: "This route is not on \(name). Add a map that covers it under Athlete ▸ Maps.")
+            message("Outside the Map", systemImage: "map", text: "This route is not on \(name). Download a map that covers it.", offersDownload: true)
         case .failed(let text):
             message("Map Not Available", systemImage: "exclamationmark.triangle", text: text)
         case .ready(let ready):
@@ -37,8 +46,18 @@ public struct RouteMapView: View {
         }
     }
 
-    private func message(_ title: LocalizedStringKey, systemImage: String, text: String) -> some View {
-        ContentUnavailableView(title, systemImage: systemImage, description: Text(text))
+    private func message(_ title: LocalizedStringKey, systemImage: String, text: String, offersDownload: Bool = false) -> some View {
+        ContentUnavailableView {
+            Label(title, systemImage: systemImage)
+        } description: {
+            Text(text)
+        } actions: {
+            if offersDownload {
+                Button("Download Map for This Route") {
+                    download = MapDownloadRequest(area: viewModel.downloadArea, model: MapDownloadModel.live(library: viewModel.library))
+                }
+            }
+        }
     }
 }
 

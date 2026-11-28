@@ -28,7 +28,9 @@ let package = Package(
                 .product(name: "GeoCore", package: "GeoMapKit"),
                 .product(name: "FeatureStore", package: "GeoMapKit"),
                 .product(name: "MapStyle", package: "GeoMapKit"),
+                .product(name: "MapBuilder", package: "GeoMapKit"),
                 .product(name: "MapRender", package: "GeoMapKit"),
+                .product(name: "Regions", package: "GeoMapKit"),
                 .product(name: "MapUI", package: "GeoMapKit"),
                 .product(name: "Tracks", package: "GeoMapKit"),
                 .product(name: "TrackOverlays", package: "GeoMapKit")

@@ -16,9 +16,23 @@ struct MapTabView: View {
     @State private var centresOnFirstFix = true
     /// The size of the map, for fitting a whole map into it (it spans the screen, so it is known once the view is on screen).
     @State private var viewSize = CGSize(width: 400, height: 800)
-    @State private var isShowingMaps = false
+    /// The sheet that is open: the list of maps, or the download of one. One `sheet` for both, as SwiftUI only reliably supports one
+    /// sheet on a view at a time.
+    @State private var sheet: Sheet?
     @State private var isShowingLocationOff = false
     @Environment(\.scenePhase) private var scenePhase
+
+    private enum Sheet: Identifiable {
+        case maps
+        case download(MapDownloadRequest)
+
+        var id: String {
+            switch self {
+            case .maps: "maps"
+            case .download(let request): "download-\(request.id)"
+            }
+        }
+    }
 
     /// How far to zoom in on the athlete's position: a neighbourhood.
     private static let positionZoom = 14.0
@@ -28,10 +42,15 @@ struct MapTabView: View {
             mapLayer.ignoresSafeArea()
             controls
         }
-        .sheet(isPresented: $isShowingMaps) {
-            NavigationStack {
-                MapsView(library: library)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { isShowingMaps = false } } }
+        .sheet(item: $sheet) { sheet in
+            switch sheet {
+            case .maps:
+                NavigationStack {
+                    MapsView(library: library)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { self.sheet = nil } } }
+                }
+            case .download(let request):
+                MapDownloadSheet(model: request.model, area: request.area)
             }
         }
         .alert("Location Is Off", isPresented: $isShowingLocationOff) {
@@ -73,7 +92,7 @@ struct MapTabView: View {
                 } description: {
                     Text(errorText)
                 } actions: {
-                    Button("Maps") { isShowingMaps = true }
+                    Button("Maps") { sheet = .maps }
                 }
             } else {
                 ContentUnavailableView {
@@ -81,7 +100,8 @@ struct MapTabView: View {
                 } description: {
                     Text("Add a map to see where you are and where your routes go.")
                 } actions: {
-                    Button("Add a Map") { isShowingMaps = true }
+                    if location.coordinate != nil { Button("Download a Map for Here") { downloadMapHere() } }
+                    Button("Add a Map") { sheet = .maps }
                 }
             }
         }
@@ -96,10 +116,15 @@ struct MapTabView: View {
                     .frame(width: 24, height: 24)
             }
             .accessibilityLabel("Centre on my location")
-            Button { isShowingMaps = true } label: {
+            Button { sheet = .maps } label: {
                 Image(systemName: "map").frame(width: 24, height: 24)
             }
             .accessibilityLabel("Maps")
+            Button { downloadMapHere() } label: {
+                Image(systemName: "arrow.down.circle").frame(width: 24, height: 24)
+            }
+            .disabled(location.coordinate == nil)
+            .accessibilityLabel("Download a map for here")
         }
         .buttonStyle(.glass)
         .buttonBorderShape(.circle)
@@ -113,6 +138,16 @@ struct MapTabView: View {
     /// Whether the selected map covers a position (a map that doesn't say what it covers is tried).
     private func covers(_ coordinate: Coordinate) -> Bool {
         opened?.bounds?.contains(coordinate) ?? true
+    }
+
+    /// Opens the download of the map round the athlete's position.
+    private func downloadMapHere() {
+        guard let coordinate = location.coordinate else { return }
+        Task {
+            let name = await PlaceName.name(near: coordinate)
+            guard let area = MapArea.around(coordinate, name: name) else { return }
+            sheet = .download(MapDownloadRequest(area: area, model: MapDownloadModel.live(library: library)))
+        }
     }
 
     private func centreOnMe() {

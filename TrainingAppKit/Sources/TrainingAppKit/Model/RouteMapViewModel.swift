@@ -32,12 +32,15 @@ public final class RouteMapViewModel {
 
     public private(set) var state: State = .idle
     public let route: Route
-    private let library: MapLibrary
+    let library: MapLibrary
 
     public init(route: Route, library: MapLibrary) {
         self.route = route
         self.library = library
     }
+
+    /// The area to download a map for: the route with a margin, named after the route.
+    public var downloadArea: MapArea { MapArea.covering(route.boundingBox, name: route.name ?? "Route") }
 
     /// Opens the selected map and works out what to show; call again when the view's size or the selected map changes.
     ///

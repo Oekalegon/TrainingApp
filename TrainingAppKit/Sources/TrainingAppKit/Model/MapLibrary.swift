@@ -131,6 +131,34 @@ public final class MapLibrary {
         return candidate
     }
 
+    /// Puts a map file that was downloaded into the library: it is checked, moved (not copied) to the library's folder and listed.
+    ///
+    /// - Returns: The id of the new map.
+    /// - Throws: ``MapLibraryError/unreadable(_:_:)`` for a file that is not a store file.
+    @discardableResult
+    public func install(fileAt url: URL, named name: String) throws -> String {
+        do { _ = try FeatureStoreFile(contentsOf: url) } catch { throw MapLibraryError.unreadable(name, "\(error)") }
+        let target = uniqueURL(name: Self.safeName(name), ext: "gmk")
+        try FileManager.default.moveItem(at: url, to: target)
+        reload()
+        return target.lastPathComponent
+    }
+
+    /// A map that covers a whole area, or `nil`. A set of blocks counts by the box round its blocks, so a hole inside it is not seen.
+    public func map(covering box: BoundingBox) -> MapItem? {
+        let area = MapArea(name: "", box: box)
+        return maps.first { item in
+            guard let bounds = (try? open(item))?.bounds else { return false }
+            return area.isCovered(by: bounds)
+        }
+    }
+
+    /// A name that can be a file name.
+    static func safeName(_ name: String) -> String {
+        let cleaned = name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-").trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty || cleaned.hasPrefix(".") ? "Map" : String(cleaned.prefix(100))
+    }
+
     // MARK: Removing
 
     /// Removes a map from the library: a copied file is deleted, a link is removed and the folder or file it led to is left alone.
